@@ -1,112 +1,114 @@
 # 歌詞ノート (Kashi Note)
 
-日本語歌詞の录入・ふりがな付き表示・Spotify 同期再生対応の歌詞管理 Web アプリ。
+A Japanese lyrics management web app with furigana display and Spotify sync.
 
-## 機能
+[日本語](README-ja.md) | [中文](README-zh.md)
 
-- **歌詞录入** — 漢字を含む日本語歌詞を貼り付けると、保存時に kuroshiro で自動的にひらがな（ふりがな）に変換
-- **ふりがな表示** — `<ruby>` タグで漢字の上にふりがなを表示。フォントサイズ調整対応（12〜28px）
-- **Spotify 同期** — Spotify OAuth 連携で再生中の曲をリアルタイム追跡。歌詞行が自動スクロール
-- **lrclib.net 同步** — 带时间戳的歌词从 lrclib.net 获取，实现逐行精确同步
-- **ワンクリック取込** — 再生中の曲が未登録の場合、lrclib から歌詞を取得して DB に保存し、即座に詳細ページへ遷移
-- **移动端対応** — レスポンシブ UI。モバイルでボタンがアイコンのみ表示、レイアウト自動調整
+## Features
 
-## 技術スタック
+- **Lyrics Input** — Paste Japanese lyrics with kanji; kuroshiro auto-converts to hiragana furigana on save
+- **Furigana Display** — Ruby annotations above kanji via `<ruby>` tags. Adjustable font size (12–28px)
+- **Spotify Sync** — OAuth-connected Spotify playback tracking with real-time line-by-line auto-scroll
+- **lrclib.net Sync** — Fetches timestamped lyrics from lrclib.net for precise per-line synchronization
+- **One-Click Import** — Playing an untracked song? Import lyrics from lrclib and jump to the detail page instantly
+- **Mobile Responsive** — Adaptive UI with icon-only buttons on mobile, stacked layouts, and compact spacing
 
-| 層 | 技術 |
+## Tech Stack
+
+| Layer | Technology |
 |---|---|
-| フレームワーク | Next.js 14 (App Router) |
+| Framework | Next.js 14 (App Router) |
 | UI | React 19, Tailwind CSS, Lucide Icons |
-| DB | SQLite (better-sqlite3) |
-| ふりがな変換 | kuroshiro + kuromoji |
-| 歌詞データソース | lrclib.net (優先), Spotify unofficial API |
-| 音楽連携 | Spotify Web API (OAuth 2.0) |
-| デプロイ | Docker, Traefik リバースプロキシ |
+| Database | SQLite (better-sqlite3) |
+| Furigana Engine | kuroshiro + kuromoji |
+| Lyrics Source | lrclib.net (primary), Spotify unofficial API |
+| Music Integration | Spotify Web API (OAuth 2.0) |
+| Deployment | Docker, Traefik reverse proxy |
 
-## プロジェクト構成
+## Project Structure
 
 ```
 src/
 ├── app/
-│   ├── page.tsx                    # 一覧ページ（Now Playing バー付き）
-│   ├── layout.tsx                  # レイアウト（ナビゲーションバー）
-│   ├── globals.css                 # グローバルスタイル
+│   ├── page.tsx                    # Song list (with Now Playing bar)
+│   ├── layout.tsx                  # Layout (navigation bar)
+│   ├── globals.css                 # Global styles
 │   ├── songs/
-│   │   ├── new/page.tsx            # 新規追加ページ
+│   │   ├── new/page.tsx            # Add new song
 │   │   └── [id]/
-│   │       ├── page.tsx            # 歌詞詳細ページ（Spotify 同期・Debug モード）
-│   │       └── edit/page.tsx       # 編集ページ
+│   │       ├── page.tsx            # Song detail (Spotify sync, debug mode)
+│   │       └── edit/page.tsx       # Edit song
 │   └── api/
 │       ├── songs/
-│       │   ├── route.ts            # GET: 一覧, POST: 新規作成
-│       │   ├── import/route.ts     # POST: lrclib からワンクリック取込
+│       │   ├── route.ts            # GET: list, POST: create
+│       │   ├── import/route.ts     # POST: one-click import from lrclib
 │       │   └── [id]/
-│       │       ├── route.ts        # GET/PUT/DELETE: 個別曲操作
-│       │       └── sync/route.ts   # POST: lrclib 同期歌詞取得
+│       │       ├── route.ts        # GET/PUT/DELETE: single song
+│       │       └── sync/route.ts   # POST: fetch synced lyrics (lrclib → Spotify fallback)
 │       ├── auth/
-│       │   ├── login/route.ts      # Spotify OAuth ログイン
-│       │   └── callback/route.ts   # Spotify OAuth コールバック
+│       │   ├── login/route.ts      # Spotify OAuth login
+│       │   └── callback/route.ts   # Spotify OAuth callback
 │       └── spotify/
-│           ├── now-playing/route.ts # 現在再生中の曲情報
-│           └── status/route.ts     # Spotify 連携状態
+│           ├── now-playing/route.ts # Currently playing track
+│           └── status/route.ts     # Spotify connection status
 └── lib/
-    ├── db.ts                       # SQLite DB 接続・スキーマ定義
-    ├── kuroshiro.ts                # ふりがな変換ロジック
-    ├── spotify.ts                  # Spotify API クライアント ID/Secret
-    └── types.ts                    # 共通型定義
+    ├── db.ts                       # SQLite connection & schema
+    ├── kuroshiro.ts                # Furigana conversion logic
+    ├── spotify.ts                  # Spotify API credentials
+    └── types.ts                    # Shared type definitions
 ```
 
-## ローカル開発
+## Local Development
 
 ```bash
-# 依存関係インストール
+# Install dependencies
 npm install
 
-# 開発サーバー起動
+# Start dev server
 npm run dev
 # → http://localhost:3000
 
-# ビルド
+# Production build
 npm run build
 ```
 
-### 環境変数
+### Environment Variables
 
-`.env` ファイルに以下を設定:
+Create a `.env` file:
 
 ```env
 SPOTIFY_CLIENT_ID=your_spotify_client_id
 SPOTIFY_CLIENT_SECRET=your_spotify_client_secret
 ```
 
-Spotify Developer Dashboard でアプリを作成し、リダイレクト URI を `http://localhost:3000/api/auth/callback` に設定。
+Create an app on the Spotify Developer Dashboard and set the redirect URI to `http://localhost:3000/api/auth/callback`.
 
-## Docker デプロイ
+## Docker Deployment
 
 ```bash
-# ビルド＆起動
+# Build & start
 docker compose up -d --build
 
-# ログ確認
+# View logs
 docker compose logs -f
 ```
 
-`docker-compose.yml` で Traefik リバースプロキシ経由での公開を想定。`kazusa-auth` ミドルウェアで認証保護。
+`docker-compose.yml` assumes Traefik reverse proxy. Protected by `kazusa-auth` middleware.
 
-## 主な API
+## API Reference
 
-| エンドポイント | メソッド | 説明 |
+| Endpoint | Method | Description |
 |---|---|---|
-| `/api/songs` | GET | 全曲一覧 |
-| `/api/songs` | POST | 新規作成（歌詞 → ふりがな自動変換） |
-| `/api/songs/import` | POST | lrclib からワンクリック取込 |
-| `/api/songs/[id]` | GET | 曲詳細 |
-| `/api/songs/[id]` | PUT | 曲更新 |
-| `/api/songs/[id]` | DELETE | 曲削除 |
-| `/api/songs/[id]/sync` | POST | 同期歌詞取得（lrclib → Spotify fallback） |
-| `/api/auth/login` | GET | Spotify OAuth ログイン |
-| `/api/spotify/now-playing` | GET | 現在再生中の曲情報 |
+| `/api/songs` | GET | List all songs |
+| `/api/songs` | POST | Create song (auto furigana conversion) |
+| `/api/songs/import` | POST | One-click import from lrclib |
+| `/api/songs/[id]` | GET | Song detail |
+| `/api/songs/[id]` | PUT | Update song |
+| `/api/songs/[id]` | DELETE | Delete song |
+| `/api/songs/[id]/sync` | POST | Fetch synced lyrics (lrclib → Spotify fallback) |
+| `/api/auth/login` | GET | Spotify OAuth login |
+| `/api/spotify/now-playing` | GET | Currently playing track info |
 
-## ライセンス
+## License
 
 Private
