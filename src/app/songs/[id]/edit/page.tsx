@@ -67,66 +67,66 @@ export default function EditSongPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="h-6 w-6 border-2 border-[var(--muted-foreground)]/30 border-t-[var(--muted-foreground)] rounded-full animate-spin" />
+      <div className="flex items-center justify-center py-32">
+        <div className="h-5 w-5 border-2 border-[var(--muted-foreground)]/30 border-t-[var(--muted-foreground)] rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="fade-in max-w-2xl mx-auto">
+    <div className="fade-in max-w-2xl">
       {/* Breadcrumb */}
-      <div className="mb-4 flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+      <div className="mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
         <a href="/" className="hover:text-[var(--foreground)] transition-colors">一覧</a>
-        <span>/</span>
-        <a href={`/songs/${id}`} className="hover:text-[var(--foreground)] transition-colors truncate max-w-[150px]">
+        <span className="opacity-40">/</span>
+        <a href={`/songs/${id}`} className="hover:text-[var(--foreground)] transition-colors truncate max-w-[180px]">
           {title || '曲詳細'}
         </a>
-        <span>/</span>
+        <span className="opacity-40">/</span>
         <span className="text-[var(--foreground)]">編集</span>
       </div>
 
-      <h1 className="text-lg font-semibold tracking-tight mb-6">曲を編集</h1>
+      <h1 className="text-lg font-semibold tracking-tight mb-8">曲を編集</h1>
 
-      <div className="space-y-4">
+      <div className="space-y-6">
         {/* Title */}
         <div>
-          <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-1.5">
+          <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-2">
             曲名 <span className="text-[var(--destructive)]">*</span>
           </label>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm outline-none focus:border-[var(--primary)] transition-colors"
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-sm outline-none focus:border-[var(--primary)] transition-colors"
           />
         </div>
 
         {/* Artist */}
         <div>
-          <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-1.5">
+          <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-2">
             アーティスト
           </label>
           <input
             type="text"
             value={artist}
             onChange={(e) => setArtist(e.target.value)}
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm outline-none focus:border-[var(--primary)] transition-colors"
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-sm outline-none focus:border-[var(--primary)] transition-colors"
           />
         </div>
 
         {/* Lyrics */}
         <div>
-          <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-1.5">
+          <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-2">
             歌詞
           </label>
           <textarea
             value={lyrics}
             onChange={(e) => setLyrics(e.target.value)}
             rows={16}
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2.5 text-sm outline-none focus:border-[var(--primary)] transition-colors resize-y leading-relaxed"
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-4 py-3 text-sm outline-none focus:border-[var(--primary)] transition-colors resize-y leading-relaxed"
           />
-          <p className="mt-1 text-[10px] text-[var(--muted-foreground)]">
+          <p className="mt-2 text-[11px] text-[var(--muted-foreground)]">
             歌詞を変更すると、ふりがなが再変換されます
           </p>
         </div>
@@ -136,13 +136,13 @@ export default function EditSongPage() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="rounded-md bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {saving ? '変換中...' : '保存'}
           </button>
           <button
             onClick={() => router.push(`/songs/${id}`)}
-            className="rounded-md px-4 py-2 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+            className="rounded-md px-5 py-2.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
           >
             キャンセル
           </button>

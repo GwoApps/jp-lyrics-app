@@ -14,12 +14,12 @@ interface SongData {
   updated_at: string;
 }
 
-function FuriganaLine({ line }: { line: FuriganaLine }) {
+function FuriganaLineView({ line }: { line: FuriganaLine }) {
   if (line.segments.length === 0) {
-    return <div className="lyrics-line empty" />;
+    return <div className="h-6" />;
   }
   return (
-    <div className="lyrics-line">
+    <div className="leading-[2.6]">
       {line.segments.map((seg, i) => {
         if (!seg.reading) {
           return <span key={i}>{seg.text}</span>;
@@ -62,9 +62,7 @@ export default function SongViewPage() {
         setSong(data);
         setLoading(false);
       })
-      .catch(() => {
-        setLoading(false);
-      });
+      .catch(() => setLoading(false));
   }, [id]);
 
   const handleDelete = async () => {
@@ -78,15 +76,15 @@ export default function SongViewPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="h-6 w-6 border-2 border-[var(--muted-foreground)]/30 border-t-[var(--muted-foreground)] rounded-full animate-spin" />
+      <div className="flex items-center justify-center py-32">
+        <div className="h-5 w-5 border-2 border-[var(--muted-foreground)]/30 border-t-[var(--muted-foreground)] rounded-full animate-spin" />
       </div>
     );
   }
 
   if (!song) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div className="flex flex-col items-center justify-center py-32 text-center">
         <p className="text-sm text-[var(--muted-foreground)]">曲が見つかりません</p>
         <button
           onClick={() => router.push('/')}
@@ -108,37 +106,37 @@ export default function SongViewPage() {
   return (
     <div className="fade-in">
       {/* Breadcrumb */}
-      <div className="mb-4 flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+      <div className="mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
         <a href="/" className="hover:text-[var(--foreground)] transition-colors">一覧</a>
-        <span>/</span>
-        <span className="text-[var(--foreground)] truncate max-w-[200px]">{song.title}</span>
+        <span className="opacity-40">/</span>
+        <span className="text-[var(--foreground)] truncate max-w-[240px]">{song.title}</span>
       </div>
 
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-8">
         <div className="flex items-start justify-between gap-4">
-          <div>
+          <div className="space-y-1">
             <h1 className="text-xl font-semibold tracking-tight">{song.title}</h1>
             {song.artist && (
-              <p className="text-sm text-[var(--muted-foreground)] mt-0.5">{song.artist}</p>
+              <p className="text-sm text-[var(--muted-foreground)]">{song.artist}</p>
             )}
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 pt-1">
             <button
               onClick={() => setShowRaw(!showRaw)}
-              className="rounded-md px-2.5 py-1.5 text-xs text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
+              className="rounded-md px-3 py-1.5 text-xs text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
             >
               {showRaw ? 'ふりがな表示' : '原文表示'}
             </button>
             <button
               onClick={() => router.push(`/songs/${id}/edit`)}
-              className="rounded-md px-2.5 py-1.5 text-xs text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
+              className="rounded-md px-3 py-1.5 text-xs text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
             >
               編集
             </button>
             <button
               onClick={handleDelete}
-              className="rounded-md px-2.5 py-1.5 text-xs text-[var(--destructive)] bg-red-950/30 hover:bg-red-950/50 transition-colors"
+              className="rounded-md px-3 py-1.5 text-xs text-[var(--destructive)] bg-red-950/30 hover:bg-red-950/50 transition-colors"
             >
               削除
             </button>
@@ -147,16 +145,16 @@ export default function SongViewPage() {
       </div>
 
       {/* Lyrics */}
-      <div className="rounded-lg bg-[var(--card)] border border-[var(--border)]">
+      <div className="rounded-lg bg-[var(--card)] border border-[var(--border)] overflow-hidden">
         {showRaw ? (
-          <pre className="lyrics-container whitespace-pre-wrap font-sans">
+          <pre className="p-6 whitespace-pre-wrap font-sans text-base leading-relaxed max-h-[70vh] overflow-y-auto">
             {song.lyrics_raw || '（歌詞なし）'}
           </pre>
         ) : (
-          <div className="lyrics-container">
+          <div className="p-6 text-base max-h-[70vh] overflow-y-auto">
             {furiganaLines.length > 0 ? (
               furiganaLines.map((line, i) => (
-                <FuriganaLine key={i} line={line} />
+                <FuriganaLineView key={i} line={line} />
               ))
             ) : (
               <p className="text-sm text-[var(--muted-foreground)]">歌詞がありません</p>
@@ -166,7 +164,7 @@ export default function SongViewPage() {
       </div>
 
       {/* Meta */}
-      <div className="mt-4 flex items-center gap-4 text-[10px] text-[var(--muted-foreground)]">
+      <div className="mt-4 flex items-center gap-6 text-[11px] text-[var(--muted-foreground)]">
         <span>作成: {new Date(song.created_at).toLocaleString('ja-JP')}</span>
         <span>更新: {new Date(song.updated_at).toLocaleString('ja-JP')}</span>
       </div>

@@ -35,7 +35,7 @@ body {
 }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
@@ -45,29 +45,12 @@ ruby {
   ruby-align: center;
 }
 rt {
-  font-size: 0.55em;
+  font-size: 0.5em;
   color: var(--muted-foreground);
   font-weight: 400;
+  line-height: 1;
 }
 rp { display: none; }
-
-/* Lyrics display area */
-.lyrics-container {
-  max-height: 70vh;
-  overflow-y: auto;
-  padding: 1.5rem;
-  line-height: 2.4;
-  font-size: 1.25rem;
-  letter-spacing: 0.02em;
-}
-
-.lyrics-line {
-  min-height: 1.8em;
-}
-
-.lyrics-line.empty {
-  min-height: 1em;
-}
 
 /* Textarea */
 textarea {
@@ -76,10 +59,10 @@ textarea {
 
 /* Transition */
 .fade-in {
-  animation: fadeIn 0.2s ease-in;
+  animation: fadeIn 0.15s ease-in;
 }
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(3px); }
   to { opacity: 1; transform: translateY(0); }
 }
 

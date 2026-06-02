@@ -44,20 +44,20 @@ export default function NewSongPage() {
   };
 
   return (
-    <div className="fade-in max-w-2xl mx-auto">
+    <div className="fade-in max-w-2xl">
       {/* Breadcrumb */}
-      <div className="mb-4 flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+      <div className="mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
         <a href="/" className="hover:text-[var(--foreground)] transition-colors">一覧</a>
-        <span>/</span>
+        <span className="opacity-40">/</span>
         <span className="text-[var(--foreground)]">新規追加</span>
       </div>
 
-      <h1 className="text-lg font-semibold tracking-tight mb-6">新しい曲を追加</h1>
+      <h1 className="text-lg font-semibold tracking-tight mb-8">新しい曲を追加</h1>
 
-      <div className="space-y-4">
+      <div className="space-y-6">
         {/* Title */}
         <div>
-          <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-1.5">
+          <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-2">
             曲名 <span className="text-[var(--destructive)]">*</span>
           </label>
           <input
@@ -65,13 +65,13 @@ export default function NewSongPage() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="例：残酷な天使のテーゼ"
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/50"
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-sm outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/50"
           />
         </div>
 
         {/* Artist */}
         <div>
-          <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-1.5">
+          <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-2">
             アーティスト
           </label>
           <input
@@ -79,13 +79,13 @@ export default function NewSongPage() {
             value={artist}
             onChange={(e) => setArtist(e.target.value)}
             placeholder="例：高橋洋子"
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/50"
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-sm outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/50"
           />
         </div>
 
         {/* Lyrics */}
         <div>
-          <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-1.5">
+          <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-2">
             歌詞
             <span className="ml-2 font-normal">（漢字を含む日本語歌詞を貼り付け）</span>
           </label>
@@ -94,9 +94,9 @@ export default function NewSongPage() {
             onChange={(e) => setLyrics(e.target.value)}
             placeholder={`例：\n残酷な天使のように\n少年よ 神話になれ...`}
             rows={16}
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2.5 text-sm outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/50 resize-y leading-relaxed"
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-4 py-3 text-sm outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/50 resize-y leading-relaxed"
           />
-          <p className="mt-1 text-[10px] text-[var(--muted-foreground)]">
+          <p className="mt-2 text-[11px] text-[var(--muted-foreground)]">
             保存時、漢字が自動的にひらがなに変換されます
           </p>
         </div>
@@ -106,13 +106,13 @@ export default function NewSongPage() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="rounded-md bg-[var(--primary)] px-5 py-2.5 text-sm font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {saving ? '変換中...' : '保存して表示'}
           </button>
           <button
             onClick={() => router.push('/')}
-            className="rounded-md px-4 py-2 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+            className="rounded-md px-5 py-2.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
           >
             キャンセル
           </button>
