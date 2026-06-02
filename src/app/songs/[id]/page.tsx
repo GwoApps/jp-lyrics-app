@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import type { FuriganaLine } from '@/lib/types';
-import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2 } from 'lucide-react';
+import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink } from 'lucide-react';
 
 interface SongData {
   id: string;
@@ -129,6 +129,7 @@ export default function SongViewPage() {
   const [syncLines, setSyncLines] = useState<SyncLine[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [allSongs, setAllSongs] = useState<{ id: string; title: string }[]>([]);
   const [fontSize, setFontSize] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('jplrc-font-size');
@@ -188,6 +189,12 @@ export default function SongViewPage() {
         if (data.lyrics_synced) setSyncLines(parseLrc(data.lyrics_synced));
       })
       .catch(() => setLoading(false));
+
+    // Fetch all songs for matching
+    fetch('/api/songs')
+      .then((r) => r.json())
+      .then((data) => setAllSongs(data.map((s: { id: string; title: string }) => ({ id: s.id, title: s.title }))))
+      .catch(() => {});
   }, [id]);
 
   const pollSpotify = useCallback(async () => {
@@ -302,6 +309,11 @@ export default function SongViewPage() {
   const hasSyncData = syncLines.length > 0;
   const debugSyncActive = spotify?.is_playing && syncLines.length > 0 ? findActiveLine(syncLines, spotify.progress_ms) : -1;
 
+  // Check if currently playing song exists in DB
+  const playingMatch = spotify?.track
+    ? allSongs.find((s) => fuzzyMatch(s.title, spotify.track!.name) && s.id !== id)
+    : null;
+
   return (
     <div className="fade-in pb-24 sm:pb-0">
       {/* Breadcrumb */}
@@ -368,14 +380,24 @@ export default function SongViewPage() {
                   {spotify.track.name}
                   {debug && <span className="ml-1 font-mono text-[10px]">[{fmtTime(spotify.progress_ms)}/{fmtTime(spotify.duration_ms)}]</span>}
                 </span>
-                <button
-                  onClick={handleImportPlaying}
-                  disabled={importing}
-                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium bg-[var(--primary)] text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0"
-                >
-                  {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-                  <span>{importing ? '...' : '取込'}</span>
-                </button>
+                {playingMatch ? (
+                  <button
+                    onClick={() => router.push(`/songs/${playingMatch.id}`)}
+                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--border)] transition-colors shrink-0"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    <span>表示</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleImportPlaying}
+                    disabled={importing}
+                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--primary)] text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0"
+                  >
+                    {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                    <span>{importing ? '...' : '取込'}</span>
+                  </button>
+                )}
               </div>
             ) : null}
           </div>
