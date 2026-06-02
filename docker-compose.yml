@@ -1,0 +1,30 @@
+services:
+  jplrc:
+    build: .
+    container_name: jplrc
+    restart: unless-stopped
+    volumes:
+      - jplrc-data:/app/data
+    networks:
+      - traefik-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jplrc.rule=Host(`jplrc.kazusa.feng.moe`)"
+      - "traefik.http.routers.jplrc.entrypoints=websecure"
+      - "traefik.http.routers.jplrc.tls.certresolver=letsencrypt"
+      - "traefik.http.services.jplrc.loadbalancer.server.port=3000"
+      - "traefik.http.routers.jplrc.middlewares=kazusa-auth@docker"
+      # home portal labels
+      - "homepage.enable=true"
+      - "homepage.title=歌詞ノート"
+      - "homepage.description=日本語歌詞管理・ふりがな表示"
+      - "homepage.icon=🎵"
+      - "homepage.category=music"
+
+volumes:
+  jplrc-data:
+
+networks:
+  traefik-net:
+    external: true
+    name: traefik_traefik-net
