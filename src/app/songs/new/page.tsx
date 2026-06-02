@@ -46,15 +46,15 @@ export default function NewSongPage() {
   return (
     <div className="fade-in max-w-2xl">
       {/* Breadcrumb */}
-      <div className="mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
+      <div className="mb-6 sm:mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
         <a href="/" className="hover:text-[var(--foreground)] transition-colors">一覧</a>
         <span className="opacity-40">/</span>
         <span className="text-[var(--foreground)]">新規追加</span>
       </div>
 
-      <h1 className="text-lg font-semibold tracking-tight mb-8">新しい曲を追加</h1>
+      <h1 className="text-lg font-semibold tracking-tight mb-6 sm:mb-8">新しい曲を追加</h1>
 
-      <div className="space-y-6">
+      <div className="space-y-5 sm:space-y-6">
         {/* Title */}
         <div>
           <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-2">
@@ -65,7 +65,7 @@ export default function NewSongPage() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="例：残酷な天使のテーゼ"
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-sm outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/50"
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 sm:px-4 py-2.5 text-sm outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/50"
           />
         </div>
 
@@ -79,7 +79,7 @@ export default function NewSongPage() {
             value={artist}
             onChange={(e) => setArtist(e.target.value)}
             placeholder="例：高橋洋子"
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-sm outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/50"
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 sm:px-4 py-2.5 text-sm outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/50"
           />
         </div>
 
@@ -92,9 +92,9 @@ export default function NewSongPage() {
           <textarea
             value={lyrics}
             onChange={(e) => setLyrics(e.target.value)}
-            placeholder={`例：\n残酷な天使のように\n少年よ 神話になれ...`}
-            rows={16}
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-4 py-3 text-sm outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/50 resize-y leading-relaxed"
+            placeholder={`例：\\n残酷な天使のように\\n少年よ 神話になれ...`}
+            rows={12}
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 sm:px-4 py-3 text-sm outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/50 resize-y leading-relaxed"
           />
           <p className="mt-2 text-[11px] text-[var(--muted-foreground)]">
             保存時、漢字が自動的にひらがなに変換されます
@@ -102,7 +102,7 @@ export default function NewSongPage() {
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-3 pt-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 pt-2">
           <button
             onClick={handleSave}
             disabled={saving}
