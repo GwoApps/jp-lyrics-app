@@ -91,7 +91,7 @@ function FuriganaLineView({ line, isActive, debugTs }: {
           {fmtMs(debugTs)}
         </span>
       )}
-      <div className={`leading-[2.4] sm:leading-[2.8] transition-all duration-300 ${isActive ? 'text-white scale-[1.02] origin-left' : 'text-[var(--muted-foreground)] opacity-60'}`}>
+      <div className={`leading-[2.2] sm:leading-[2.8] transition-all duration-300 ${isActive ? 'text-white scale-[1.02] origin-left' : 'text-[var(--muted-foreground)] opacity-60'}`}>
         {line.segments.map((seg, i) => {
           if (!seg.reading) return <span key={i}>{seg.text}</span>;
           return (
@@ -101,6 +101,18 @@ function FuriganaLineView({ line, isActive, debugTs }: {
       </div>
     </div>
   );
+}
+
+/** Reusable button class builder */
+function btnCls(active?: boolean, variant?: 'danger') {
+  const base = 'inline-flex items-center justify-center rounded-xl transition-colors disabled:opacity-50';
+  const size = 'h-11 w-11 sm:h-8 sm:w-8 sm:rounded-md'; // 44px touch target on mobile
+  const colors = variant === 'danger'
+    ? 'text-[var(--destructive)] bg-red-950/30 hover:bg-red-950/50'
+    : active
+      ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+      : 'text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)]';
+  return `${base} ${size} ${colors}`;
 }
 
 export default function SongViewPage() {
@@ -120,9 +132,9 @@ export default function SongViewPage() {
   const [fontSize, setFontSize] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('jplrc-font-size');
-      if (saved) { const n = parseInt(saved); if (n >= 12 && n <= 28) return n; }
+      if (saved) { const n = parseInt(saved); if (n >= 14 && n <= 32) return n; }
     }
-    return 18;
+    return 20;
   });
   const lyricsRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -291,51 +303,43 @@ export default function SongViewPage() {
   const debugSyncActive = spotify?.is_playing && syncLines.length > 0 ? findActiveLine(syncLines, spotify.progress_ms) : -1;
 
   return (
-    <div className="fade-in">
+    <div className="fade-in pb-24 sm:pb-0">
       {/* Breadcrumb */}
-      <div className="mb-6 sm:mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
+      <div className="mb-4 sm:mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
         <a href="/" className="hover:text-[var(--foreground)] transition-colors inline-flex items-center gap-1">
           <ArrowLeft className="h-3 w-3" /> 一覧
         </a>
         <span className="opacity-40">/</span>
-        <span className="text-[var(--foreground)] truncate max-w-[180px] sm:max-w-[320px]">{song.title}</span>
+        <span className="text-[var(--foreground)] truncate max-w-[200px] sm:max-w-[320px]">{song.title}</span>
       </div>
 
-      {/* Header */}
-      <div className="mb-6 sm:mb-8">
-        <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
-          <div className="space-y-1 min-w-0">
-            <h1 className="text-lg sm:text-xl font-semibold tracking-tight">{song.title}</h1>
-            {song.artist && <p className="text-sm text-[var(--muted-foreground)]">{song.artist}</p>}
+      {/* Header — compact on mobile */}
+      <div className="mb-4 sm:mb-8">
+        <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
+          <div className="space-y-0.5 sm:space-y-1 min-w-0">
+            <h1 className="text-base sm:text-xl font-semibold tracking-tight">{song.title}</h1>
+            {song.artist && <p className="text-xs sm:text-sm text-[var(--muted-foreground)]">{song.artist}</p>}
           </div>
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0">
-            {/* Font size control */}
+          {/* Desktop-only buttons */}
+          <div className="hidden sm:flex items-center gap-2 shrink-0">
             <div className="flex items-center gap-0.5 rounded-md bg-[var(--accent)] px-1 py-0.5">
-              <button onClick={() => setFontSize(s => Math.max(12, s - 2))} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors" title="文字缩小">
-                <Minus className="h-3 w-3" />
-              </button>
+              <button onClick={() => setFontSize(s => Math.max(14, s - 2))} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Minus className="h-3 w-3" /></button>
               <span className="text-[10px] w-5 text-center text-[var(--muted-foreground)] tabular-nums">{fontSize}</span>
-              <button onClick={() => setFontSize(s => Math.min(28, s + 2))} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors" title="文字拡大">
-                <Plus className="h-3 w-3" />
-              </button>
+              <button onClick={() => setFontSize(s => Math.min(32, s + 2))} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Plus className="h-3 w-3" /></button>
             </div>
-            <button onClick={handleSync} disabled={syncing} className="inline-flex items-center gap-1.5 rounded-md px-2.5 sm:px-3 py-1.5 text-xs text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors disabled:opacity-50">
+            <button onClick={handleSync} disabled={syncing} className={btnCls()}>
               <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">{syncing ? '取得中...' : hasSyncData ? '再同期' : '同期歌詞'}</span>
             </button>
-            <button onClick={() => setDebug(!debug)} className={`inline-flex items-center gap-1.5 rounded-md px-2.5 sm:px-3 py-1.5 text-xs transition-colors ${debug ? 'bg-[var(--primary)] text-[var(--primary-foreground)]' : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}>
+            <button onClick={() => setDebug(!debug)} className={btnCls(debug)}>
               <Bug className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Debug</span>
             </button>
-            <button onClick={() => setShowRaw(!showRaw)} className="inline-flex items-center gap-1.5 rounded-md px-2.5 sm:px-3 py-1.5 text-xs text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors">
+            <button onClick={() => setShowRaw(!showRaw)} className={btnCls()}>
               {showRaw ? <BookOpen className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
-              <span className="hidden sm:inline">{showRaw ? 'ふりがな' : '原文'}</span>
             </button>
-            <button onClick={() => router.push(`/songs/${id}/edit`)} className="inline-flex items-center gap-1.5 rounded-md px-2.5 sm:px-3 py-1.5 text-xs text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors">
+            <button onClick={() => router.push(`/songs/${id}/edit`)} className={btnCls()}>
               <Pencil className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">編集</span>
             </button>
-            <button onClick={handleDelete} className="inline-flex items-center rounded-md px-2 py-1.5 text-xs text-[var(--destructive)] bg-red-950/30 hover:bg-red-950/50 transition-colors">
+            <button onClick={handleDelete} className={btnCls(false, 'danger')}>
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -343,26 +347,26 @@ export default function SongViewPage() {
 
         {/* Spotify sync indicator */}
         {spotify?.connected && (
-          <div className="mt-3 sm:mt-4 flex items-center gap-2">
+          <div className="mt-2 sm:mt-4 flex items-center gap-2">
             {isSynced ? (
-              <div className="flex items-center gap-2 rounded-full bg-green-950/40 border border-green-800/30 px-2.5 sm:px-3 py-1">
+              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-green-950/40 border border-green-800/30 px-2 sm:px-3 py-1">
                 <span className="inline-block h-2 w-2 rounded-full bg-green-400 animate-pulse" />
                 <Music className="h-3 w-3 text-green-400" />
-                <span className="text-xs text-green-400 truncate max-w-[200px] sm:max-w-none">
+                <span className="text-xs text-green-400 truncate max-w-[180px] sm:max-w-none">
                   {spotify.track!.name}
                   {debug && spotify && (
-                    <span className="ml-2 font-mono text-green-500/70 text-[10px]">
-                      [{fmtTime(spotify.progress_ms)} / {fmtTime(spotify.duration_ms)}] line#{activeLine}
+                    <span className="ml-1 sm:ml-2 font-mono text-green-500/70 text-[10px]">
+                      [{fmtTime(spotify.progress_ms)}/{fmtTime(spotify.duration_ms)}]#{activeLine}
                     </span>
                   )}
                 </span>
               </div>
             ) : spotify.is_playing && spotify.track ? (
-              <div className="flex items-center gap-2 rounded-full bg-[var(--accent)] px-2.5 sm:px-3 py-1">
+              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--accent)] px-2 sm:px-3 py-1">
                 <span className="inline-block h-2 w-2 rounded-full bg-[var(--muted-foreground)]" />
-                <span className="text-xs text-[var(--muted-foreground)] truncate max-w-[150px] sm:max-w-none">
+                <span className="text-xs text-[var(--muted-foreground)] truncate max-w-[140px] sm:max-w-none">
                   {spotify.track.name}
-                  {debug && <span className="ml-2 font-mono text-[10px]">[{fmtTime(spotify.progress_ms)} / {fmtTime(spotify.duration_ms)}]</span>}
+                  {debug && <span className="ml-1 font-mono text-[10px]">[{fmtTime(spotify.progress_ms)}/{fmtTime(spotify.duration_ms)}]</span>}
                 </span>
                 <button
                   onClick={handleImportPlaying}
@@ -379,11 +383,11 @@ export default function SongViewPage() {
 
         {/* Debug panel */}
         {debug && (
-          <div className="mt-3 rounded-md bg-[var(--muted)] border border-[var(--border)] p-2.5 sm:p-3 text-[10px] sm:text-[11px] font-mono space-y-1 overflow-x-auto">
+          <div className="mt-3 rounded-md bg-[var(--muted)] border border-[var(--border)] p-2 sm:p-3 text-[10px] sm:text-[11px] font-mono space-y-1 overflow-x-auto">
             <div className="text-[var(--primary)] font-medium mb-1.5">Debug Info</div>
             <div>Spotify: {spotify?.connected ? '✓ connected' : '✗ disconnected'} | playing: {String(!!spotify?.is_playing)} | match: {String(isSynced)}</div>
             <div>progress: {spotify ? `${spotify.progress_ms}ms (${fmtTime(spotify.progress_ms)})` : '—'} / {spotify ? `${spotify.duration_ms}ms (${fmtTime(spotify.duration_ms)})` : '—'}</div>
-            <div>sync lines: {syncLines.length} | furigana: {furiganaLines.length} | active: #{activeLine} ({activeLine >= 0 && lineTimestamps[activeLine] != null ? fmtMs(lineTimestamps[activeLine]!) : '—'}) | sync: #{debugSyncActive}</div>
+            <div>sync: {syncLines.length} | furigana: {furiganaLines.length} | active: #{activeLine} ({activeLine >= 0 && lineTimestamps[activeLine] != null ? fmtMs(lineTimestamps[activeLine]!) : '—'}) | sync: #{debugSyncActive}</div>
             <div>track: {spotify?.track?.name || '—'} | song: {song.title}</div>
             {syncLines.length > 0 && (
               <div className="pt-1.5 mt-1.5 border-t border-[var(--border)]">
@@ -404,9 +408,9 @@ export default function SongViewPage() {
       {/* Lyrics */}
       <div className="rounded-lg bg-[var(--card)] border border-[var(--border)] overflow-hidden">
         {showRaw ? (
-          <pre className="p-4 sm:p-6 whitespace-pre-wrap font-sans leading-relaxed max-h-[70vh] overflow-y-auto" style={{ fontSize: `${fontSize}px` }}>{song.lyrics_raw || '（歌詞なし）'}</pre>
+          <pre className="p-4 sm:p-6 whitespace-pre-wrap font-sans leading-relaxed max-h-[70vh] sm:max-h-[70vh] overflow-y-auto" style={{ fontSize: `${fontSize}px` }}>{song.lyrics_raw || '（歌詞なし）'}</pre>
         ) : (
-          <div ref={lyricsRef} className="p-4 sm:p-6 max-h-[70vh] overflow-y-auto scroll-smooth" style={{ fontSize: `${fontSize}px` }}>
+          <div ref={lyricsRef} className="p-4 sm:p-6 max-h-[70vh] sm:max-h-[70vh] overflow-y-auto scroll-smooth" style={{ fontSize: `${fontSize}px` }}>
             {furiganaLines.length > 0 ? (
               furiganaLines.map((line, i) => (
                 <div key={i} ref={(el) => { lineRefs.current[i] = el; }}>
@@ -425,8 +429,8 @@ export default function SongViewPage() {
       </div>
 
       {/* Meta */}
-      <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-x-4 sm:gap-x-6 gap-y-1 text-[10px] sm:text-[11px] text-[var(--muted-foreground)]">
+      <div className="mt-3 sm:mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-2">
+        <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-6 gap-y-1 text-[10px] sm:text-[11px] text-[var(--muted-foreground)]">
           <span>作成: {new Date(song.created_at).toLocaleString('ja-JP')}</span>
           <span>更新: {new Date(song.updated_at).toLocaleString('ja-JP')}</span>
           {hasSyncData && <span className="text-green-500/60">{syncLines.length} 行同期済み</span>}
@@ -434,6 +438,45 @@ export default function SongViewPage() {
         {!spotify?.connected && (
           <a href="/api/auth/login" className="text-[11px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">Spotify連携</a>
         )}
+      </div>
+
+      {/* Mobile bottom toolbar */}
+      <div className="fixed bottom-0 left-0 right-0 sm:hidden z-50 bg-[var(--background)]/95 backdrop-blur-sm border-t border-[var(--border)]">
+        <div className="mx-auto max-w-[860px] flex items-center justify-around px-2 py-2 safe-area-pb">
+          {/* Font size */}
+          <button onClick={() => setFontSize(s => Math.max(14, s - 2))} className="flex flex-col items-center gap-0.5 p-1 text-[var(--muted-foreground)]">
+            <span className="text-lg font-medium leading-none">A-</span>
+          </button>
+          <button onClick={() => setFontSize(s => Math.min(32, s + 2))} className="flex flex-col items-center gap-0.5 p-1 text-[var(--muted-foreground)]">
+            <span className="text-lg font-medium leading-none">A+</span>
+          </button>
+          {/* Divider */}
+          <div className="w-px h-6 bg-[var(--border)]" />
+          {/* Sync */}
+          <button onClick={handleSync} disabled={syncing} className="flex flex-col items-center gap-0.5 p-2 text-[var(--muted-foreground)] disabled:opacity-50">
+            <RefreshCw className={`h-5 w-5 ${syncing ? 'animate-spin' : ''}`} />
+            <span className="text-[10px]">{syncing ? '...' : '同期'}</span>
+          </button>
+          {/* Raw/Furigana */}
+          <button onClick={() => setShowRaw(!showRaw)} className="flex flex-col items-center gap-0.5 p-2 text-[var(--muted-foreground)]">
+            {showRaw ? <BookOpen className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
+            <span className="text-[10px]">{showRaw ? 'ふりがな' : '原文'}</span>
+          </button>
+          {/* Debug */}
+          <button onClick={() => setDebug(!debug)} className={`flex flex-col items-center gap-0.5 p-2 ${debug ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)]'}`}>
+            <Bug className="h-5 w-5" />
+            <span className="text-[10px]">Debug</span>
+          </button>
+          {/* Edit */}
+          <button onClick={() => router.push(`/songs/${id}/edit`)} className="flex flex-col items-center gap-0.5 p-2 text-[var(--muted-foreground)]">
+            <Pencil className="h-5 w-5" />
+            <span className="text-[10px]">編集</span>
+          </button>
+          {/* Delete */}
+          <button onClick={handleDelete} className="flex flex-col items-center gap-0.5 p-2 text-[var(--destructive)]">
+            <Trash2 className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
       {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
