@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
+import { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET } from '@/lib/spotify';
 
 interface LrcLine {
   timeMs: number;
   text: string;
 }
 
-/** Parse LRC format into structured timestamps */
 function parseLrc(lrc: string): LrcLine[] {
   const lines: LrcLine[] = [];
   for (const raw of lrc.split('\n')) {
@@ -20,32 +20,28 @@ function parseLrc(lrc: string): LrcLine[] {
   return lines.sort((a, b) => a.timeMs - b.timeMs);
 }
 
-/** lrclib.net lookup */
-async function fetchFromLrclib(title: string, artist: string): Promise<string | null> {
-  const params = new URLSearchParams({ track_name: title, artist_name: artist });
-  try {
-    const res = await fetch(`https://lrclib.net/api/get?${params}`, {
-      headers: { 'User-Agent': 'jp-lyrics-app/1.0' },
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    // Prefer synced lyrics, fall back to plain
-    return data.syncedLyrics || null;
-  } catch {
-    return null;
-  }
+function normalize(s: string): string {
+  return s.normalize('NFKC').replace(/\s+/g, '').toLowerCase();
 }
 
-/** Spotify unofficial lyrics endpoint */
-async function fetchFromSpotify(trackName: string, artistName: string): Promise<string | null> {
+function fuzzyMatch(a: string, b: string): boolean {
+  const na = normalize(a);
+  const nb = normalize(b);
+  if (!na || !nb) return false;
+  if (na.includes(nb) || nb.includes(na)) return true;
+  const shorter = na.length <= nb.length ? na : nb;
+  const longer = na.length > nb.length ? na : nb;
+  let hits = 0;
+  for (const ch of shorter) { if (longer.includes(ch)) hits++; }
+  return hits / shorter.length >= 0.5;
+}
+
+/** Get a valid Spotify access token (refresh if needed) */
+async function getSpotifyToken(): Promise<string | null> {
   const auth = db.prepare('SELECT access_token, refresh_token, expires_at FROM spotify_auth WHERE id = 1').get();
   if (!auth || !auth.access_token) return null;
 
-  let accessToken = auth.access_token;
-
-  // Refresh if expired
   if (Math.floor(Date.now() / 1000) > auth.expires_at - 60) {
-    const { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET } = await import('@/lib/spotify');
     const refreshRes = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
       headers: {
@@ -55,31 +51,104 @@ async function fetchFromSpotify(trackName: string, artistName: string): Promise<
       body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: auth.refresh_token }),
     });
     if (!refreshRes.ok) return null;
-    const refreshData = await refreshRes.json();
-    accessToken = refreshData.access_token;
+    const data = await refreshRes.json();
     db.prepare(`UPDATE spotify_auth SET access_token = ?, expires_at = ?, updated_at = datetime('now','localtime') WHERE id = 1`)
-      .run(accessToken, Math.floor(Date.now() / 1000) + refreshData.expires_in);
+      .run(data.access_token, Math.floor(Date.now() / 1000) + data.expires_in);
+    return data.access_token;
+  }
+  return auth.access_token;
+}
+
+/** Use Spotify search to get the canonical track name */
+async function getSpotifyCanonicalName(title: string, artist: string): Promise<{ name: string; artist: string } | null> {
+  const token = await getSpotifyToken();
+  if (!token) return null;
+
+  const searchRes = await fetch(
+    `https://api.spotify.com/v1/search?q=${encodeURIComponent(`${title} ${artist}`)}&type=track&limit=3`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!searchRes.ok) return null;
+  const data = await searchRes.json();
+  const tracks = data.tracks?.items || [];
+
+  for (const t of tracks) {
+    if (fuzzyMatch(t.name, title)) {
+      return { name: t.name, artist: t.artists?.[0]?.name || artist };
+    }
+  }
+  return null;
+}
+
+/** lrclib.net: exact get → search with canonical name → search with artist */
+async function fetchFromLrclib(title: string, artist: string): Promise<string | null> {
+  const headers = { 'User-Agent': 'jp-lyrics-app/1.0' };
+
+  // 1) Exact match
+  try {
+    const params = new URLSearchParams({ track_name: title, artist_name: artist });
+    const res = await fetch(`https://lrclib.net/api/get?${params}`, { headers });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.syncedLyrics) return data.syncedLyrics;
+    }
+  } catch { /* */ }
+
+  // 2) Search with canonical Spotify name (fixes CJK variant issues)
+  const canonical = await getSpotifyCanonicalName(title, artist);
+  if (canonical && canonical.name !== title) {
+    try {
+      const params = new URLSearchParams({ q: `${canonical.name} ${canonical.artist}` });
+      const res = await fetch(`https://lrclib.net/api/search?${params}`, { headers });
+      if (res.ok) {
+        const results = await res.json();
+        for (const r of results) {
+          if (r.syncedLyrics && fuzzyMatch(r.trackName, canonical.name)) {
+            return r.syncedLyrics;
+          }
+        }
+      }
+    } catch { /* */ }
   }
 
-  // Search for track to get Spotify ID
+  // 3) Broader search with original title
+  try {
+    const params = new URLSearchParams({ q: `${title} ${artist}` });
+    const res = await fetch(`https://lrclib.net/api/search?${params}`, { headers });
+    if (res.ok) {
+      const results = await res.json();
+      for (const r of results) {
+        if (r.syncedLyrics && fuzzyMatch(r.trackName, title)) {
+          return r.syncedLyrics;
+        }
+      }
+    }
+  } catch { /* */ }
+
+  return null;
+}
+
+/** Spotify unofficial lyrics endpoint */
+async function fetchFromSpotify(title: string, artist: string): Promise<string | null> {
+  const token = await getSpotifyToken();
+  if (!token) return null;
+
   const searchRes = await fetch(
-    `https://api.spotify.com/v1/search?q=${encodeURIComponent(`${trackName} ${artistName}`)}&type=track&limit=1`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+    `https://api.spotify.com/v1/search?q=${encodeURIComponent(`${title} ${artist}`)}&type=track&limit=1`,
+    { headers: { Authorization: `Bearer ${token}` } }
   );
   if (!searchRes.ok) return null;
   const searchData = await searchRes.json();
   const trackId = searchData.tracks?.items?.[0]?.id;
   if (!trackId) return null;
 
-  // Get lyrics from spclient
   const lyricsRes = await fetch(
     `https://spclient.wg.spotify.com/color-lyrics/v2/track/${trackId}?format=json&market=from_token`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+    { headers: { Authorization: `Bearer ${token}` } }
   );
   if (!lyricsRes.ok) return null;
   const lyricsData = await lyricsRes.json();
 
-  // Convert Spotify lines to LRC format
   const lines = lyricsData?.lyrics?.lines;
   if (!lines || !lines.length) return null;
 
@@ -110,11 +179,11 @@ export async function POST(
     return NextResponse.json({ synced: true, source: 'cached', lines: parsed.length, lrc: song.lyrics_synced });
   }
 
-  // Try lrclib.net first
+  // Try lrclib.net (with Spotify canonical name fallback)
   let lrc = await fetchFromLrclib(song.title, song.artist);
   let source = 'lrclib';
 
-  // Fallback to Spotify
+  // Fallback to Spotify unofficial
   if (!lrc) {
     lrc = await fetchFromSpotify(song.title, song.artist);
     source = 'spotify';
@@ -124,7 +193,6 @@ export async function POST(
     return NextResponse.json({ synced: false, error: '同期歌詞が見つかりません' });
   }
 
-  // Store
   db.prepare(`UPDATE songs SET lyrics_synced = ?, updated_at = datetime('now','localtime') WHERE id = ?`)
     .run(lrc, id);
 
