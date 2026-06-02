@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import type { FuriganaLine } from '@/lib/types';
-import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste } from 'lucide-react';
+import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture } from 'lucide-react';
 
 interface SongData {
   id: string;
@@ -150,6 +150,7 @@ export default function SongViewPage() {
   const furiganaLinesRef = useRef<FuriganaLine[]>([]);
   const songRef = useRef<SongData | null>(null);
   const debugRef = useRef(false);
+  const pipWindowRef = useRef<Window | null>(null);
 
   useEffect(() => { localStorage.setItem('jplrc-font-size', String(fontSize)); }, [fontSize]);
 
@@ -190,6 +191,13 @@ export default function SongViewPage() {
   useEffect(() => { furiganaLinesRef.current = furiganaLines; }, [furiganaLines]);
   useEffect(() => { songRef.current = song; }, [song]);
   useEffect(() => { debugRef.current = debug; }, [debug]);
+
+  // Close PiP window on unmount
+  useEffect(() => {
+    return () => {
+      try { pipWindowRef.current?.close(); } catch { /* */ }
+    };
+  }, []);
 
   const showToast = (type: 'success' | 'error', msg: string) => {
     setToast({ type, msg });
@@ -290,6 +298,21 @@ export default function SongViewPage() {
         if (!debugRef.current && lineRefs.current[newActive]) {
           lineRefs.current[newActive]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
+        // Update PiP window if open
+        try {
+          const pipWin = pipWindowRef.current;
+          if (pipWin && !pipWin.closed) {
+            const pipLines = pipWin.document.querySelectorAll('.line');
+            pipLines.forEach((el: Element, i: number) => {
+              if (i === newActive) {
+                (el as HTMLElement).classList.add('active');
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              } else {
+                (el as HTMLElement).classList.remove('active');
+              }
+            });
+          }
+        } catch { /* PiP window closed */ }
       }
 
       rafRef.current = requestAnimationFrame(tick);
@@ -385,6 +408,88 @@ export default function SongViewPage() {
     }
   };
 
+  const openPiP = useCallback(async () => {
+    // Toggle: close if already open
+    if (pipWindowRef.current && !pipWindowRef.current.closed) {
+      pipWindowRef.current.close();
+      pipWindowRef.current = null;
+      return;
+    }
+
+    if (!('documentPictureInPicture' in window)) {
+      showToast('error', 'このブラウザはPiP非対応です (Chrome 116+)');
+      return;
+    }
+
+    if (furiganaLines.length === 0) {
+      showToast('error', '歌詞がありません');
+      return;
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pipWindow = await (window as any).documentPictureInPicture.requestWindow({
+        width: 380,
+        height: 520,
+      });
+
+      pipWindowRef.current = pipWindow;
+
+      const title = song?.title || '';
+      const artist = song?.artist || '';
+
+      pipWindow.document.documentElement.innerHTML = `
+        <head>
+          <meta name="color-scheme" content="dark">
+          <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500&display=swap" rel="stylesheet">
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            html, body { background: #0a0a0a; color: #a3a3a3; font-family: 'Noto Sans JP', sans-serif; height: 100%; overflow: hidden; }
+            #pip-header { padding: 8px 12px; border-bottom: 1px solid #262626; font-size: 11px; color: #737373; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            #pip-header .title { color: #e5e5e5; font-weight: 500; }
+            #pip-lyrics { height: calc(100% - 36px); overflow-y: auto; padding: 12px; scroll-behavior: smooth; }
+            .line { line-height: 2.2; padding: 2px 4px; border-radius: 4px; transition: color 0.3s, transform 0.3s, opacity 0.3s; transform-origin: left; opacity: 0.6; font-size: ${fontSize}px; }
+            .line.active { color: #ffffff; transform: scale(1.02); opacity: 1; }
+            .line.empty { height: 1.5em; }
+            ruby rt { font-size: 0.5em; color: #a3a3a3; }
+            .line.active ruby rt { color: #d4d4d4; }
+          </style>
+        </head>
+        <body>
+          <div id="pip-header"><span class="title">${title}</span>${artist ? ` — ${artist}` : ''}</div>
+          <div id="pip-lyrics">
+            ${furiganaLines.map((line, i) => {
+              if (line.segments.length === 0) return `<div class="line empty" data-line="${i}"></div>`;
+              const html = line.segments.map(seg => {
+                if (!seg.reading) return seg.text;
+                return `<ruby>${seg.text}<rp>(</rp><rt>${seg.reading}</rt><rp>)</rp></ruby>`;
+              }).join('');
+              return `<div class="line" data-line="${i}">${html}</div>`;
+            }).join('')}
+          </div>
+        </body>
+      `;
+
+      // Sync current active line immediately
+      if (highlightRef.current >= 0) {
+        const pipLines = pipWindow.document.querySelectorAll('.line');
+        pipLines.forEach((el: Element, i: number) => {
+          if (i === highlightRef.current) {
+            (el as HTMLElement).classList.add('active');
+            el.scrollIntoView({ block: 'center' });
+          }
+        });
+      }
+
+      pipWindow.addEventListener('pagehide', () => {
+        pipWindowRef.current = null;
+      });
+    } catch (e) {
+      console.error('PiP failed:', e);
+      showToast('error', 'PiPの開始に失敗しました');
+    }
+  }, [furiganaLines, song, fontSize, showToast]);
+
   if (loading) {
     return <div className="flex items-center justify-center py-32"><div className="h-5 w-5 border-2 border-[var(--muted-foreground)]/30 border-t-[var(--muted-foreground)] rounded-full animate-spin" /></div>;
   }
@@ -437,6 +542,11 @@ export default function SongViewPage() {
             <button onClick={handleSync} disabled={syncing} className={btnCls()}>
               <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
             </button>
+            {furiganaLines.length > 0 && (
+              <button onClick={openPiP} className={btnCls()} title="Picture-in-Picture">
+                <PictureInPicture className="h-3.5 w-3.5" />
+              </button>
+            )}
             {!hasSyncData && (
               <button onClick={() => setShowPasteLrc(!showPasteLrc)} className={btnCls(showPasteLrc)}>
                 <ClipboardPaste className="h-3.5 w-3.5" />
@@ -611,6 +721,13 @@ export default function SongViewPage() {
             <RefreshCw className={`h-5 w-5 ${syncing ? 'animate-spin' : ''}`} />
             <span className="text-[10px]">{syncing ? '...' : '同期'}</span>
           </button>
+          {/* PiP */}
+          {furiganaLines.length > 0 && (
+            <button onClick={openPiP} className="flex flex-col items-center gap-0.5 p-2 text-[var(--muted-foreground)]">
+              <PictureInPicture className="h-5 w-5" />
+              <span className="text-[10px]">PiP</span>
+            </button>
+          )}
           {/* Paste LRC */}
           {!hasSyncData && (
             <button onClick={() => setShowPasteLrc(!showPasteLrc)} className={`flex flex-col items-center gap-0.5 p-2 ${showPasteLrc ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)]'}`}>
