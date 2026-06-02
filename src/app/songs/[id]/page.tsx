@@ -142,6 +142,14 @@ export default function SongViewPage() {
   });
   const lyricsRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
+  // Interpolation state for smooth progress between Spotify polls
+  const interpRef = useRef({ progressMs: 0, pollTime: 0, isPlaying: false, trackName: '', durationMs: 0 });
+  const rafRef = useRef<number>(0);
+  const highlightRef = useRef(-1);
+  const lineTimestampsRef = useRef<(number | null)[]>([]);
+  const furiganaLinesRef = useRef<FuriganaLine[]>([]);
+  const songRef = useRef<SongData | null>(null);
+  const debugRef = useRef(false);
 
   useEffect(() => { localStorage.setItem('jplrc-font-size', String(fontSize)); }, [fontSize]);
 
@@ -177,6 +185,12 @@ export default function SongViewPage() {
     return ts;
   }, [syncLines, furiganaLines]);
 
+  // Keep refs in sync with state for rAF loop (avoids stale closures)
+  useEffect(() => { lineTimestampsRef.current = lineTimestamps; }, [lineTimestamps]);
+  useEffect(() => { furiganaLinesRef.current = furiganaLines; }, [furiganaLines]);
+  useEffect(() => { songRef.current = song; }, [song]);
+  useEffect(() => { debugRef.current = debug; }, [debug]);
+
   const showToast = (type: 'success' | 'error', msg: string) => {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 3000);
@@ -205,6 +219,18 @@ export default function SongViewPage() {
       const res = await fetch('/api/spotify/now-playing');
       const data = await res.json();
       setSpotify(data);
+      // Record interpolation anchor for smooth progress between polls
+      if (data.is_playing && data.track) {
+        interpRef.current = {
+          progressMs: data.progress_ms,
+          pollTime: performance.now(),
+          isPlaying: true,
+          trackName: data.track.name,
+          durationMs: data.duration_ms || 0,
+        };
+      } else {
+        interpRef.current.isPlaying = false;
+      }
     } catch { /* */ }
   }, []);
 
@@ -214,37 +240,71 @@ export default function SongViewPage() {
     return () => clearInterval(interval);
   }, [pollSpotify]);
 
+  // Smooth interpolation loop — runs at display refresh rate between Spotify polls
+  // Directly updates activeLine and scrolls via refs, no React re-render per frame
   useEffect(() => {
-    if (!spotify?.is_playing || !spotify.track || !song) {
-      setActiveLine(-1);
-      return;
-    }
-    if (!fuzzyMatch(spotify.track.name, song.title)) {
-      setActiveLine(-1);
-      return;
-    }
-    if (lineTimestamps.length > 0) {
-      let best = -1;
-      for (let i = lineTimestamps.length - 1; i >= 0; i--) {
-        const ts = lineTimestamps[i];
-        if (ts != null && spotify.progress_ms >= ts) {
-          best = i;
-          break;
+    const tick = () => {
+      const { progressMs, pollTime, isPlaying, trackName, durationMs } = interpRef.current;
+      const currentSong = songRef.current;
+
+      // Not playing or song mismatch → clear highlight
+      if (!isPlaying || !currentSong || !fuzzyMatch(trackName, currentSong.title)) {
+        if (highlightRef.current !== -1) {
+          highlightRef.current = -1;
+          setActiveLine(-1);
+        }
+        rafRef.current = requestAnimationFrame(tick);
+        return;
+      }
+
+      // Interpolate progress since last Spotify poll
+      const elapsed = performance.now() - pollTime;
+      const currentMs = progressMs + Math.max(0, elapsed);
+
+      // Find active line
+      const lts = lineTimestampsRef.current;
+      const fls = furiganaLinesRef.current;
+      let newActive = -1;
+
+      if (lts.length > 0) {
+        // Timestamp-based: binary-ish scan from end
+        for (let i = lts.length - 1; i >= 0; i--) {
+          if (lts[i] != null && currentMs >= lts[i]!) {
+            newActive = i;
+            break;
+          }
+        }
+      } else {
+        // Fallback: proportional scroll
+        const nonEmpty = fls.filter(l => l.segments.length > 0);
+        if (nonEmpty.length && durationMs) {
+          const progress = Math.min(currentMs / durationMs, 1);
+          newActive = Math.min(Math.floor(progress * nonEmpty.length), nonEmpty.length - 1);
         }
       }
-      setActiveLine(best);
-    } else {
-      const nonEmpty = furiganaLines.filter(l => l.segments.length > 0);
-      if (!nonEmpty.length || !spotify.duration_ms) return;
-      const progress = spotify.progress_ms / spotify.duration_ms;
-      setActiveLine(Math.min(Math.floor(progress * nonEmpty.length), nonEmpty.length - 1));
-    }
-  }, [spotify, song, lineTimestamps, furiganaLines]);
 
+      // Update highlight + scroll only when line actually changes
+      if (newActive !== highlightRef.current) {
+        highlightRef.current = newActive;
+        setActiveLine(newActive);
+        if (!debugRef.current && lineRefs.current[newActive]) {
+          lineRefs.current[newActive]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, []); // Run once — reads from refs that stay in sync via separate effects
+
+  // Re-center when debug mode is toggled off
   useEffect(() => {
-    if (debug || activeLine < 0 || !lineRefs.current[activeLine]) return;
-    lineRefs.current[activeLine]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [activeLine, debug]);
+    if (!debug && activeLine >= 0 && lineRefs.current[activeLine]) {
+      lineRefs.current[activeLine]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [debug]);
 
   const handleSync = async () => {
     setSyncing(true);
