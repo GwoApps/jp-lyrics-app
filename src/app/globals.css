@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0a0a0a;
+  --foreground: #e5e5e5;
+  --card: #141414;
+  --card-foreground: #e5e5e5;
+  --muted: #1a1a1a;
+  --muted-foreground: #737373;
+  --border: #262626;
+  --input: #1e1e1e;
+  --ring: #d4d4d4;
+  --accent: #262626;
+  --accent-foreground: #fafafa;
+  --destructive: #ef4444;
+  --destructive-foreground: #fafafa;
+  --primary: #a78bfa;
+  --primary-foreground: #0a0a0a;
+  --radius: 0.5rem;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
+
+/* Furigana / Ruby styling */
+ruby {
+  ruby-align: center;
+}
+rt {
+  font-size: 0.55em;
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+rp { display: none; }
+
+/* Lyrics display area */
+.lyrics-container {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 1.5rem;
+  line-height: 2.4;
+  font-size: 1.25rem;
+  letter-spacing: 0.02em;
+}
+
+.lyrics-line {
+  min-height: 1.8em;
+}
+
+.lyrics-line.empty {
+  min-height: 1em;
+}
+
+/* Textarea */
+textarea {
+  font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Transition */
+.fade-in {
+  animation: fadeIn 0.2s ease-in;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius);
+  font-size: 0.8125rem;
+  z-index: 100;
+  animation: slideUp 0.3s ease-out;
+}
+.toast-success { background: #065f46; color: #a7f3d0; border: 1px solid #047857; }
+.toast-error { background: #7f1d1d; color: #fca5a5; border: 1px solid #991b1b; }
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
