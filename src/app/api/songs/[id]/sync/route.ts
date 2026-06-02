@@ -94,6 +94,17 @@ async function getSpotifyCanonicalName(title: string, artist: string): Promise<{
 async function fetchFromLrclib(title: string, artist: string): Promise<LyricsResult | null> {
   const headers = { 'User-Agent': 'jp-lyrics-app/1.0' };
 
+  /** Fetch with timeout */
+  async function fetchWithTimeout(url: string, timeoutMs = 15000): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { headers, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   function toResult(data: { syncedLyrics?: string; plainLyrics?: string }): LyricsResult | null {
     if (!data.syncedLyrics) return null;
     return { synced: data.syncedLyrics, plain: data.plainLyrics || stripTimestamps(data.syncedLyrics) };
@@ -102,7 +113,7 @@ async function fetchFromLrclib(title: string, artist: string): Promise<LyricsRes
   // 1) Exact match
   try {
     const params = new URLSearchParams({ track_name: title, artist_name: artist });
-    const res = await fetch(`https://lrclib.net/api/get?${params}`, { headers });
+    const res = await fetchWithTimeout(`https://lrclib.net/api/get?${params}`);
     if (res.ok) {
       const data = await res.json();
       const r = toResult(data);
@@ -115,7 +126,7 @@ async function fetchFromLrclib(title: string, artist: string): Promise<LyricsRes
   if (canonical && canonical.name !== title) {
     try {
       const params = new URLSearchParams({ q: `${canonical.name} ${canonical.artist}` });
-      const res = await fetch(`https://lrclib.net/api/search?${params}`, { headers });
+      const res = await fetchWithTimeout(`https://lrclib.net/api/search?${params}`);
       if (res.ok) {
         const results = await res.json();
         for (const item of results) {
@@ -130,7 +141,7 @@ async function fetchFromLrclib(title: string, artist: string): Promise<LyricsRes
   // 3) Broader search with original title
   try {
     const params = new URLSearchParams({ q: `${title} ${artist}` });
-    const res = await fetch(`https://lrclib.net/api/search?${params}`, { headers });
+    const res = await fetchWithTimeout(`https://lrclib.net/api/search?${params}`);
     if (res.ok) {
       const results = await res.json();
       for (const item of results) {

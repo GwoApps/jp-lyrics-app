@@ -10,10 +10,20 @@ function stripTimestamps(lrc: string): string {
 }
 
 async function fetchLyrics(title: string, artist: string): Promise<{ synced: string; plain: string } | null> {
+  async function fetchWithTimeout(url: string, timeoutMs = 15000): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { headers: LRCLIB_HEADERS, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   // 1) Exact match
   try {
     const params = new URLSearchParams({ track_name: title, artist_name: artist });
-    const res = await fetch(`https://lrclib.net/api/get?${params}`, { headers: LRCLIB_HEADERS });
+    const res = await fetchWithTimeout(`https://lrclib.net/api/get?${params}`);
     if (res.ok) {
       const data = await res.json();
       if (data.syncedLyrics) {
@@ -25,7 +35,7 @@ async function fetchLyrics(title: string, artist: string): Promise<{ synced: str
   // 2) Fuzzy search
   try {
     const params = new URLSearchParams({ q: `${title} ${artist}` });
-    const res = await fetch(`https://lrclib.net/api/search?${params}`, { headers: LRCLIB_HEADERS });
+    const res = await fetchWithTimeout(`https://lrclib.net/api/search?${params}`);
     if (res.ok) {
       const results = await res.json();
       for (const r of results) {
