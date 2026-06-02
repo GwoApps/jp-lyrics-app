@@ -39,12 +39,12 @@ function fuzzyMatch(a: string, b: string): boolean {
   const na = normalize(a);
   const nb = normalize(b);
   if (!na || !nb) return false;
-  if (na.includes(nb) || nb.includes(na)) return true;
-  const shorter = na.length <= nb.length ? na : nb;
-  const longer = na.length > nb.length ? na : nb;
-  let hits = 0;
-  for (const ch of shorter) { if (longer.includes(ch)) hits++; }
-  return hits / shorter.length >= 0.5;
+  if (na === nb || na.includes(nb) || nb.includes(na)) return true;
+  // Bigram (Sørensen-Dice) similarity
+  const bg = (s: string) => { const set = new Set<string>(); for (let i = 0; i < s.length - 1; i++) set.add(s.substring(i, i + 2)); return set; };
+  const aSet = bg(na), bSet = bg(nb);
+  let common = 0; for (const g of aSet) { if (bSet.has(g)) common++; }
+  return (2 * common) / (aSet.size + bSet.size) >= 0.4;
 }
 
 /** Use Spotify search to get the canonical track name */
