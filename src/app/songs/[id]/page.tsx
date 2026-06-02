@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import type { FuriganaLine } from '@/lib/types';
-import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music } from 'lucide-react';
+import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2 } from 'lucide-react';
 
 interface SongData {
   id: string;
@@ -116,6 +116,7 @@ export default function SongViewPage() {
   const [activeLine, setActiveLine] = useState(-1);
   const [syncLines, setSyncLines] = useState<SyncLine[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [fontSize, setFontSize] = useState(18);
   const lyricsRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -244,6 +245,24 @@ export default function SongViewPage() {
     if (res.ok) { showToast('success', '削除しました'); setTimeout(() => router.push('/'), 800); }
   };
 
+  const handleImportPlaying = async () => {
+    if (!spotify?.track) return;
+    setImporting(true);
+    try {
+      const res = await fetch('/api/songs/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: spotify.track.name, artist: spotify.track.artist }),
+      });
+      const data = await res.json();
+      router.push(`/songs/${data.id}`);
+    } catch {
+      showToast('error', '取込に失敗しました');
+    } finally {
+      setImporting(false);
+    }
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center py-32"><div className="h-5 w-5 border-2 border-[var(--muted-foreground)]/30 border-t-[var(--muted-foreground)] rounded-full animate-spin" /></div>;
   }
@@ -333,10 +352,18 @@ export default function SongViewPage() {
             ) : spotify.is_playing && spotify.track ? (
               <div className="flex items-center gap-2 rounded-full bg-[var(--accent)] px-2.5 sm:px-3 py-1">
                 <span className="inline-block h-2 w-2 rounded-full bg-[var(--muted-foreground)]" />
-                <span className="text-xs text-[var(--muted-foreground)] truncate max-w-[250px] sm:max-w-none">
+                <span className="text-xs text-[var(--muted-foreground)] truncate max-w-[150px] sm:max-w-none">
                   {spotify.track.name}
                   {debug && <span className="ml-2 font-mono text-[10px]">[{fmtTime(spotify.progress_ms)} / {fmtTime(spotify.duration_ms)}]</span>}
                 </span>
+                <button
+                  onClick={handleImportPlaying}
+                  disabled={importing}
+                  className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium bg-[var(--primary)] text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0"
+                >
+                  {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                  <span>{importing ? '...' : '取込'}</span>
+                </button>
               </div>
             ) : null}
           </div>
