@@ -19,11 +19,7 @@
   --radius: 0.5rem;
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+/* Tailwind preflight handles reset — no manual * reset needed */
 
 body {
   background: var(--background);
