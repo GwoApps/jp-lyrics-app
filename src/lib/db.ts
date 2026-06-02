@@ -1,18 +1,13 @@
 import { join, dirname } from 'path';
 import { mkdirSync } from 'fs';
 
-// Use require for CJS-only modules in ESM context
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const Database = require('better-sqlite3');
 
 const DB_PATH = join(process.cwd(), 'data', 'lyrics.db');
-
-// Ensure data directory exists
 mkdirSync(dirname(DB_PATH), { recursive: true });
 
 const db = Database(DB_PATH);
-
-// Enable WAL for better concurrent read performance
 db.pragma('journal_mode = WAL');
 
 db.exec(`
@@ -22,6 +17,7 @@ db.exec(`
     artist TEXT NOT NULL DEFAULT '',
     lyrics_raw TEXT NOT NULL DEFAULT '',
     lyrics_furigana TEXT NOT NULL DEFAULT '[]',
+    lyrics_synced TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
   );
@@ -36,7 +32,11 @@ db.exec(`
   );
 `);
 
-// Ensure spotify_auth row exists
+// Migrate: add lyrics_synced column if missing
+try {
+  db.exec(`ALTER TABLE songs ADD COLUMN lyrics_synced TEXT NOT NULL DEFAULT ''`);
+} catch { /* column already exists */ }
+
 db.prepare('INSERT OR IGNORE INTO spotify_auth (id) VALUES (1)').run();
 
 export default db;

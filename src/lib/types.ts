@@ -2,15 +2,16 @@ export interface Song {
   id: string;
   title: string;
   artist: string;
-  lyrics_raw: string;      // original with kanji
-  lyrics_furigana: string;  // JSON: Array<FuriganaLine>
+  lyrics_raw: string;
+  lyrics_furigana: string;
+  lyrics_synced: string;
   created_at: string;
   updated_at: string;
 }
 
 export interface FuriganaSegment {
-  text: string;      // surface form (kanji/kana)
-  reading: string;   // hiragana reading (empty if same as text)
+  text: string;
+  reading: string;
 }
 
 export interface FuriganaLine {
