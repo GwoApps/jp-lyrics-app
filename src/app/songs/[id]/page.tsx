@@ -117,9 +117,17 @@ export default function SongViewPage() {
   const [syncLines, setSyncLines] = useState<SyncLine[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [fontSize, setFontSize] = useState(18);
+  const [fontSize, setFontSize] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('jplrc-font-size');
+      if (saved) { const n = parseInt(saved); if (n >= 12 && n <= 28) return n; }
+    }
+    return 18;
+  });
   const lyricsRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  useEffect(() => { localStorage.setItem('jplrc-font-size', String(fontSize)); }, [fontSize]);
 
   const furiganaLines = useMemo<FuriganaLine[]>(() => {
     if (!song?.lyrics_furigana) return [];
@@ -212,9 +220,9 @@ export default function SongViewPage() {
   }, [spotify, song, lineTimestamps, furiganaLines]);
 
   useEffect(() => {
-    if (activeLine < 0 || !lineRefs.current[activeLine]) return;
+    if (debug || activeLine < 0 || !lineRefs.current[activeLine]) return;
     lineRefs.current[activeLine]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [activeLine]);
+  }, [activeLine, debug]);
 
   const handleSync = async () => {
     setSyncing(true);
