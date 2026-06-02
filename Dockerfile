@@ -21,6 +21,9 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
+# Copy kuromoji dictionary (required for furigana conversion)
+COPY --from=deps /app/node_modules/kuromoji/dict ./node_modules/kuromoji/dict
+
 # Create data directory for SQLite DB
 RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 
