@@ -315,9 +315,9 @@ export default function SongViewPage() {
     : null;
 
   return (
-    <div className="fade-in pb-24 sm:pb-0">
+    <div className="fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-hidden sm:block sm:h-auto sm:pb-0">
       {/* Breadcrumb */}
-      <div className="mb-4 sm:mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
+      <div className="shrink-0 mb-3 sm:mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
         <a href="/" className="hover:text-[var(--foreground)] transition-colors inline-flex items-center gap-1">
           <ArrowLeft className="h-3 w-3" /> 一覧
         </a>
@@ -326,7 +326,7 @@ export default function SongViewPage() {
       </div>
 
       {/* Header — compact on mobile */}
-      <div className="mb-4 sm:mb-8">
+      <div className="shrink-0 mb-3 sm:mb-8">
         <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
           <div className="space-y-0.5 sm:space-y-1 min-w-0">
             <h1 className="text-base sm:text-xl font-semibold tracking-tight">{song.title}</h1>
@@ -428,11 +428,11 @@ export default function SongViewPage() {
       </div>
 
       {/* Lyrics */}
-      <div className="rounded-lg bg-[var(--card)] border border-[var(--border)] overflow-hidden">
+      <div className="rounded-lg bg-[var(--card)] border border-[var(--border)] overflow-hidden flex-1 min-h-0">
         {showRaw ? (
-          <pre className="p-4 sm:p-6 whitespace-pre-wrap font-sans leading-relaxed max-h-[70vh] sm:max-h-[70vh] overflow-y-auto" style={{ fontSize: `${fontSize}px` }}>{song.lyrics_raw || '（歌詞なし）'}</pre>
+          <pre className="p-4 sm:p-6 whitespace-pre-wrap font-sans leading-relaxed h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto" style={{ fontSize: `${fontSize}px` }}>{song.lyrics_raw || '（歌詞なし）'}</pre>
         ) : (
-          <div ref={lyricsRef} className="p-4 sm:p-6 max-h-[70vh] sm:max-h-[70vh] overflow-y-auto scroll-smooth" style={{ fontSize: `${fontSize}px` }}>
+          <div ref={lyricsRef} className="p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto scroll-smooth" style={{ fontSize: `${fontSize}px` }}>
             {furiganaLines.length > 0 ? (
               furiganaLines.map((line, i) => (
                 <div key={i} ref={(el) => { lineRefs.current[i] = el; }}>
@@ -451,7 +451,7 @@ export default function SongViewPage() {
       </div>
 
       {/* Meta */}
-      <div className="mt-3 sm:mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-2">
+      <div className="shrink-0 mt-2 sm:mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-2">
         <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-6 gap-y-1 text-[10px] sm:text-[11px] text-[var(--muted-foreground)]">
           <span>作成: {new Date(song.created_at).toLocaleString('ja-JP')}</span>
           <span>更新: {new Date(song.updated_at).toLocaleString('ja-JP')}</span>
