@@ -23,7 +23,7 @@ export async function PUT(
 ) {
   const { id } = await params;
   const body = await request.json();
-  const { title, artist, lyrics_raw } = body;
+  const { title, artist, lyrics_raw, lyrics_synced } = body;
 
   const existing = db.prepare('SELECT * FROM songs WHERE id = ?').get(id) as Song | undefined;
   if (!existing) {
@@ -43,13 +43,16 @@ export async function PUT(
     }
   }
 
+  const newSynced = lyrics_synced !== undefined ? lyrics_synced : existing.lyrics_synced;
+
   db.prepare(
-    `UPDATE songs SET title = ?, artist = ?, lyrics_raw = ?, lyrics_furigana = ?, updated_at = datetime('now', 'localtime') WHERE id = ?`
+    `UPDATE songs SET title = ?, artist = ?, lyrics_raw = ?, lyrics_furigana = ?, lyrics_synced = ?, updated_at = datetime('now', 'localtime') WHERE id = ?`
   ).run(
     title !== undefined ? title : existing.title,
     artist !== undefined ? artist : existing.artist,
     newRaw,
     lyricsFurigana,
+    newSynced,
     id
   );
 

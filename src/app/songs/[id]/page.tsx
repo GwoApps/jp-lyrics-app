@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import type { FuriganaLine } from '@/lib/types';
-import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink } from 'lucide-react';
+import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste } from 'lucide-react';
 
 interface SongData {
   id: string;
@@ -130,6 +130,9 @@ export default function SongViewPage() {
   const [syncing, setSyncing] = useState(false);
   const [importing, setImporting] = useState(false);
   const [allSongs, setAllSongs] = useState<{ id: string; title: string }[]>([]);
+  const [showPasteLrc, setShowPasteLrc] = useState(false);
+  const [pasteLrcText, setPasteLrcText] = useState('');
+  const [syncError, setSyncError] = useState('');
   const [fontSize, setFontSize] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('jplrc-font-size');
@@ -245,6 +248,7 @@ export default function SongViewPage() {
 
   const handleSync = async () => {
     setSyncing(true);
+    setSyncError('');
     try {
       const res = await fetch(`/api/songs/${id}/sync`, { method: 'POST' });
       const data = await res.json();
@@ -257,12 +261,43 @@ export default function SongViewPage() {
         }
         showToast('success', `歌詞同期完了 (${data.source}, ${data.lines}行)`);
       } else {
-        showToast('error', data.error || '同期歌詞が見つかりません');
+        setSyncError(data.error || '歌詞が見つかりません');
+        showToast('error', '歌詞が見つかりません — 手動貼付をご利用ください');
       }
     } catch {
+      setSyncError('通信エラー');
       showToast('error', '取得に失敗しました');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handlePasteLrc = async () => {
+    if (!pasteLrcText.trim()) return;
+    // Save raw lyrics + synced lyrics
+    try {
+      const res = await fetch(`/api/songs/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lyrics_synced: pasteLrcText.trim(),
+        }),
+      });
+      if (res.ok) {
+        // Re-fetch song data
+        const songRes = await fetch(`/api/songs/${id}`);
+        if (songRes.ok) {
+          const updated = await songRes.json();
+          setSong(updated);
+          setSyncLines(parseLrc(pasteLrcText.trim()));
+        }
+        setShowPasteLrc(false);
+        setPasteLrcText('');
+        setSyncError('');
+        showToast('success', '歌詞を保存しました');
+      }
+    } catch {
+      showToast('error', '保存に失敗しました');
     }
   };
 
@@ -342,6 +377,11 @@ export default function SongViewPage() {
             <button onClick={handleSync} disabled={syncing} className={btnCls()}>
               <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
             </button>
+            {!hasSyncData && (
+              <button onClick={() => setShowPasteLrc(!showPasteLrc)} className={btnCls(showPasteLrc)}>
+                <ClipboardPaste className="h-3.5 w-3.5" />
+              </button>
+            )}
             <button onClick={() => setDebug(!debug)} className={btnCls(debug)}>
               <Bug className="h-3.5 w-3.5" />
             </button>
@@ -425,6 +465,38 @@ export default function SongViewPage() {
             )}
           </div>
         )}
+
+        {/* Paste LRC UI */}
+        {(showPasteLrc || syncError) && !hasSyncData && (
+          <div className="mt-3 rounded-md bg-[var(--muted)] border border-[var(--border)] p-3 sm:p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-[var(--foreground)]">LRC 歌詞を手動貼付</span>
+              {syncError && <span className="text-[10px] text-[var(--destructive)]">{syncError}</span>}
+            </div>
+            <textarea
+              value={pasteLrcText}
+              onChange={(e) => setPasteLrcText(e.target.value)}
+              placeholder={`[00:05.58] 歌詞の一行目\n[00:10.23] 歌詞の二行目\n[00:15.00] ...`}
+              rows={6}
+              className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs font-mono outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/40 resize-y"
+            />
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                onClick={handlePasteLrc}
+                disabled={!pasteLrcText.trim()}
+                className="rounded-md px-3 py-1.5 text-xs font-medium bg-[var(--primary)] text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                保存
+              </button>
+              <button
+                onClick={() => { setShowPasteLrc(false); setPasteLrcText(''); setSyncError(''); }}
+                className="rounded-md px-3 py-1.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Lyrics */}
@@ -479,6 +551,13 @@ export default function SongViewPage() {
             <RefreshCw className={`h-5 w-5 ${syncing ? 'animate-spin' : ''}`} />
             <span className="text-[10px]">{syncing ? '...' : '同期'}</span>
           </button>
+          {/* Paste LRC */}
+          {!hasSyncData && (
+            <button onClick={() => setShowPasteLrc(!showPasteLrc)} className={`flex flex-col items-center gap-0.5 p-2 ${showPasteLrc ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)]'}`}>
+              <ClipboardPaste className="h-5 w-5" />
+              <span className="text-[10px]">貼付</span>
+            </button>
+          )}
           {/* Raw/Furigana */}
           <button onClick={() => setShowRaw(!showRaw)} className="flex flex-col items-center gap-0.5 p-2 text-[var(--muted-foreground)]">
             {showRaw ? <BookOpen className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
