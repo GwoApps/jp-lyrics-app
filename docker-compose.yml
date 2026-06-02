@@ -3,6 +3,7 @@ services:
     build: .
     container_name: jplrc
     restart: unless-stopped
+    env_file: .env
     volumes:
       - jplrc-data:/app/data
     networks:
