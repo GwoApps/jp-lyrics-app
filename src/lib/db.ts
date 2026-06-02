@@ -23,7 +23,7 @@ db.exec(`
   );
 
   CREATE TABLE IF NOT EXISTS spotify_auth (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
+    user_email TEXT PRIMARY KEY,
     access_token TEXT NOT NULL DEFAULT '',
     refresh_token TEXT NOT NULL DEFAULT '',
     expires_at INTEGER NOT NULL DEFAULT 0,
@@ -37,6 +37,30 @@ try {
   db.exec(`ALTER TABLE songs ADD COLUMN lyrics_synced TEXT NOT NULL DEFAULT ''`);
 } catch { /* column already exists */ }
 
-db.prepare('INSERT OR IGNORE INTO spotify_auth (id) VALUES (1)').run();
+// Migrate: if old single-row spotify_auth exists (id=1 style), drop and recreate
+try {
+  const info = db.prepare("PRAGMA table_info(spotify_auth)").all();
+  const hasIdCol = (info as { name: string }[]).some((c) => c.name === 'id');
+  if (hasIdCol) {
+    // Old schema — save existing data, recreate, migrate
+    const old = db.prepare('SELECT * FROM spotify_auth WHERE id = 1').get() as Record<string, unknown> | undefined;
+    db.exec('DROP TABLE spotify_auth');
+    db.exec(`
+      CREATE TABLE spotify_auth (
+        user_email TEXT PRIMARY KEY,
+        access_token TEXT NOT NULL DEFAULT '',
+        refresh_token TEXT NOT NULL DEFAULT '',
+        expires_at INTEGER NOT NULL DEFAULT 0,
+        display_name TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      )
+    `);
+    if (old && old.access_token) {
+      db.prepare(
+        `INSERT INTO spotify_auth (user_email, access_token, refresh_token, expires_at, display_name) VALUES ('__legacy__', ?, ?, ?, ?)`
+      ).run(old.access_token, old.refresh_token, old.expires_at, old.display_name);
+    }
+  }
+} catch { /* migration already done or table doesn't exist */ }
 
 export default db;

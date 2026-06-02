@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI } from '@/lib/spotify';
+import { getAuthUser } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get('code');
@@ -8,6 +9,12 @@ export async function GET(request: NextRequest) {
 
   if (error || !code) {
     return NextResponse.redirect(new URL('/?spotify_error=denied', request.url));
+  }
+
+  // Get authenticated user from kazusa-auth headers
+  const user = getAuthUser(request);
+  if (!user) {
+    return NextResponse.redirect(new URL('/?spotify_error=no_auth', request.url));
   }
 
   const tokenRes = await fetch('https://accounts.spotify.com/api/token', {
@@ -35,9 +42,18 @@ export async function GET(request: NextRequest) {
   const profile = profileRes.ok ? await profileRes.json() : { display_name: 'Spotify User' };
 
   const expiresAt = Math.floor(Date.now() / 1000) + tokenData.expires_in;
+
+  // Upsert: insert or replace for this user
   db.prepare(
-    `UPDATE spotify_auth SET access_token = ?, refresh_token = ?, expires_at = ?, display_name = ?, updated_at = datetime('now', 'localtime') WHERE id = 1`
-  ).run(tokenData.access_token, tokenData.refresh_token, expiresAt, profile.display_name || '');
+    `INSERT INTO spotify_auth (user_email, access_token, refresh_token, expires_at, display_name, updated_at)
+     VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))
+     ON CONFLICT(user_email) DO UPDATE SET
+       access_token = excluded.access_token,
+       refresh_token = excluded.refresh_token,
+       expires_at = excluded.expires_at,
+       display_name = excluded.display_name,
+       updated_at = excluded.updated_at`
+  ).run(user.email, tokenData.access_token, tokenData.refresh_token, expiresAt, profile.display_name || '');
 
   return NextResponse.redirect(new URL('/?spotify=connected', request.url));
 }
