@@ -1,10 +1,20 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET } from '@/lib/spotify';
+import { convertToFurigana } from '@/lib/kuroshiro';
 
 interface LrcLine {
   timeMs: number;
   text: string;
+}
+
+interface LyricsResult {
+  synced: string;
+  plain: string;
+}
+
+function stripTimestamps(lrc: string): string {
+  return lrc.replace(/^\[\d{2}:\d{2}\.\d{2,3}\]\s*/gm, '').trim();
 }
 
 function parseLrc(lrc: string): LrcLine[] {
@@ -81,8 +91,13 @@ async function getSpotifyCanonicalName(title: string, artist: string): Promise<{
 }
 
 /** lrclib.net: exact get → search with canonical name → search with artist */
-async function fetchFromLrclib(title: string, artist: string): Promise<string | null> {
+async function fetchFromLrclib(title: string, artist: string): Promise<LyricsResult | null> {
   const headers = { 'User-Agent': 'jp-lyrics-app/1.0' };
+
+  function toResult(data: { syncedLyrics?: string; plainLyrics?: string }): LyricsResult | null {
+    if (!data.syncedLyrics) return null;
+    return { synced: data.syncedLyrics, plain: data.plainLyrics || stripTimestamps(data.syncedLyrics) };
+  }
 
   // 1) Exact match
   try {
@@ -90,7 +105,8 @@ async function fetchFromLrclib(title: string, artist: string): Promise<string | 
     const res = await fetch(`https://lrclib.net/api/get?${params}`, { headers });
     if (res.ok) {
       const data = await res.json();
-      if (data.syncedLyrics) return data.syncedLyrics;
+      const r = toResult(data);
+      if (r) return r;
     }
   } catch { /* */ }
 
@@ -102,9 +118,9 @@ async function fetchFromLrclib(title: string, artist: string): Promise<string | 
       const res = await fetch(`https://lrclib.net/api/search?${params}`, { headers });
       if (res.ok) {
         const results = await res.json();
-        for (const r of results) {
-          if (r.syncedLyrics && fuzzyMatch(r.trackName, canonical.name)) {
-            return r.syncedLyrics;
+        for (const item of results) {
+          if (item.syncedLyrics && fuzzyMatch(item.trackName, canonical.name)) {
+            return toResult(item);
           }
         }
       }
@@ -117,9 +133,9 @@ async function fetchFromLrclib(title: string, artist: string): Promise<string | 
     const res = await fetch(`https://lrclib.net/api/search?${params}`, { headers });
     if (res.ok) {
       const results = await res.json();
-      for (const r of results) {
-        if (r.syncedLyrics && fuzzyMatch(r.trackName, title)) {
-          return r.syncedLyrics;
+      for (const item of results) {
+        if (item.syncedLyrics && fuzzyMatch(item.trackName, title)) {
+          return toResult(item);
         }
       }
     }
@@ -129,7 +145,7 @@ async function fetchFromLrclib(title: string, artist: string): Promise<string | 
 }
 
 /** Spotify unofficial lyrics endpoint */
-async function fetchFromSpotify(title: string, artist: string): Promise<string | null> {
+async function fetchFromSpotify(title: string, artist: string): Promise<LyricsResult | null> {
   const token = await getSpotifyToken();
   if (!token) return null;
 
@@ -153,14 +169,16 @@ async function fetchFromSpotify(title: string, artist: string): Promise<string |
   if (!lines || !lines.length) return null;
 
   const lrcLines: string[] = [];
+  const plainLines: string[] = [];
   for (const line of lines) {
     const ts = parseInt(line.startTimeMs);
     const min = Math.floor(ts / 60000);
     const sec = Math.floor((ts % 60000) / 1000);
     const ms = ts % 1000;
     lrcLines.push(`[${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}.${String(ms).padStart(3, '0')}] ${line.words}`);
+    plainLines.push(line.words);
   }
-  return lrcLines.join('\n');
+  return { synced: lrcLines.join('\n'), plain: plainLines.join('\n') };
 }
 
 export async function POST(
@@ -173,29 +191,30 @@ export async function POST(
     return NextResponse.json({ error: '曲が見つかりません' }, { status: 404 });
   }
 
-  // Already synced?
-  if (song.lyrics_synced) {
-    const parsed = parseLrc(song.lyrics_synced);
-    return NextResponse.json({ synced: true, source: 'cached', lines: parsed.length, lrc: song.lyrics_synced });
-  }
-
-  // Try lrclib.net (with Spotify canonical name fallback)
-  let lrc = await fetchFromLrclib(song.title, song.artist);
+  // Always re-fetch to allow overwrite
+  let result = await fetchFromLrclib(song.title, song.artist);
   let source = 'lrclib';
 
-  // Fallback to Spotify unofficial
-  if (!lrc) {
-    lrc = await fetchFromSpotify(song.title, song.artist);
+  if (!result) {
+    result = await fetchFromSpotify(song.title, song.artist);
     source = 'spotify';
   }
 
-  if (!lrc) {
+  if (!result) {
     return NextResponse.json({ synced: false, error: '同期歌詞が見つかりません' });
   }
 
-  db.prepare(`UPDATE songs SET lyrics_synced = ?, updated_at = datetime('now','localtime') WHERE id = ?`)
-    .run(lrc, id);
+  // Generate furigana from plain lyrics
+  let furigana: unknown[] = [];
+  try {
+    furigana = await convertToFurigana(result.plain);
+  } catch (e) {
+    console.error('Furigana conversion failed:', e);
+  }
 
-  const parsed = parseLrc(lrc);
-  return NextResponse.json({ synced: true, source, lines: parsed.length, lrc });
+  db.prepare(`UPDATE songs SET lyrics_raw = ?, lyrics_furigana = ?, lyrics_synced = ?, updated_at = datetime('now','localtime') WHERE id = ?`)
+    .run(result.plain, JSON.stringify(furigana), result.synced, id);
+
+  const parsed = parseLrc(result.synced);
+  return NextResponse.json({ synced: true, source, lines: parsed.length, lrc: result.synced });
 }

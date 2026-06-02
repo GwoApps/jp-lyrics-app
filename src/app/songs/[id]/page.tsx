@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import type { FuriganaLine } from '@/lib/types';
 
@@ -120,6 +120,38 @@ export default function SongViewPage() {
   const lyricsRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
 
+  const furiganaLines = useMemo<FuriganaLine[]>(() => {
+    if (!song?.lyrics_furigana) return [];
+    try { return JSON.parse(song.lyrics_furigana); } catch { return []; }
+  }, [song?.lyrics_furigana]);
+
+  const lineTimestamps = useMemo(() => {
+    if (!syncLines.length || !furiganaLines.length) return [] as (number | null)[];
+    const ts: (number | null)[] = [];
+    let si = 0;
+    for (let fi = 0; fi < furiganaLines.length; fi++) {
+      const fl = furiganaLines[fi];
+      if (fl.segments.length === 0) { ts.push(null); continue; }
+      const flText = fl.segments.map(s => s.text).join('').replace(/\s+/g, '');
+      let bestJ = -1;
+      for (let j = si; j < Math.min(syncLines.length, si + 10); j++) {
+        if (fuzzyMatch(flText, syncLines[j].text.replace(/\s+/g, ''))) {
+          bestJ = j; break;
+        }
+      }
+      if (bestJ >= 0) {
+        ts.push(syncLines[bestJ].timeMs);
+        si = bestJ + 1;
+      } else if (si < syncLines.length) {
+        ts.push(syncLines[si].timeMs);
+        si++;
+      } else {
+        ts.push(null);
+      }
+    }
+    return ts;
+  }, [syncLines, furiganaLines]);
+
   const showToast = (type: 'success' | 'error', msg: string) => {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 3000);
@@ -156,22 +188,27 @@ export default function SongViewPage() {
       setActiveLine(-1);
       return;
     }
-    const titleMatch = fuzzyMatch(spotify.track.name, song.title);
-    if (!titleMatch) {
+    if (!fuzzyMatch(spotify.track.name, song.title)) {
       setActiveLine(-1);
       return;
     }
-    if (syncLines.length > 0) {
-      setActiveLine(findActiveLine(syncLines, spotify.progress_ms));
+    if (lineTimestamps.length > 0) {
+      let best = -1;
+      for (let i = lineTimestamps.length - 1; i >= 0; i--) {
+        const ts = lineTimestamps[i];
+        if (ts != null && spotify.progress_ms >= ts) {
+          best = i;
+          break;
+        }
+      }
+      setActiveLine(best);
     } else {
-      let furiganaLines: FuriganaLine[] = [];
-      try { furiganaLines = JSON.parse(song.lyrics_furigana); } catch { /* */ }
       const nonEmpty = furiganaLines.filter(l => l.segments.length > 0);
-      if (nonEmpty.length === 0 || !spotify.duration_ms) return;
+      if (!nonEmpty.length || !spotify.duration_ms) return;
       const progress = spotify.progress_ms / spotify.duration_ms;
       setActiveLine(Math.min(Math.floor(progress * nonEmpty.length), nonEmpty.length - 1));
     }
-  }, [spotify, song, syncLines]);
+  }, [spotify, song, lineTimestamps, furiganaLines]);
 
   useEffect(() => {
     if (activeLine < 0 || !lineRefs.current[activeLine]) return;
@@ -184,8 +221,14 @@ export default function SongViewPage() {
       const res = await fetch(`/api/songs/${id}/sync`, { method: 'POST' });
       const data = await res.json();
       if (data.synced) {
-        setSyncLines(parseLrc(data.lrc));
-        showToast('success', `同期歌詞取得完了 (${data.source}, ${data.lines}行)`);
+        // Re-fetch song data to get updated lyrics_raw + lyrics_furigana
+        const songRes = await fetch(`/api/songs/${id}`);
+        if (songRes.ok) {
+          const updated = await songRes.json();
+          setSong(updated);
+          setSyncLines(parseLrc(data.lrc));
+        }
+        showToast('success', `歌詞同期完了 (${data.source}, ${data.lines}行)`);
       } else {
         showToast('error', data.error || '同期歌詞が見つかりません');
       }
@@ -215,44 +258,9 @@ export default function SongViewPage() {
     );
   }
 
-  let furiganaLines: FuriganaLine[] = [];
-  try { furiganaLines = JSON.parse(song.lyrics_furigana); } catch { /* */ }
-
   const isSynced = spotify?.is_playing && spotify.track && activeLine >= 0;
   const hasSyncData = syncLines.length > 0;
-
-  // Build a map: furigana line index → nearest syncLine timestamp
-  // Since furigana lines and sync lines may not be 1:1, we try to match by text similarity
-  const lineTimestamps: (number | null)[] = [];
-  if (hasSyncData && furiganaLines.length > 0) {
-    let syncIdx = 0;
-    for (let i = 0; i < furiganaLines.length; i++) {
-      const line = furiganaLines[i];
-      if (line.segments.length === 0) {
-        lineTimestamps.push(null);
-        continue;
-      }
-      const lineText = line.segments.map(s => s.text).join('').replace(/\s+/g, '');
-      // Try to find matching sync line
-      let bestIdx = syncIdx;
-      let bestScore = 0;
-      for (let j = Math.max(0, syncIdx - 2); j < Math.min(syncLines.length, syncIdx + 5); j++) {
-        const syncText = syncLines[j].text.replace(/\s+/g, '');
-        if (fuzzyMatch(lineText, syncText)) {
-          bestIdx = j;
-          bestScore = 1;
-          break;
-        }
-      }
-      if (bestScore > 0) {
-        lineTimestamps.push(syncLines[bestIdx].timeMs);
-        syncIdx = bestIdx + 1;
-      } else {
-        // Interpolate from surrounding matched lines
-        lineTimestamps.push(syncIdx < syncLines.length ? syncLines[syncIdx].timeMs : null);
-      }
-    }
-  }
+  const debugSyncActive = spotify?.is_playing && syncLines.length > 0 ? findActiveLine(syncLines, spotify.progress_ms) : -1;
 
   return (
     <div className="fade-in">
@@ -271,11 +279,9 @@ export default function SongViewPage() {
             {song.artist && <p className="text-sm text-[var(--muted-foreground)]">{song.artist}</p>}
           </div>
           <div className="flex items-center gap-2 shrink-0 pt-1">
-            {!hasSyncData && (
-              <button onClick={handleSync} disabled={syncing} className="rounded-md px-3 py-1.5 text-xs text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors disabled:opacity-50">
-                {syncing ? '取得中...' : '⏱ 同期歌詞'}
-              </button>
-            )}
+            <button onClick={handleSync} disabled={syncing} className="rounded-md px-3 py-1.5 text-xs text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors disabled:opacity-50">
+              {syncing ? '取得中...' : hasSyncData ? '🔄 再同期' : '⏱ 同期歌詞'}
+            </button>
             <button onClick={() => setDebug(!debug)} className={`rounded-md px-3 py-1.5 text-xs transition-colors ${debug ? 'bg-[var(--primary)] text-[var(--primary-foreground)]' : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}>
               Debug
             </button>
@@ -320,14 +326,14 @@ export default function SongViewPage() {
             <div className="text-[var(--primary)] font-medium mb-1.5">Debug Info</div>
             <div>Spotify: {spotify?.connected ? '✓ connected' : '✗ disconnected'} | playing: {String(!!spotify?.is_playing)} | match: {String(isSynced)}</div>
             <div>progress: {spotify ? `${spotify.progress_ms}ms (${fmtTime(spotify.progress_ms)})` : '—'} / {spotify ? `${spotify.duration_ms}ms (${fmtTime(spotify.duration_ms)})` : '—'}</div>
-            <div>sync lines: {syncLines.length} | furigana lines: {furiganaLines.length} | active: #{activeLine}</div>
+            <div>sync lines: {syncLines.length} | furigana lines: {furiganaLines.length} | active furigana: #{activeLine} ({activeLine >= 0 && lineTimestamps[activeLine] != null ? fmtMs(lineTimestamps[activeLine]!) : '—'}) | sync line: #{debugSyncActive}</div>
             <div>track: {spotify?.track?.name || '—'} | song: {song.title}</div>
             {syncLines.length > 0 && (
               <div className="pt-1.5 mt-1.5 border-t border-[var(--border)]">
                 <div className="text-[var(--muted-foreground)] mb-1">Synced timestamps ({syncLines.length} lines):</div>
                 <div className="max-h-40 overflow-y-auto space-y-0.5">
                   {syncLines.map((sl, i) => (
-                    <div key={i} className={i === activeLine ? 'text-green-400 font-medium' : 'text-[var(--muted-foreground)]'}>
+                    <div key={i} className={i === debugSyncActive ? 'text-green-400 font-medium' : 'text-[var(--muted-foreground)]'}>
                       [{fmtMs(sl.timeMs)}] {sl.text}
                     </div>
                   ))}
