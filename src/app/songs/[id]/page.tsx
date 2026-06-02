@@ -22,6 +22,31 @@ interface SpotifyState {
   track: { name: string; artist: string; album: string } | null;
 }
 
+/** Normalize CJK variants and whitespace for fuzzy matching */
+function normalize(s: string): string {
+  return s
+    .normalize('NFKC')          // full-width → half-width, CJK compat
+    .replace(/\s+/g, '')         // strip all whitespace
+    .toLowerCase();
+}
+
+/** Check if two strings are a fuzzy match (>=60% char overlap) */
+function fuzzyMatch(a: string, b: string): boolean {
+  const na = normalize(a);
+  const nb = normalize(b);
+  if (!na || !nb) return false;
+  // Direct inclusion check first
+  if (na.includes(nb) || nb.includes(na)) return true;
+  // Char overlap ratio
+  const shorter = na.length <= nb.length ? na : nb;
+  const longer = na.length > nb.length ? na : nb;
+  let hits = 0;
+  for (const ch of shorter) {
+    if (longer.includes(ch)) hits++;
+  }
+  return hits / shorter.length >= 0.6;
+}
+
 function FuriganaLineView({ line, isActive }: { line: FuriganaLine; isActive: boolean }) {
   if (line.segments.length === 0) {
     return <div className="h-6" />;
@@ -87,9 +112,7 @@ export default function SongViewPage() {
       const res = await fetch('/api/spotify/now-playing');
       const data = await res.json();
       setSpotify(data);
-    } catch {
-      // ignore
-    }
+    } catch { /* */ }
   }, []);
 
   useEffect(() => {
@@ -105,21 +128,16 @@ export default function SongViewPage() {
       return;
     }
 
-    // Fuzzy match: check if track name or artist contains song title/artist
-    const trackLower = `${spotify.track.name} ${spotify.track.artist}`.toLowerCase();
-    const songLower = `${song.title} ${song.artist}`.toLowerCase();
-    const titleMatch = trackLower.includes(song.title.toLowerCase()) || songLower.includes(spotify.track.name.toLowerCase());
+    // Use NFKC-normalized fuzzy matching
+    const titleMatch = fuzzyMatch(spotify.track.name, song.title);
 
     if (!titleMatch) {
       setActiveLine(-1);
       return;
     }
 
-    // Compute active line from progress
     let furiganaLines: FuriganaLine[] = [];
-    try {
-      furiganaLines = JSON.parse(song.lyrics_furigana);
-    } catch { /* */ }
+    try { furiganaLines = JSON.parse(song.lyrics_furigana); } catch { /* */ }
 
     const nonEmptyLines = furiganaLines.filter(l => l.segments.length > 0);
     if (nonEmptyLines.length === 0 || !spotify.duration_ms) return;
@@ -205,7 +223,7 @@ export default function SongViewPage() {
               <div className="flex items-center gap-2 rounded-full bg-green-950/40 border border-green-800/30 px-3 py-1">
                 <span className="inline-block h-2 w-2 rounded-full bg-green-400 animate-pulse" />
                 <span className="text-xs text-green-400">
-                  Spotify同期中 — {spotify.track!.name} / {spotify.track!.artist}
+                  Spotify同期中 — {spotify.track!.name}
                 </span>
               </div>
             ) : spotify.is_playing && spotify.track ? (
@@ -254,7 +272,6 @@ export default function SongViewPage() {
         )}
       </div>
 
-      {/* Toast */}
       {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
     </div>
   );
