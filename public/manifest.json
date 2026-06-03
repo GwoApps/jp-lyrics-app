@@ -1,8 +1,10 @@
 {
+  "id": "/",
   "name": "歌詞ノート — Lyrics Note",
   "short_name": "歌詞ノート",
   "description": "Japanese lyrics management with furigana annotation and Spotify sync",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",
   "theme_color": "#a78bfa",

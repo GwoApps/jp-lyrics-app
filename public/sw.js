@@ -1,18 +1,20 @@
-const CACHE_NAME = 'jplrc-v1';
-const STATIC_ASSETS = [
-  '/',
-  '/icon-16x16.png',
-  '/icon-32x32.png',
-  '/icon-192x192.png',
-  '/icon-512x512.png',
-  '/apple-touch-icon.png',
-  '/manifest.json',
-];
+const CACHE_NAME = 'jplrc-v2';
 
-// Install: cache static assets
+// Install: cache static assets individually (one failure won't block others)
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
+    caches.open(CACHE_NAME).then((cache) => {
+      const urls = [
+        '/icon-16x16.png',
+        '/icon-32x32.png',
+        '/icon-192x192.png',
+        '/icon-512x512.png',
+        '/apple-touch-icon.png',
+        '/manifest.json',
+      ];
+      // Add each URL individually — skip failures silently
+      return Promise.allSettled(urls.map((u) => cache.add(u)));
+    })
   );
   self.skipWaiting();
 });
