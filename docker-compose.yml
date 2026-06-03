@@ -31,7 +31,6 @@ services:
 
 volumes:
   jplrc-data:
-    name: jp-lyrics-app_jplrc-data
 
 networks:
   traefik-net:
