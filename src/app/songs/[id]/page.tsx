@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture, Repeat, Copy, Check } from 'lucide-react';
+import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture, Repeat, Copy, Check, MoreVertical } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import FuriganaLineView from '@/components/FuriganaLine';
 import { useI18n } from '@/lib/i18n';
@@ -304,47 +304,101 @@ export default function SongViewPage() {
       </div>
 
       {/* Mobile bottom toolbar */}
-      <div className="fixed bottom-0 left-0 right-0 sm:hidden z-50 bg-[var(--background)]/95 backdrop-blur-sm border-t border-[var(--border)]">
-        <div className="mx-auto max-w-[860px] flex items-center justify-around px-2 py-2 safe-area-pb">
-          <button onClick={() => data.setFontSize(s => Math.max(14, s - 2))} className="flex flex-col items-center gap-0.5 p-1 text-[var(--muted-foreground)]"><span className="text-lg font-medium leading-none">A-</span></button>
-          <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="flex flex-col items-center gap-0.5 p-1 text-[var(--muted-foreground)]"><span className="text-lg font-medium leading-none">A+</span></button>
-          <div className="w-px h-6 bg-[var(--border)]" />
-          <button onClick={data.handleSync} disabled={data.syncing} className="flex flex-col items-center gap-0.5 p-2 text-[var(--muted-foreground)] disabled:opacity-50">
-            <RefreshCw className={`h-5 w-5 ${data.syncing ? 'animate-spin' : ''}`} /><span className="text-[10px]">{data.syncing ? t('song.syncing') : t('song.sync')}</span>
-          </button>
-          {furiganaLines.length > 0 && pipSupported && (
-            <button onClick={() => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef)} className="flex flex-col items-center gap-0.5 p-2 text-[var(--muted-foreground)]">
-              <PictureInPicture className="h-5 w-5" /><span className="text-[10px]">PiP</span>
-            </button>
-          )}
-          {!hasSyncData && (
-            <button onClick={() => data.setShowPasteLrc(!data.showPasteLrc)} className={`flex flex-col items-center gap-0.5 p-2 ${data.showPasteLrc ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)]'}`}>
-              <ClipboardPaste className="h-5 w-5" /><span className="text-[10px]">{t('song.paste')}</span>
-            </button>
-          )}
-          <button onClick={() => data.setShowRaw(!data.showRaw)} className="flex flex-col items-center gap-0.5 p-2 text-[var(--muted-foreground)]">
-            {data.showRaw ? <BookOpen className="h-5 w-5" /> : <FileText className="h-5 w-5" />}<span className="text-[10px]">{data.showRaw ? t('song.furigana') : t('song.raw')}</span>
-          </button>
-          <button onClick={() => data.setDebug(!data.debug)} className={`flex flex-col items-center gap-0.5 p-2 ${data.debug ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)]'}`}>
-            <Bug className="h-5 w-5" /><span className="text-[10px]">Debug</span>
-          </button>
-          <button onClick={() => router.push(`/songs/${id}/edit`)} className="flex flex-col items-center gap-0.5 p-2 text-[var(--muted-foreground)]">
-            <Pencil className="h-5 w-5" /><span className="text-[10px]">{t('common.edit')}</span>
-          </button>
-          <button onClick={data.handleDelete} className="flex flex-col items-center gap-0.5 p-2 text-[var(--destructive)]"><Trash2 className="h-5 w-5" /></button>
-          <button onClick={data.handleCopy} className={`flex flex-col items-center gap-0.5 p-2 ${data.copied ? 'text-green-400' : 'text-[var(--muted-foreground)]'}`}>
-            {data.copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}<span className="text-[10px]">{t('song.copy')}</span>
-          </button>
-          <button onClick={() => data.setShowExport(!data.showExport)} className={`flex flex-col items-center gap-0.5 p-2 ${data.showExport ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)]'}`}>
-            <Download className="h-5 w-5" /><span className="text-[10px]">{t('song.export')}</span>
-          </button>
-        </div>
-      </div>
+      <MobileMenu
+        data={data} sync={sync} song={song} id={id} router={router}
+        furiganaLines={furiganaLines} hasSyncData={hasSyncData} pipSupported={pipSupported}
+        highlightRef={highlightRef} pipWindowRef={pipWindowRef}
+      />
 
       {data.toast && <div className={`toast toast-${data.toast.type}`}>{data.toast.msg}</div>}
 
       <ConfirmDialog open={data.deleteConfirm} title={t('dialog.deleteConfirmTitle', { title: song?.title || '' })} body={t('dialog.deleteConfirmBody')} confirmLabel={t('common.delete')} cancelLabel={t('common.cancel')} variant="danger" onConfirm={data.confirmDelete} onCancel={() => data.setDeleteConfirm(false)} />
       <ConfirmDialog open={!!data.importAlert} title={t('dialog.importErrorTitle')} body={data.importAlert || undefined} confirmLabel={t('common.confirm')} alert onConfirm={() => data.setImportAlert(null)} />
+    </div>
+  );
+}
+
+/** Mobile bottom toolbar — A-/A+, Sync, Copy visible; rest in 3-dot menu */
+function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, pipSupported, highlightRef, pipWindowRef }: {
+  data: ReturnType<typeof useSongData>;
+  sync: ReturnType<typeof useSpotifySync>;
+  song: NonNullable<ReturnType<typeof useSongData>['song']>;
+  id: string;
+  router: ReturnType<typeof useRouter>;
+  furiganaLines: ReturnType<typeof useSongData>['furiganaLines'];
+  hasSyncData: boolean;
+  pipSupported: boolean;
+  highlightRef: React.MutableRefObject<number>;
+  pipWindowRef: React.MutableRefObject<Window | null>;
+}) {
+  const { t } = useI18n();
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu on outside tap
+  useEffect(() => {
+    if (!showMenu) return;
+    const handler = (e: TouchEvent | MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setShowMenu(false);
+    };
+    document.addEventListener('touchstart', handler);
+    document.addEventListener('mousedown', handler);
+    return () => { document.removeEventListener('touchstart', handler); document.removeEventListener('mousedown', handler); };
+  }, [showMenu]);
+
+  const menuItems = [
+    { icon: <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />, label: data.syncing ? t('song.syncing') : t('song.sync'), onClick: data.handleSync, disabled: data.syncing },
+    ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: 'PiP', onClick: () => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef) }] : []),
+    ...(!hasSyncData ? [{ icon: <ClipboardPaste className="h-4 w-4" />, label: t('song.paste'), onClick: () => data.setShowPasteLrc(!data.showPasteLrc), active: data.showPasteLrc }] : []),
+    { icon: data.showRaw ? <BookOpen className="h-4 w-4" /> : <FileText className="h-4 w-4" />, label: data.showRaw ? t('song.furigana') : t('song.raw'), onClick: () => data.setShowRaw(!data.showRaw) },
+    { icon: <Bug className="h-4 w-4" />, label: 'Debug', onClick: () => data.setDebug(!data.debug), active: data.debug },
+    { icon: <Pencil className="h-4 w-4" />, label: t('common.edit'), onClick: () => router.push(`/songs/${id}/edit`) },
+    { icon: <Download className="h-4 w-4" />, label: t('song.export'), onClick: () => data.setShowExport(!data.showExport), active: data.showExport },
+    { icon: <Trash2 className="h-4 w-4" />, label: t('common.delete'), onClick: data.handleDelete, danger: true },
+  ];
+
+  return (
+    <div className="fixed bottom-0 left-0 right-0 sm:hidden z-50 bg-[var(--background)]/95 backdrop-blur-sm border-t border-[var(--border)]">
+      <div className="mx-auto max-w-[860px] flex items-center justify-between px-3 py-2 safe-area-pb">
+        {/* A-/A+ */}
+        <div className="flex items-center gap-0.5 rounded-lg bg-[var(--accent)] px-1 py-0.5">
+          <button onClick={() => data.setFontSize(s => Math.max(14, s - 2))} className="p-1.5 text-[var(--muted-foreground)] active:text-[var(--foreground)]"><span className="text-base font-medium leading-none">A-</span></button>
+          <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="p-1.5 text-[var(--muted-foreground)] active:text-[var(--foreground)]"><span className="text-base font-medium leading-none">A+</span></button>
+        </div>
+
+        {/* Copy */}
+        <button onClick={data.handleCopy} className={`flex flex-col items-center gap-0.5 p-2 ${data.copied ? 'text-green-400' : 'text-[var(--muted-foreground)]'}`}>
+          {data.copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}<span className="text-[10px]">{t('song.copy')}</span>
+        </button>
+
+        {/* 3-dot menu */}
+        <div className="relative" ref={menuRef}>
+          <button onClick={() => setShowMenu(!showMenu)} className={`flex flex-col items-center gap-0.5 p-2 rounded-lg transition-colors ${showMenu ? 'text-[var(--foreground)] bg-[var(--accent)]' : 'text-[var(--muted-foreground)]'}`}>
+            <MoreVertical className="h-5 w-5" /><span className="text-[10px]">{t('common.more')}</span>
+          </button>
+          {showMenu && (
+            <div className="absolute right-0 bottom-full mb-2 z-50 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-xl py-1.5 min-w-[180px] fade-in">
+              {menuItems.map((item, i) => (
+                <button
+                  key={i}
+                  onClick={() => { item.onClick(); if (!('active' in item)) setShowMenu(false); }}
+                  disabled={'disabled' in item ? item.disabled : false}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors disabled:opacity-50 ${
+                    'danger' in item && item.danger
+                      ? 'text-[var(--destructive)] hover:bg-red-950/30'
+                      : 'active' in item && item.active
+                        ? 'text-[var(--primary)] bg-[var(--primary)]/10'
+                        : 'text-[var(--foreground)] hover:bg-[var(--accent)]'
+                  }`}
+                >
+                  {item.icon}
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
