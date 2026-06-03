@@ -303,7 +303,8 @@ export function useSongData(id: string): UseSongDataReturn {
             #pip-header .title { color: #e5e5e5; font-weight: 500; }
             #pip-lyrics { height: calc(100% - 36px); overflow-y: auto; padding: 12px; scroll-behavior: smooth; }
             .line { line-height: 2.2; padding: 2px 4px; border-radius: 4px; transition: color 0.3s, transform 0.3s, opacity 0.3s; transform-origin: left; opacity: 0.6; font-size: ${fontSize}px; }
-            .line.active { color: #ffffff; transform: scale(1.02); opacity: 1; }
+            @keyframes lyricActivate { 0% { transform: scale(1); filter: brightness(1); } 40% { transform: scale(1.06); filter: brightness(1.25); } 100% { transform: scale(1.03); filter: brightness(1); } }
+            .line.active { color: #ffffff; transform: scale(1.03); opacity: 1; font-weight: 700; animation: lyricActivate 0.45s cubic-bezier(0.34, 1.56, 0.64, 1); }
             .line.empty { height: 1.5em; }
             ruby rt { font-size: 0.5em; color: #a3a3a3; }
             .line.active ruby rt { color: #d4d4d4; }

@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef, useEffect, useState } from 'react';
 import type { FuriganaLine } from '@/lib/types';
 import { fmtMs } from '@/lib/lrc';
 
@@ -8,6 +9,16 @@ export default function FuriganaLineView({ line, isActive, debugTs }: {
   isActive: boolean;
   debugTs?: number | null;
 }) {
+  const [animKey, setAnimKey] = useState(0);
+  const wasActiveRef = useRef(false);
+
+  useEffect(() => {
+    if (isActive && !wasActiveRef.current) {
+      setAnimKey(k => k + 1);
+    }
+    wasActiveRef.current = isActive;
+  }, [isActive]);
+
   if (line.segments.length === 0) return <div className="h-5 sm:h-6" />;
   return (
     <div className="flex items-baseline gap-2 sm:gap-3">
@@ -16,7 +27,14 @@ export default function FuriganaLineView({ line, isActive, debugTs }: {
           {fmtMs(debugTs)}
         </span>
       )}
-      <div className={`leading-[2.2] sm:leading-[2.8] transition-all duration-300 ${isActive ? 'text-white scale-[1.02] origin-left' : 'text-[var(--muted-foreground)] opacity-60'}`}>
+      <div
+        key={animKey}
+        className={`leading-[2.2] sm:leading-[2.8] transition-all duration-300 ${
+          isActive
+            ? 'text-white font-bold scale-[1.03] origin-left lyric-active'
+            : 'text-[var(--muted-foreground)] opacity-60 font-normal'
+        }`}
+      >
         {line.segments.map((seg, i) => {
           if (!seg.reading) return <span key={i}>{seg.text}</span>;
           return (
