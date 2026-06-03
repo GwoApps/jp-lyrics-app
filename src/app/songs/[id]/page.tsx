@@ -6,6 +6,7 @@ import type { FuriganaLine } from '@/lib/types';
 import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useI18n } from '@/lib/i18n';
+import { isTitleMatch, findBestMatch, lineFuzzyMatch } from '@/lib/match';
 
 interface SongData {
   id: string;
@@ -29,22 +30,6 @@ interface SpotifyState {
 interface SyncLine {
   timeMs: number;
   text: string;
-}
-
-function normalize(s: string): string {
-  return s.normalize('NFKC').replace(/\s+/g, '').toLowerCase();
-}
-
-function fuzzyMatch(a: string, b: string): boolean {
-  const na = normalize(a);
-  const nb = normalize(b);
-  if (!na || !nb) return false;
-  if (na === nb || na.includes(nb) || nb.includes(na)) return true;
-  // Bigram (Sørensen-Dice) similarity
-  const bg = (s: string) => { const set = new Set<string>(); for (let i = 0; i < s.length - 1; i++) set.add(s.substring(i, i + 2)); return set; };
-  const aSet = bg(na), bSet = bg(nb);
-  let common = 0; for (const g of aSet) { if (bSet.has(g)) common++; }
-  return (2 * common) / (aSet.size + bSet.size) >= 0.4;
 }
 
 function parseLrc(lrc: string): SyncLine[] {
@@ -134,7 +119,7 @@ export default function SongViewPage() {
   const [syncLines, setSyncLines] = useState<SyncLine[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [allSongs, setAllSongs] = useState<{ id: string; title: string }[]>([]);
+  const [allSongs, setAllSongs] = useState<{ id: string; title: string; artist: string }[]>([]);
   const [showPasteLrc, setShowPasteLrc] = useState(false);
   const [pasteLrcText, setPasteLrcText] = useState('');
   const [syncError, setSyncError] = useState('');
@@ -182,7 +167,7 @@ export default function SongViewPage() {
       const flText = fl.segments.map(s => s.text).join('').replace(/\s+/g, '');
       let bestJ = -1;
       for (let j = si; j < Math.min(syncLines.length, si + 10); j++) {
-        if (fuzzyMatch(flText, syncLines[j].text.replace(/\s+/g, ''))) {
+        if (lineFuzzyMatch(flText, syncLines[j].text.replace(/\s+/g, ''))) {
           bestJ = j; break;
         }
       }
@@ -231,7 +216,7 @@ export default function SongViewPage() {
     // Fetch all songs for matching
     fetch('/api/songs')
       .then((r) => r.json())
-      .then((data) => setAllSongs(data.map((s: { id: string; title: string }) => ({ id: s.id, title: s.title }))))
+      .then((data) => setAllSongs(data.map((s: { id: string; title: string; artist: string }) => ({ id: s.id, title: s.title, artist: s.artist }))))
       .catch(() => {});
   }, [id]);
 
@@ -269,7 +254,7 @@ export default function SongViewPage() {
       const currentSong = songRef.current;
 
       // Not playing or song mismatch → clear highlight
-      if (!isPlaying || !currentSong || !fuzzyMatch(trackName, currentSong.title)) {
+      if (!isPlaying || !currentSong || !isTitleMatch(trackName, currentSong.title)) {
         if (highlightRef.current !== -1) {
           highlightRef.current = -1;
           setActiveLine(-1);
@@ -532,9 +517,12 @@ export default function SongViewPage() {
   const hasSyncData = syncLines.length > 0;
   const debugSyncActive = spotify?.is_playing && syncLines.length > 0 ? findActiveLine(syncLines, spotify.progress_ms) : -1;
 
-  // Check if currently playing song exists in DB
+  // Check if currently playing song exists in DB (title + artist scoring)
   const playingMatch = spotify?.track
-    ? allSongs.find((s) => fuzzyMatch(s.title, spotify.track!.name) && s.id !== id)
+    ? (() => {
+        const candidates = allSongs.filter((s) => s.id !== id);
+        return findBestMatch(candidates, spotify.track);
+      })()
     : null;
 
   return (

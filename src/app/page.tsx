@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Music, Pencil, Trash2, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useI18n } from '@/lib/i18n';
+import { findBestMatch, isSongPlaying } from '@/lib/match';
 
 interface SongItem {
   id: string;
@@ -31,22 +32,6 @@ interface NowPlaying {
 function localeToBCP47(locale: string): string {
   const map: Record<string, string> = { ja: 'ja-JP', en: 'en-US', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW' };
   return map[locale] ?? 'ja-JP';
-}
-
-function normalize(s: string): string {
-  return s.normalize('NFKC').replace(/\s+/g, '').toLowerCase();
-}
-
-function fuzzyMatch(a: string, b: string): boolean {
-  const na = normalize(a);
-  const nb = normalize(b);
-  if (!na || !nb) return false;
-  if (na === nb || na.includes(nb) || nb.includes(na)) return true;
-  // Bigram (Sørensen-Dice) similarity — much better than char overlap
-  const bg = (s: string) => { const set = new Set<string>(); for (let i = 0; i < s.length - 1; i++) set.add(s.substring(i, i + 2)); return set; };
-  const aSet = bg(na), bSet = bg(nb);
-  let common = 0; for (const g of aSet) { if (bSet.has(g)) common++; }
-  return (2 * common) / (aSet.size + bSet.size) >= 0.4;
 }
 
 export default function HomePage() {
@@ -142,10 +127,8 @@ export default function HomePage() {
     }
   };
 
-  // Find matching song in DB for currently playing track
-  const matchedSong = nowPlaying?.track
-    ? songs.find((s) => fuzzyMatch(s.title, nowPlaying.track!.name))
-    : null;
+  // Find matching song in DB for currently playing track (uses title + artist scoring)
+  const matchedSong = findBestMatch(songs, nowPlaying?.track);
 
   // Filter songs by search query and "my songs" toggle
   const filteredSongs = songs.filter((s) => {
@@ -272,7 +255,7 @@ export default function HomePage() {
       ) : (
         <div className="space-y-1.5 sm:space-y-2">
           {filteredSongs.map((song) => {
-            const isPlaying = nowPlaying?.is_playing && nowPlaying.track && fuzzyMatch(song.title, nowPlaying.track.name);
+            const isPlaying = nowPlaying?.is_playing && isSongPlaying(song, nowPlaying.track);
             return (
               <div key={song.id} className={`group flex items-center gap-3 sm:gap-4 rounded-lg bg-[var(--card)] border px-4 sm:px-5 py-3 sm:py-4 transition-colors hover:bg-[var(--muted)] cursor-pointer ${isPlaying ? 'border-green-800/50 bg-green-950/10' : 'border-[var(--border)]'}`} onClick={() => router.push(`/songs/${song.id}`)}>
                 <div className={`flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-md ${isPlaying ? 'bg-green-950/30' : 'bg-[var(--muted)]'}`}>
