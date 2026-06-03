@@ -513,12 +513,15 @@ export default function SongViewPage() {
     );
   }
 
-  const isSynced = spotify?.is_playing && spotify.track && activeLine >= 0;
+  // Is Spotify playing THIS song? (separate from "is lyrics line active")
+  const isSameSong = !!(spotify?.is_playing && spotify.track && song && isTitleMatch(spotify.track.name, song.title));
+  // Green sync state: same song AND a lyrics line is active
+  const isSynced = isSameSong && activeLine >= 0;
   const hasSyncData = syncLines.length > 0;
   const debugSyncActive = spotify?.is_playing && syncLines.length > 0 ? findActiveLine(syncLines, spotify.progress_ms) : -1;
 
-  // Check if currently playing song exists in DB (title + artist scoring)
-  const playingMatch = spotify?.track
+  // Check if currently playing song exists in OTHER songs in DB (title + artist scoring)
+  const playingMatch = spotify?.track && !isSameSong
     ? (() => {
         const candidates = allSongs.filter((s) => s.id !== id);
         return findBestMatch(candidates, spotify.track);
@@ -588,6 +591,7 @@ export default function SongViewPage() {
         {spotify?.connected && (
           <div className="mt-2 sm:mt-4 flex items-center gap-2">
             {isSynced ? (
+              /* Green: lyrics actively synced */
               <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-green-950/40 border border-green-800/30 px-2 sm:px-3 py-1">
                 <span className="inline-block h-2 w-2 rounded-full bg-green-400 animate-pulse" />
                 <Music className="h-3 w-3 text-green-400" />
@@ -600,7 +604,18 @@ export default function SongViewPage() {
                   )}
                 </span>
               </div>
+            ) : isSameSong ? (
+              /* Same song, before first lyrics line — dim green, no import button */
+              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-green-950/20 border border-green-800/20 px-2 sm:px-3 py-1">
+                <span className="inline-block h-2 w-2 rounded-full bg-green-400/50 animate-pulse" />
+                <Music className="h-3 w-3 text-green-400/50" />
+                <span className="text-xs text-green-400/60 truncate max-w-[180px] sm:max-w-none">
+                  {spotify.track!.name}
+                  {debug && <span className="ml-1 font-mono text-[10px]">[{fmtTime(spotify.progress_ms)}/{fmtTime(spotify.duration_ms)}] #{activeLine}</span>}
+                </span>
+              </div>
             ) : spotify.is_playing && spotify.track ? (
+              /* Different song — grey with import/jump */
               <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--accent)] px-2 sm:px-3 py-1">
                 <span className="inline-block h-2 w-2 rounded-full bg-[var(--muted-foreground)]" />
                 <span className="text-xs text-[var(--muted-foreground)] truncate max-w-[140px] sm:max-w-none">
@@ -634,7 +649,7 @@ export default function SongViewPage() {
         {debug && (
           <div className="mt-3 rounded-md bg-[var(--muted)] border border-[var(--border)] p-2 sm:p-3 text-[10px] sm:text-[11px] font-mono space-y-1 overflow-x-auto">
             <div className="text-[var(--primary)] font-medium mb-1.5">Debug Info</div>
-            <div>Spotify: {spotify?.connected ? '✓ connected' : '✗ disconnected'} | playing: {String(!!spotify?.is_playing)} | match: {String(isSynced)}</div>
+            <div>Spotify: {spotify?.connected ? '✓ connected' : '✗ disconnected'} | playing: {String(!!spotify?.is_playing)} | same: {String(isSameSong)} | synced: {String(isSynced)}</div>
             <div>progress: {spotify ? `${spotify.progress_ms}ms (${fmtTime(spotify.progress_ms)})` : '—'} / {spotify ? `${spotify.duration_ms}ms (${fmtTime(spotify.duration_ms)})` : '—'}</div>
             <div>sync: {syncLines.length} | furigana: {furiganaLines.length} | active: #{activeLine} ({activeLine >= 0 && lineTimestamps[activeLine] != null ? fmtMs(lineTimestamps[activeLine]!) : '—'}) | sync: #{debugSyncActive}</div>
             <div>track: {spotify?.track?.name || '—'} | song: {song.title}</div>
