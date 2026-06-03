@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import db from '@/lib/db';
 import { convertToFurigana } from '@/lib/kuroshiro';
@@ -51,7 +51,7 @@ async function fetchLyrics(title: string, artist: string): Promise<{ synced: str
 }
 
 // POST /api/songs/import — one-click import from lrclib
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const { title, artist } = await request.json();
   const user = getAuthUser(request);
 
