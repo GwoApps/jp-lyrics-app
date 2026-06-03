@@ -72,22 +72,23 @@ export async function POST(request: Request) {
   // Fetch lyrics from lrclib
   const result = await fetchLyrics(cleanTitle, cleanArtist);
 
+  if (!result) {
+    return NextResponse.json({ error: '歌詞が見つかりませんでした — 手動で貼り付けてください', hasLyrics: false }, { status: 404 });
+  }
+
   // Generate furigana
   let furigana: unknown[] = [];
-  const plain = result?.plain || '';
-  if (plain) {
-    try {
-      furigana = await convertToFurigana(plain);
-    } catch (e) {
-      console.error('Furigana conversion failed:', e);
-    }
+  try {
+    furigana = await convertToFurigana(result.plain);
+  } catch (e) {
+    console.error('Furigana conversion failed:', e);
   }
 
   // Insert
   const id = uuidv4();
   db.prepare(
     'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(id, cleanTitle, cleanArtist, plain, JSON.stringify(furigana), result?.synced || '');
+  ).run(id, cleanTitle, cleanArtist, result.plain, JSON.stringify(furigana), result.synced || '');
 
-  return NextResponse.json({ id, alreadyExists: false, hasLyrics: !!result }, { status: 201 });
+  return NextResponse.json({ id, alreadyExists: false, hasLyrics: true }, { status: 201 });
 }

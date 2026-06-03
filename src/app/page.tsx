@@ -47,7 +47,13 @@ export default function HomePage() {
   const [spotify, setSpotify] = useState<SpotifyStatus | null>(null);
   const [nowPlaying, setNowPlaying] = useState<NowPlaying | null>(null);
   const [importing, setImporting] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const router = useRouter();
+
+  const showToast = (type: 'success' | 'error', msg: string) => {
+    setToast({ type, msg });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   useEffect(() => {
     fetch('/api/songs')
@@ -97,9 +103,13 @@ export default function HomePage() {
         body: JSON.stringify({ title: nowPlaying.track.name, artist: nowPlaying.track.artist }),
       });
       const data = await res.json();
+      if (!res.ok || data.error) {
+        showToast('error', data.error || '歌詞の取得に失敗しました');
+        return;
+      }
       router.push(`/songs/${data.id}`);
     } catch {
-      alert('取込に失敗しました');
+      showToast('error', '取込に失敗しました');
     } finally {
       setImporting(false);
     }
@@ -215,6 +225,8 @@ export default function HomePage() {
           })}
         </div>
       )}
+
+      {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
     </div>
   );
 }

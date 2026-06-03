@@ -408,6 +408,10 @@ export default function SongViewPage() {
         body: JSON.stringify({ title: spotify.track.name, artist: spotify.track.artist }),
       });
       const data = await res.json();
+      if (!res.ok || data.error) {
+        showToast('error', data.error || '歌詞の取得に失敗しました');
+        return;
+      }
       router.push(`/songs/${data.id}`);
     } catch {
       showToast('error', '取込に失敗しました');
