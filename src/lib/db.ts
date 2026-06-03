@@ -37,6 +37,11 @@ try {
   db.exec(`ALTER TABLE songs ADD COLUMN lyrics_synced TEXT NOT NULL DEFAULT ''`);
 } catch { /* column already exists */ }
 
+// Migrate: add created_by column if missing
+try {
+  db.exec(`ALTER TABLE songs ADD COLUMN created_by TEXT NOT NULL DEFAULT ''`);
+} catch { /* column already exists */ }
+
 // Migrate: if old single-row spotify_auth exists (id=1 style), drop and recreate
 try {
   const info = db.prepare("PRAGMA table_info(spotify_auth)").all();

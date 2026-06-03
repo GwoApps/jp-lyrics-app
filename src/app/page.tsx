@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Music, Pencil, Trash2, Plus, Unlink, Download, ExternalLink, Loader2 } from 'lucide-react';
+import { Music, Pencil, Trash2, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useI18n } from '@/lib/i18n';
 
@@ -10,6 +10,7 @@ interface SongItem {
   id: string;
   title: string;
   artist: string;
+  created_by: string;
   created_at: string;
   updated_at: string;
 }
@@ -58,6 +59,9 @@ export default function HomePage() {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [importAlert, setImportAlert] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [mySongsOnly, setMySongsOnly] = useState(false);
+  const [currentUser, setCurrentUser] = useState<{ email: string; name: string } | null>(null);
   const router = useRouter();
 
   const showToast = (type: 'success' | 'error', msg: string) => {
@@ -74,6 +78,11 @@ export default function HomePage() {
     fetch('/api/spotify/status')
       .then((r) => r.json())
       .then((data) => setSpotify(data))
+      .catch(() => {});
+
+    fetch('/api/me')
+      .then((r) => r.json())
+      .then((data) => { if (data.authenticated) setCurrentUser({ email: data.email, name: data.name }); })
       .catch(() => {});
   }, []);
 
@@ -138,13 +147,23 @@ export default function HomePage() {
     ? songs.find((s) => fuzzyMatch(s.title, nowPlaying.track!.name))
     : null;
 
+  // Filter songs by search query and "my songs" toggle
+  const filteredSongs = songs.filter((s) => {
+    if (mySongsOnly && currentUser && s.created_by !== currentUser.email) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      return s.title.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
   return (
     <div className="fade-in">
       {/* Header */}
       <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">{t('home.songList')}</h1>
-          <p className="text-xs text-[var(--muted-foreground)] mt-1">{t('home.songCount', { count: songs.length })}</p>
+          <p className="text-xs text-[var(--muted-foreground)] mt-1">{t('home.songCount', { count: filteredSongs.length })}{(searchQuery || mySongsOnly) && filteredSongs.length !== songs.length ? ` / ${songs.length}` : ''}</p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {spotify?.connected ? (
@@ -166,6 +185,38 @@ export default function HomePage() {
             <span>{t('common.new')}</span>
           </button>
         </div>
+      </div>
+
+      {/* Search & Filter */}
+      <div className="mb-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t('home.search')}
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] pl-9 pr-8 py-2 text-xs outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/50"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        {currentUser && (
+          <button
+            onClick={() => setMySongsOnly(!mySongsOnly)}
+            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors shrink-0 ${
+              mySongsOnly
+                ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+            }`}
+          >
+            <User className="h-3.5 w-3.5" />
+            <span>{t('home.mine')}</span>
+          </button>
+        )}
       </div>
 
       {/* Now Playing bar */}
@@ -213,9 +264,14 @@ export default function HomePage() {
             <Plus className="h-3.5 w-3.5" /> {t('home.addFirst')}
           </button>
         </div>
+      ) : filteredSongs.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Search className="h-8 w-8 mb-3 text-[var(--muted-foreground)] opacity-20" />
+          <p className="text-sm text-[var(--muted-foreground)]">{t('home.noResults')}</p>
+        </div>
       ) : (
         <div className="space-y-1.5 sm:space-y-2">
-          {songs.map((song) => {
+          {filteredSongs.map((song) => {
             const isPlaying = nowPlaying?.is_playing && nowPlaying.track && fuzzyMatch(song.title, nowPlaying.track.name);
             return (
               <div key={song.id} className={`group flex items-center gap-3 sm:gap-4 rounded-lg bg-[var(--card)] border px-4 sm:px-5 py-3 sm:py-4 transition-colors hover:bg-[var(--muted)] cursor-pointer ${isPlaying ? 'border-green-800/50 bg-green-950/10' : 'border-[var(--border)]'}`} onClick={() => router.push(`/songs/${song.id}`)}>
@@ -228,6 +284,9 @@ export default function HomePage() {
                     {isPlaying && <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse shrink-0" />}
                   </div>
                   <div className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate">{song.artist || t('common.unknownArtist')}</div>
+                  {song.created_by && (
+                    <div className="text-[10px] text-[var(--muted-foreground)]/60 mt-0.5 truncate">{t('home.createdBy')}: {song.created_by === currentUser?.email ? currentUser?.name || song.created_by : song.created_by}</div>
+                  )}
                 </div>
                 <div className="text-[10px] sm:text-[11px] text-[var(--muted-foreground)] hidden sm:block shrink-0">{new Date(song.updated_at).toLocaleDateString(localeToBCP47(locale))}</div>
                 <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">

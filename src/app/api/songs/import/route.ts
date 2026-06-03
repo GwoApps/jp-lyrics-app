@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import db from '@/lib/db';
 import { convertToFurigana } from '@/lib/kuroshiro';
+import { getAuthUser } from '@/lib/auth';
 
 const LRCLIB_HEADERS = { 'User-Agent': 'jp-lyrics-app/1.0' };
 
@@ -52,6 +53,7 @@ async function fetchLyrics(title: string, artist: string): Promise<{ synced: str
 // POST /api/songs/import — one-click import from lrclib
 export async function POST(request: Request) {
   const { title, artist } = await request.json();
+  const user = getAuthUser(request);
 
   if (!title?.trim()) {
     return NextResponse.json({ error: '曲名を入力してください' }, { status: 400 });
@@ -87,8 +89,8 @@ export async function POST(request: Request) {
   // Insert
   const id = uuidv4();
   db.prepare(
-    'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(id, cleanTitle, cleanArtist, result.plain, JSON.stringify(furigana), result.synced || '');
+    'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(id, cleanTitle, cleanArtist, result.plain, JSON.stringify(furigana), result.synced || '', user?.email || '');
 
   return NextResponse.json({ id, alreadyExists: false, hasLyrics: true }, { status: 201 });
 }

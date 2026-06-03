@@ -5,6 +5,7 @@ export interface Song {
   lyrics_raw: string;
   lyrics_furigana: string;
   lyrics_synced: string;
+  created_by: string;
   created_at: string;
   updated_at: string;
 }
@@ -22,6 +23,7 @@ export interface SongListItem {
   id: string;
   title: string;
   artist: string;
+  created_by: string;
   created_at: string;
   updated_at: string;
 }
