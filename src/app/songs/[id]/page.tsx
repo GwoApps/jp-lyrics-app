@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import type { FuriganaLine } from '@/lib/types';
 import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture } from 'lucide-react';
+import ConfirmDialog from '@/components/ConfirmDialog';
 
 interface SongData {
   id: string;
@@ -124,6 +125,7 @@ export default function SongViewPage() {
   const [showRaw, setShowRaw] = useState(false);
   const [debug, setDebug] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [spotify, setSpotify] = useState<SpotifyState | null>(null);
   const [activeLine, setActiveLine] = useState(-1);
   const [syncLines, setSyncLines] = useState<SyncLine[]>([]);
@@ -392,10 +394,16 @@ export default function SongViewPage() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!song || !confirm(`「${song.title}」を削除しますか？`)) return;
+  const handleDelete = () => {
+    if (!song) return;
+    setDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!song) return;
     const res = await fetch(`/api/songs/${id}`, { method: 'DELETE' });
     if (res.ok) { showToast('success', '削除しました'); setTimeout(() => router.push('/'), 800); }
+    setDeleteConfirm(false);
   };
 
   const handleImportPlaying = async () => {
@@ -770,6 +778,17 @@ export default function SongViewPage() {
       </div>
 
       {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
+
+      <ConfirmDialog
+        open={deleteConfirm}
+        title={`「${song?.title}」を削除しますか？`}
+        body="この操作は取り消せません。歌詞データとふりがなが完全に削除されます。"
+        confirmLabel="削除"
+        cancelLabel="キャンセル"
+        variant="danger"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteConfirm(false)}
+      />
     </div>
   );
 }

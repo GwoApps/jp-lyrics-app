@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Music, Pencil, Trash2, Plus, Unlink, Download, ExternalLink, Loader2 } from 'lucide-react';
+import ConfirmDialog from '@/components/ConfirmDialog';
 
 interface SongItem {
   id: string;
@@ -48,6 +49,7 @@ export default function HomePage() {
   const [nowPlaying, setNowPlaying] = useState<NowPlaying | null>(null);
   const [importing, setImporting] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const router = useRouter();
 
   const showToast = (type: 'success' | 'error', msg: string) => {
@@ -81,10 +83,18 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, [pollNowPlaying]);
 
-  const handleDelete = async (id: string, title: string) => {
-    if (!confirm(`「${title}」を削除しますか？`)) return;
-    const res = await fetch(`/api/songs/${id}`, { method: 'DELETE' });
-    if (res.ok) setSongs((prev) => prev.filter((s) => s.id !== id));
+  const handleDelete = (id: string, title: string) => {
+    setDeleteTarget({ id, title });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    const res = await fetch(`/api/songs/${deleteTarget.id}`, { method: 'DELETE' });
+    if (res.ok) {
+      setSongs((prev) => prev.filter((s) => s.id !== deleteTarget.id));
+      showToast('success', '削除しました');
+    }
+    setDeleteTarget(null);
   };
 
   const handleDisconnect = async () => {
@@ -227,6 +237,17 @@ export default function HomePage() {
       )}
 
       {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title={`「${deleteTarget?.title}」を削除しますか？`}
+        body="この操作は取り消せません。歌詞データとふりがなが完全に削除されます。"
+        confirmLabel="削除"
+        cancelLabel="キャンセル"
+        variant="danger"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }
