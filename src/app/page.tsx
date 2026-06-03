@@ -50,6 +50,7 @@ export default function HomePage() {
   const [importing, setImporting] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [importAlert, setImportAlert] = useState<string | null>(null);
   const router = useRouter();
 
   const showToast = (type: 'success' | 'error', msg: string) => {
@@ -114,7 +115,7 @@ export default function HomePage() {
       });
       const data = await res.json();
       if (!res.ok || data.error) {
-        showToast('error', data.error || '歌詞の取得に失敗しました');
+        setImportAlert(data.error || '歌詞の取得に失敗しました');
         return;
       }
       router.push(`/songs/${data.id}`);
@@ -247,6 +248,15 @@ export default function HomePage() {
         variant="danger"
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={!!importAlert}
+        title="歌詞の取得に失敗"
+        body={importAlert || undefined}
+        confirmLabel="OK"
+        alert
+        onConfirm={() => setImportAlert(null)}
       />
     </div>
   );

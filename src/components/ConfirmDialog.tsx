@@ -7,8 +7,9 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: 'danger' | 'default';
+  alert?: boolean;
   onConfirm: () => void;
-  onCancel: () => void;
+  onCancel?: () => void;
 }
 
 export default function ConfirmDialog({
@@ -18,13 +19,19 @@ export default function ConfirmDialog({
   confirmLabel = '確認',
   cancelLabel = 'キャンセル',
   variant = 'default',
+  alert = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
   if (!open) return null;
 
+  const handleOverlayClick = () => {
+    if (alert) onConfirm();
+    else onCancel?.();
+  };
+
   return (
-    <div className="confirm-overlay" onClick={onCancel}>
+    <div className="confirm-overlay" onClick={handleOverlayClick}>
       <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="confirm-dialog-icon">{variant === 'danger' ? '🗑️' : '⚠️'}</div>
         <div className="confirm-dialog-title">{title}</div>
@@ -34,9 +41,11 @@ export default function ConfirmDialog({
           </div>
         )}
         <div className="confirm-dialog-actions">
-          <button className="confirm-dialog-btn confirm-dialog-btn--cancel" onClick={onCancel}>
-            {cancelLabel}
-          </button>
+          {!alert && (
+            <button className="confirm-dialog-btn confirm-dialog-btn--cancel" onClick={onCancel}>
+              {cancelLabel}
+            </button>
+          )}
           <button
             className={`confirm-dialog-btn ${variant === 'danger' ? 'confirm-dialog-btn--danger' : 'confirm-dialog-btn--confirm'}`}
             onClick={onConfirm}

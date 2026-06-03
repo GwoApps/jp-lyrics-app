@@ -126,6 +126,7 @@ export default function SongViewPage() {
   const [debug, setDebug] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [importAlert, setImportAlert] = useState<string | null>(null);
   const [spotify, setSpotify] = useState<SpotifyState | null>(null);
   const [activeLine, setActiveLine] = useState(-1);
   const [syncLines, setSyncLines] = useState<SyncLine[]>([]);
@@ -355,11 +356,11 @@ export default function SongViewPage() {
         showToast('success', `歌詞同期完了 (${data.source}, ${data.lines}行)`);
       } else {
         setSyncError(data.error || '歌詞が見つかりません');
-        showToast('error', '歌詞が見つかりません — 手動貼付をご利用ください');
+        setImportAlert(data.error || '歌詞が見つかりません — 手動貼付をご利用ください');
       }
     } catch {
       setSyncError('通信エラー');
-      showToast('error', '取得に失敗しました');
+      setImportAlert('通信エラーが発生しました');
     } finally {
       setSyncing(false);
     }
@@ -417,7 +418,7 @@ export default function SongViewPage() {
       });
       const data = await res.json();
       if (!res.ok || data.error) {
-        showToast('error', data.error || '歌詞の取得に失敗しました');
+        setImportAlert(data.error || '歌詞の取得に失敗しました');
         return;
       }
       router.push(`/songs/${data.id}`);
@@ -788,6 +789,15 @@ export default function SongViewPage() {
         variant="danger"
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirm(false)}
+      />
+
+      <ConfirmDialog
+        open={!!importAlert}
+        title="歌詞の取得に失敗"
+        body={importAlert || undefined}
+        confirmLabel="OK"
+        alert
+        onConfirm={() => setImportAlert(null)}
       />
     </div>
   );
