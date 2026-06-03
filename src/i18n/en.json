@@ -64,7 +64,9 @@
     "furigana": "Furigana",
     "raw": "Raw",
     "spotify": "Spotify",
-    "pipBtn": "Picture-in-Picture"
+    "pipBtn": "Picture-in-Picture",
+    "followOn": "Following",
+    "followOff": "Follow"
   },
   "edit": {
     "title": "Edit Song",

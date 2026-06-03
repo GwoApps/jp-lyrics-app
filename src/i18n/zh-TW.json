@@ -64,7 +64,9 @@
     "furigana": "注音",
     "raw": "原文",
     "spotify": "Spotify",
-    "pipBtn": "子母畫面"
+    "pipBtn": "子母畫面",
+    "followOn": "跟隨中",
+    "followOff": "跟隨"
   },
   "edit": {
     "title": "編輯歌曲",

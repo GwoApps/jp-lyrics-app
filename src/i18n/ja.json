@@ -64,7 +64,9 @@
     "furigana": "ふりがな",
     "raw": "原文",
     "spotify": "Spotify連携",
-    "pipBtn": "Picture-in-Picture"
+    "pipBtn": "Picture-in-Picture",
+    "followOn": "フォロー中",
+    "followOff": "フォロー"
   },
   "edit": {
     "title": "曲を編集",

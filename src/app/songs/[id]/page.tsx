@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import type { FuriganaLine } from '@/lib/types';
-import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture } from 'lucide-react';
+import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture, Repeat } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useI18n } from '@/lib/i18n';
 import { isTitleMatch, findBestMatch, lineFuzzyMatch } from '@/lib/match';
@@ -142,6 +142,14 @@ export default function SongViewPage() {
   const debugRef = useRef(false);
   const pipWindowRef = useRef<Window | null>(null);
   const [pipSupported, setPipSupported] = useState(false);
+  const [followPlaying, setFollowPlaying] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('jplrc-follow-playing') !== 'false';
+    return true;
+  });
+  const prevTrackRef = useRef<string>('');
+  const navigatingRef = useRef(false);
+  const followPlayingRef = useRef(true);
+  const allSongsRef = useRef<{ id: string; title: string; artist: string }[]>([]);
 
   useEffect(() => {
     try {
@@ -151,6 +159,7 @@ export default function SongViewPage() {
     } catch { setPipSupported(false); }
   }, []);
   useEffect(() => { localStorage.setItem('jplrc-font-size', String(fontSize)); }, [fontSize]);
+  useEffect(() => { localStorage.setItem('jplrc-follow-playing', String(followPlaying)); }, [followPlaying]);
 
   const furiganaLines = useMemo<FuriganaLine[]>(() => {
     if (!song?.lyrics_furigana) return [];
@@ -189,6 +198,8 @@ export default function SongViewPage() {
   useEffect(() => { furiganaLinesRef.current = furiganaLines; }, [furiganaLines]);
   useEffect(() => { songRef.current = song; }, [song]);
   useEffect(() => { debugRef.current = debug; }, [debug]);
+  useEffect(() => { followPlayingRef.current = followPlaying; }, [followPlaying]);
+  useEffect(() => { allSongsRef.current = allSongs; }, [allSongs]);
 
   // Close PiP window on unmount
   useEffect(() => {
@@ -225,8 +236,9 @@ export default function SongViewPage() {
       const res = await fetch('/api/spotify/now-playing');
       const data = await res.json();
       setSpotify(data);
-      // Record interpolation anchor for smooth progress between polls
+
       if (data.is_playing && data.track) {
+        // Record interpolation anchor
         interpRef.current = {
           progressMs: data.progress_ms,
           pollTime: performance.now(),
@@ -234,8 +246,27 @@ export default function SongViewPage() {
           trackName: data.track.name,
           durationMs: data.duration_ms || 0,
         };
+
+        // Follow now-playing: detect track change and auto-navigate
+        const trackKey = data.track.name;
+        if (
+          followPlayingRef.current &&
+          !navigatingRef.current &&
+          prevTrackRef.current &&
+          prevTrackRef.current !== trackKey
+        ) {
+          const match = findBestMatch(allSongsRef.current, data.track);
+          if (match && match.id !== songRef.current?.id) {
+            navigatingRef.current = true;
+            window.location.assign(`/songs/${match.id}`);
+            return;
+          }
+        }
+        prevTrackRef.current = trackKey;
       } else {
         interpRef.current.isPlaying = false;
+        // Don't clear prevTrackRef on pause — only clear when no track at all
+        if (!data.track) prevTrackRef.current = '';
       }
     } catch { /* */ }
   }, []);
@@ -642,6 +673,19 @@ export default function SongViewPage() {
                 )}
               </div>
             ) : null}
+            {/* Follow now-playing toggle */}
+            <button
+              onClick={() => setFollowPlaying((v) => !v)}
+              className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium transition-colors ${
+                followPlaying
+                  ? 'bg-[var(--primary)]/20 text-[var(--primary)]'
+                  : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+              }`}
+              title={followPlaying ? t('song.followOn') : t('song.followOff')}
+            >
+              <Repeat className="h-3 w-3" />
+              <span className="hidden sm:inline">{followPlaying ? t('song.followOn') : t('song.followOff')}</span>
+            </button>
           </div>
         )}
 
