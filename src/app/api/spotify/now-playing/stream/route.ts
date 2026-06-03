@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { subscribe } from '@/lib/spotify-poller';
+import type { DiffMessage } from '@/lib/spotify-poller';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -11,16 +12,20 @@ export async function GET(request: NextRequest) {
     return new Response('Unauthorized', { status: 401 });
   }
 
+  const wantFull = request.nextUrl.searchParams.get('full') === 'true';
+
   const stream = new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder();
       let unsub: (() => void) | null = null;
       let alive = true;
 
-      const send = (data: unknown) => {
+      const send = (msg: DiffMessage) => {
         if (!alive) return;
         try {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          // Always send full data on first message or when ?full=true requested
+          const payload = wantFull ? { ...msg, d: undefined, _full: true } : msg;
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
         } catch {
           cleanup();
         }
@@ -33,16 +38,14 @@ export async function GET(request: NextRequest) {
         try { controller.close(); } catch { /* already closed */ }
       };
 
-      // Detect client disconnect
       request.signal.addEventListener('abort', cleanup);
 
-      // Send initial heartbeat immediately
-      send({ _heartbeat: true });
+      // Subscribe to shared poller (first message is always full data)
+      unsub = subscribe(user.email, (_fullData, diffMsg) => {
+        send(diffMsg);
+      });
 
-      // Subscribe to shared poller
-      unsub = subscribe(user.email, send);
-
-      // Heartbeat every 30s to keep connection alive and detect zombies
+      // Heartbeat every 30s
       const heartbeat = setInterval(() => {
         if (!alive) { clearInterval(heartbeat); return; }
         try {
@@ -53,12 +56,11 @@ export async function GET(request: NextRequest) {
         }
       }, 30_000);
 
-      // Cleanup on stream cancel
-      const origCancel = controller.close.bind(controller);
+      const origClose = controller.close.bind(controller);
       controller.close = () => {
         clearInterval(heartbeat);
         cleanup();
-        try { origCancel(); } catch { /* */ }
+        try { origClose(); } catch { /* */ }
       };
     },
   });
@@ -68,7 +70,7 @@ export async function GET(request: NextRequest) {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
       'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no', // Disable nginx buffering
+      'X-Accel-Buffering': 'no',
     },
   });
 }

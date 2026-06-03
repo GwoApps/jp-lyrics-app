@@ -9,20 +9,52 @@ export interface NowPlayingData {
   error?: number;
 }
 
-type Subscriber = (data: NowPlayingData) => void;
+/** Diff message sent over SSE */
+export interface DiffMessage {
+  seq: number;
+  c: number;  // checksum of full data
+  d: Partial<NowPlayingData>; // changed fields only (empty = no change)
+}
+
+type Subscriber = (data: NowPlayingData, diff: DiffMessage) => void;
 
 interface UserPoller {
-  subscribers: Set<Subscriber>;
+  subscribers: Map<Subscriber, { lastData: NowPlayingData | null; lastSeq: number }>;
   interval: ReturnType<typeof setInterval> | null;
   lastData: NowPlayingData | null;
+  seq: number;
   consecutiveErrors: number;
 }
 
-// Module-level singleton — persists across route invocations in the same process
 const pollers = new Map<string, UserPoller>();
 
 const POLL_INTERVAL_MS = 2000;
 const MAX_CONSECUTIVE_ERRORS = 10;
+
+/** Fast 32-bit hash for checksum */
+function computeChecksum(data: NowPlayingData): number {
+  const s = `${data.progress_ms}|${data.is_playing}|${data.track?.name ?? ''}|${data.track?.artist ?? ''}|${data.duration_ms}|${data.connected}`;
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  }
+  return h >>> 0;
+}
+
+/** Compute diff between two states. Returns only changed fields. */
+function computeDiff(prev: NowPlayingData | null, curr: NowPlayingData): Partial<NowPlayingData> {
+  if (!prev) return curr; // first time: send everything
+  const diff: Partial<NowPlayingData> = {};
+  if (prev.connected !== curr.connected) diff.connected = curr.connected;
+  if (prev.is_playing !== curr.is_playing) diff.is_playing = curr.is_playing;
+  if (prev.progress_ms !== curr.progress_ms) diff.progress_ms = curr.progress_ms;
+  if (prev.duration_ms !== curr.duration_ms) diff.duration_ms = curr.duration_ms;
+  if (prev.error !== curr.error) diff.error = curr.error;
+  if (prev.track?.name !== curr.track?.name || prev.track?.artist !== curr.track?.artist || prev.track?.album !== curr.track?.album) {
+    diff.track = curr.track;
+  }
+  return diff;
+}
 
 async function fetchNowPlaying(userEmail: string): Promise<NowPlayingData> {
   const accessToken = await getSpotifyTokenForUser(userEmail);
@@ -68,9 +100,18 @@ function startPolling(userEmail: string, poller: UserPoller) {
 
     try {
       const data = await fetchNowPlaying(userEmail);
+      poller.seq++;
+      const checksum = computeChecksum(data);
+      const diff = computeDiff(poller.lastData, data);
       poller.lastData = data;
       poller.consecutiveErrors = 0;
-      poller.subscribers.forEach(cb => cb(data));
+
+      const diffMsg: DiffMessage = { seq: poller.seq, c: checksum, d: diff };
+      poller.subscribers.forEach((state, cb) => {
+        cb(data, diffMsg);
+        state.lastData = data;
+        state.lastSeq = poller.seq;
+      });
     } catch {
       poller.consecutiveErrors++;
       if (poller.consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
@@ -79,7 +120,6 @@ function startPolling(userEmail: string, poller: UserPoller) {
     }
   };
 
-  // First fetch immediately
   tick();
   poller.interval = setInterval(tick, POLL_INTERVAL_MS);
 }
@@ -97,18 +137,25 @@ function stopPolling(userEmail: string) {
 }
 
 /** Subscribe to now-playing updates. Returns unsubscribe function. */
-export function subscribe(userEmail: string, callback: Subscriber): () => void {
+export function subscribe(
+  userEmail: string,
+  callback: Subscriber,
+  opts?: { fullRefresh?: boolean },
+): () => void {
   let poller = pollers.get(userEmail);
   if (!poller) {
-    poller = { subscribers: new Set(), interval: null, lastData: null, consecutiveErrors: 0 };
+    poller = { subscribers: new Map(), interval: null, lastData: null, seq: 0, consecutiveErrors: 0 };
     pollers.set(userEmail, poller);
   }
 
-  poller.subscribers.add(callback);
+  poller.subscribers.set(callback, { lastData: null, lastSeq: 0 });
 
-  // Send cached data immediately if available
+  // Send full data immediately if available (always full for first message)
   if (poller.lastData) {
-    callback(poller.lastData);
+    const fullMsg: DiffMessage = { seq: poller.seq, c: computeChecksum(poller.lastData), d: poller.lastData };
+    callback(poller.lastData, fullMsg);
+    const state = poller.subscribers.get(callback);
+    if (state) { state.lastData = poller.lastData; state.lastSeq = poller.seq; }
   }
 
   startPolling(userEmail, poller);
