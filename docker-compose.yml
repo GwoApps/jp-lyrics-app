@@ -10,11 +10,18 @@ services:
       - traefik-net
     labels:
       - "traefik.enable=true"
+      - "traefik.http.services.jplrc.loadbalancer.server.port=3000"
+      # Main router (auth protected)
       - "traefik.http.routers.jplrc.rule=Host(`jplrc.kazusa.feng.moe`)"
       - "traefik.http.routers.jplrc.entrypoints=websecure"
       - "traefik.http.routers.jplrc.tls.certresolver=letsencrypt"
-      - "traefik.http.services.jplrc.loadbalancer.server.port=3000"
       - "traefik.http.routers.jplrc.middlewares=kazusa-auth@docker"
+      # Public router for PWA assets (no auth, higher priority)
+      - "traefik.http.routers.jplrc-public.rule=Host(`jplrc.kazusa.feng.moe`) && (Path(`/manifest.json`) || Path(`/sw.js`) || PathPrefix(`/icon-`) || Path(`/apple-touch-icon.png`))"
+      - "traefik.http.routers.jplrc-public.entrypoints=websecure"
+      - "traefik.http.routers.jplrc-public.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.jplrc-public.service=jplrc"
+      - "traefik.http.routers.jplrc-public.priority=100"
       # home portal labels
       - "homepage.enable=true"
       - "homepage.title=歌詞ノート"
