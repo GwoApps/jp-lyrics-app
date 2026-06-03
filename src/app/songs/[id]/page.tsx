@@ -153,7 +153,13 @@ export default function SongViewPage() {
   const pipWindowRef = useRef<Window | null>(null);
   const [pipSupported, setPipSupported] = useState(false);
 
-  useEffect(() => { setPipSupported('documentPictureInPicture' in window); }, []);
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const api = (window as any).documentPictureInPicture;
+      setPipSupported(typeof api?.requestWindow === 'function');
+    } catch { setPipSupported(false); }
+  }, []);
   useEffect(() => { localStorage.setItem('jplrc-font-size', String(fontSize)); }, [fontSize]);
 
   const furiganaLines = useMemo<FuriganaLine[]>(() => {
@@ -419,7 +425,7 @@ export default function SongViewPage() {
     }
 
     if (!('documentPictureInPicture' in window)) {
-      showToast('error', 'このブラウザはPiP非対応です (Chrome 116+)');
+      showToast('error', 'PiP非対応 — デスクトップChrome 116+が必要です');
       return;
     }
 
