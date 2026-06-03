@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { FuriganaLine } from '@/lib/types';
 import type { SyncLine } from '@/lib/lrc';
 import { isTitleMatch, findBestMatch } from '@/lib/match';
+import { useNowPlaying } from './useNowPlaying';
+import type { NowPlayingData } from './useNowPlaying';
 
 export interface SpotifyState {
   connected: boolean;
@@ -48,6 +50,7 @@ export interface UseSpotifySyncReturn {
 }
 
 export function useSpotifySync(syncRefs: React.MutableRefObject<SyncRefs>): UseSpotifySyncReturn {
+  const nowPlayingData = useNowPlaying();
   const [spotify, setSpotify] = useState<SpotifyState | null>(null);
   const [activeLine, setActiveLine] = useState(-1);
   const [followPlaying, setFollowPlaying] = useState(() => {
@@ -72,52 +75,44 @@ export function useSpotifySync(syncRefs: React.MutableRefObject<SyncRefs>): UseS
     };
   }, []);
 
-  // Poll Spotify every 1s
-  const pollSpotify = useCallback(async () => {
-    try {
-      const res = await fetch('/api/spotify/now-playing');
-      const data = await res.json();
-      setSpotify(data);
-
-      const refs = syncRefs.current;
-
-      if (data.is_playing && data.track) {
-        interpRef.current = {
-          progressMs: data.progress_ms,
-          pollTime: performance.now(),
-          isPlaying: true,
-          trackName: data.track.name,
-          durationMs: data.duration_ms || 0,
-        };
-
-        // Follow now-playing: detect track change and auto-navigate
-        const trackKey = data.track.name;
-        if (
-          refs.followPlaying &&
-          !navigatingRef.current &&
-          prevTrackRef.current &&
-          prevTrackRef.current !== trackKey
-        ) {
-          const match = findBestMatch(refs.allSongs, data.track);
-          if (match && match.id !== refs.currentSongId) {
-            navigatingRef.current = true;
-            window.location.assign(`/songs/${match.id}`);
-            return;
-          }
-        }
-        prevTrackRef.current = trackKey;
-      } else {
-        interpRef.current.isPlaying = false;
-        if (!data.track) prevTrackRef.current = '';
-      }
-    } catch { /* */ }
-  }, [syncRefs]);
-
+  // React to SSE/polling data from useNowPlaying
   useEffect(() => {
-    pollSpotify();
-    const interval = setInterval(pollSpotify, 1000);
-    return () => clearInterval(interval);
-  }, [pollSpotify]);
+    if (!nowPlayingData) return;
+
+    setSpotify(nowPlayingData as SpotifyState);
+
+    const refs = syncRefs.current;
+
+    if (nowPlayingData.is_playing && nowPlayingData.track) {
+      interpRef.current = {
+        progressMs: nowPlayingData.progress_ms,
+        pollTime: performance.now(),
+        isPlaying: true,
+        trackName: nowPlayingData.track.name,
+        durationMs: nowPlayingData.duration_ms || 0,
+      };
+
+      // Follow now-playing: detect track change and auto-navigate
+      const trackKey = nowPlayingData.track.name;
+      if (
+        refs.followPlaying &&
+        !navigatingRef.current &&
+        prevTrackRef.current &&
+        prevTrackRef.current !== trackKey
+      ) {
+        const match = findBestMatch(refs.allSongs, nowPlayingData.track);
+        if (match && match.id !== refs.currentSongId) {
+          navigatingRef.current = true;
+          window.location.assign(`/songs/${match.id}`);
+          return;
+        }
+      }
+      prevTrackRef.current = trackKey;
+    } else {
+      interpRef.current.isPlaying = false;
+      if (!nowPlayingData.track) prevTrackRef.current = '';
+    }
+  }, [nowPlayingData, syncRefs]);
 
   // Smooth rAF interpolation loop — runs at display refresh rate between polls
   // Reads from refs to avoid stale closures; no React re-render per frame

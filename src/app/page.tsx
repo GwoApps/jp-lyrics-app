@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Music, Pencil, Trash2, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User, Star, FolderPlus, Trash } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useI18n } from '@/lib/i18n';
 import { findBestMatch, isSongPlaying } from '@/lib/match';
+import { useNowPlaying } from '@/hooks/useNowPlaying';
 
 interface SongItem {
   id: string;
@@ -21,14 +22,6 @@ interface SpotifyStatus {
   display_name?: string;
 }
 
-interface NowPlaying {
-  connected: boolean;
-  is_playing: boolean;
-  track: { name: string; artist: string; album: string } | null;
-  progress_ms: number;
-  duration_ms: number;
-}
-
 function localeToBCP47(locale: string): string {
   const map: Record<string, string> = { ja: 'ja-JP', en: 'en-US', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW' };
   return map[locale] ?? 'ja-JP';
@@ -39,7 +32,7 @@ export default function HomePage() {
   const [songs, setSongs] = useState<SongItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [spotify, setSpotify] = useState<SpotifyStatus | null>(null);
-  const [nowPlaying, setNowPlaying] = useState<NowPlaying | null>(null);
+  const nowPlaying = useNowPlaying();
   const [importing, setImporting] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
@@ -102,20 +95,6 @@ export default function HomePage() {
       .catch(() => setCollectionSongs(new Set()));
   }, [filterCollection]);
 
-  const pollNowPlaying = useCallback(async () => {
-    try {
-      const res = await fetch('/api/spotify/now-playing');
-      const data = await res.json();
-      setNowPlaying(data);
-    } catch { /* */ }
-  }, []);
-
-  useEffect(() => {
-    pollNowPlaying();
-    const interval = setInterval(pollNowPlaying, 3000);
-    return () => clearInterval(interval);
-  }, [pollNowPlaying]);
-
   const handleDelete = (id: string, title: string) => {
     setDeleteTarget({ id, title });
   };
@@ -133,7 +112,6 @@ export default function HomePage() {
   const handleDisconnect = async () => {
     await fetch('/api/spotify/status', { method: 'DELETE' });
     setSpotify({ connected: false });
-    setNowPlaying(null);
   };
 
   const handleImport = async () => {
