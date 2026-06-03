@@ -14,7 +14,9 @@
     "unknownArtist": "未知歌手",
     "linesSynced": "已同步 {count} 行",
     "created": "创建:",
-    "updated": "更新:"
+    "updated": "更新:",
+    "lightMode": "浅色模式",
+    "darkMode": "深色模式"
   },
   "home": {
     "songList": "歌曲列表",
@@ -35,7 +37,19 @@
     "importErrorTitle": "歌词获取失败",
     "importErrorDefault": "歌词获取失败",
     "importFailed": "导入失败",
-    "deleted": "已删除"
+    "deleted": "已删除",
+    "playlistImport": "导入播放列表",
+    "playlistImportTitle": "从 Spotify 播放列表批量导入",
+    "playlistUrlPlaceholder": "输入 Spotify 播放列表 URL...",
+    "playlistImportBtn": "批量导入",
+    "playlistImporting": "导入中...",
+    "playlistImportResult": "共 {total} 首：{imported} 首已导入、{skipped} 首已跳过、{failed} 首无歌词",
+    "playlistImportError": "播放列表导入失败",
+    "playlistImportFailed": "播放列表导入失败",
+    "collections": "收藏夹",
+    "collectionsTitle": "管理收藏夹",
+    "newCollectionPlaceholder": "新收藏夹名称...",
+    "createCollection": "创建"
   },
   "song": {
     "notFound": "找不到歌曲",
@@ -66,7 +80,13 @@
     "spotify": "Spotify",
     "pipBtn": "画中画",
     "followOn": "跟随中",
-    "followOff": "跟随"
+    "followOff": "跟随",
+    "copy": "复制",
+    "copyFailed": "复制失败",
+    "tokenExpired": "令牌已过期",
+    "reconnect": "重新连接",
+    "export": "导出",
+    "exportFurigana": "（含振假名）"
   },
   "edit": {
     "title": "编辑歌曲",

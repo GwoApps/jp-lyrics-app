@@ -14,7 +14,9 @@
     "unknownArtist": "アーティスト不明",
     "linesSynced": "{count} 行同期済み",
     "created": "作成:",
-    "updated": "更新:"
+    "updated": "更新:",
+    "lightMode": "ライトモード",
+    "darkMode": "ダークモード"
   },
   "home": {
     "songList": "曲一覧",
@@ -35,7 +37,19 @@
     "importErrorTitle": "歌詞の取得に失敗",
     "importErrorDefault": "歌詞の取得に失敗しました",
     "importFailed": "取込に失敗しました",
-    "deleted": "削除しました"
+    "deleted": "削除しました",
+    "playlistImport": "プレイリスト取込",
+    "playlistImportTitle": "Spotifyプレイリストから一括取込",
+    "playlistUrlPlaceholder": "SpotifyプレイリストURLを入力...",
+    "playlistImportBtn": "一括取込",
+    "playlistImporting": "取込中...",
+    "playlistImportResult": "{total}曲中 {imported}曲取込、{skipped}曲スキップ、{failed}曲歌詞なし",
+    "playlistImportError": "プレイリストの取込に失敗しました",
+    "playlistImportFailed": "プレイリストの取込に失敗しました",
+    "collections": "コレクション",
+    "collectionsTitle": "コレクション管理",
+    "newCollectionPlaceholder": "新しいコレクション名...",
+    "createCollection": "作成"
   },
   "song": {
     "notFound": "曲が見つかりません",
@@ -66,7 +80,13 @@
     "spotify": "Spotify連携",
     "pipBtn": "Picture-in-Picture",
     "followOn": "フォロー中",
-    "followOff": "フォロー"
+    "followOff": "フォロー",
+    "copy": "コピー",
+    "copyFailed": "コピーに失敗しました",
+    "tokenExpired": "トークン期限切れ",
+    "reconnect": "再接続",
+    "export": "エクスポート",
+    "exportFurigana": "（ふりがな付き）"
   },
   "edit": {
     "title": "曲を編集",

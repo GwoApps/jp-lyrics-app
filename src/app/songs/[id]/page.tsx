@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import type { FuriganaLine } from '@/lib/types';
-import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture, Repeat } from 'lucide-react';
+import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture, Repeat, Copy, Check } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useI18n } from '@/lib/i18n';
 import { isTitleMatch, findBestMatch, lineFuzzyMatch } from '@/lib/match';
@@ -25,6 +25,7 @@ interface SpotifyState {
   progress_ms: number;
   duration_ms: number;
   track: { name: string; artist: string; album: string } | null;
+  error?: number;
 }
 
 interface SyncLine {
@@ -123,6 +124,8 @@ export default function SongViewPage() {
   const [showPasteLrc, setShowPasteLrc] = useState(false);
   const [pasteLrcText, setPasteLrcText] = useState('');
   const [syncError, setSyncError] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   const [fontSize, setFontSize] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('jplrc-font-size');
@@ -418,6 +421,18 @@ export default function SongViewPage() {
     setDeleteConfirm(true);
   };
 
+  const handleCopy = async () => {
+    if (!song) return;
+    const text = song.lyrics_raw || furiganaLines.map(l => l.segments.map(s => s.text).join('')).join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      showToast('error', t('song.copyFailed'));
+    }
+  };
+
   const confirmDelete = async () => {
     if (!song) return;
     const res = await fetch(`/api/songs/${id}`, { method: 'DELETE' });
@@ -605,6 +620,21 @@ export default function SongViewPage() {
               <button onClick={handleDelete} className={btnCls(false, 'danger')}>
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
+              <button onClick={handleCopy} className={btnCls(copied)}>
+                {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+              </button>
+              <div className="relative">
+                <button onClick={() => setShowExport(!showExport)} className={btnCls(showExport)}>
+                  <Download className="h-3.5 w-3.5" />
+                </button>
+                {showExport && (
+                  <div className="absolute right-0 top-full mt-1 z-50 rounded-lg bg-[var(--card)] border border-[var(--border)] shadow-lg py-1 min-w-[120px]">
+                    <a href={`/api/songs/${id}/export?format=text`} onClick={() => setShowExport(false)} className="block px-3 py-1.5 text-xs text-[var(--foreground)] hover:bg-[var(--accent)]">.txt</a>
+                    <a href={`/api/songs/${id}/export?format=lrc`} onClick={() => setShowExport(false)} className="block px-3 py-1.5 text-xs text-[var(--foreground)] hover:bg-[var(--accent)]">.lrc</a>
+                    <a href={`/api/songs/${id}/export?format=html`} onClick={() => setShowExport(false)} className="block px-3 py-1.5 text-xs text-[var(--foreground)] hover:bg-[var(--accent)]">.html {t('song.exportFurigana')}</a>
+                  </div>
+                )}
+              </div>
             </div>
             {furiganaLines.length > 0 && pipSupported && (
               <button
@@ -621,7 +651,20 @@ export default function SongViewPage() {
         {/* Spotify sync indicator */}
         {spotify?.connected && (
           <div className="mt-2 sm:mt-4 flex items-center gap-2">
-            {isSynced ? (
+            {spotify.error ? (
+              /* Token expired — reconnect prompt */
+              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-amber-950/30 border border-amber-800/30 px-2 sm:px-3 py-1">
+                <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
+                <span className="text-xs text-amber-400">{t('song.tokenExpired')}</span>
+                <a
+                  href="/api/auth/login"
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-colors shrink-0"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  <span>{t('song.reconnect')}</span>
+                </a>
+              </div>
+            ) : isSynced ? (
               /* Green: lyrics actively synced */
               <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-green-950/40 border border-green-800/30 px-2 sm:px-3 py-1">
                 <span className="inline-block h-2 w-2 rounded-full bg-green-400 animate-pulse" />
@@ -829,6 +872,16 @@ export default function SongViewPage() {
           {/* Delete */}
           <button onClick={handleDelete} className="flex flex-col items-center gap-0.5 p-2 text-[var(--destructive)]">
             <Trash2 className="h-5 w-5" />
+          </button>
+          {/* Copy */}
+          <button onClick={handleCopy} className={`flex flex-col items-center gap-0.5 p-2 ${copied ? 'text-green-400' : 'text-[var(--muted-foreground)]'}`}>
+            {copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
+            <span className="text-[10px]">{t('song.copy')}</span>
+          </button>
+          {/* Export */}
+          <button onClick={() => setShowExport(!showExport)} className={`flex flex-col items-center gap-0.5 p-2 ${showExport ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)]'}`}>
+            <Download className="h-5 w-5" />
+            <span className="text-[10px]">{t('song.export')}</span>
           </button>
         </div>
       </div>

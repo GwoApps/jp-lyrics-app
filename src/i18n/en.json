@@ -14,7 +14,9 @@
     "unknownArtist": "Unknown Artist",
     "linesSynced": "{count} lines synced",
     "created": "Created:",
-    "updated": "Updated:"
+    "updated": "Updated:",
+    "lightMode": "Light mode",
+    "darkMode": "Dark mode"
   },
   "home": {
     "songList": "Song List",
@@ -35,7 +37,19 @@
     "importErrorTitle": "Failed to fetch lyrics",
     "importErrorDefault": "Failed to fetch lyrics",
     "importFailed": "Import failed",
-    "deleted": "Deleted"
+    "deleted": "Deleted",
+    "playlistImport": "Import Playlist",
+    "playlistImportTitle": "Batch import from Spotify playlist",
+    "playlistUrlPlaceholder": "Enter Spotify playlist URL...",
+    "playlistImportBtn": "Import",
+    "playlistImporting": "Importing...",
+    "playlistImportResult": "{total} tracks: {imported} imported, {skipped} skipped, {failed} no lyrics",
+    "playlistImportError": "Failed to import playlist",
+    "playlistImportFailed": "Failed to import playlist",
+    "collections": "Collections",
+    "collectionsTitle": "Manage Collections",
+    "newCollectionPlaceholder": "New collection name...",
+    "createCollection": "Create"
   },
   "song": {
     "notFound": "Song not found",
@@ -66,7 +80,13 @@
     "spotify": "Spotify",
     "pipBtn": "Picture-in-Picture",
     "followOn": "Following",
-    "followOff": "Follow"
+    "followOff": "Follow",
+    "copy": "Copy",
+    "copyFailed": "Failed to copy",
+    "tokenExpired": "Token expired",
+    "reconnect": "Reconnect",
+    "export": "Export",
+    "exportFurigana": "(with furigana)"
   },
   "edit": {
     "title": "Edit Song",

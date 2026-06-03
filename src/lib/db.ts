@@ -30,6 +30,27 @@ db.exec(`
     display_name TEXT NOT NULL DEFAULT '',
     updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
   );
+
+  CREATE TABLE IF NOT EXISTS favorites (
+    user_email TEXT NOT NULL,
+    song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    PRIMARY KEY (user_email, song_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS collections (
+    id TEXT PRIMARY KEY,
+    user_email TEXT NOT NULL,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+  );
+
+  CREATE TABLE IF NOT EXISTS collection_songs (
+    collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+    song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (collection_id, song_id)
+  );
 `);
 
 // Migrate: add lyrics_synced column if missing

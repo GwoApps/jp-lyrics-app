@@ -9,26 +9,35 @@ import type { SongListItem } from '@/lib/types';
 export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get('q')?.trim() || '';
   const mine = request.nextUrl.searchParams.get('mine') === '1';
+  const favoritesOnly = request.nextUrl.searchParams.get('favorites') === '1';
   const user = getAuthUser(request);
 
-  let sql = 'SELECT id, title, artist, created_by, created_at, updated_at FROM songs';
+  let sql = 'SELECT s.id, s.title, s.artist, s.created_by, s.created_at, s.updated_at FROM songs s';
   const conditions: string[] = [];
-  const args: string[] = [];
+  const args: (string | number)[] = [];
+
+  if (favoritesOnly) {
+    if (!user) {
+      return NextResponse.json([]);
+    }
+    sql += ' INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ?';
+    args.push(user.email);
+  }
 
   if (q) {
-    conditions.push('(title LIKE ? OR artist LIKE ?)');
+    conditions.push('(s.title LIKE ? OR s.artist LIKE ?)');
     const pattern = `%${q}%`;
     args.push(pattern, pattern);
   }
   if (mine && user) {
-    conditions.push('created_by = ?');
+    conditions.push('s.created_by = ?');
     args.push(user.email);
   }
 
   if (conditions.length > 0) {
     sql += ' WHERE ' + conditions.join(' AND ');
   }
-  sql += ' ORDER BY updated_at DESC';
+  sql += ' ORDER BY s.updated_at DESC';
 
   const songs = db.prepare(sql).all(...args) as SongListItem[];
   return NextResponse.json(songs);
