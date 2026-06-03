@@ -17,7 +17,7 @@ function btnCls(active?: boolean, variant?: 'danger') {
   const base = 'inline-flex items-center justify-center rounded-xl transition-colors disabled:opacity-50';
   const size = 'h-11 w-11 sm:h-8 sm:w-8 sm:rounded-md';
   const colors = variant === 'danger'
-    ? 'text-[var(--destructive)] bg-red-950/30 hover:bg-red-950/50'
+    ? 'text-[var(--destructive)] bg-[var(--destructive)]/10 hover:bg-[var(--destructive)]/20'
     : active
       ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
       : 'text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)]';
@@ -150,7 +150,7 @@ export default function SongViewPage() {
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
               <button onClick={data.handleCopy} className={btnCls(data.copied)}>
-                {data.copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+                {data.copied ? <Check className="h-3.5 w-3.5 text-[var(--success)]" /> : <Copy className="h-3.5 w-3.5" />}
               </button>
               <div className="relative">
                 <button onClick={() => data.setShowExport(!data.showExport)} className={btnCls(data.showExport)}>
@@ -181,27 +181,27 @@ export default function SongViewPage() {
         {spotify?.connected && (
           <div className="mt-2 sm:mt-4 flex items-center gap-2">
             {spotify.error ? (
-              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-amber-950/30 border border-amber-800/30 px-2 sm:px-3 py-1">
-                <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
-                <span className="text-xs text-amber-400">{t('song.tokenExpired')}</span>
-                <a href="/api/auth/login" className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-colors shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--warning-muted)] border border-[var(--warning)]/30 px-2 sm:px-3 py-1">
+                <span className="inline-block h-2 w-2 rounded-full bg-[var(--warning)]" />
+                <span className="text-xs text-[var(--warning)]">{t('song.tokenExpired')}</span>
+                <a href="/api/auth/login" className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--warning)]/20 text-[var(--warning)] hover:bg-[var(--warning)]/30 transition-colors shrink-0">
                   <RefreshCw className="h-3 w-3" /><span>{t('song.reconnect')}</span>
                 </a>
               </div>
             ) : isSynced ? (
-              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-green-950/40 border border-green-800/30 px-2 sm:px-3 py-1">
-                <span className="inline-block h-2 w-2 rounded-full bg-green-400 animate-pulse" />
-                <Music className="h-3 w-3 text-green-400" />
-                <span className="text-xs text-green-400 truncate max-w-[180px] sm:max-w-none">
+              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--success-muted)] border border-[var(--success)]/30 px-2 sm:px-3 py-1">
+                <span className="inline-block h-2 w-2 rounded-full bg-[var(--success)] animate-pulse" />
+                <Music className="h-3 w-3 text-[var(--success)]" />
+                <span className="text-xs text-[var(--success)] truncate max-w-[180px] sm:max-w-none">
                   {spotify.track!.name}
-                  {data.debug && spotify && <span className="ml-1 sm:ml-2 font-mono text-green-500/70 text-[10px]">[{fmtTime(spotify.progress_ms)}/{fmtTime(spotify.duration_ms)}]#{activeLine}</span>}
+                  {data.debug && spotify && <span className="ml-1 sm:ml-2 font-mono text-[var(--success)]/70 text-[10px]">[{fmtTime(spotify.progress_ms)}/{fmtTime(spotify.duration_ms)}]#{activeLine}</span>}
                 </span>
               </div>
             ) : isSameSong ? (
-              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-green-950/20 border border-green-800/20 px-2 sm:px-3 py-1">
-                <span className="inline-block h-2 w-2 rounded-full bg-green-400/50 animate-pulse" />
-                <Music className="h-3 w-3 text-green-400/50" />
-                <span className="text-xs text-green-400/60 truncate max-w-[180px] sm:max-w-none">
+              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--success-muted)]/50 border border-[var(--success)]/20 px-2 sm:px-3 py-1">
+                <span className="inline-block h-2 w-2 rounded-full bg-[var(--success)]/50 animate-pulse" />
+                <Music className="h-3 w-3 text-[var(--success)]/50" />
+                <span className="text-xs text-[var(--success)]/60 truncate max-w-[180px] sm:max-w-none">
                   {spotify.track!.name}
                   {data.debug && <span className="ml-1 font-mono text-[10px]">[{fmtTime(spotify.progress_ms)}/{fmtTime(spotify.duration_ms)}] #{activeLine}</span>}
                 </span>
@@ -248,7 +248,7 @@ export default function SongViewPage() {
                 <div className="text-[var(--muted-foreground)] mb-1">Synced timestamps ({syncLines.length} lines):</div>
                 <div className="max-h-40 overflow-y-auto space-y-0.5">
                   {syncLines.map((sl, i) => (
-                    <div key={i} className={i === debugSyncActive ? 'text-green-400 font-medium' : 'text-[var(--muted-foreground)]'}>[{fmtMs(sl.timeMs)}] {sl.text}</div>
+                    <div key={i} className={i === debugSyncActive ? 'text-[var(--success)] font-medium' : 'text-[var(--muted-foreground)]'}>[{fmtMs(sl.timeMs)}] {sl.text}</div>
                   ))}
                 </div>
               </div>
@@ -349,32 +349,47 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
   const menuItems = [
     { icon: <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />, label: data.syncing ? t('song.syncing') : t('song.sync'), onClick: data.handleSync, disabled: data.syncing },
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: 'PiP', onClick: () => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef) }] : []),
-    ...(!hasSyncData ? [{ icon: <ClipboardPaste className="h-4 w-4" />, label: t('song.paste'), onClick: () => data.setShowPasteLrc(!data.showPasteLrc), active: data.showPasteLrc }] : []),
-    { icon: data.showRaw ? <BookOpen className="h-4 w-4" /> : <FileText className="h-4 w-4" />, label: data.showRaw ? t('song.furigana') : t('song.raw'), onClick: () => data.setShowRaw(!data.showRaw) },
     { icon: <Bug className="h-4 w-4" />, label: 'Debug', onClick: () => data.setDebug(!data.debug), active: data.debug },
     { icon: <Pencil className="h-4 w-4" />, label: t('common.edit'), onClick: () => router.push(`/songs/${id}/edit`) },
-    { icon: <Download className="h-4 w-4" />, label: t('song.export'), onClick: () => data.setShowExport(!data.showExport), active: data.showExport },
     { icon: <Trash2 className="h-4 w-4" />, label: t('common.delete'), onClick: data.handleDelete, danger: true },
   ];
 
   return (
     <div className="fixed bottom-0 left-0 right-0 sm:hidden z-50 bg-[var(--background)]/95 backdrop-blur-sm border-t border-[var(--border)]">
-      <div className="mx-auto max-w-[860px] flex items-center justify-between px-3 py-2 safe-area-pb">
+      <div className="mx-auto max-w-[860px] flex items-center justify-between px-2" style={{ paddingTop: 8, paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
         {/* A-/A+ */}
-        <div className="flex items-center gap-0.5 rounded-lg bg-[var(--accent)] px-1 py-0.5">
-          <button onClick={() => data.setFontSize(s => Math.max(14, s - 2))} className="p-1.5 text-[var(--muted-foreground)] active:text-[var(--foreground)]"><span className="text-base font-medium leading-none">A-</span></button>
-          <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="p-1.5 text-[var(--muted-foreground)] active:text-[var(--foreground)]"><span className="text-base font-medium leading-none">A+</span></button>
+        <div className="flex items-stretch rounded-lg bg-[var(--accent)] overflow-hidden">
+          <button onClick={() => data.setFontSize(s => Math.max(14, s - 2))} className="flex items-center justify-center px-2 py-1 text-sm font-medium text-[var(--muted-foreground)] active:text-[var(--foreground)] active:bg-[var(--accent)]">A-</button>
+          <div className="w-px bg-[var(--border)]" />
+          <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="flex items-center justify-center px-2 py-1 text-base font-medium text-[var(--muted-foreground)] active:text-[var(--foreground)] active:bg-[var(--accent)]">A+</button>
         </div>
 
         {/* Copy */}
-        <button onClick={data.handleCopy} className={`flex flex-col items-center gap-0.5 p-2 ${data.copied ? 'text-green-400' : 'text-[var(--muted-foreground)]'}`}>
-          {data.copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}<span className="text-[10px]">{t('song.copy')}</span>
+        <button onClick={data.handleCopy} className={`flex items-center justify-center p-2 ${data.copied ? 'text-[var(--success)]' : 'text-[var(--muted-foreground)]'}`}>
+          {data.copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
+        </button>
+
+        {/* Paste */}
+        {!hasSyncData && (
+          <button onClick={() => data.setShowPasteLrc(!data.showPasteLrc)} className={`flex items-center justify-center p-2 ${data.showPasteLrc ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)]'}`}>
+            <ClipboardPaste className="h-5 w-5" />
+          </button>
+        )}
+
+        {/* Raw / Furigana */}
+        <button onClick={() => data.setShowRaw(!data.showRaw)} className="flex items-center justify-center p-2 text-[var(--muted-foreground)]">
+          {data.showRaw ? <BookOpen className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
+        </button>
+
+        {/* Export */}
+        <button onClick={() => data.setShowExport(!data.showExport)} className={`flex items-center justify-center p-2 ${data.showExport ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)]'}`}>
+          <Download className="h-5 w-5" />
         </button>
 
         {/* 3-dot menu */}
         <div className="relative" ref={menuRef}>
-          <button onClick={() => setShowMenu(!showMenu)} className={`flex flex-col items-center gap-0.5 p-2 rounded-lg transition-colors ${showMenu ? 'text-[var(--foreground)] bg-[var(--accent)]' : 'text-[var(--muted-foreground)]'}`}>
-            <MoreVertical className="h-5 w-5" /><span className="text-[10px]">{t('common.more')}</span>
+          <button onClick={() => setShowMenu(!showMenu)} className={`flex items-center justify-center p-2 rounded-lg transition-colors ${showMenu ? 'text-[var(--foreground)] bg-[var(--accent)]' : 'text-[var(--muted-foreground)]'}`}>
+            <MoreVertical className="h-5 w-5" />
           </button>
           {showMenu && (
             <div className="absolute right-0 bottom-full mb-2 z-50 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-xl py-1.5 min-w-[180px] fade-in">
@@ -385,7 +400,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
                   disabled={'disabled' in item ? item.disabled : false}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors disabled:opacity-50 ${
                     'danger' in item && item.danger
-                      ? 'text-[var(--destructive)] hover:bg-red-950/30'
+                      ? 'text-[var(--destructive)] hover:bg-[var(--destructive)]/10'
                       : 'active' in item && item.active
                         ? 'text-[var(--primary)] bg-[var(--primary)]/10'
                         : 'text-[var(--foreground)] hover:bg-[var(--accent)]'

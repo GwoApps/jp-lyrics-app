@@ -1,56 +1,77 @@
-const CACHE_NAME = 'jplrc-v2';
+const CACHE_NAME = 'jplrc-v3';
+const IMMUTABLE_CACHE = 'jplrc-immutable-v1';
 
-// Install: cache static assets individually (one failure won't block others)
+// Install: precache icons only
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      const urls = [
-        '/icon-16x16.png',
-        '/icon-32x32.png',
-        '/icon-192x192.png',
-        '/icon-512x512.png',
-        '/apple-touch-icon.png',
-        '/manifest.json',
-      ];
-      // Add each URL individually — skip failures silently
-      return Promise.allSettled(urls.map((u) => cache.add(u)));
+      return Promise.allSettled([
+        cache.add('/icon-16x16.png'),
+        cache.add('/icon-32x32.png'),
+        cache.add('/icon-192x192.png'),
+        cache.add('/icon-512x512.png'),
+        cache.add('/apple-touch-icon.png'),
+        cache.add('/manifest.json'),
+      ]);
     })
   );
   self.skipWaiting();
 });
 
-// Activate: clean old caches
+// Activate: clean old caches, notify clients
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
+      Promise.all(
+        keys
+          .filter((k) => k !== CACHE_NAME && k !== IMMUTABLE_CACHE)
+          .map((k) => caches.delete(k))
+      )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-// Fetch: network-first for API/pages, cache-first for static assets
+// Fetch handler
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  const url = new URL(request.url);
-
-  // Skip non-GET
   if (request.method !== 'GET') return;
 
-  // API calls: network-only (no caching)
+  const url = new URL(request.url);
+
+  // Skip cross-origin (Spotify, Google Fonts handled separately)
+  if (url.origin !== self.location.origin) {
+    // Google Fonts: cache-first
+    if (url.hostname.includes('fonts.googleapis.com') || url.hostname.includes('fonts.gstatic.com')) {
+      event.respondWith(
+        caches.match(request).then((cached) => {
+          if (cached) return cached;
+          return fetch(request).then((response) => {
+            if (response.ok) {
+              const clone = response.clone();
+              caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+            }
+            return response;
+          });
+        })
+      );
+    }
+    return;
+  }
+
+  // API: network-only
   if (url.pathname.startsWith('/api/')) return;
 
-  // Spotify external: network-only
-  if (url.hostname.includes('spotify.com') || url.hostname.includes('spotifycdn.com')) return;
-
-  // Google Fonts: cache-first
-  if (url.hostname.includes('fonts.googleapis.com') || url.hostname.includes('fonts.gstatic.com')) {
+  // Next.js immutable static assets (/_next/static/*): cache-first
+  // These have content hashes in filenames — safe to cache forever
+  if (url.pathname.startsWith('/_next/static/')) {
     event.respondWith(
       caches.match(request).then((cached) => {
         if (cached) return cached;
         return fetch(request).then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(IMMUTABLE_CACHE).then((c) => c.put(request, clone));
+          }
           return response;
         });
       })
@@ -58,17 +79,35 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets & pages: stale-while-revalidate
+  // HTML pages (navigation): network-first
+  // Always fetch fresh HTML so new JS/CSS hashes are picked up
+  if (request.mode === 'navigate' || url.pathname === '/') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // Other same-origin static (icons, manifest, etc.): stale-while-revalidate
   event.respondWith(
     caches.match(request).then((cached) => {
-      const fetchPromise = fetch(request).then((response) => {
-        if (response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-        }
-        return response;
-      }).catch(() => cached);
-
+      const fetchPromise = fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => cached);
       return cached || fetchPromise;
     })
   );

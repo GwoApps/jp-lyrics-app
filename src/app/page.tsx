@@ -225,7 +225,7 @@ export default function HomePage() {
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {spotify?.connected ? (
             <div className="flex items-center gap-2 flex-1 sm:flex-none">
-              <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400" />
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
               <span className="text-xs text-[var(--muted-foreground)] truncate">{spotify.display_name}</span>
               <button onClick={handleDisconnect} className="text-[var(--muted-foreground)] hover:text-[var(--destructive)] transition-colors" title={t('home.disconnect')}>
                 <Unlink className="h-3.5 w-3.5" />
@@ -319,7 +319,7 @@ export default function HomePage() {
               onClick={() => setFavoritesOnly(!favoritesOnly)}
               className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors shrink-0 ${
                 favoritesOnly
-                  ? 'bg-amber-500/20 text-amber-400'
+                  ? 'bg-[var(--warning)]/20 text-[var(--warning)]'
                   : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
               }`}
             >
@@ -415,8 +415,8 @@ export default function HomePage() {
       {nowPlaying?.is_playing && nowPlaying.track && (
         <div className="mb-5 sm:mb-6 rounded-lg bg-[var(--card)] border border-[var(--border)] p-3 sm:p-4 flex items-center gap-3">
           <div className="relative shrink-0">
-            <Music className="h-5 w-5 text-green-400" />
-            <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-green-400 animate-pulse" />
+            <Music className="h-5 w-5 text-[var(--success)]" />
+            <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-[var(--success)] animate-pulse" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium truncate">{nowPlaying.track.name}</div>
@@ -466,14 +466,14 @@ export default function HomePage() {
           {filteredSongs.map((song) => {
             const isPlaying = nowPlaying?.is_playing && isSongPlaying(song, nowPlaying.track);
             return (
-              <div key={song.id} className={`group flex items-center gap-3 sm:gap-4 rounded-lg bg-[var(--card)] border px-4 sm:px-5 py-3 sm:py-4 transition-colors hover:bg-[var(--muted)] cursor-pointer ${isPlaying ? 'border-green-800/50 bg-green-950/10' : 'border-[var(--border)]'}`} onClick={() => router.push(`/songs/${song.id}`)}>
-                <div className={`flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-md ${isPlaying ? 'bg-green-950/30' : 'bg-[var(--muted)]'}`}>
-                  <Music className={`h-4 w-4 ${isPlaying ? 'text-green-400' : 'text-[var(--muted-foreground)]'}`} />
+              <div key={song.id} className={`group flex items-center gap-3 sm:gap-4 rounded-lg bg-[var(--card)] border px-4 sm:px-5 py-3 sm:py-4 transition-colors hover:bg-[var(--muted)] cursor-pointer ${isPlaying ? 'border-[var(--success)]/50 bg-[var(--success-muted)]' : 'border-[var(--border)]'}`} onClick={() => router.push(`/songs/${song.id}`)}>
+                <div className={`flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-md ${isPlaying ? 'bg-[var(--success-muted)]' : 'bg-[var(--muted)]'}`}>
+                  <Music className={`h-4 w-4 ${isPlaying ? 'text-[var(--success)]' : 'text-[var(--muted-foreground)]'}`} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate flex items-center gap-2">
                     {song.title}
-                    {isPlaying && <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse shrink-0" />}
+                    {isPlaying && <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--success)] animate-pulse shrink-0" />}
                   </div>
                   <div className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate">{song.artist || t('common.unknownArtist')}</div>
                   {song.created_by && (
@@ -483,14 +483,14 @@ export default function HomePage() {
                 <div className="text-[10px] sm:text-[11px] text-[var(--muted-foreground)] hidden sm:block shrink-0">{new Date(song.updated_at).toLocaleDateString(localeToBCP47(locale))}</div>
                 <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
                   {currentUser && (
-                    <button onClick={(e) => { e.stopPropagation(); handleToggleFavorite(song.id); }} className={`rounded p-1.5 sm:p-2 transition-colors ${favorites.has(song.id) ? 'text-amber-400' : 'text-[var(--muted-foreground)] hover:text-amber-400'}`}>
+                    <button onClick={(e) => { e.stopPropagation(); handleToggleFavorite(song.id); }} className={`rounded p-1.5 sm:p-2 transition-colors ${favorites.has(song.id) ? 'text-[var(--warning)]' : 'text-[var(--muted-foreground)] hover:text-[var(--warning)]'}`}>
                       <Star className={`h-3.5 w-3.5 ${favorites.has(song.id) ? 'fill-current' : ''}`} />
                     </button>
                   )}
                   <button onClick={(e) => { e.stopPropagation(); router.push(`/songs/${song.id}/edit`); }} className="rounded p-1.5 sm:p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors">
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
-                  <button onClick={(e) => { e.stopPropagation(); handleDelete(song.id, song.title); }} className="rounded p-1.5 sm:p-2 text-[var(--destructive)] hover:bg-red-950/40 transition-colors">
+                  <button onClick={(e) => { e.stopPropagation(); handleDelete(song.id, song.title); }} className="rounded p-1.5 sm:p-2 text-[var(--destructive)] hover:bg-[var(--destructive)]/10 transition-colors">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>

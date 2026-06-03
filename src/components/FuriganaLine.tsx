@@ -31,7 +31,7 @@ export default function FuriganaLineView({ line, isActive, debugTs }: {
         key={animKey}
         className={`leading-[2.2] sm:leading-[2.8] transition-all duration-300 ${
           isActive
-            ? 'text-white scale-[1.03] origin-left lyric-active'
+            ? 'text-[var(--foreground)] scale-[1.03] origin-left lyric-active'
             : 'text-[var(--muted-foreground)] opacity-60'
         }`}
         style={{ fontWeight: isActive ? 700 : 400 }}

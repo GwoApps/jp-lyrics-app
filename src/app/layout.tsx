@@ -23,10 +23,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0a0a0a',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({
@@ -37,6 +37,9 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <head>
+        <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+        <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#0a0a0a" />
         <link
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap"
           rel="stylesheet"
@@ -48,7 +51,30 @@ export default function RootLayout({
           if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
               navigator.serviceWorker.register('/sw.js', { scope: '/' })
-                .then((reg) => { console.log('[SW] registered, scope:', reg.scope); })
+                .then((reg) => {
+                  console.log('[SW] registered, scope:', reg.scope);
+                  // Check for updates periodically
+                  reg.update();
+                  setInterval(() => reg.update(), 60 * 60 * 1000); // hourly
+                  // Listen for new SW installing
+                  reg.addEventListener('updatefound', () => {
+                    const newWorker = reg.installing;
+                    if (!newWorker) return;
+                    newWorker.addEventListener('statechange', () => {
+                      if (newWorker.state === 'activated') {
+                        // Show update toast
+                        const toast = document.createElement('div');
+                        toast.className = 'toast toast-success';
+                        toast.textContent = '🔄 New version — tap to refresh';
+                        toast.style.cursor = 'pointer';
+                        toast.style.bottom = '5.5rem';
+                        toast.onclick = () => { toast.remove(); window.location.reload(); };
+                        document.body.appendChild(toast);
+                        setTimeout(() => toast.remove(), 15000);
+                      }
+                    });
+                  });
+                })
                 .catch((err) => { console.warn('[SW] registration failed:', err); });
             });
           }
