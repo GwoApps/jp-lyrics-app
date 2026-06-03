@@ -46,6 +46,7 @@ export default function HomePage() {
   const [importAlert, setImportAlert] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [mySongsOnly, setMySongsOnly] = useState(false);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ email: string; name: string } | null>(null);
   const [showPlaylistImport, setShowPlaylistImport] = useState(false);
   const [playlistUrl, setPlaylistUrl] = useState('');
@@ -226,6 +227,7 @@ export default function HomePage() {
   // Filter songs by search query and "my songs" toggle
   const filteredSongs = songs.filter((s) => {
     if (mySongsOnly && currentUser && s.created_by !== currentUser.email) return false;
+    if (favoritesOnly && !favorites.has(s.id)) return false;
     if (filterCollection && !collectionSongs.has(s.id)) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -240,7 +242,7 @@ export default function HomePage() {
       <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">{t('home.songList')}</h1>
-          <p className="text-xs text-[var(--muted-foreground)] mt-1">{t('home.songCount', { count: filteredSongs.length })}{(searchQuery || mySongsOnly) && filteredSongs.length !== songs.length ? ` / ${songs.length}` : ''}</p>
+          <p className="text-xs text-[var(--muted-foreground)] mt-1">{t('home.songCount', { count: filteredSongs.length })}{(searchQuery || mySongsOnly || favoritesOnly) && filteredSongs.length !== songs.length ? ` / ${songs.length}` : ''}</p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {spotify?.connected ? (
@@ -334,17 +336,30 @@ export default function HomePage() {
           )}
         </div>
         {currentUser && (
-          <button
-            onClick={() => setMySongsOnly(!mySongsOnly)}
-            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors shrink-0 ${
-              mySongsOnly
-                ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
-                : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
-            }`}
-          >
-            <User className="h-3.5 w-3.5" />
-            <span>{t('home.mine')}</span>
-          </button>
+          <>
+            <button
+              onClick={() => setFavoritesOnly(!favoritesOnly)}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors shrink-0 ${
+                favoritesOnly
+                  ? 'bg-amber-500/20 text-amber-400'
+                  : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+              }`}
+            >
+              <Star className={`h-3.5 w-3.5 ${favoritesOnly ? 'fill-current' : ''}`} />
+              <span>{t('home.favorites')}</span>
+            </button>
+            <button
+              onClick={() => setMySongsOnly(!mySongsOnly)}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors shrink-0 ${
+                mySongsOnly
+                  ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                  : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+              }`}
+            >
+              <User className="h-3.5 w-3.5" />
+              <span>{t('home.mine')}</span>
+            </button>
+          </>
         )}
       </div>
 

@@ -29,6 +29,7 @@
     "addFirst": "添加第一首歌",
     "search": "按歌名或歌手搜索",
     "mine": "我的",
+    "favorites": "收藏",
     "all": "全部",
     "createdBy": "创建者",
     "noResults": "没有匹配的歌曲",

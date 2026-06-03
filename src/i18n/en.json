@@ -29,6 +29,7 @@
     "addFirst": "Add your first song",
     "search": "Search by title or artist",
     "mine": "My songs",
+    "favorites": "Favorites",
     "all": "All",
     "createdBy": "Created by",
     "noResults": "No matching songs",

@@ -29,6 +29,7 @@
     "addFirst": "最初の曲を追加する",
     "search": "曲名・アーティストで検索",
     "mine": "自分の曲",
+    "favorites": "お気に入り",
     "all": "すべて",
     "createdBy": "作成者",
     "noResults": "該当する曲がありません",
