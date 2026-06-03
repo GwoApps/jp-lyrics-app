@@ -1,10 +1,32 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import AppShell from '@/components/AppShell';
 
 export const metadata: Metadata = {
   title: '歌詞ノート — Lyrics Note',
-  description: 'Japanese lyrics management with furigana',
+  description: 'Japanese lyrics management with furigana annotation and Spotify sync',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: '歌詞ノート',
+  },
+  icons: {
+    icon: [
+      { url: '/icon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/icon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-512x512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#0a0a0a',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({
@@ -22,6 +44,13 @@ export default function RootLayout({
       </head>
       <body>
         <AppShell>{children}</AppShell>
+        <script dangerouslySetInnerHTML={{ __html: `
+          if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+              navigator.serviceWorker.register('/sw.js').catch(() => {});
+            });
+          }
+        `}} />
       </body>
     </html>
   );
