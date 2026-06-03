@@ -151,7 +151,9 @@ export default function SongViewPage() {
   const songRef = useRef<SongData | null>(null);
   const debugRef = useRef(false);
   const pipWindowRef = useRef<Window | null>(null);
+  const [pipSupported, setPipSupported] = useState(false);
 
+  useEffect(() => { setPipSupported('documentPictureInPicture' in window); }, []);
   useEffect(() => { localStorage.setItem('jplrc-font-size', String(fontSize)); }, [fontSize]);
 
   const furiganaLines = useMemo<FuriganaLine[]>(() => {
@@ -542,7 +544,7 @@ export default function SongViewPage() {
             <button onClick={handleSync} disabled={syncing} className={btnCls()}>
               <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
             </button>
-            {furiganaLines.length > 0 && (
+            {furiganaLines.length > 0 && pipSupported && (
               <button onClick={openPiP} className={btnCls()} title="Picture-in-Picture">
                 <PictureInPicture className="h-3.5 w-3.5" />
               </button>
@@ -722,7 +724,7 @@ export default function SongViewPage() {
             <span className="text-[10px]">{syncing ? '...' : '同期'}</span>
           </button>
           {/* PiP */}
-          {furiganaLines.length > 0 && (
+          {furiganaLines.length > 0 && pipSupported && (
             <button onClick={openPiP} className="flex flex-col items-center gap-0.5 p-2 text-[var(--muted-foreground)]">
               <PictureInPicture className="h-5 w-5" />
               <span className="text-[10px]">PiP</span>
