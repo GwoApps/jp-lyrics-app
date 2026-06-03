@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Music, Pencil, Trash2, Plus, Unlink, Download, ExternalLink, Loader2 } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { useI18n } from '@/lib/i18n';
 
 interface SongItem {
   id: string;
@@ -26,6 +27,11 @@ interface NowPlaying {
   duration_ms: number;
 }
 
+function localeToBCP47(locale: string): string {
+  const map: Record<string, string> = { ja: 'ja-JP', en: 'en-US', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW' };
+  return map[locale] ?? 'ja-JP';
+}
+
 function normalize(s: string): string {
   return s.normalize('NFKC').replace(/\s+/g, '').toLowerCase();
 }
@@ -43,6 +49,7 @@ function fuzzyMatch(a: string, b: string): boolean {
 }
 
 export default function HomePage() {
+  const { t, locale } = useI18n();
   const [songs, setSongs] = useState<SongItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [spotify, setSpotify] = useState<SpotifyStatus | null>(null);
@@ -93,7 +100,7 @@ export default function HomePage() {
     const res = await fetch(`/api/songs/${deleteTarget.id}`, { method: 'DELETE' });
     if (res.ok) {
       setSongs((prev) => prev.filter((s) => s.id !== deleteTarget.id));
-      showToast('success', '削除しました');
+      showToast('success', t('home.deleted'));
     }
     setDeleteTarget(null);
   };
@@ -115,12 +122,12 @@ export default function HomePage() {
       });
       const data = await res.json();
       if (!res.ok || data.error) {
-        setImportAlert(data.error || '歌詞の取得に失敗しました');
+        setImportAlert(data.error || t('home.importErrorDefault'));
         return;
       }
       router.push(`/songs/${data.id}`);
     } catch {
-      showToast('error', '取込に失敗しました');
+      showToast('error', t('home.importFailed'));
     } finally {
       setImporting(false);
     }
@@ -136,15 +143,15 @@ export default function HomePage() {
       {/* Header */}
       <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">曲一覧</h1>
-          <p className="text-xs text-[var(--muted-foreground)] mt-1">{songs.length} 曲</p>
+          <h1 className="text-lg font-semibold tracking-tight">{t('home.songList')}</h1>
+          <p className="text-xs text-[var(--muted-foreground)] mt-1">{t('home.songCount', { count: songs.length })}</p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {spotify?.connected ? (
             <div className="flex items-center gap-2 flex-1 sm:flex-none">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400" />
               <span className="text-xs text-[var(--muted-foreground)] truncate">{spotify.display_name}</span>
-              <button onClick={handleDisconnect} className="text-[var(--muted-foreground)] hover:text-[var(--destructive)] transition-colors" title="切断">
+              <button onClick={handleDisconnect} className="text-[var(--muted-foreground)] hover:text-[var(--destructive)] transition-colors" title={t('home.disconnect')}>
                 <Unlink className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -156,7 +163,7 @@ export default function HomePage() {
           )}
           <button onClick={() => router.push('/songs/new')} className="inline-flex items-center gap-1.5 rounded-md bg-[var(--primary)] px-3 sm:px-4 py-2 text-xs font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90">
             <Plus className="h-3.5 w-3.5" />
-            <span>新規</span>
+            <span>{t('common.new')}</span>
           </button>
         </div>
       </div>
@@ -178,7 +185,7 @@ export default function HomePage() {
               className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors shrink-0"
             >
               <ExternalLink className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">表示</span>
+              <span className="hidden sm:inline">{t('home.view')}</span>
             </button>
           ) : (
             <button
@@ -187,7 +194,7 @@ export default function HomePage() {
               className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium bg-[var(--primary)] text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0"
             >
               {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-              <span>{importing ? '取得中...' : '取込'}</span>
+              <span>{importing ? t('home.importing') : t('home.import')}</span>
             </button>
           )}
         </div>
@@ -201,9 +208,9 @@ export default function HomePage() {
       ) : songs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <Music className="h-10 w-10 mb-4 text-[var(--muted-foreground)] opacity-20" />
-          <p className="text-sm text-[var(--muted-foreground)]">まだ曲がありません</p>
+          <p className="text-sm text-[var(--muted-foreground)]">{t('home.noSongs')}</p>
           <button onClick={() => router.push('/songs/new')} className="mt-5 inline-flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-4 py-2 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
-            <Plus className="h-3.5 w-3.5" /> 最初の曲を追加する
+            <Plus className="h-3.5 w-3.5" /> {t('home.addFirst')}
           </button>
         </div>
       ) : (
@@ -220,9 +227,9 @@ export default function HomePage() {
                     {song.title}
                     {isPlaying && <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse shrink-0" />}
                   </div>
-                  <div className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate">{song.artist || 'アーティスト不明'}</div>
+                  <div className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate">{song.artist || t('common.unknownArtist')}</div>
                 </div>
-                <div className="text-[10px] sm:text-[11px] text-[var(--muted-foreground)] hidden sm:block shrink-0">{new Date(song.updated_at).toLocaleDateString('ja-JP')}</div>
+                <div className="text-[10px] sm:text-[11px] text-[var(--muted-foreground)] hidden sm:block shrink-0">{new Date(song.updated_at).toLocaleDateString(localeToBCP47(locale))}</div>
                 <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
                   <button onClick={(e) => { e.stopPropagation(); router.push(`/songs/${song.id}/edit`); }} className="rounded p-1.5 sm:p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors">
                     <Pencil className="h-3.5 w-3.5" />
@@ -241,10 +248,10 @@ export default function HomePage() {
 
       <ConfirmDialog
         open={!!deleteTarget}
-        title={`「${deleteTarget?.title}」を削除しますか？`}
-        body="この操作は取り消せません。歌詞データとふりがなが完全に削除されます。"
-        confirmLabel="削除"
-        cancelLabel="キャンセル"
+        title={t('dialog.deleteConfirmTitle', { title: deleteTarget?.title || '' })}
+        body={t('dialog.deleteConfirmBody')}
+        confirmLabel={t('common.delete')}
+        cancelLabel={t('common.cancel')}
         variant="danger"
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
@@ -252,9 +259,9 @@ export default function HomePage() {
 
       <ConfirmDialog
         open={!!importAlert}
-        title="歌詞の取得に失敗"
+        title={t('home.importErrorTitle')}
         body={importAlert || undefined}
-        confirmLabel="OK"
+        confirmLabel={t('common.confirm')}
         alert
         onConfirm={() => setImportAlert(null)}
       />

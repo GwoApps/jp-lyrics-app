@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import type { FuriganaLine } from '@/lib/types';
 import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { useI18n } from '@/lib/i18n';
 
 interface SongData {
   id: string;
@@ -119,6 +120,7 @@ function btnCls(active?: boolean, variant?: 'danger') {
 export default function SongViewPage() {
   const router = useRouter();
   const params = useParams();
+  const { t } = useI18n();
   const id = params?.id as string;
   const [song, setSong] = useState<SongData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -353,14 +355,14 @@ export default function SongViewPage() {
           setSong(updated);
           setSyncLines(parseLrc(data.lrc));
         }
-        showToast('success', `歌詞同期完了 (${data.source}, ${data.lines}行)`);
+        showToast('success', t('song.synced', { source: data.source, lines: String(data.lines) }));
       } else {
-        setSyncError(data.error || '歌詞が見つかりません');
-        setImportAlert(data.error || '歌詞が見つかりません — 手動貼付をご利用ください');
+        setSyncError(data.error || t('song.syncNotFound'));
+        setImportAlert(data.error || t('song.syncNotFoundManual'));
       }
     } catch {
-      setSyncError('通信エラー');
-      setImportAlert('通信エラーが発生しました');
+      setSyncError(t('song.networkError'));
+      setImportAlert(t('song.networkErrorAlert'));
     } finally {
       setSyncing(false);
     }
@@ -388,10 +390,10 @@ export default function SongViewPage() {
         setShowPasteLrc(false);
         setPasteLrcText('');
         setSyncError('');
-        showToast('success', '歌詞を保存しました');
+        showToast('success', t('song.lyricsSaved'));
       }
     } catch {
-      showToast('error', '保存に失敗しました');
+      showToast('error', t('song.saveFailed'));
     }
   };
 
@@ -403,7 +405,7 @@ export default function SongViewPage() {
   const confirmDelete = async () => {
     if (!song) return;
     const res = await fetch(`/api/songs/${id}`, { method: 'DELETE' });
-    if (res.ok) { showToast('success', '削除しました'); setTimeout(() => router.push('/'), 800); }
+    if (res.ok) { showToast('success', t('home.deleted')); setTimeout(() => router.push('/'), 800); }
     setDeleteConfirm(false);
   };
 
@@ -418,12 +420,12 @@ export default function SongViewPage() {
       });
       const data = await res.json();
       if (!res.ok || data.error) {
-        setImportAlert(data.error || '歌詞の取得に失敗しました');
+        setImportAlert(data.error || t('song.importFailed'));
         return;
       }
       router.push(`/songs/${data.id}`);
     } catch {
-      showToast('error', '取込に失敗しました');
+      showToast('error', t('song.importFailed'));
     } finally {
       setImporting(false);
     }
@@ -438,12 +440,12 @@ export default function SongViewPage() {
     }
 
     if (!('documentPictureInPicture' in window)) {
-      showToast('error', 'PiP非対応 — デスクトップChrome 116+が必要です');
+      showToast('error', t('song.pipUnsupported'));
       return;
     }
 
     if (furiganaLines.length === 0) {
-      showToast('error', '歌詞がありません');
+      showToast('error', t('song.noLyrics'));
       return;
     }
 
@@ -507,7 +509,7 @@ export default function SongViewPage() {
       });
     } catch (e) {
       console.error('PiP failed:', e);
-      showToast('error', 'PiPの開始に失敗しました');
+      showToast('error', t('song.pipFailed'));
     }
   }, [furiganaLines, song, fontSize, showToast]);
 
@@ -518,9 +520,9 @@ export default function SongViewPage() {
   if (!song) {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
-        <p className="text-sm text-[var(--muted-foreground)]">曲が見つかりません</p>
+        <p className="text-sm text-[var(--muted-foreground)]">{t('song.notFound')}</p>
         <button onClick={() => router.push('/')} className="mt-4 text-xs text-[var(--primary)] hover:underline inline-flex items-center gap-1">
-          <ArrowLeft className="h-3 w-3" /> 一覧に戻る
+          <ArrowLeft className="h-3 w-3" /> {t('song.backToList')}
         </button>
       </div>
     );
@@ -540,7 +542,7 @@ export default function SongViewPage() {
       {/* Breadcrumb */}
       <div className="shrink-0 mb-3 sm:mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
         <a href="/" className="hover:text-[var(--foreground)] transition-colors inline-flex items-center gap-1">
-          <ArrowLeft className="h-3 w-3" /> 一覧
+          <ArrowLeft className="h-3 w-3" /> {t('common.list')}
         </a>
         <span className="opacity-40">/</span>
         <span className="text-[var(--foreground)] truncate max-w-[200px] sm:max-w-[320px]">{song.title}</span>
@@ -588,7 +590,7 @@ export default function SongViewPage() {
                 className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
               >
                 <PictureInPicture className="h-3.5 w-3.5" />
-                <span>Picture-in-Picture</span>
+                <span>{t('song.pipBtn')}</span>
               </button>
             )}
           </div>
@@ -623,7 +625,7 @@ export default function SongViewPage() {
                     className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--border)] transition-colors shrink-0"
                   >
                     <ExternalLink className="h-3 w-3" />
-                    <span>表示</span>
+                    <span>{t('song.show')}</span>
                   </button>
                 ) : (
                   <button
@@ -632,7 +634,7 @@ export default function SongViewPage() {
                     className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--primary)] text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0"
                   >
                     {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-                    <span>{importing ? '...' : '取込'}</span>
+                    <span>{importing ? t('home.importing') : t('song.importBtn')}</span>
                   </button>
                 )}
               </div>
@@ -667,13 +669,13 @@ export default function SongViewPage() {
         {(showPasteLrc || syncError) && !hasSyncData && (
           <div className="mt-3 rounded-md bg-[var(--muted)] border border-[var(--border)] p-3 sm:p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-[var(--foreground)]">LRC 歌詞を手動貼付</span>
+              <span className="text-xs font-medium text-[var(--foreground)]">{t('song.pasteLrcTitle')}</span>
               {syncError && <span className="text-[10px] text-[var(--destructive)]">{syncError}</span>}
             </div>
             <textarea
               value={pasteLrcText}
               onChange={(e) => setPasteLrcText(e.target.value)}
-              placeholder={`[00:05.58] 歌詞の一行目\n[00:10.23] 歌詞の二行目\n[00:15.00] ...`}
+              placeholder={t('song.pasteLrcPlaceholder')}
               rows={6}
               className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs font-mono outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/40 resize-y"
             />
@@ -683,13 +685,13 @@ export default function SongViewPage() {
                 disabled={!pasteLrcText.trim()}
                 className="rounded-md px-3 py-1.5 text-xs font-medium bg-[var(--primary)] text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50"
               >
-                保存
+                {t('common.save')}
               </button>
               <button
                 onClick={() => { setShowPasteLrc(false); setPasteLrcText(''); setSyncError(''); }}
                 className="rounded-md px-3 py-1.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
               >
-                キャンセル
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -699,7 +701,7 @@ export default function SongViewPage() {
       {/* Lyrics */}
       <div className="rounded-lg bg-[var(--card)] border border-[var(--border)] overflow-hidden flex-1 min-h-0">
         {showRaw ? (
-          <pre className="p-4 sm:p-6 whitespace-pre-wrap font-sans leading-relaxed h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto" style={{ fontSize: `${fontSize}px` }}>{song.lyrics_raw || '（歌詞なし）'}</pre>
+          <pre className="p-4 sm:p-6 whitespace-pre-wrap font-sans leading-relaxed h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto" style={{ fontSize: `${fontSize}px` }}>{song.lyrics_raw || t('song.noLyricsParen')}</pre>
         ) : (
           <div ref={lyricsRef} className="p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto scroll-smooth" style={{ fontSize: `${fontSize}px` }}>
             {furiganaLines.length > 0 ? (
@@ -713,7 +715,7 @@ export default function SongViewPage() {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-[var(--muted-foreground)]">歌詞がありません</p>
+              <p className="text-sm text-[var(--muted-foreground)]">{t('song.noLyricsSimple')}</p>
             )}
           </div>
         )}
@@ -722,12 +724,12 @@ export default function SongViewPage() {
       {/* Meta */}
       <div className="shrink-0 mt-2 sm:mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-2">
         <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-6 gap-y-1 text-[10px] sm:text-[11px] text-[var(--muted-foreground)]">
-          <span>作成: {new Date(song.created_at).toLocaleString('ja-JP')}</span>
-          <span>更新: {new Date(song.updated_at).toLocaleString('ja-JP')}</span>
-          {hasSyncData && <span className="text-green-500/60">{syncLines.length} 行同期済み</span>}
+          <span>{t('common.created')}{new Date(song.created_at).toLocaleString('ja-JP')}</span>
+          <span>{t('common.updated')}{new Date(song.updated_at).toLocaleString('ja-JP')}</span>
+          {hasSyncData && <span className="text-green-500/60">{t('common.linesSynced', { count: String(syncLines.length) })}</span>}
         </div>
         {!spotify?.connected && (
-          <a href="/api/auth/login" className="text-[11px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">Spotify連携</a>
+          <a href="/api/auth/login" className="text-[11px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">{t('song.spotify')}</a>
         )}
       </div>
 
@@ -746,7 +748,7 @@ export default function SongViewPage() {
           {/* Sync */}
           <button onClick={handleSync} disabled={syncing} className="flex flex-col items-center gap-0.5 p-2 text-[var(--muted-foreground)] disabled:opacity-50">
             <RefreshCw className={`h-5 w-5 ${syncing ? 'animate-spin' : ''}`} />
-            <span className="text-[10px]">{syncing ? '...' : '同期'}</span>
+            <span className="text-[10px]">{syncing ? t('song.syncing') : t('song.sync')}</span>
           </button>
           {/* PiP */}
           {furiganaLines.length > 0 && pipSupported && (
@@ -759,13 +761,13 @@ export default function SongViewPage() {
           {!hasSyncData && (
             <button onClick={() => setShowPasteLrc(!showPasteLrc)} className={`flex flex-col items-center gap-0.5 p-2 ${showPasteLrc ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)]'}`}>
               <ClipboardPaste className="h-5 w-5" />
-              <span className="text-[10px]">貼付</span>
+              <span className="text-[10px]">{t('song.paste')}</span>
             </button>
           )}
           {/* Raw/Furigana */}
           <button onClick={() => setShowRaw(!showRaw)} className="flex flex-col items-center gap-0.5 p-2 text-[var(--muted-foreground)]">
             {showRaw ? <BookOpen className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
-            <span className="text-[10px]">{showRaw ? 'ふりがな' : '原文'}</span>
+            <span className="text-[10px]">{showRaw ? t('song.furigana') : t('song.raw')}</span>
           </button>
           {/* Debug */}
           <button onClick={() => setDebug(!debug)} className={`flex flex-col items-center gap-0.5 p-2 ${debug ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)]'}`}>
@@ -775,7 +777,7 @@ export default function SongViewPage() {
           {/* Edit */}
           <button onClick={() => router.push(`/songs/${id}/edit`)} className="flex flex-col items-center gap-0.5 p-2 text-[var(--muted-foreground)]">
             <Pencil className="h-5 w-5" />
-            <span className="text-[10px]">編集</span>
+            <span className="text-[10px]">{t('common.edit')}</span>
           </button>
           {/* Delete */}
           <button onClick={handleDelete} className="flex flex-col items-center gap-0.5 p-2 text-[var(--destructive)]">
@@ -788,10 +790,10 @@ export default function SongViewPage() {
 
       <ConfirmDialog
         open={deleteConfirm}
-        title={`「${song?.title}」を削除しますか？`}
-        body="この操作は取り消せません。歌詞データとふりがなが完全に削除されます。"
-        confirmLabel="削除"
-        cancelLabel="キャンセル"
+        title={t('dialog.deleteConfirmTitle', { title: song?.title || '' })}
+        body={t('dialog.deleteConfirmBody')}
+        confirmLabel={t('common.delete')}
+        cancelLabel={t('common.cancel')}
         variant="danger"
         onConfirm={confirmDelete}
         onCancel={() => setDeleteConfirm(false)}
@@ -799,9 +801,9 @@ export default function SongViewPage() {
 
       <ConfirmDialog
         open={!!importAlert}
-        title="歌詞の取得に失敗"
+        title={t('dialog.importErrorTitle')}
         body={importAlert || undefined}
-        confirmLabel="OK"
+        confirmLabel={t('common.confirm')}
         alert
         onConfirm={() => setImportAlert(null)}
       />
