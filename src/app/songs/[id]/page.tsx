@@ -554,37 +554,43 @@ export default function SongViewPage() {
             {song.artist && <p className="text-xs sm:text-sm text-[var(--muted-foreground)]">{song.artist}</p>}
           </div>
           {/* Desktop-only buttons */}
-          <div className="hidden sm:flex items-center gap-2 shrink-0">
-            <div className="flex items-center gap-0.5 rounded-md bg-[var(--accent)] px-1 py-0.5">
-              <button onClick={() => setFontSize(s => Math.max(14, s - 2))} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Minus className="h-3 w-3" /></button>
-              <span className="text-[10px] w-5 text-center text-[var(--muted-foreground)] tabular-nums">{fontSize}</span>
-              <button onClick={() => setFontSize(s => Math.min(32, s + 2))} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Plus className="h-3 w-3" /></button>
+          <div className="hidden sm:flex flex-col items-end gap-2 shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-0.5 rounded-md bg-[var(--accent)] px-1 py-0.5">
+                <button onClick={() => setFontSize(s => Math.max(14, s - 2))} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Minus className="h-3 w-3" /></button>
+                <span className="text-[10px] w-5 text-center text-[var(--muted-foreground)] tabular-nums">{fontSize}</span>
+                <button onClick={() => setFontSize(s => Math.min(32, s + 2))} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Plus className="h-3 w-3" /></button>
+              </div>
+              <button onClick={handleSync} disabled={syncing} className={btnCls()}>
+                <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
+              </button>
+              {!hasSyncData && (
+                <button onClick={() => setShowPasteLrc(!showPasteLrc)} className={btnCls(showPasteLrc)}>
+                  <ClipboardPaste className="h-3.5 w-3.5" />
+                </button>
+              )}
+              <button onClick={() => setDebug(!debug)} className={btnCls(debug)}>
+                <Bug className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={() => setShowRaw(!showRaw)} className={btnCls()}>
+                {showRaw ? <BookOpen className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
+              </button>
+              <button onClick={() => router.push(`/songs/${id}/edit`)} className={btnCls()}>
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={handleDelete} className={btnCls(false, 'danger')}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
             </div>
-            <button onClick={handleSync} disabled={syncing} className={btnCls()}>
-              <RefreshCw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
-            </button>
             {furiganaLines.length > 0 && pipSupported && (
-              <button onClick={openPiP} className={btnCls()} title="Picture-in-Picture">
+              <button
+                onClick={openPiP}
+                className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
+              >
                 <PictureInPicture className="h-3.5 w-3.5" />
+                <span>Picture-in-Picture</span>
               </button>
             )}
-            {!hasSyncData && (
-              <button onClick={() => setShowPasteLrc(!showPasteLrc)} className={btnCls(showPasteLrc)}>
-                <ClipboardPaste className="h-3.5 w-3.5" />
-              </button>
-            )}
-            <button onClick={() => setDebug(!debug)} className={btnCls(debug)}>
-              <Bug className="h-3.5 w-3.5" />
-            </button>
-            <button onClick={() => setShowRaw(!showRaw)} className={btnCls()}>
-              {showRaw ? <BookOpen className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
-            </button>
-            <button onClick={() => router.push(`/songs/${id}/edit`)} className={btnCls()}>
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
-            <button onClick={handleDelete} className={btnCls(false, 'danger')}>
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
           </div>
         </div>
 
