@@ -1,8 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { Upload } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+
+type LyricsMode = 'text' | 'lrc';
 
 export default function NewSongPage() {
   const { t } = useI18n();
@@ -10,12 +13,27 @@ export default function NewSongPage() {
   const [title, setTitle] = useState('');
   const [artist, setArtist] = useState('');
   const [lyrics, setLyrics] = useState('');
+  const [lyricsMode, setLyricsMode] = useState<LyricsMode>('text');
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const showToast = (type: 'success' | 'error', msg: string) => {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      if (text) setLyrics(text);
+    };
+    reader.readAsText(file);
+    // reset so same file can be re-selected
+    e.target.value = '';
   };
 
   const handleSave = async () => {
@@ -25,14 +43,21 @@ export default function NewSongPage() {
     }
     setSaving(true);
     try {
+      const body: Record<string, string> = {
+        title: title.trim(),
+        artist: artist.trim(),
+      };
+      if (lyrics.trim()) {
+        if (lyricsMode === 'lrc') {
+          body.lyrics_synced = lyrics;
+        } else {
+          body.lyrics_raw = lyrics;
+        }
+      }
       const res = await fetch('/api/songs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: title.trim(),
-          artist: artist.trim(),
-          lyrics_raw: lyrics,
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error(t('new.saveFailed'));
       const song = await res.json();
@@ -44,6 +69,13 @@ export default function NewSongPage() {
       setSaving(false);
     }
   };
+
+  const radioCls = (mode: LyricsMode) =>
+    `flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors ${
+      lyricsMode === mode
+        ? 'bg-[var(--primary)]/15 text-[var(--primary)] border border-[var(--primary)]/30'
+        : 'bg-[var(--accent)] text-[var(--muted-foreground)] border border-transparent hover:text-[var(--foreground)]'
+    }`;
 
   return (
     <div className="fade-in max-w-2xl">
@@ -87,19 +119,54 @@ export default function NewSongPage() {
 
         {/* Lyrics */}
         <div>
-          <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-2">
-            {t('new.lyrics')}
-            <span className="ml-2 font-normal">{t('new.lyricsHint')}</span>
-          </label>
+          {/* Mode selector + upload */}
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-medium text-[var(--muted-foreground)]">
+              {t('new.lyrics')}
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setLyricsMode('text')}
+                className={radioCls('text')}
+              >
+                {t('new.lyricsModePlain')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setLyricsMode('lrc')}
+                className={radioCls('lrc')}
+              >
+                {t('new.lyricsModeLrc')}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,.lrc,.text"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
+                title={t('new.uploadFile')}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                <span>{t('new.uploadFile')}</span>
+              </button>
+            </div>
+          </div>
+
           <textarea
             value={lyrics}
             onChange={(e) => setLyrics(e.target.value)}
-            placeholder={t('new.lyricsPlaceholder')}
+            placeholder={lyricsMode === 'lrc' ? t('new.lrcPlaceholder') : t('new.lyricsPlaceholder')}
             rows={12}
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 sm:px-4 py-3 text-sm outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/50 resize-y leading-relaxed"
+            className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 sm:px-4 py-3 text-sm outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/50 resize-y leading-relaxed font-mono"
           />
           <p className="mt-2 text-[11px] text-[var(--muted-foreground)]">
-            {t('new.furiganaHint')}
+            {lyricsMode === 'lrc' ? t('new.lyricsHint') : t('new.furiganaHint')}
           </p>
         </div>
 

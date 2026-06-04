@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import db from '@/lib/db';
 import { convertToFurigana } from '@/lib/kuroshiro';
+import { parseLrc } from '@/lib/lrc';
 import { getAuthUser } from '@/lib/auth';
 import type { SongListItem } from '@/lib/types';
 
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
 // POST /api/songs - create a new song
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { title, artist, lyrics_raw } = body;
+  const { title, artist, lyrics_raw, lyrics_synced } = body;
   const user = getAuthUser(request);
 
   if (!title) {
@@ -56,14 +57,22 @@ export async function POST(request: NextRequest) {
   const id = uuidv4();
   let lyricsFurigana = '[]';
 
-  if (lyrics_raw && lyrics_raw.trim()) {
-    const furigana = await convertToFurigana(lyrics_raw);
+  // If LRC synced lyrics provided, strip timestamps to get raw text
+  let rawLyrics = lyrics_raw || '';
+  let syncedLyrics = lyrics_synced || '';
+  if (syncedLyrics && !rawLyrics) {
+    const parsed = parseLrc(syncedLyrics);
+    rawLyrics = parsed.map((l) => l.text).join('\n');
+  }
+
+  if (rawLyrics && rawLyrics.trim()) {
+    const furigana = await convertToFurigana(rawLyrics);
     lyricsFurigana = JSON.stringify(furigana);
   }
 
   db.prepare(
-    'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, created_by) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(id, title, artist || '', lyrics_raw || '', lyricsFurigana, user?.email || '');
+    'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(id, title, artist || '', rawLyrics, lyricsFurigana, syncedLyrics, user?.email || '');
 
   const song = db.prepare('SELECT * FROM songs WHERE id = ?').get(id);
   return NextResponse.json(song, { status: 201 });
