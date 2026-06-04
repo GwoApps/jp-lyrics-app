@@ -314,7 +314,7 @@ export default function HomePage() {
           )}
         </div>
         {currentUser && (
-          <>
+          <div className="flex gap-2">
             <button
               onClick={() => setFavoritesOnly(!favoritesOnly)}
               className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors shrink-0 ${
@@ -337,7 +337,7 @@ export default function HomePage() {
               <User className="h-3.5 w-3.5" />
               <span>{t('home.mine')}</span>
             </button>
-          </>
+          </div>
         )}
       </div>
 
