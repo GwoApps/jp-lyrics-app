@@ -31,6 +31,7 @@ function Nav() {
           >
             {t('common.new')}
           </a>
+          <LanguageSwitcher />
           <button
             onClick={toggleTheme}
             className="rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)]"
@@ -38,7 +39,6 @@ function Nav() {
           >
             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
-          <LanguageSwitcher />
         </div>
       </div>
     </nav>
