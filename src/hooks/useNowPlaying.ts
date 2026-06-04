@@ -46,6 +46,7 @@ function applyDiff(base: NowPlayingData, diff: Partial<NowPlayingData>): NowPlay
  * Real-time now-playing via SSE diff + checksum verification.
  * - Primary: EventSource → /api/spotify/now-playing/stream (diff protocol)
  * - Fallback: fetch polling every 3s if SSE fails
+ * - Auto-reconnect on page visibility restore (mobile background → foreground)
  */
 export function useNowPlaying() {
   const [data, setData] = useState<NowPlayingData | null>(null);
@@ -56,6 +57,7 @@ export function useNowPlaying() {
   const localSeqRef = useRef(0);
   const checksumErrRef = useRef(0);
   const mountedRef = useRef(true);
+  const lastMessageTimeRef = useRef(0);
 
   const clearFallback = useCallback(() => {
     if (fallbackRef.current) {
@@ -72,7 +74,10 @@ export function useNowPlaying() {
       try {
         const res = await fetch('/api/spotify/now-playing');
         const d = await res.json();
-        if (mountedRef.current) setData(d);
+        if (mountedRef.current) {
+          setData(d);
+          lastMessageTimeRef.current = Date.now();
+        }
       } catch { /* */ }
     };
 
@@ -102,6 +107,7 @@ export function useNowPlaying() {
           localSeqRef.current = msg.seq;
           setData(fullData);
           gotMessageRef.current = true;
+          lastMessageTimeRef.current = Date.now();
           clearFallback();
           // Reconnect to normal diff stream
           es.close();
@@ -120,6 +126,9 @@ export function useNowPlaying() {
     if (!mountedRef.current) return;
 
     esRef.current?.close();
+    clearFallback();
+    gotMessageRef.current = false;
+
     const es = new EventSource('/api/spotify/now-playing/stream');
     esRef.current = es;
 
@@ -129,9 +138,13 @@ export function useNowPlaying() {
       if (!mountedRef.current) return;
       try {
         const msg = JSON.parse(e.data) as DiffMessage & { _heartbeat?: boolean };
-        if (msg._heartbeat) return;
+        if (msg._heartbeat) {
+          lastMessageTimeRef.current = Date.now();
+          return;
+        }
 
         gotMessageRef.current = true;
+        lastMessageTimeRef.current = Date.now();
         clearFallback();
 
         // First message after connect: d is the full data
@@ -203,6 +216,38 @@ export function useNowPlaying() {
       esRef.current = null;
       clearFallback();
     };
+  }, [connect, clearFallback]);
+
+  // Reconnect when page returns from background (mobile tab switch / app switch)
+  useEffect(() => {
+    const STALE_THRESHOLD_MS = 10_000; // 10s without data = stale
+
+    const handleVisibility = () => {
+      if (!mountedRef.current) return;
+      if (document.visibilityState !== 'visible') return;
+
+      const es = esRef.current;
+      const hasFallback = fallbackRef.current !== null;
+      const lastMsg = lastMessageTimeRef.current;
+      const stale = !lastMsg || (Date.now() - lastMsg > STALE_THRESHOLD_MS);
+
+      // Check if SSE is dead or data is stale
+      const sseDead = !es || es.readyState === EventSource.CLOSED;
+      const sseOpenButStale = es?.readyState === EventSource.OPEN && stale;
+
+      if (sseDead || sseOpenButStale || (hasFallback && stale)) {
+        console.warn(`[now-playing] visibility restore — reconnecting (sseDead=${sseDead}, stale=${stale})`);
+        clearFallback();
+        esRef.current?.close();
+        esRef.current = null;
+        localSeqRef.current = 0;
+        checksumErrRef.current = 0;
+        connect();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [connect, clearFallback]);
 
   return data;
