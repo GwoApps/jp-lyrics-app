@@ -15,7 +15,7 @@ export async function DELETE(
   const { id } = await params;
 
   // Verify ownership
-  const collection = db.prepare(
+  const collection = await db.prepare(
     'SELECT id FROM collections WHERE id = ? AND user_email = ?'
   ).get(id, user.email);
 
@@ -24,7 +24,7 @@ export async function DELETE(
   }
 
   // Delete collection (cascade will handle collection_songs)
-  db.prepare('DELETE FROM collections WHERE id = ?').run(id);
+  await db.prepare('DELETE FROM collections WHERE id = ?').run(id);
 
   return NextResponse.json({ success: true });
 }
@@ -47,7 +47,7 @@ export async function PUT(
   }
 
   // Verify ownership
-  const collection = db.prepare(
+  const collection = await db.prepare(
     'SELECT id FROM collections WHERE id = ? AND user_email = ?'
   ).get(id, user.email);
 
@@ -55,7 +55,7 @@ export async function PUT(
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  db.prepare('UPDATE collections SET name = ? WHERE id = ?').run(name.trim(), id);
+  await db.prepare('UPDATE collections SET name = ? WHERE id = ?').run(name.trim(), id);
 
   return NextResponse.json({ id, name: name.trim() });
 }

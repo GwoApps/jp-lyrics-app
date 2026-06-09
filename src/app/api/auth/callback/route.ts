@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
   const expiresAt = Math.floor(Date.now() / 1000) + tokenData.expires_in;
 
   // Upsert: insert or replace for this user
-  db.prepare(
+  await db.prepare(
     `INSERT INTO spotify_auth (user_email, access_token, refresh_token, expires_at, display_name, updated_at)
      VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))
      ON CONFLICT(user_email) DO UPDATE SET

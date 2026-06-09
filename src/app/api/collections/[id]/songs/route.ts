@@ -15,7 +15,7 @@ export async function GET(
   const { id } = await params;
 
   // Verify ownership
-  const collection = db.prepare(
+  const collection = await db.prepare(
     'SELECT id FROM collections WHERE id = ? AND user_email = ?'
   ).get(id, user.email);
 
@@ -23,7 +23,7 @@ export async function GET(
     return NextResponse.json([]);
   }
 
-  const songs = db.prepare(`
+  const songs = await db.prepare(`
     SELECT s.id, s.title, s.artist, s.created_by, s.created_at, s.updated_at
     FROM songs s
     JOIN collection_songs cs ON s.id = cs.song_id
@@ -52,7 +52,7 @@ export async function POST(
   }
 
   // Verify ownership
-  const collection = db.prepare(
+  const collection = await db.prepare(
     'SELECT id FROM collections WHERE id = ? AND user_email = ?'
   ).get(id, user.email);
 
@@ -61,7 +61,7 @@ export async function POST(
   }
 
   // Get max sort order
-  const maxOrder = db.prepare(
+  const maxOrder = await db.prepare(
     'SELECT MAX(sort_order) as max FROM collection_songs WHERE collection_id = ?'
   ).get(id) as { max: number | null };
 
@@ -69,7 +69,7 @@ export async function POST(
 
   // Add song (ignore if already exists)
   try {
-    db.prepare(
+    await db.prepare(
       'INSERT INTO collection_songs (collection_id, song_id, sort_order) VALUES (?, ?, ?)'
     ).run(id, songId, sortOrder);
   } catch {
@@ -97,7 +97,7 @@ export async function DELETE(
   }
 
   // Verify ownership
-  const collection = db.prepare(
+  const collection = await db.prepare(
     'SELECT id FROM collections WHERE id = ? AND user_email = ?'
   ).get(id, user.email);
 
@@ -105,7 +105,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  db.prepare(
+  await db.prepare(
     'DELETE FROM collection_songs WHERE collection_id = ? AND song_id = ?'
   ).run(id, songId);
 

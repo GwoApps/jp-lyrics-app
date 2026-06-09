@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
   const results = { total: tracks.length, imported: 0, skipped: 0, failed: 0 };
 
   for (const track of tracks) {
-    const existing = db.prepare(
+    const existing = await db.prepare(
       'SELECT id FROM songs WHERE title = ? AND artist = ?'
     ).get(track.title, track.artist) as { id: string } | undefined;
 
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
     }
 
     const id = uuidv4();
-    db.prepare(
+    await db.prepare(
       'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).run(
       id,

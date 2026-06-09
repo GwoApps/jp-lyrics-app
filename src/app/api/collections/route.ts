@@ -10,17 +10,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json([]);
   }
 
-  const collections = db.prepare(
+  const collections = await db.prepare(
     'SELECT id, name, created_at FROM collections WHERE user_email = ? ORDER BY name'
   ).all(user.email);
 
   // Add song count for each collection
-  const result = (collections as { id: string; name: string; created_at: string }[]).map((c) => {
-    const count = db.prepare(
-      'SELECT COUNT(*) as count FROM collection_songs WHERE collection_id = ?'
-    ).get(c.id) as { count: number };
-    return { ...c, songCount: count.count };
-  });
+  const result = await Promise.all(
+    (collections as { id: string; name: string; created_at: string }[]).map(async (c) => {
+      const count = await db.prepare(
+        'SELECT COUNT(*) as count FROM collection_songs WHERE collection_id = ?'
+      ).get(c.id) as { count: number };
+      return { ...c, songCount: count.count };
+    })
+  );
 
   return NextResponse.json(result);
 }
@@ -38,7 +40,7 @@ export async function POST(request: NextRequest) {
   }
 
   const id = uuidv4();
-  db.prepare(
+  await db.prepare(
     'INSERT INTO collections (id, user_email, name) VALUES (?, ?, ?)'
   ).run(id, user.email, name.trim());
 

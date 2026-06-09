@@ -8,7 +8,7 @@ export async function GET(
   const { id } = await params;
   const format = request.nextUrl.searchParams.get('format') || 'text';
 
-  const song = db.prepare('SELECT title, artist, lyrics_raw, lyrics_synced, lyrics_furigana FROM songs WHERE id = ?').get(id) as {
+  const song = await db.prepare('SELECT title, artist, lyrics_raw, lyrics_synced, lyrics_furigana FROM songs WHERE id = ?').get(id) as {
     title: string;
     artist: string;
     lyrics_raw: string;

@@ -15,17 +15,17 @@ export async function POST(
   const { id } = await params;
 
   // Check if already favorited
-  const existing = db.prepare(
+  const existing = await db.prepare(
     'SELECT 1 FROM favorites WHERE user_email = ? AND song_id = ?'
   ).get(user.email, id);
 
   if (existing) {
     // Remove favorite
-    db.prepare('DELETE FROM favorites WHERE user_email = ? AND song_id = ?').run(user.email, id);
+    await db.prepare('DELETE FROM favorites WHERE user_email = ? AND song_id = ?').run(user.email, id);
     return NextResponse.json({ favorited: false });
   } else {
     // Add favorite
-    db.prepare('INSERT INTO favorites (user_email, song_id) VALUES (?, ?)').run(user.email, id);
+    await db.prepare('INSERT INTO favorites (user_email, song_id) VALUES (?, ?)').run(user.email, id);
     return NextResponse.json({ favorited: true });
   }
 }
@@ -41,7 +41,7 @@ export async function GET(
   }
 
   const { id } = await params;
-  const existing = db.prepare(
+  const existing = await db.prepare(
     'SELECT 1 FROM favorites WHERE user_email = ? AND song_id = ?'
   ).get(user.email, id);
 

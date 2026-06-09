@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ connected: false });
   }
 
-  const auth = db.prepare('SELECT display_name, updated_at FROM spotify_auth WHERE user_email = ?').get(user.email) as { display_name: string; updated_at: string } | undefined;
+  const auth = await db.prepare('SELECT display_name, updated_at FROM spotify_auth WHERE user_email = ?').get(user.email) as { display_name: string; updated_at: string } | undefined;
   if (!auth || !auth.display_name) {
     return NextResponse.json({ connected: false });
   }
@@ -21,6 +21,6 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
-  db.prepare('DELETE FROM spotify_auth WHERE user_email = ?').run(user.email);
+  await db.prepare('DELETE FROM spotify_auth WHERE user_email = ?').run(user.email);
   return NextResponse.json({ success: true });
 }

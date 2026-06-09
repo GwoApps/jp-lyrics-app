@@ -7,7 +7,7 @@ export const SPOTIFY_SCOPES = 'user-read-currently-playing user-read-playback-st
 
 /** Get a valid Spotify access token for a specific user (refresh if needed) */
 export async function getSpotifyTokenForUser(userEmail: string): Promise<string | null> {
-  const auth = db.prepare(
+  const auth = await db.prepare(
     'SELECT access_token, refresh_token, expires_at FROM spotify_auth WHERE user_email = ?'
   ).get(userEmail) as { access_token: string; refresh_token: string; expires_at: number } | undefined;
 
@@ -25,7 +25,7 @@ export async function getSpotifyTokenForUser(userEmail: string): Promise<string 
     if (!refreshRes.ok) return null;
     const data = await refreshRes.json();
     const expiresAt = Math.floor(Date.now() / 1000) + data.expires_in;
-    db.prepare(
+    await db.prepare(
       `UPDATE spotify_auth SET access_token = ?, expires_at = ?, updated_at = datetime('now','localtime') WHERE user_email = ?`
     ).run(data.access_token, expiresAt, userEmail);
     return data.access_token;

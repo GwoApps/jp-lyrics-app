@@ -1,92 +1,168 @@
-import { join, dirname } from 'path';
+import { createClient, type Client } from '@libsql/client';
 import { mkdirSync } from 'fs';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const Database = require('better-sqlite3');
+/**
+ * Database client — @libsql/client (Turso / embedded SQLite).
+ *
+ * Env vars:
+ *   TURSO_URL   — libsql://xxx.turso.io (production)
+ *   TURSO_AUTH_TOKEN — JWT auth token (production)
+ *
+ * Without env vars: falls back to local file (data/local.db).
+ * With embedded replica: TURSO_URL + TURSO_AUTH_TOKEN → syncs to local file automatically.
+ */
 
-const DB_PATH = join(process.cwd(), 'data', 'lyrics.db');
-mkdirSync(dirname(DB_PATH), { recursive: true });
+// Ensure data directory exists (needed for local file mode)
+if (!process.env.TURSO_URL) {
+  try { mkdirSync('data', { recursive: true }); } catch { /* exists */ }
+}
 
-const db = Database(DB_PATH);
-db.pragma('journal_mode = WAL');
+const client: Client = createClient(
+  process.env.TURSO_URL
+    ? {
+        url: process.env.TURSO_URL,
+        authToken: process.env.TURSO_AUTH_TOKEN,
+        syncUrl: 'file:data/local.db',
+        syncInterval: 60,
+      }
+    : { url: 'file:data/local.db' }
+);
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS songs (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    artist TEXT NOT NULL DEFAULT '',
-    lyrics_raw TEXT NOT NULL DEFAULT '',
-    lyrics_furigana TEXT NOT NULL DEFAULT '[]',
-    lyrics_synced TEXT NOT NULL DEFAULT '',
-    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-  );
+// --- Schema bootstrap (runs once on first import) ---
 
-  CREATE TABLE IF NOT EXISTS spotify_auth (
-    user_email TEXT PRIMARY KEY,
-    access_token TEXT NOT NULL DEFAULT '',
-    refresh_token TEXT NOT NULL DEFAULT '',
-    expires_at INTEGER NOT NULL DEFAULT 0,
-    display_name TEXT NOT NULL DEFAULT '',
-    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-  );
+const SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS songs (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  artist TEXT NOT NULL DEFAULT '',
+  lyrics_raw TEXT NOT NULL DEFAULT '',
+  lyrics_furigana TEXT NOT NULL DEFAULT '[]',
+  lyrics_synced TEXT NOT NULL DEFAULT '',
+  created_by TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
 
-  CREATE TABLE IF NOT EXISTS favorites (
-    user_email TEXT NOT NULL,
-    song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
-    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    PRIMARY KEY (user_email, song_id)
-  );
+CREATE TABLE IF NOT EXISTS spotify_auth (
+  user_email TEXT PRIMARY KEY,
+  access_token TEXT NOT NULL DEFAULT '',
+  refresh_token TEXT NOT NULL DEFAULT '',
+  expires_at INTEGER NOT NULL DEFAULT 0,
+  display_name TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
 
-  CREATE TABLE IF NOT EXISTS collections (
-    id TEXT PRIMARY KEY,
-    user_email TEXT NOT NULL,
-    name TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-  );
+CREATE TABLE IF NOT EXISTS favorites (
+  user_email TEXT NOT NULL,
+  song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  PRIMARY KEY (user_email, song_id)
+);
 
-  CREATE TABLE IF NOT EXISTS collection_songs (
-    collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
-    song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
-    sort_order INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (collection_id, song_id)
-  );
-`);
+CREATE TABLE IF NOT EXISTS collections (
+  id TEXT PRIMARY KEY,
+  user_email TEXT NOT NULL,
+  name TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
 
-// Migrate: add lyrics_synced column if missing
-try {
-  db.exec(`ALTER TABLE songs ADD COLUMN lyrics_synced TEXT NOT NULL DEFAULT ''`);
-} catch { /* column already exists */ }
+CREATE TABLE IF NOT EXISTS collection_songs (
+  collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+  song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (collection_id, song_id)
+);
+`;
 
-// Migrate: add created_by column if missing
-try {
-  db.exec(`ALTER TABLE songs ADD COLUMN created_by TEXT NOT NULL DEFAULT ''`);
-} catch { /* column already exists */ }
-
-// Migrate: if old single-row spotify_auth exists (id=1 style), drop and recreate
-try {
-  const info = db.prepare("PRAGMA table_info(spotify_auth)").all();
-  const hasIdCol = (info as { name: string }[]).some((c) => c.name === 'id');
-  if (hasIdCol) {
-    // Old schema — save existing data, recreate, migrate
-    const old = db.prepare('SELECT * FROM spotify_auth WHERE id = 1').get() as Record<string, unknown> | undefined;
-    db.exec('DROP TABLE spotify_auth');
-    db.exec(`
-      CREATE TABLE spotify_auth (
-        user_email TEXT PRIMARY KEY,
-        access_token TEXT NOT NULL DEFAULT '',
-        refresh_token TEXT NOT NULL DEFAULT '',
-        expires_at INTEGER NOT NULL DEFAULT 0,
-        display_name TEXT NOT NULL DEFAULT '',
-        updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-      )
-    `);
-    if (old && old.access_token) {
-      db.prepare(
-        `INSERT INTO spotify_auth (user_email, access_token, refresh_token, expires_at, display_name) VALUES ('__legacy__', ?, ?, ?, ?)`
-      ).run(old.access_token, old.refresh_token, old.expires_at, old.display_name);
+// Run schema bootstrap
+(async () => {
+  try {
+    for (const stmt of SCHEMA_SQL.split(';').map(s => s.trim()).filter(Boolean)) {
+      await client.execute(stmt);
     }
+  } catch (e) {
+    // Schema already exists or DB unavailable — continue
+    console.warn('[db] schema bootstrap:', (e as Error).message);
   }
-} catch { /* migration already done or table doesn't exist */ }
+})();
 
+// --- Migration: add lyrics_synced column if missing ---
+(async () => {
+  try {
+    await client.execute('ALTER TABLE songs ADD COLUMN lyrics_synced TEXT NOT NULL DEFAULT \'\'');
+  } catch { /* column already exists */ }
+})();
+
+// --- Migration: add created_by column if missing ---
+(async () => {
+  try {
+    await client.execute('ALTER TABLE songs ADD COLUMN created_by TEXT NOT NULL DEFAULT \'\'');
+  } catch { /* column already exists */ }
+})();
+
+/**
+ * Wrapper that mimics better-sqlite3's prepare() API for minimal route changes.
+ *
+ * Usage (identical to before, just add `await`):
+ *   const row = await db.prepare('SELECT * FROM songs WHERE id = ?').get(id);
+ *   const rows = await db.prepare('SELECT * FROM songs').all();
+ *   const result = await db.prepare('INSERT ...').run(a, b, c);
+ *   // result.rowsAffected, result.lastInsertRowid
+ */
+
+interface PreparedStatement {
+  get(...args: unknown[]): Promise<Record<string, unknown> | undefined>;
+  all(...args: unknown[]): Promise<Record<string, unknown>[]>;
+  run(...args: unknown[]): Promise<{ rowsAffected: number; lastInsertRowid: unknown }>;
+}
+
+function prepare(sql: string): PreparedStatement {
+  return {
+    async get(...args: unknown[]) {
+      const result = await client.execute({ sql, args: args as (string | number | null)[] });
+      return result.rows[0] as Record<string, unknown> | undefined;
+    },
+    async all(...args: unknown[]) {
+      const result = await client.execute({ sql, args: args as (string | number | null)[] });
+      return result.rows as Record<string, unknown>[];
+    },
+    async run(...args: unknown[]) {
+      const result = await client.execute({ sql, args: args as (string | number | null)[] });
+      return {
+        rowsAffected: result.rowsAffected,
+        lastInsertRowid: result.lastInsertRowid,
+      };
+    },
+  };
+}
+
+/**
+ * Execute raw SQL (single or multi-statement).
+ * For multi-statement DDL, use execMultiple.
+ */
+async function exec(sql: string): Promise<void> {
+  await client.execute(sql);
+}
+
+/**
+ * Execute multiple SQL statements (for DDL / migrations).
+ * Splits on semicolons and runs each statement.
+ */
+async function execMultiple(sql: string): Promise<void> {
+  for (const stmt of sql.split(';').map(s => s.trim()).filter(Boolean)) {
+    await client.execute(stmt);
+  }
+}
+
+/**
+ * Execute a batch of operations in a transaction.
+ */
+async function batch(stmts: { sql: string; args: unknown[] }[]): Promise<void> {
+  await client.batch(
+    stmts.map(s => ({ sql: s.sql, args: s.args as (string | number | null)[] })),
+    'write'
+  );
+}
+
+const db = { prepare, exec, execMultiple, batch, client };
 export default db;

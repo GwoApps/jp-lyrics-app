@@ -138,7 +138,7 @@ export async function POST(
   const { id } = await params;
   const user = getAuthUser(request);
 
-  const song = db.prepare('SELECT * FROM songs WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  const song = await db.prepare('SELECT * FROM songs WHERE id = ?').get(id) as Record<string, unknown> | undefined;
   if (!song) {
     return NextResponse.json({ error: '曲が見つかりません' }, { status: 404 });
   }
@@ -182,7 +182,7 @@ export async function POST(
     console.error('Furigana conversion failed:', e);
   }
 
-  db.prepare(`UPDATE songs SET lyrics_raw = ?, lyrics_furigana = ?, lyrics_synced = ?, updated_at = datetime('now','localtime') WHERE id = ?`)
+  await db.prepare(`UPDATE songs SET lyrics_raw = ?, lyrics_furigana = ?, lyrics_synced = ?, updated_at = datetime('now','localtime') WHERE id = ?`)
     .run(result.plain, JSON.stringify(furigana), result.synced, id);
 
   const parsed = parseLrc(result.synced);

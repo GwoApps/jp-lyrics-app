@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
   const cleanArtist = (artist || '').trim();
 
   // Check if already exists (exact match)
-  const existing = db.prepare(
+  const existing = await db.prepare(
     'SELECT id FROM songs WHERE title = ? AND artist = ?'
   ).get(cleanTitle, cleanArtist) as { id: string } | undefined;
 
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
 
   // Insert
   const id = uuidv4();
-  db.prepare(
+  await db.prepare(
     'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)'
   ).run(id, cleanTitle, cleanArtist, result.plain, JSON.stringify(furigana), result.synced || '', user?.email || '');
 

@@ -9,7 +9,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const song = db.prepare('SELECT * FROM songs WHERE id = ?').get(id) as Song | undefined;
+  const song = await db.prepare('SELECT * FROM songs WHERE id = ?').get(id) as Song | undefined;
   if (!song) {
     return NextResponse.json({ error: '曲が見つかりません' }, { status: 404 });
   }
@@ -25,7 +25,7 @@ export async function PUT(
   const body = await request.json();
   const { title, artist, lyrics_raw, lyrics_synced } = body;
 
-  const existing = db.prepare('SELECT * FROM songs WHERE id = ?').get(id) as Song | undefined;
+  const existing = await db.prepare('SELECT * FROM songs WHERE id = ?').get(id) as Song | undefined;
   if (!existing) {
     return NextResponse.json({ error: '曲が見つかりません' }, { status: 404 });
   }
@@ -45,7 +45,7 @@ export async function PUT(
 
   const newSynced = lyrics_synced !== undefined ? lyrics_synced : existing.lyrics_synced;
 
-  db.prepare(
+  await db.prepare(
     `UPDATE songs SET title = ?, artist = ?, lyrics_raw = ?, lyrics_furigana = ?, lyrics_synced = ?, updated_at = datetime('now', 'localtime') WHERE id = ?`
   ).run(
     title !== undefined ? title : existing.title,
@@ -56,7 +56,7 @@ export async function PUT(
     id
   );
 
-  const updated = db.prepare('SELECT * FROM songs WHERE id = ?').get(id);
+  const updated = await db.prepare('SELECT * FROM songs WHERE id = ?').get(id);
   return NextResponse.json(updated);
 }
 
@@ -66,8 +66,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const result = db.prepare('DELETE FROM songs WHERE id = ?').run(id);
-  if (result.changes === 0) {
+  const result = await db.prepare('DELETE FROM songs WHERE id = ?').run(id);
+  if (result.rowsAffected === 0) {
     return NextResponse.json({ error: '曲が見つかりません' }, { status: 404 });
   }
   return NextResponse.json({ success: true });

@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
   }
   sql += ' ORDER BY s.updated_at DESC';
 
-  const songs = db.prepare(sql).all(...args) as SongListItem[];
+  const songs = await db.prepare(sql).all(...args) as unknown as SongListItem[];
   return NextResponse.json(songs);
 }
 
@@ -70,10 +70,10 @@ export async function POST(request: NextRequest) {
     lyricsFurigana = JSON.stringify(furigana);
   }
 
-  db.prepare(
+  await db.prepare(
     'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)'
   ).run(id, title, artist || '', rawLyrics, lyricsFurigana, syncedLyrics, user?.email || '');
 
-  const song = db.prepare('SELECT * FROM songs WHERE id = ?').get(id);
+  const song = await db.prepare('SELECT * FROM songs WHERE id = ?').get(id);
   return NextResponse.json(song, { status: 201 });
 }
