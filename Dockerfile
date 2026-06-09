@@ -24,19 +24,12 @@ COPY --from=builder /app/.next/static ./.next/static
 # Copy kuromoji dictionary (required for furigana conversion)
 COPY --from=deps /app/node_modules/kuromoji/dict ./node_modules/kuromoji/dict
 
-# Seed data for first-run initialization
-COPY --from=builder /app/seed ./seed
+# Create data directory — volume mount point for local.db
+RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 
-# Entrypoint script (handles seed data + ownership)
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
-
-# Create data directory for SQLite DB + install su-exec for privilege drop
-RUN mkdir -p /app/data && chown nextjs:nodejs /app/data && apk add --no-cache su-exec
-
+USER nextjs
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["node", "server.js"]
