@@ -284,6 +284,11 @@ export default function SongViewPage() {
                   <FuriganaLineView line={line} isActive={i === activeLine && !!isSynced} debugTs={data.debug && lineTimestamps[i] != null ? lineTimestamps[i] : undefined} />
                 </div>
               ))
+            ) : data.furiganaLoading ? (
+              <div className="flex items-center gap-2 py-8 text-sm text-[var(--muted-foreground)]">
+                <div className="h-4 w-4 border-2 border-[var(--muted-foreground)]/30 border-t-[var(--muted-foreground)] rounded-full animate-spin" />
+                <span>{t('song.loadingFurigana')}</span>
+              </div>
             ) : (
               <p className="text-sm text-[var(--muted-foreground)]">{t('song.noLyricsSimple')}</p>
             )}

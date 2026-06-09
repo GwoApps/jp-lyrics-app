@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import db from '@/lib/db';
-import { convertToFurigana } from '@/lib/kuroshiro';
 import { getAuthUser } from '@/lib/auth';
 import { getSpotifyTokenForUser } from '@/lib/spotify';
 
@@ -124,15 +123,6 @@ export async function POST(request: NextRequest) {
 
     const lyrics = await fetchLyrics(track.title, track.artist);
 
-    let furigana: unknown[] = [];
-    if (lyrics?.plain) {
-      try {
-        furigana = await convertToFurigana(lyrics.plain);
-      } catch (e) {
-        console.error('Furigana conversion failed:', e);
-      }
-    }
-
     const id = uuidv4();
     await db.prepare(
       'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)'
@@ -141,7 +131,7 @@ export async function POST(request: NextRequest) {
       track.title,
       track.artist,
       lyrics?.plain || '',
-      JSON.stringify(furigana),
+      '[]',
       lyrics?.synced || '',
       user.email
     );

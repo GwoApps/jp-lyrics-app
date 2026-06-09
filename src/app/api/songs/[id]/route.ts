@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
-import { convertToFurigana } from '@/lib/kuroshiro';
 import type { Song } from '@/lib/types';
 
 // GET /api/songs/[id] - get single song
@@ -33,14 +32,9 @@ export async function PUT(
   let lyricsFurigana = existing.lyrics_furigana;
   const newRaw = lyrics_raw !== undefined ? lyrics_raw : existing.lyrics_raw;
 
-  // Re-convert if lyrics changed
+  // Clear furigana when lyrics change — client will recompute via kuromoji-es
   if (lyrics_raw !== undefined && lyrics_raw !== existing.lyrics_raw) {
-    if (newRaw.trim()) {
-      const furigana = await convertToFurigana(newRaw);
-      lyricsFurigana = JSON.stringify(furigana);
-    } else {
-      lyricsFurigana = '[]';
-    }
+    lyricsFurigana = '[]';
   }
 
   const newSynced = lyrics_synced !== undefined ? lyrics_synced : existing.lyrics_synced;

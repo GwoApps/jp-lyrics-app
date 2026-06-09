@@ -68,6 +68,7 @@
     "networkError": "Network error",
     "networkErrorAlert": "A network error occurred",
     "noLyricsParen": "(No lyrics)",
+    "loadingFurigana": "Loading furigana...",
     "noLyricsSimple": "No lyrics",
     "show": "View",
     "importBtn": "Import",

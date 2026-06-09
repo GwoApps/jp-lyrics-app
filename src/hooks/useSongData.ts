@@ -7,6 +7,7 @@ import { parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
 import { findBestMatch, lineFuzzyMatch } from '@/lib/match';
 import { useI18n } from '@/lib/i18n';
+import { convertToFuriganaClient } from '@/lib/kuroshiro-client';
 
 interface SongData {
   id: string;
@@ -29,6 +30,7 @@ export interface UseSongDataReturn {
   loading: boolean;
   syncLines: ReturnType<typeof parseLrc>;
   furiganaLines: FuriganaLine[];
+  furiganaLoading: boolean;
   lineTimestamps: (number | null)[];
   syncing: boolean;
   syncError: string;
@@ -104,10 +106,36 @@ export function useSongData(id: string): UseSongDataReturn {
   useEffect(() => { localStorage.setItem('jplrc-font-size', String(fontSize)); }, [fontSize]);
 
   // Derived
-  const furiganaLines = useMemo<FuriganaLine[]>(() => {
+  const serverFurigana = useMemo<FuriganaLine[]>(() => {
     if (!song?.lyrics_furigana) return [];
     try { return JSON.parse(song.lyrics_furigana); } catch { return []; }
   }, [song?.lyrics_furigana]);
+
+  // Client-side furigana (lazy-loaded from kuromoji-es CDN when needed)
+  const [clientFurigana, setClientFurigana] = useState<FuriganaLine[]>([]);
+  const [furiganaLoading, setFuriganaLoading] = useState(false);
+
+  const furiganaLines = useMemo<FuriganaLine[]>(() => {
+    // Prefer server-side pre-computed data (existing songs)
+    if (serverFurigana.length > 0) return serverFurigana;
+    // Fall back to client-side computed data
+    if (clientFurigana.length > 0) return clientFurigana;
+    return [];
+  }, [serverFurigana, clientFurigana]);
+
+  // Client-side furigana conversion: only when server has no furigana but raw lyrics exist
+  useEffect(() => {
+    if (!song?.lyrics_raw?.trim()) return;
+    if (serverFurigana.length > 0) return; // server already has it
+    if (clientFurigana.length > 0) return; // already computed
+    if (furiganaLoading) return;
+
+    setFuriganaLoading(true);
+    convertToFuriganaClient(song.lyrics_raw)
+      .then((lines) => setClientFurigana(lines))
+      .catch((e) => console.error('Client furigana conversion failed:', e))
+      .finally(() => setFuriganaLoading(false));
+  }, [song?.lyrics_raw, serverFurigana.length, clientFurigana.length, furiganaLoading]);
 
   const lineTimestamps = useMemo(() => {
     if (!syncLines.length || !furiganaLines.length) return [] as (number | null)[];
@@ -355,6 +383,7 @@ export function useSongData(id: string): UseSongDataReturn {
     loading,
     syncLines,
     furiganaLines,
+    furiganaLoading,
     lineTimestamps,
     syncing,
     syncError,

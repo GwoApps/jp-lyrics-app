@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getSpotifyTokenForUser } from '@/lib/spotify';
 import { getAuthUser } from '@/lib/auth';
-import { convertToFurigana } from '@/lib/kuroshiro';
 
 interface LrcLine {
   timeMs: number;
@@ -174,16 +173,9 @@ export async function POST(
     });
   }
 
-  // Generate furigana from plain lyrics
-  let furigana: unknown[] = [];
-  try {
-    furigana = await convertToFurigana(result.plain);
-  } catch (e) {
-    console.error('Furigana conversion failed:', e);
-  }
-
-  await db.prepare(`UPDATE songs SET lyrics_raw = ?, lyrics_furigana = ?, lyrics_synced = ?, updated_at = datetime('now','localtime') WHERE id = ?`)
-    .run(result.plain, JSON.stringify(furigana), result.synced, id);
+  // Store lyrics — furigana will be computed client-side via kuromoji-es
+  await db.prepare(`UPDATE songs SET lyrics_raw = ?, lyrics_furigana = '[]', lyrics_synced = ?, updated_at = datetime('now','localtime') WHERE id = ?`)
+    .run(result.plain, result.synced, id);
 
   const parsed = parseLrc(result.synced);
   return NextResponse.json({ synced: true, source, lines: parsed.length, lrc: result.synced });

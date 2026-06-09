@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import db from '@/lib/db';
-import { convertToFurigana } from '@/lib/kuroshiro';
 import { getAuthUser } from '@/lib/auth';
 
 const LRCLIB_HEADERS = { 'User-Agent': 'jp-lyrics-app/1.0' };
@@ -78,19 +77,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '歌詞が見つかりませんでした — 手動で貼り付けてください', hasLyrics: false }, { status: 404 });
   }
 
-  // Generate furigana
-  let furigana: unknown[] = [];
-  try {
-    furigana = await convertToFurigana(result.plain);
-  } catch (e) {
-    console.error('Furigana conversion failed:', e);
-  }
-
   // Insert
   const id = uuidv4();
   await db.prepare(
     'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(id, cleanTitle, cleanArtist, result.plain, JSON.stringify(furigana), result.synced || '', user?.email || '');
+  ).run(id, cleanTitle, cleanArtist, result.plain, '[]', result.synced || '', user?.email || '');
 
   return NextResponse.json({ id, alreadyExists: false, hasLyrics: true }, { status: 201 });
 }
