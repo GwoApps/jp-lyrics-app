@@ -274,7 +274,7 @@ export default function HomePage() {
               <span>Spotify</span>
             </a>
           )}
-          <button onClick={() => router.push('/songs/new')} disabled={!currentUser} className="inline-flex items-center gap-1.5 rounded-md bg-[var(--primary)] px-3 sm:px-4 py-2 text-xs font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed">
+          <button onClick={() => router.push('/songs/new')} disabled={!spotify?.connected} className="inline-flex items-center gap-1.5 rounded-md bg-[var(--primary)] px-3 sm:px-4 py-2 text-xs font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed">
             <Plus className="h-3.5 w-3.5" />
             <span>{t('common.new')}</span>
           </button>
@@ -467,7 +467,7 @@ export default function HomePage() {
               <ExternalLink className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">{t('home.view')}</span>
             </button>
-          ) : currentUser ? (
+          ) : spotify?.connected ? (
             <button
               onClick={handleImport}
               disabled={importing}
@@ -489,7 +489,7 @@ export default function HomePage() {
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <Music className="h-10 w-10 mb-4 text-[var(--muted-foreground)] opacity-20" />
           <p className="text-sm text-[var(--muted-foreground)]">{t('home.noSongs')}</p>
-          <button onClick={() => router.push('/songs/new')} disabled={!currentUser} className="mt-5 inline-flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-4 py-2 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+          <button onClick={() => router.push('/songs/new')} disabled={!spotify?.connected} className="mt-5 inline-flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-4 py-2 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             <Plus className="h-3.5 w-3.5" /> {t('home.addFirst')}
           </button>
         </div>
@@ -519,7 +519,7 @@ export default function HomePage() {
                 </div>
                 <div className="text-[10px] sm:text-[11px] text-[var(--muted-foreground)] hidden sm:block shrink-0">{new Date(song.updated_at).toLocaleDateString(localeToBCP47(locale))}</div>
                 <div className="flex items-center gap-0.5 shrink-0">
-                  {currentUser && (
+                  {spotify?.connected && (
                     <>
                       <button onClick={(e) => { e.stopPropagation(); handleToggleFavorite(song.id); }} className={`rounded p-1.5 sm:p-2 transition-colors ${favorites.has(song.id) ? 'text-[var(--warning)]' : 'text-[var(--muted-foreground)] hover:text-[var(--warning)]'}`}>
                         <Star className={`h-3.5 w-3.5 ${favorites.has(song.id) ? 'fill-current' : ''}`} />

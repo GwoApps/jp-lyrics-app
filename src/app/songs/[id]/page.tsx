@@ -192,11 +192,11 @@ export default function SongViewPage() {
                 <span className="text-[10px] w-5 text-center text-[var(--muted-foreground)] tabular-nums">{data.fontSize}</span>
                 <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Plus className="h-3 w-3" /></button>
               </div>
-              <button onClick={data.handleSync} disabled={data.syncing || !currentUserEmail} className={btnCls()}>
+              <button onClick={data.handleSync} disabled={data.syncing || !spotifyConnected} className={btnCls()}>
                 <RefreshCw className={`h-3.5 w-3.5 ${data.syncing ? 'animate-spin' : ''}`} />
               </button>
               {!hasSyncData && (
-                <button onClick={() => data.setShowPasteLrc(!data.showPasteLrc)} disabled={!currentUserEmail} className={btnCls(data.showPasteLrc)}>
+                <button onClick={() => data.setShowPasteLrc(!data.showPasteLrc)} disabled={!spotifyConnected} className={btnCls(data.showPasteLrc)}>
                   <ClipboardPaste className="h-3.5 w-3.5" />
                 </button>
               )}
@@ -206,10 +206,10 @@ export default function SongViewPage() {
               <button onClick={() => data.setShowRaw(!data.showRaw)} className={btnCls()}>
                 {data.showRaw ? <BookOpen className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
               </button>
-              <button onClick={() => router.push(`/songs/${id}/edit`)} disabled={!currentUserEmail} className={btnCls()}>
+              <button onClick={() => router.push(`/songs/${id}/edit`)} disabled={!spotifyConnected} className={btnCls()}>
                 <Pencil className="h-3.5 w-3.5" />
               </button>
-              <button onClick={data.handleDelete} disabled={!currentUserEmail} className={btnCls(false, 'danger')}>
+              <button onClick={data.handleDelete} disabled={!spotifyConnected} className={btnCls(false, 'danger')}>
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
               <button onClick={data.handleCopy} className={btnCls(data.copied)}>
@@ -280,7 +280,7 @@ export default function SongViewPage() {
                   <button onClick={() => router.push(`/songs/${playingMatch.id}`)} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--border)] transition-colors shrink-0">
                     <ExternalLink className="h-3 w-3" /><span>{t('song.show')}</span>
                   </button>
-                ) : currentUserEmail ? (
+                ) : spotifyConnected ? (
                   <button onClick={() => data.handleImportPlaying(spotify)} disabled={data.importing} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--primary)] text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0">
                     {data.importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}<span>{data.importing ? t('home.importing') : t('song.importBtn')}</span>
                   </button>
@@ -382,7 +382,7 @@ export default function SongViewPage() {
       <MobileMenu
         data={data} sync={sync} song={song} id={id} router={router}
         furiganaLines={furiganaLines} hasSyncData={hasSyncData} pipSupported={pipSupported}
-        highlightRef={highlightRef} pipWindowRef={pipWindowRef} currentUserEmail={currentUserEmail}
+        highlightRef={highlightRef} pipWindowRef={pipWindowRef} spotifyConnected={spotifyConnected === true}
       />
 
       {data.toast && <div className={`toast toast-${data.toast.type}`}>{data.toast.msg}</div>}
@@ -394,7 +394,7 @@ export default function SongViewPage() {
 }
 
 /** Mobile bottom toolbar — A-/A+, Sync, Copy visible; rest in 3-dot menu */
-function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, pipSupported, highlightRef, pipWindowRef, currentUserEmail }: {
+function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, pipSupported, highlightRef, pipWindowRef, spotifyConnected }: {
   data: ReturnType<typeof useSongData>;
   sync: ReturnType<typeof useSpotifySync>;
   song: NonNullable<ReturnType<typeof useSongData>['song']>;
@@ -405,7 +405,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
   pipSupported: boolean;
   highlightRef: React.MutableRefObject<number>;
   pipWindowRef: React.MutableRefObject<Window | null>;
-  currentUserEmail: string;
+  spotifyConnected: boolean;
 }) {
   const { t } = useI18n();
   const [showMenu, setShowMenu] = useState(false);
@@ -426,7 +426,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
     { icon: <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />, label: data.syncing ? t('song.syncing') : t('song.sync'), onClick: data.handleSync, disabled: data.syncing },
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: 'PiP', onClick: () => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef) }] : []),
     { icon: <Bug className="h-4 w-4" />, label: 'Debug', onClick: () => data.setDebug(!data.debug), active: data.debug },
-    ...(currentUserEmail ? [
+    ...(spotifyConnected ? [
       { icon: <Pencil className="h-4 w-4" />, label: t('common.edit'), onClick: () => router.push(`/songs/${id}/edit`) },
       { icon: <Trash2 className="h-4 w-4" />, label: t('common.delete'), onClick: data.handleDelete, danger: true },
     ] : []),
