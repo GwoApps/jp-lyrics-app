@@ -10,12 +10,20 @@ function Nav() {
   const { t } = useI18n();
   const { theme, toggleTheme } = useTheme();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [spotifyConnected, setSpotifyConnected] = useState(false);
 
   useEffect(() => {
-    fetch('/api/me')
+    fetch('/api/spotify/status')
       .then(r => r.json())
       .then(data => {
-        if (data.authenticated && data.isAdmin) {
+        if (data.connected) {
+          setSpotifyConnected(true);
+          return fetch('/api/me').then(r => r.json());
+        }
+        return null;
+      })
+      .then(data => {
+        if (data?.authenticated && data.isAdmin) {
           setIsAdmin(true);
         }
       })
@@ -41,11 +49,11 @@ function Nav() {
           </a>
           <a
             href="/songs/new"
-            className="rounded-md px-2.5 sm:px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)]"
+            className={`rounded-md px-2.5 sm:px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)] ${!spotifyConnected ? 'opacity-50 pointer-events-none' : ''}`}
           >
             {t('common.new')}
           </a>
-          {isAdmin && (
+          {spotifyConnected && isAdmin && (
             <a
               href="/admin"
               className="rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)]"
