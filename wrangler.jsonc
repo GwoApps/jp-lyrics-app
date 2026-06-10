@@ -42,9 +42,6 @@
 			"database_id": "a9b7c22d-16d1-4ae1-b84c-1138d238f293"
 		}
 	],
-	"vars": {
-		"SPOTIFY_POLL_MODE": "client"
-	},
 	"observability": {
     "logs": {
       "enabled": true,
