@@ -1,7 +1,5 @@
 import { NextRequest } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
-import { subscribe } from '@/lib/spotify-poller';
-import type { DiffMessage } from '@/lib/spotify-poller';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -9,10 +7,14 @@ export const runtime = 'nodejs';
 const POLL_MODE = process.env.SPOTIFY_POLL_MODE || 'client';
 
 export async function GET(request: NextRequest) {
-  // In client mode, SSE stream is disabled — browser polls directly
+  // In client mode, SSE stream is disabled — browser polls directly.
+  // Guard BEFORE importing poller so bundlers can tree-shake it.
   if (POLL_MODE === 'client') {
     return new Response('SSE disabled — client polls directly', { status: 501 });
   }
+
+  // Server mode: dynamic import keeps poller out of client-mode bundles
+  const { subscribe } = await import('@/lib/spotify-poller');
 
   const user = getAuthUser(request);
   if (!user) {
@@ -27,7 +29,7 @@ export async function GET(request: NextRequest) {
       let unsub: (() => void) | null = null;
       let alive = true;
 
-      const send = (msg: DiffMessage) => {
+      const send = (msg: Record<string, unknown>) => {
         if (!alive) return;
         try {
           // Always send full data on first message or when ?full=true requested
@@ -49,7 +51,7 @@ export async function GET(request: NextRequest) {
 
       // Subscribe to shared poller (first message is always full data)
       unsub = subscribe(user.email, (_fullData, diffMsg) => {
-        send(diffMsg);
+        send(diffMsg as unknown as Record<string, unknown>);
       });
 
       // Heartbeat every 30s

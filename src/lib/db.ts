@@ -1,32 +1,35 @@
 import { createClient, type Client } from '@libsql/client';
-import { mkdirSync } from 'fs';
 
 /**
  * Database client — @libsql/client (Turso / embedded SQLite).
  *
  * Env vars:
- *   TURSO_URL   — libsql://xxx.turso.io (production)
- *   TURSO_AUTH_TOKEN — JWT auth token (production)
+ *   TURSO_URL       — libsql://xxx.turso.io  (remote, edge-compatible)
+ *   TURSO_AUTH_TOKEN — JWT auth token         (remote)
  *
- * Without env vars: falls back to local file (data/local.db).
- * With embedded replica: TURSO_URL + TURSO_AUTH_TOKEN → syncs to local file automatically.
+ * With TURSO_URL:  pure HTTP client, zero filesystem dependency.
+ *                  Compatible with Cloudflare Workers / Vercel Edge.
+ * Without TURSO_URL: falls back to local file (data/local.db).
+ *                    Requires Node.js runtime (Docker / self-hosted).
  */
 
-// Ensure data directory exists (needed for local file mode)
-if (!process.env.TURSO_URL) {
-  try { mkdirSync('data', { recursive: true }); } catch { /* exists */ }
+const useRemote = !!process.env.TURSO_URL;
+
+// Local file mode only: ensure data/ directory exists (Node.js runtime only)
+if (!useRemote) {
+  try {
+    // Dynamic require so bundlers for edge runtimes can tree-shake fs away
+    const fs = require('fs') as typeof import('fs');
+    fs.mkdirSync('data', { recursive: true });
+  } catch { /* already exists, or fs unavailable (edge) */ }
 }
 
-const client: Client = createClient(
-  process.env.TURSO_URL
-    ? {
-        url: process.env.TURSO_URL,
-        authToken: process.env.TURSO_AUTH_TOKEN,
-        syncUrl: 'file:data/local.db',
-        syncInterval: 60,
-      }
-    : { url: 'file:data/local.db' }
-);
+const client: Client = useRemote
+  ? createClient({
+      url: process.env.TURSO_URL!,
+      authToken: process.env.TURSO_AUTH_TOKEN,
+    })
+  : createClient({ url: 'file:data/local.db' });
 
 // --- Schema bootstrap (runs once on first import) ---
 

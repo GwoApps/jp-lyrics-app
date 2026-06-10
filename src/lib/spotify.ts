@@ -5,6 +5,15 @@ export const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || '';
 export const SPOTIFY_REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI || 'https://jplrc.kazusa.feng.moe/api/auth/callback';
 export const SPOTIFY_SCOPES = 'user-read-currently-playing user-read-playback-state';
 
+/** Base64 encode — Node Buffer first, btoa fallback for Edge/CF Workers */
+export function base64Encode(str: string): string {
+  try {
+    return Buffer.from(str).toString('base64');
+  } catch {
+    return btoa(str);
+  }
+}
+
 /** Get a valid Spotify access token for a specific user (refresh if needed) */
 export async function getSpotifyTokenForUser(userEmail: string): Promise<string | null> {
   const auth = await db.prepare(
@@ -18,7 +27,7 @@ export async function getSpotifyTokenForUser(userEmail: string): Promise<string 
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: `Basic ${Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString('base64')}`,
+        Authorization: `Basic ${base64Encode(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`)}`,
       },
       body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: auth.refresh_token }),
     });
