@@ -289,6 +289,13 @@ export default function SongViewPage() {
                 <div className="h-4 w-4 border-2 border-[var(--muted-foreground)]/30 border-t-[var(--muted-foreground)] rounded-full animate-spin" />
                 <span>{t('song.loadingFurigana')}</span>
               </div>
+            ) : data.furiganaError ? (
+              <div className="flex flex-col gap-3 py-8">
+                <div className="flex items-center gap-2 text-sm text-[var(--warning)]">
+                  <span>{data.furiganaError}</span>
+                </div>
+                <pre className="whitespace-pre-wrap font-sans leading-relaxed text-[var(--muted-foreground)]" style={{ fontSize: `${data.fontSize}px` }}>{song.lyrics_raw}</pre>
+              </div>
             ) : (
               <p className="text-sm text-[var(--muted-foreground)]">{t('song.noLyricsSimple')}</p>
             )}

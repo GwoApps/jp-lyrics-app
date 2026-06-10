@@ -69,6 +69,7 @@
     "networkErrorAlert": "A network error occurred",
     "noLyricsParen": "(No lyrics)",
     "loadingFurigana": "Loading furigana...",
+    "furiganaLoadFailed": "Failed to load furigana. Check your network. Plain lyrics are still available.",
     "noLyricsSimple": "No lyrics",
     "show": "View",
     "importBtn": "Import",

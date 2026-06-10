@@ -69,6 +69,7 @@
     "networkErrorAlert": "發生網路錯誤",
     "noLyricsParen": "（無歌詞）",
     "loadingFurigana": "正在載入振假名...",
+    "furiganaLoadFailed": "振假名載入失敗，請檢查網路。歌詞文字仍可顯示。",
     "noLyricsSimple": "沒有歌詞",
     "show": "檢視",
     "importBtn": "匯入",

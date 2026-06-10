@@ -31,6 +31,7 @@ export interface UseSongDataReturn {
   syncLines: ReturnType<typeof parseLrc>;
   furiganaLines: FuriganaLine[];
   furiganaLoading: boolean;
+  furiganaError: string;
   lineTimestamps: (number | null)[];
   syncing: boolean;
   syncError: string;
@@ -114,6 +115,7 @@ export function useSongData(id: string): UseSongDataReturn {
   // Client-side furigana (lazy-loaded from kuromoji-es CDN when needed)
   const [clientFurigana, setClientFurigana] = useState<FuriganaLine[]>([]);
   const [furiganaLoading, setFuriganaLoading] = useState(false);
+  const [furiganaError, setFuriganaError] = useState('');
 
   const furiganaLines = useMemo<FuriganaLine[]>(() => {
     // Prefer server-side pre-computed data (existing songs)
@@ -131,9 +133,13 @@ export function useSongData(id: string): UseSongDataReturn {
     if (furiganaLoading) return;
 
     setFuriganaLoading(true);
+    setFuriganaError('');
     convertToFuriganaClient(song.lyrics_raw)
       .then((lines) => setClientFurigana(lines))
-      .catch((e) => console.error('Client furigana conversion failed:', e))
+      .catch((e) => {
+        console.error('Client furigana conversion failed:', e);
+        setFuriganaError(t('song.furiganaLoadFailed'));
+      })
       .finally(() => setFuriganaLoading(false));
   }, [song?.lyrics_raw, serverFurigana.length, clientFurigana.length, furiganaLoading]);
 
@@ -384,6 +390,7 @@ export function useSongData(id: string): UseSongDataReturn {
     syncLines,
     furiganaLines,
     furiganaLoading,
+    furiganaError,
     lineTimestamps,
     syncing,
     syncError,
