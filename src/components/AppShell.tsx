@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { I18nProvider, useI18n } from '@/lib/i18n';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
-import { Sun, Moon, Shield } from 'lucide-react';
+import { Sun, Moon } from 'lucide-react';
 
 function Nav() {
   const { t } = useI18n();
@@ -47,19 +47,12 @@ function Nav() {
           >
             {t('common.list')}
           </a>
-          <a
-            href="/songs/new"
-            className={`rounded-md px-2.5 sm:px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)] ${!spotifyConnected ? 'opacity-50 pointer-events-none' : ''}`}
-          >
-            {t('common.new')}
-          </a>
           {spotifyConnected && isAdmin && (
             <a
               href="/admin"
-              className="rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)]"
-              title={t('admin.title')}
+              className="rounded-md px-2.5 sm:px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)]"
             >
-              <Shield className="h-4 w-4" />
+              {t('admin.title')}
             </a>
           )}
           <a
