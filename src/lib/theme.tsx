@@ -19,7 +19,7 @@ export function useTheme() {
 }
 
 function applyThemeColor(theme: Theme) {
-  const meta = document.querySelector('meta[name="theme-color"]');
+  const meta = document.getElementById('theme-color-meta');
   if (meta) meta.setAttribute('content', THEME_COLORS[theme]);
 }
 
@@ -32,6 +32,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setTheme(saved);
       document.documentElement.setAttribute('data-theme', saved);
       applyThemeColor(saved);
+    } else {
+      // No saved preference — detect system and apply
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const detected: Theme = prefersDark ? 'dark' : 'light';
+      setTheme(detected);
+      document.documentElement.setAttribute('data-theme', detected);
+      applyThemeColor(detected);
     }
   }, []);
 
