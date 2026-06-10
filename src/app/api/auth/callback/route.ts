@@ -42,13 +42,14 @@ export async function GET(request: NextRequest) {
   });
   const profile = profileRes.ok ? await profileRes.json() : {};
 
-  // Determine user email:
+  // Determine user identifier:
   //   1. From gateway header (kazusa-home-portal)
-  //   2. From Spotify profile (standalone / CF Workers)
+  //   2. From Spotify profile email (if user-read-email scope granted)
+  //   3. From Spotify profile ID (always available, e.g. "spotify:abc123")
   const authUser = await getAuthUser(request);
-  const email = authUser?.email || profile.email;
-  if (!email) {
-    return NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=no_email`);
+  const userId = authUser?.email || profile.email || `spotify:${profile.id}`;
+  if (!userId) {
+    return NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=no_identity`);
   }
 
   const expiresAt = Math.floor(Date.now() / 1000) + tokenData.expires_in;
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
   // Upsert Spotify auth
   await db.run(sql`
     INSERT INTO spotify_auth (user_email, access_token, refresh_token, expires_at, display_name, updated_at)
-    VALUES (${email}, ${tokenData.access_token}, ${tokenData.refresh_token}, ${expiresAt}, ${profile.display_name || ''}, datetime('now', 'localtime'))
+    VALUES (${userId}, ${tokenData.access_token}, ${tokenData.refresh_token}, ${expiresAt}, ${profile.display_name || ''}, datetime('now', 'localtime'))
     ON CONFLICT(user_email) DO UPDATE SET
       access_token = excluded.access_token,
       refresh_token = excluded.refresh_token,
@@ -66,7 +67,7 @@ export async function GET(request: NextRequest) {
   `);
 
   // Set signed session cookie (used when no gateway auth headers)
-  const token = await signSession(email);
+  const token = await signSession(userId);
   const response = NextResponse.redirect(`${APP_ORIGIN}/?spotify=connected`);
   response.cookies.set(COOKIE_NAME, token, {
     httpOnly: true,
