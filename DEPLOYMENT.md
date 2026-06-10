@@ -2,9 +2,9 @@
 
 Three deployment targets with increasing levels of edge-readiness:
 
-| | Docker (self-hosted) | Cloudflare Workers | Vercel |
+| | Docker (self-hosted) | Cloudflare Workers (D1) | Vercel (Turso) |
 |---|---|---|---|
-| Database | Local SQLite file | Turso (remote) | Turso (remote) |
+| Database | Local SQLite file | Cloudflare D1 (built-in) | Turso (remote) |
 | Furigana | Client-side (CDN) | Client-side (CDN) | Client-side (CDN) |
 | Spotify poll | `server` or `client` | `client` only | `client` only |
 | Filesystem | ✅ Required | ❌ Not available | ❌ Not available |
@@ -92,41 +92,45 @@ For Docker, `server` mode is recommended. Set `SPOTIFY_POLL_MODE=server`.
 
 ---
 
-## 2. Cloudflare Workers
+## 2. Cloudflare Workers + D1
 
-Edge-deployed, globally distributed. Requires Turso for the database.
+Edge-deployed, globally distributed. Uses Cloudflare D1 (built-in SQLite).
 
 ### Prerequisites
 
 - Cloudflare account with Workers enabled
-- Turso account (free tier: 500 databases, 9GB storage, 1B reads/month)
+- D1 database (free tier: 5M reads/day, 100K writes/day)
 - Spotify Developer App
 - [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/)
 
-### Step 1: Set Up Turso
+### Step 1: Create D1 Database
 
 ```bash
-# Install Turso CLI
-curl -sSfL https://get.tur.so/install.sh | bash
+# Create D1 database via Wrangler
+wrangler d1 create jplrc-db
 
-# Create database
-turso db create jplrc
-
-# Get connection URL and token
-turso db show jplrc --url
-turso db tokens create jplrc
+# Note the database_id from the output, then add to wrangler.toml
 ```
 
-### Step 2: Migrate Existing Data (Optional)
+### Step 2: Set Up Schema
 
-If you have an existing `data/local.db`:
+Apply the schema to D1:
 
 ```bash
-# Import schema + data into Turso
-turso db shell jplrc < data/local.db
+# Using Drizzle Kit (recommended)
+npx drizzle-kit push
+
+# Or using Wrangler directly
+wrangler d1 execute jplrc-db --file=./schema.sql
 ```
 
-Or use the Turso REST API / libsql-client to run the schema SQL manually.
+To migrate existing local data:
+```bash
+# Export from local SQLite
+sqlite3 data/local.db .dump > dump.sql
+# Import into D1
+wrangler d1 execute jplrc-db --file=./dump.sql
+```
 
 ### Step 3: Configure Wrangler
 
@@ -134,18 +138,21 @@ Create `wrangler.toml`:
 
 ```toml
 name = "jplrc"
-main = ".next/standalone/server.js"
-compatibility_date = "2024-01-01"
+main = ".open-next/worker.js"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "jplrc-db"
+database_id = "<your-database-id>"
 
 [vars]
 SPOTIFY_POLL_MODE = "client"
 SPOTIFY_REDIRECT_URI = "https://jplrc.your-domain.com/api/auth/callback"
 
-# Spotify secrets (use wrangler secret put)
-# SPOTIFY_CLIENT_ID
-# SPOTIFY_CLIENT_SECRET
-# TURSO_URL
-# TURSO_AUTH_TOKEN
+[observability]
+enabled = true
 ```
 
 Set secrets:
@@ -153,21 +160,26 @@ Set secrets:
 ```bash
 wrangler secret put SPOTIFY_CLIENT_ID
 wrangler secret put SPOTIFY_CLIENT_SECRET
-wrangler secret put TURSO_URL
-wrangler secret put TURSO_AUTH_TOKEN
 ```
 
 ### Step 4: Build & Deploy
 
 ```bash
-npm run build
+# Install OpenNext Cloudflare adapter
+npm install -D @opennextjs/cloudflare
+
+# Build for Cloudflare
+npx @opennextjs/cloudflare build
+
+# Deploy
 wrangler deploy
 ```
 
 ### Important Notes
 
 - **`SPOTIFY_POLL_MODE=client` is mandatory** — Workers have no persistent process for the server-side poller
-- **`TURSO_URL` is mandatory** — Workers have no filesystem for local SQLite
+- **D1 binding (`DB`)** is automatically available via `process.env.DB` in the OpenNext adapter
+- **`getDB(env.DB)`** in route handlers receives the D1 binding — no TURSO_URL needed
 - Furigana is computed client-side via CDN-loaded kuromoji-es (no server dependency)
 - The SSE stream endpoint returns `501` in client mode (by design)
 
@@ -176,6 +188,7 @@ wrangler deploy
 - Spotify OAuth callback needs to reach the Worker — configure `SPOTIFY_REDIRECT_URI` accordingly
 - The `spotify-poller.ts` singleton and `spotify.ts` token refresh logic are server-only and will be tree-shaken out of the Worker bundle
 - Cron-based Spotify token refresh is not available (tokens refresh on-demand when the browser polls)
+- D1 has a 10MB database size limit on the free tier (1GB on paid)
 
 ---
 

@@ -27,7 +27,7 @@ A Japanese lyrics management web app with furigana annotation, Spotify real-time
 |---|---|
 | Framework | Next.js 16 (App Router) |
 | UI | React 19, Tailwind CSS v4, Lucide Icons |
-| Database | @libsql/client (Turso or local SQLite) |
+| Database | Drizzle ORM + @libsql/client (Turso, local SQLite, or Cloudflare D1) |
 | Furigana Engine | kuromoji-es (browser CDN, lazy-loaded) |
 | Lyrics Source | lrclib.net |
 | Music Integration | Spotify Web API (OAuth 2.0) + SSE / client polling |
@@ -60,7 +60,7 @@ npm run dev
 | `SPOTIFY_CLIENT_SECRET` | No | Spotify app client secret |
 | `SPOTIFY_REDIRECT_URI` | No | Override callback URL (default: request origin + `/api/auth/callback`) |
 | `SPOTIFY_POLL_MODE` | No | `client` (default) or `server`. See [DEPLOYMENT.md](DEPLOYMENT.md) |
-| `TURSO_URL` | No | Turso database URL (e.g. `libsql://xxx.turso.io`). Without this, falls back to local SQLite file |
+| `TURSO_URL` | No | Turso database URL (e.g. `libsql://xxx.turso.io`). Without this, falls back to local SQLite file. For CF D1, use binding instead |
 | `TURSO_AUTH_TOKEN` | No | Turso auth token (required when `TURSO_URL` is set) |
 
 Spotify integration is optional. Without it, you can still manage lyrics manually.
@@ -113,6 +113,7 @@ src/
 │   └── useSongData.ts                    # Song data + handlers
 ├── lib/
 │   ├── db.ts                             # @libsql/client (Turso / local SQLite)
+│   ├── schema.ts                         # Drizzle ORM typed schema definitions
 │   ├── kuroshiro-client.ts               # Client-side furigana (CDN lazy-load)
 │   ├── compound-readings.ts              # Compound reading corrections
 │   ├── match.ts                          # Multi-level song matching
