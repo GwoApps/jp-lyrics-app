@@ -97,11 +97,12 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser | null
   // 1. Gateway headers (kazusa-home-portal)
   const headerEmail = request.headers.get('X-User-Email');
   if (headerEmail) {
-    const userId = request.headers.get('X-User-Id') || headerEmail;
-    const { isAdmin, isBlocked } = await getUserStatus(userId);
+    // Use email (not X-User-Id) as user key — X-User-Id is the gateway's
+    // database auto-increment, not the same identifier used in jplrc's users table
+    const { isAdmin, isBlocked } = await getUserStatus(headerEmail);
     if (isBlocked) return null;
     return {
-      id: userId,
+      id: headerEmail,
       email: headerEmail,
       name: decodeURIComponent(request.headers.get('X-User-Name') || ''),
       role: isAdmin ? 'admin' : (request.headers.get('X-User-Role') || 'user'),
