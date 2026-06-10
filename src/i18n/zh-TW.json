@@ -51,7 +51,11 @@
     "collections": "收藏集",
     "collectionsTitle": "管理收藏集",
     "newCollectionPlaceholder": "新收藏集名稱...",
-    "createCollection": "建立"
+    "createCollection": "建立",
+    "spotifyConnected": "Spotify 已連線",
+    "spotifyDenied": "Spotify 連線已取消",
+    "spotifyTokenFailed": "Spotify 驗證失敗",
+    "spotifyNoIdentity": "無法取得 Spotify 使用者資訊"
   },
   "song": {
     "notFound": "找不到歌曲",

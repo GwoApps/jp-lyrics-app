@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Music, Pencil, Trash2, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User, Star, FolderPlus, Trash } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useI18n } from '@/lib/i18n';
@@ -52,11 +52,33 @@ export default function HomePage() {
   const [filterCollection, setFilterCollection] = useState<string | null>(null);
   const [collectionSongs, setCollectionSongs] = useState<Set<string>>(new Set());
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const showToast = (type: 'success' | 'error', msg: string) => {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 3000);
   };
+
+  // ─── Handle Spotify OAuth redirect params ───
+  useEffect(() => {
+    const error = searchParams.get('spotify_error');
+    const success = searchParams.get('spotify');
+
+    if (error || success) {
+      // Clean URL params immediately
+      const url = new URL(window.location.href);
+      url.searchParams.delete('spotify_error');
+      url.searchParams.delete('spotify');
+      window.history.replaceState({}, '', url.pathname + url.search);
+
+      if (error) {
+        const key = `home.spotify${error.charAt(0).toUpperCase() + error.slice(1)}`;
+        showToast('error', t(key));
+      } else if (success === 'connected') {
+        showToast('success', t('home.spotifyConnected'));
+      }
+    }
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetch('/api/songs')

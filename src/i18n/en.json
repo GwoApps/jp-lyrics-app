@@ -51,7 +51,11 @@
     "collections": "Collections",
     "collectionsTitle": "Manage Collections",
     "newCollectionPlaceholder": "New collection name...",
-    "createCollection": "Create"
+    "createCollection": "Create",
+    "spotifyConnected": "Spotify connected",
+    "spotifyDenied": "Spotify connection cancelled",
+    "spotifyTokenFailed": "Spotify authentication failed",
+    "spotifyNoIdentity": "Could not retrieve Spotify user info"
   },
   "song": {
     "notFound": "Song not found",
