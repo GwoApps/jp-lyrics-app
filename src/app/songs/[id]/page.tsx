@@ -50,9 +50,13 @@ export default function SongViewPage() {
 
   // Current user for match priority
   const [currentUserEmail, setCurrentUserEmail] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => {
     fetch('/api/me').then(r => r.json()).then(d => {
-      if (d.authenticated && d.email) setCurrentUserEmail(d.email);
+      if (d.authenticated && d.email) {
+        setCurrentUserEmail(d.email);
+        if (d.isAdmin) setIsAdmin(true);
+      }
     }).catch(() => {});
   }, []);
 
@@ -151,7 +155,44 @@ export default function SongViewPage() {
               {song.is_public === 1 ? (
                 <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--success)]/20 text-[var(--success)]">{t('admin.public')}</span>
               ) : (
-                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--muted)] text-[var(--muted-foreground)]">{t('admin.private')}</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--muted)] text-[var(--muted-foreground)]">
+                  {t('admin.private')}
+                  {isAdmin ? (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await fetch(`/api/admin/songs/${id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ is_public: 1 }),
+                          });
+                          if (res.ok) {
+                            data.refreshSong();
+                            data.showToast('success', t('admin.approved'));
+                          }
+                        } catch {}
+                      }}
+                      className="text-[var(--primary)] hover:text-[var(--primary)]/80 underline transition-colors"
+                    >
+                      {t('admin.setPublic')}
+                    </button>
+                  ) : currentUserEmail && song.created_by === currentUserEmail && song.public_requested !== 1 ? (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await fetch(`/api/songs/${id}/request-public`, { method: 'POST' });
+                          if (res.ok) {
+                            data.refreshSong();
+                            data.showToast('success', t('song.requestPublicSuccess'));
+                          }
+                        } catch {}
+                      }}
+                      className="text-[var(--primary)] hover:text-[var(--primary)]/80 underline transition-colors"
+                    >
+                      {t('song.requestPublic')}
+                    </button>
+                  ) : null}
+                </span>
               )}
               {song.is_public === 0 && song.public_requested === 1 && (
                 <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--warning)]/20 text-[var(--warning)]">{t('song.requestPublicPending')}</span>

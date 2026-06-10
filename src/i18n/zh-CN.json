@@ -160,6 +160,7 @@
     "unblock": "解封",
     "blockReason": "原因",
     "public": "公开",
+    "setPublic": "设置为公开",
     "private": "私密",
     "toggleVisibility": "切换可见性",
     "confirmDeleteUser": "删除此用户及其所有数据？",
