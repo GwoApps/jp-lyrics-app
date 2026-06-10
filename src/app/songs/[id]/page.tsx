@@ -345,9 +345,9 @@ export default function SongViewPage() {
       {/* Lyrics */}
       <div className="rounded-lg bg-[var(--card)] border border-[var(--border)] overflow-hidden flex-1 min-h-0">
         {data.showRaw ? (
-          <pre className="p-4 sm:p-6 whitespace-pre-wrap font-sans leading-relaxed h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto" style={{ fontSize: `${data.fontSize}px` }}>{song.lyrics_raw || t('song.noLyricsParen')}</pre>
+          <pre className="p-4 sm:p-6 whitespace-pre-wrap font-sans leading-relaxed h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden" style={{ fontSize: `${data.fontSize}px` }}>{song.lyrics_raw || t('song.noLyricsParen')}</pre>
         ) : (
-          <div ref={data.lyricsRef} className="p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto scroll-smooth" style={{ fontSize: `${data.fontSize}px` }}>
+          <div ref={data.lyricsRef} className="p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden scroll-smooth" style={{ fontSize: `${data.fontSize}px` }}>
             {furiganaLines.length > 0 ? (
               furiganaLines.map((line, i) => (
                 <div key={i} ref={(el) => { data.lineRefs.current[i] = el; }}>
