@@ -52,6 +52,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=no_identity`);
   }
 
+  // Check if user is blocked
+  try {
+    const existingUser = await db.get(
+      sql`SELECT is_blocked FROM users WHERE id = ${userId}`
+    ) as { is_blocked: number } | undefined;
+    if (existingUser?.is_blocked === 1) {
+      return NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=blocked`);
+    }
+  } catch { /* users table may not exist yet */ }
+
   const expiresAt = Math.floor(Date.now() / 1000) + tokenData.expires_in;
 
   // Upsert Spotify auth
@@ -65,6 +75,26 @@ export async function GET(request: NextRequest) {
       display_name = excluded.display_name,
       updated_at = excluded.updated_at
   `);
+
+  // Upsert user into users table
+  try {
+    await db.run(sql`
+      INSERT OR IGNORE INTO users (id, display_name, created_at, updated_at)
+      VALUES (${userId}, ${profile.display_name || ''}, datetime('now', 'localtime'), datetime('now', 'localtime'))
+    `);
+    await db.run(sql`
+      UPDATE users SET display_name = ${profile.display_name || ''}, updated_at = datetime('now', 'localtime')
+      WHERE id = ${userId}
+    `);
+
+    // First user becomes admin
+    const adminCount = await db.get(
+      sql`SELECT COUNT(*) as cnt FROM users WHERE is_admin = 1`
+    ) as { cnt: number };
+    if (adminCount.cnt === 0) {
+      await db.run(sql`UPDATE users SET is_admin = 1 WHERE id = ${userId}`);
+    }
+  } catch { /* users table may not exist yet */ }
 
   // Set signed session cookie (used when no gateway auth headers)
   const token = await signSession(userId);

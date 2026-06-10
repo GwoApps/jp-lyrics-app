@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS songs (
   lyrics_synced TEXT NOT NULL DEFAULT '',
   created_by TEXT NOT NULL DEFAULT '',
   created_by_name TEXT NOT NULL DEFAULT '',
+  is_public INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
@@ -143,6 +144,15 @@ CREATE TABLE IF NOT EXISTS collection_songs (
   sort_order INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (collection_id, song_id)
 );
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  display_name TEXT NOT NULL DEFAULT '',
+  is_admin INTEGER NOT NULL DEFAULT 0,
+  is_blocked INTEGER NOT NULL DEFAULT 0,
+  blocked_reason TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
 `;
 
 async function bootstrapSchema() {
@@ -152,6 +162,10 @@ async function bootstrapSchema() {
     for (const stmt of SCHEMA_SQL.split(';').map(s => s.trim()).filter(Boolean)) {
       await db.run(sql.raw(stmt));
     }
+    // Migration: add is_public column to existing songs table if missing
+    try {
+      await db.run(sql.raw(`ALTER TABLE songs ADD COLUMN is_public INTEGER NOT NULL DEFAULT 1`));
+    } catch { /* column already exists */ }
   } catch (e) {
     console.warn('[db] schema bootstrap:', (e as Error).message);
   }

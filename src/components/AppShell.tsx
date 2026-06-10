@@ -1,13 +1,27 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { I18nProvider, useI18n } from '@/lib/i18n';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
-import { Sun, Moon } from 'lucide-react';
+import { Sun, Moon, Shield } from 'lucide-react';
 
 function Nav() {
   const { t } = useI18n();
   const { theme, toggleTheme } = useTheme();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/me')
+      .then(r => r.json())
+      .then(data => {
+        if (data.authenticated && data.isAdmin) {
+          setIsAdmin(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <nav className="sticky top-0 z-50 border-b border-[var(--border)] bg-[var(--background)]/80 backdrop-blur-sm">
       <div className="mx-auto flex h-11 max-w-[860px] items-center px-4 sm:px-6">
@@ -31,6 +45,15 @@ function Nav() {
           >
             {t('common.new')}
           </a>
+          {isAdmin && (
+            <a
+              href="/admin"
+              className="rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)]"
+              title={t('admin.title')}
+            >
+              <Shield className="h-4 w-4" />
+            </a>
+          )}
           <a
             href="https://github.com/GwoApps/jp-lyrics-app"
             target="_blank"

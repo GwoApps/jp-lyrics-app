@@ -7,5 +7,10 @@ export async function GET(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ authenticated: false });
   }
-  return NextResponse.json({ authenticated: true, email: user.email, name: user.name });
+  return NextResponse.json({
+    authenticated: true,
+    email: user.email,
+    name: user.name,
+    isAdmin: user.isAdmin,
+  });
 }

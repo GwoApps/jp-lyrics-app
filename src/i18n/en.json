@@ -55,7 +55,8 @@
     "spotifyConnected": "Spotify connected",
     "spotifyDenied": "Spotify connection cancelled",
     "spotifyTokenFailed": "Spotify authentication failed",
-    "spotifyNoIdentity": "Could not retrieve Spotify user info"
+    "spotifyNoIdentity": "Could not retrieve Spotify user info",
+    "spotifyBlocked": "Your account has been blocked"
   },
   "song": {
     "notFound": "Song not found",
@@ -136,5 +137,31 @@
     "deleteConfirmTitle": "Delete「{title}」?",
     "deleteConfirmBody": "This action cannot be undone. Lyrics and furigana data will be permanently deleted.",
     "importErrorTitle": "Failed to fetch lyrics"
+  },
+  "admin": {
+    "title": "Admin",
+    "users": "Users",
+    "songs": "Songs",
+    "backToHome": "Back to home",
+    "adminRole": "Admin",
+    "userRole": "User",
+    "active": "Active",
+    "blocked": "Blocked",
+    "promote": "Promote to admin",
+    "demote": "Demote to user",
+    "block": "Block",
+    "unblock": "Unblock",
+    "blockReason": "Reason",
+    "public": "Public",
+    "private": "Private",
+    "toggleVisibility": "Toggle visibility",
+    "confirmDeleteUser": "Delete this user and all their data?",
+    "confirmDeleteSong": "Delete this song?",
+    "userDeleted": "User deleted",
+    "songDeleted": "Song deleted",
+    "noUsers": "No users",
+    "noSongs": "No songs",
+    "blockedFromLogin": "Your account has been blocked",
+    "unblocked": "User unblocked"
   }
 }

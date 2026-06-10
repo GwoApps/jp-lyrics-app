@@ -76,6 +76,7 @@ export default function HomePage() {
           denied: 'home.spotifyDenied',
           token_failed: 'home.spotifyTokenFailed',
           no_identity: 'home.spotifyNoIdentity',
+          blocked: 'home.spotifyBlocked',
         };
         showToast('error', t(keyMap[error] || 'home.spotifyTokenFailed'));
       } else if (success === 'connected') {

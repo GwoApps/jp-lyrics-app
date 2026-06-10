@@ -1,10 +1,13 @@
 import { NextRequest } from 'next/server';
+import { getDB, schema, sql } from '@/lib/db';
 
 export interface AuthUser {
-  id: string;
-  email: string;
+  id: string;       // user identifier (spotify:id or email)
+  email: string;    // same as id for backward compat
   name: string;
-  role: string;
+  role: string;     // 'admin' or 'user'
+  isAdmin: boolean;
+  isBlocked: boolean;
 }
 
 const COOKIE_NAME = 'jplrc_session';
@@ -67,6 +70,23 @@ async function verifySession(token: string): Promise<string | null> {
 }
 
 /**
+ * Query the users table for admin/blocked status.
+ * Returns { isAdmin, isBlocked } or defaults if user not found.
+ */
+async function getUserStatus(userId: string): Promise<{ isAdmin: boolean; isBlocked: boolean }> {
+  try {
+    const db = getDB();
+    const row = await db.get(
+      sql`SELECT is_admin, is_blocked FROM users WHERE id = ${userId}`
+    ) as { is_admin: number; is_blocked: number } | undefined;
+    if (row) {
+      return { isAdmin: row.is_admin === 1, isBlocked: row.is_blocked === 1 };
+    }
+  } catch { /* users table may not exist yet */ }
+  return { isAdmin: false, isBlocked: false };
+}
+
+/**
  * Extract authenticated user from:
  *   1. kazusa-auth forward headers (X-User-Email etc.) — gateway mode
  *   2. Signed session cookie — standalone / Cloudflare Workers mode
@@ -77,11 +97,16 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser | null
   // 1. Gateway headers (kazusa-home-portal)
   const headerEmail = request.headers.get('X-User-Email');
   if (headerEmail) {
+    const userId = request.headers.get('X-User-Id') || headerEmail;
+    const { isAdmin, isBlocked } = await getUserStatus(userId);
+    if (isBlocked) return null;
     return {
-      id: request.headers.get('X-User-Id') || '',
+      id: userId,
       email: headerEmail,
       name: decodeURIComponent(request.headers.get('X-User-Name') || ''),
-      role: request.headers.get('X-User-Role') || 'user',
+      role: isAdmin ? 'admin' : (request.headers.get('X-User-Role') || 'user'),
+      isAdmin,
+      isBlocked,
     };
   }
 
@@ -90,7 +115,9 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser | null
   if (cookie) {
     const email = await verifySession(cookie);
     if (email) {
-      return { id: '', email, name: '', role: 'user' };
+      const { isAdmin, isBlocked } = await getUserStatus(email);
+      if (isBlocked) return null;
+      return { id: email, email, name: '', role: isAdmin ? 'admin' : 'user', isAdmin, isBlocked };
     }
   }
 

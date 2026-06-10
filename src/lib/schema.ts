@@ -10,6 +10,7 @@ export const songs = sqliteTable('songs', {
   lyricsSynced: text('lyrics_synced').notNull().default(''),
   createdBy: text('created_by').notNull().default(''),
   createdByName: text('created_by_name').notNull().default(''),
+  isPublic: integer('is_public').notNull().default(1),
   createdAt: text('created_at').notNull().default(sql`(datetime('now', 'localtime'))`),
   updatedAt: text('updated_at').notNull().default(sql`(datetime('now', 'localtime'))`),
 });
@@ -45,3 +46,13 @@ export const collectionSongs = sqliteTable('collection_songs', {
 }, (t) => [
   primaryKey({ columns: [t.collectionId, t.songId] }),
 ]);
+
+export const users = sqliteTable('users', {
+  id: text('id').primaryKey(),
+  displayName: text('display_name').notNull().default(''),
+  isAdmin: integer('is_admin').notNull().default(0),
+  isBlocked: integer('is_blocked').notNull().default(0),
+  blockedReason: text('blocked_reason').notNull().default(''),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+  updatedAt: text('updated_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+});

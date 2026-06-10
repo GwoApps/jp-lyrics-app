@@ -55,7 +55,8 @@
     "spotifyConnected": "Spotify 已連線",
     "spotifyDenied": "Spotify 連線已取消",
     "spotifyTokenFailed": "Spotify 驗證失敗",
-    "spotifyNoIdentity": "無法取得 Spotify 使用者資訊"
+    "spotifyNoIdentity": "無法取得 Spotify 使用者資訊",
+    "spotifyBlocked": "您的帳號已被封鎖"
   },
   "song": {
     "notFound": "找不到歌曲",
@@ -136,5 +137,31 @@
     "deleteConfirmTitle": "確定刪除「{title}」？",
     "deleteConfirmBody": "此操作不可撤銷。歌詞和注音資料將被永久刪除。",
     "importErrorTitle": "歌詞取得失敗"
+  },
+  "admin": {
+    "title": "管理後台",
+    "users": "使用者",
+    "songs": "歌詞",
+    "backToHome": "返回首頁",
+    "adminRole": "管理員",
+    "userRole": "一般",
+    "active": "啟用",
+    "blocked": "已封鎖",
+    "promote": "升級為管理員",
+    "demote": "降級為一般使用者",
+    "block": "封鎖",
+    "unblock": "解除封鎖",
+    "blockReason": "原因",
+    "public": "公開",
+    "private": "非公開",
+    "toggleVisibility": "切換公開狀態",
+    "confirmDeleteUser": "確定刪除此使用者及其所有資料？",
+    "confirmDeleteSong": "確定刪除此歌曲？",
+    "userDeleted": "使用者已刪除",
+    "songDeleted": "歌曲已刪除",
+    "noUsers": "尚無使用者",
+    "noSongs": "尚無歌曲",
+    "blockedFromLogin": "帳號已被封鎖",
+    "unblocked": "已解除封鎖"
   }
 }
