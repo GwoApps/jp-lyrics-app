@@ -42,9 +42,19 @@ export default function SongViewPage() {
     followPlaying: true,
     allSongs: [],
     currentSongId: id,
+    currentUserEmail: '',
     pipWindow: null,
     lineRefs: { current: [] },
+    lyricsRef: { current: null },
   });
+
+  // Current user for match priority
+  const [currentUserEmail, setCurrentUserEmail] = useState('');
+  useEffect(() => {
+    fetch('/api/me').then(r => r.json()).then(d => {
+      if (d.authenticated && d.email) setCurrentUserEmail(d.email);
+    }).catch(() => {});
+  }, []);
 
   // Spotify auth check — skip polling if not connected
   const [spotifyConnected, setSpotifyConnected] = useState<boolean | null>(null);
@@ -66,13 +76,20 @@ export default function SongViewPage() {
   useEffect(() => { syncRefs.current.followPlaying = sync.followPlaying; }, [sync.followPlaying]);
   useEffect(() => { syncRefs.current.allSongs = data.allSongs; }, [data.allSongs]);
   useEffect(() => { syncRefs.current.currentSongId = id; }, [id]);
+  useEffect(() => { syncRefs.current.currentUserEmail = currentUserEmail; }, [currentUserEmail]);
   useEffect(() => { syncRefs.current.pipWindow = sync.pipWindowRef.current; }, [sync.pipWindowRef]);
   useEffect(() => { syncRefs.current.lineRefs = data.lineRefs; }, [data.lineRefs]);
+  useEffect(() => { syncRefs.current.lyricsRef = data.lyricsRef; }, [data.lyricsRef]);
 
   // Re-center on active line when debug toggled off
   useEffect(() => {
     if (!data.debug && sync.activeLine >= 0 && data.lineRefs.current?.[sync.activeLine]) {
-      data.lineRefs.current[sync.activeLine]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const lineEl = data.lineRefs.current[sync.activeLine];
+      const container = data.lyricsRef.current;
+      if (lineEl && container) {
+        const lineTop = lineEl.offsetTop - container.offsetTop;
+        container.scrollTo({ top: lineTop - container.clientHeight / 2 + lineEl.offsetHeight / 2, behavior: 'smooth' });
+      }
     }
   }, [data.debug]);
 
@@ -109,7 +126,7 @@ export default function SongViewPage() {
   const hasSyncData = syncLines.length > 0;
   const debugSyncActive = spotify?.is_playing && syncLines.length > 0 ? findActiveLine(syncLines, spotify.progress_ms) : -1;
   const playingMatch = spotify?.track && !isSameSong
-    ? findBestMatch(data.allSongs.filter((s) => s.id !== id), spotify.track)
+    ? findBestMatch(data.allSongs.filter((s) => s.id !== id), spotify.track, currentUserEmail)
     : null;
 
   return (
@@ -129,6 +146,50 @@ export default function SongViewPage() {
           <div className="space-y-0.5 sm:space-y-1 min-w-0">
             <h1 className="text-base sm:text-xl font-semibold tracking-tight">{song.title}</h1>
             {song.artist && <p className="text-xs sm:text-sm text-[var(--muted-foreground)]">{song.artist}</p>}
+            {/* Visibility badge + request public */}
+            <div className="flex items-center gap-2 mt-1">
+              {song.is_public === 1 ? (
+                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--success)]/20 text-[var(--success)]">{t('admin.public')}</span>
+              ) : (
+                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--muted)] text-[var(--muted-foreground)]">{t('admin.private')}</span>
+              )}
+              {song.is_public === 0 && song.public_requested === 1 && (
+                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--warning)]/20 text-[var(--warning)]">{t('song.requestPublicPending')}</span>
+              )}
+              {currentUserEmail && song.created_by === currentUserEmail && song.is_public === 0 && (
+                song.public_requested === 1 ? (
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(`/api/songs/${id}/request-public`, { method: 'DELETE' });
+                        if (res.ok) {
+                          data.refreshSong();
+                          data.showToast('success', t('song.requestPublicCancelled'));
+                        }
+                      } catch {}
+                    }}
+                    className="text-[10px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] underline transition-colors"
+                  >
+                    {t('song.requestPublicCancel')}
+                  </button>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(`/api/songs/${id}/request-public`, { method: 'POST' });
+                        if (res.ok) {
+                          data.refreshSong();
+                          data.showToast('success', t('song.requestPublicSuccess'));
+                        }
+                      } catch {}
+                    }}
+                    className="text-[10px] text-[var(--primary)] hover:text-[var(--primary)]/80 underline transition-colors"
+                  >
+                    {t('song.requestPublic')}
+                  </button>
+                )
+              )}
+            </div>
           </div>
           {/* Desktop buttons */}
           <div className="hidden sm:flex flex-col items-end gap-2 shrink-0">
@@ -138,11 +199,11 @@ export default function SongViewPage() {
                 <span className="text-[10px] w-5 text-center text-[var(--muted-foreground)] tabular-nums">{data.fontSize}</span>
                 <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Plus className="h-3 w-3" /></button>
               </div>
-              <button onClick={data.handleSync} disabled={data.syncing} className={btnCls()}>
+              <button onClick={data.handleSync} disabled={data.syncing || !spotifyConnected} className={btnCls()}>
                 <RefreshCw className={`h-3.5 w-3.5 ${data.syncing ? 'animate-spin' : ''}`} />
               </button>
               {!hasSyncData && (
-                <button onClick={() => data.setShowPasteLrc(!data.showPasteLrc)} className={btnCls(data.showPasteLrc)}>
+                <button onClick={() => data.setShowPasteLrc(!data.showPasteLrc)} disabled={!spotifyConnected} className={btnCls(data.showPasteLrc)}>
                   <ClipboardPaste className="h-3.5 w-3.5" />
                 </button>
               )}
@@ -152,10 +213,10 @@ export default function SongViewPage() {
               <button onClick={() => data.setShowRaw(!data.showRaw)} className={btnCls()}>
                 {data.showRaw ? <BookOpen className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
               </button>
-              <button onClick={() => router.push(`/songs/${id}/edit`)} className={btnCls()}>
+              <button onClick={() => router.push(`/songs/${id}/edit`)} disabled={!spotifyConnected} className={btnCls()}>
                 <Pencil className="h-3.5 w-3.5" />
               </button>
-              <button onClick={data.handleDelete} className={btnCls(false, 'danger')}>
+              <button onClick={data.handleDelete} disabled={!spotifyConnected} className={btnCls(false, 'danger')}>
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
               <button onClick={data.handleCopy} className={btnCls(data.copied)}>
@@ -226,11 +287,11 @@ export default function SongViewPage() {
                   <button onClick={() => router.push(`/songs/${playingMatch.id}`)} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--border)] transition-colors shrink-0">
                     <ExternalLink className="h-3 w-3" /><span>{t('song.show')}</span>
                   </button>
-                ) : (
+                ) : spotifyConnected ? (
                   <button onClick={() => data.handleImportPlaying(spotify)} disabled={data.importing} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--primary)] text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0">
                     {data.importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}<span>{data.importing ? t('home.importing') : t('song.importBtn')}</span>
                   </button>
-                )}
+                ) : null}
               </div>
             ) : null}
             <button
@@ -284,9 +345,9 @@ export default function SongViewPage() {
       {/* Lyrics */}
       <div className="rounded-lg bg-[var(--card)] border border-[var(--border)] overflow-hidden flex-1 min-h-0">
         {data.showRaw ? (
-          <pre className="p-4 sm:p-6 whitespace-pre-wrap font-sans leading-relaxed h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto" style={{ fontSize: `${data.fontSize}px` }}>{song.lyrics_raw || t('song.noLyricsParen')}</pre>
+          <pre className="p-4 sm:p-6 whitespace-pre-wrap font-sans leading-relaxed h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden" style={{ fontSize: `${data.fontSize}px` }}>{song.lyrics_raw || t('song.noLyricsParen')}</pre>
         ) : (
-          <div ref={data.lyricsRef} className="p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto scroll-smooth" style={{ fontSize: `${data.fontSize}px` }}>
+          <div ref={data.lyricsRef} className="p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden scroll-smooth" style={{ fontSize: `${data.fontSize}px` }}>
             {furiganaLines.length > 0 ? (
               furiganaLines.map((line, i) => (
                 <div key={i} ref={(el) => { data.lineRefs.current[i] = el; }}>
@@ -328,7 +389,7 @@ export default function SongViewPage() {
       <MobileMenu
         data={data} sync={sync} song={song} id={id} router={router}
         furiganaLines={furiganaLines} hasSyncData={hasSyncData} pipSupported={pipSupported}
-        highlightRef={highlightRef} pipWindowRef={pipWindowRef}
+        highlightRef={highlightRef} pipWindowRef={pipWindowRef} spotifyConnected={spotifyConnected === true}
       />
 
       {data.toast && <div className={`toast toast-${data.toast.type}`}>{data.toast.msg}</div>}
@@ -340,7 +401,7 @@ export default function SongViewPage() {
 }
 
 /** Mobile bottom toolbar — A-/A+, Sync, Copy visible; rest in 3-dot menu */
-function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, pipSupported, highlightRef, pipWindowRef }: {
+function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, pipSupported, highlightRef, pipWindowRef, spotifyConnected }: {
   data: ReturnType<typeof useSongData>;
   sync: ReturnType<typeof useSpotifySync>;
   song: NonNullable<ReturnType<typeof useSongData>['song']>;
@@ -351,6 +412,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
   pipSupported: boolean;
   highlightRef: React.MutableRefObject<number>;
   pipWindowRef: React.MutableRefObject<Window | null>;
+  spotifyConnected: boolean;
 }) {
   const { t } = useI18n();
   const [showMenu, setShowMenu] = useState(false);
@@ -371,8 +433,10 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
     { icon: <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />, label: data.syncing ? t('song.syncing') : t('song.sync'), onClick: data.handleSync, disabled: data.syncing },
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: 'PiP', onClick: () => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef) }] : []),
     { icon: <Bug className="h-4 w-4" />, label: 'Debug', onClick: () => data.setDebug(!data.debug), active: data.debug },
-    { icon: <Pencil className="h-4 w-4" />, label: t('common.edit'), onClick: () => router.push(`/songs/${id}/edit`) },
-    { icon: <Trash2 className="h-4 w-4" />, label: t('common.delete'), onClick: data.handleDelete, danger: true },
+    ...(spotifyConnected ? [
+      { icon: <Pencil className="h-4 w-4" />, label: t('common.edit'), onClick: () => router.push(`/songs/${id}/edit`) },
+      { icon: <Trash2 className="h-4 w-4" />, label: t('common.delete'), onClick: data.handleDelete, danger: true },
+    ] : []),
   ];
 
   return (

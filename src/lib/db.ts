@@ -85,80 +85,96 @@ if (_d1) {
     fs.mkdirSync('data', { recursive: true });
   } catch { /* already exists, or fs unavailable (edge) */ }
 
-  const [{ drizzle }, { createClient }] = await Promise.all([
+  const [{ drizzle }, libsql] = await Promise.all([
     import('drizzle-orm/libsql'),
     import('@libsql/client'),
   ]);
 
   if (process.env.TURSO_URL) {
-    const client = createClient({
+    const client = libsql.createClient({
       url: process.env.TURSO_URL,
       authToken: process.env.TURSO_AUTH_TOKEN,
     });
     _db = drizzle(client, { schema });
   } else {
-    const client = createClient({ url: 'file:data/local.db' });
+    const client = libsql.createClient({ url: 'file:data/local.db' });
     _db = drizzle(client, { schema });
   }
 }
 
-// --- Schema bootstrap (runs once for non-D1 backends) ---
+// --- Schema migration via Drizzle (runs once for non-D1 backends) ---
 
-const SCHEMA_SQL = `
-CREATE TABLE IF NOT EXISTS songs (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  artist TEXT NOT NULL DEFAULT '',
-  lyrics_raw TEXT NOT NULL DEFAULT '',
-  lyrics_furigana TEXT NOT NULL DEFAULT '[]',
-  lyrics_synced TEXT NOT NULL DEFAULT '',
-  created_by TEXT NOT NULL DEFAULT '',
-  created_by_name TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-);
-CREATE TABLE IF NOT EXISTS spotify_auth (
-  user_email TEXT PRIMARY KEY,
-  access_token TEXT NOT NULL DEFAULT '',
-  refresh_token TEXT NOT NULL DEFAULT '',
-  expires_at INTEGER NOT NULL DEFAULT 0,
-  display_name TEXT NOT NULL DEFAULT '',
-  updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-);
-CREATE TABLE IF NOT EXISTS favorites (
-  user_email TEXT NOT NULL,
-  song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-  PRIMARY KEY (user_email, song_id)
-);
-CREATE TABLE IF NOT EXISTS collections (
-  id TEXT PRIMARY KEY,
-  user_email TEXT NOT NULL,
-  name TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-);
-CREATE TABLE IF NOT EXISTS collection_songs (
-  collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
-  song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (collection_id, song_id)
-);
-`;
+import * as path from 'path';
+import * as fs from 'fs';
 
-async function bootstrapSchema() {
-  if (_isD1) return; // D1 manages its own schema
-  try {
-    const db = getDB();
-    for (const stmt of SCHEMA_SQL.split(';').map(s => s.trim()).filter(Boolean)) {
+interface MigrationEntry { idx: number; tag: string }
+
+async function runMigrations() {
+  if (_isD1) return; // D1 manages its own schema via wrangler
+
+  const db = getDB();
+  const migrationsDir = path.resolve('drizzle');
+  const journalPath = path.join(migrationsDir, 'meta', '_journal.json');
+
+  // Read journal
+  if (!fs.existsSync(journalPath)) return;
+  const journal = JSON.parse(fs.readFileSync(journalPath, 'utf-8'));
+  const entries: MigrationEntry[] = journal.entries || [];
+  if (entries.length === 0) return;
+
+  // Create __drizzle_migrations table if not exists
+  await db.run(sql.raw(
+    `CREATE TABLE IF NOT EXISTS "__drizzle_migrations" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "hash" TEXT NOT NULL, "created_at" NUMERIC NOT NULL)`
+  ));
+
+  // Check which migrations have been applied
+  const applied = await db.all(sql`SELECT hash FROM "__drizzle_migrations"`);
+  const appliedSet = new Set(applied.map((r: any) => r.hash));
+
+  // Find pending migrations
+  const pending = entries.filter(e => !appliedSet.has(e.tag + '.sql'));
+
+  if (pending.length === 0) return;
+
+  // If this is an existing DB (has tables besides __drizzle_migrations) and the
+  // first pending migration is 0000 (baseline), mark it as applied without executing
+  const tables = await db.all(
+    sql`SELECT name FROM sqlite_master WHERE type='table' AND name != '__drizzle_migrations' AND name NOT LIKE 'sqlite_%'`
+  );
+
+  const now = Date.now();
+  for (const entry of pending) {
+    const tag = entry.tag + '.sql';
+    const sqlPath = path.join(migrationsDir, tag);
+
+    if (entry.idx === 0 && tables.length > 0) {
+      // Baseline: existing DB already has tables, just mark as applied
+      console.log(`[db] Baseline: marking ${tag} as applied (existing DB)`);
+      await db.run(sql`INSERT INTO "__drizzle_migrations" ("hash", "created_at") VALUES (${tag}, ${now})`);
+      continue;
+    }
+
+    // Apply migration SQL
+    if (!fs.existsSync(sqlPath)) {
+      console.warn(`[db] Migration file not found: ${tag}, skipping`);
+      continue;
+    }
+    const migrationSQL = fs.readFileSync(sqlPath, 'utf-8');
+    // Split by statement-breakpoint (drizzle-kit convention)
+    const statements = migrationSQL.split('--> statement-breakpoint').map(s => s.trim()).filter(Boolean);
+    console.log(`[db] Applying ${tag} (${statements.length} statements)`);
+    for (const stmt of statements) {
       await db.run(sql.raw(stmt));
     }
-  } catch (e) {
-    console.warn('[db] schema bootstrap:', (e as Error).message);
+    await db.run(sql`INSERT INTO "__drizzle_migrations" ("hash", "created_at") VALUES (${tag}, ${now})`);
   }
+  console.log('[db] Migrations applied');
 }
 
-// Run bootstrap (fire-and-forget)
-bootstrapSchema();
+// Run migrations (fire-and-forget with error logging)
+runMigrations().catch((e) => {
+  console.error('[db] Migration failed:', e.message);
+});
 
 // Re-export Drizzle query helpers for convenience
 export { schema, sql, eq, and, or, like, inArray, desc, asc, isNull, isNotNull };

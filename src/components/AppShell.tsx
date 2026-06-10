@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { I18nProvider, useI18n } from '@/lib/i18n';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
@@ -8,6 +9,27 @@ import { Sun, Moon } from 'lucide-react';
 function Nav() {
   const { t } = useI18n();
   const { theme, toggleTheme } = useTheme();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [spotifyConnected, setSpotifyConnected] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/spotify/status')
+      .then(r => r.json())
+      .then(data => {
+        if (data.connected) {
+          setSpotifyConnected(true);
+          return fetch('/api/me').then(r => r.json());
+        }
+        return null;
+      })
+      .then(data => {
+        if (data?.authenticated && data.isAdmin) {
+          setIsAdmin(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <nav className="sticky top-0 z-50 border-b border-[var(--border)] bg-[var(--background)]/80 backdrop-blur-sm">
       <div className="mx-auto flex h-11 max-w-[860px] items-center px-4 sm:px-6">
@@ -25,12 +47,14 @@ function Nav() {
           >
             {t('common.list')}
           </a>
-          <a
-            href="/songs/new"
-            className="rounded-md px-2.5 sm:px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)]"
-          >
-            {t('common.new')}
-          </a>
+          {spotifyConnected && isAdmin && (
+            <a
+              href="/admin"
+              className="rounded-md px-2.5 sm:px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)]"
+            >
+              {t('admin.title')}
+            </a>
+          )}
           <a
             href="https://github.com/GwoApps/jp-lyrics-app"
             target="_blank"

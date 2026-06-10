@@ -22,41 +22,58 @@ export async function GET(request: NextRequest) {
   const mine = request.nextUrl.searchParams.get('mine') === '1';
   const favoritesOnly = request.nextUrl.searchParams.get('favorites') === '1';
   const user = await getAuthUser(request);
+  const isAdmin = user?.isAdmin === true;
+  const userEmail = user?.email || '';
 
   if (favoritesOnly) {
     if (!user) {
       return NextResponse.json([]);
     }
-    // Use raw SQL for the JOIN query to preserve snake_case column names in response
     const pattern = q ? `%${q}%` : null;
     let rawSql;
     if (q && mine) {
-      rawSql = sql`SELECT s.id, s.title, s.artist, s.created_by_name, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${user.email} WHERE (s.title LIKE ${pattern} OR s.artist LIKE ${pattern}) AND s.created_by = ${user.email} ORDER BY s.updated_at DESC`;
+      rawSql = isAdmin
+        ? sql`SELECT s.id, s.title, s.artist, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail} WHERE (s.title LIKE ${pattern} OR s.artist LIKE ${pattern}) AND s.created_by = ${userEmail} ORDER BY s.updated_at DESC`
+        : sql`SELECT s.id, s.title, s.artist, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail} WHERE (s.title LIKE ${pattern} OR s.artist LIKE ${pattern}) AND s.created_by = ${userEmail} AND (s.is_public = 1 OR s.created_by = ${userEmail}) ORDER BY s.updated_at DESC`;
     } else if (q) {
-      rawSql = sql`SELECT s.id, s.title, s.artist, s.created_by_name, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${user.email} WHERE (s.title LIKE ${pattern} OR s.artist LIKE ${pattern}) ORDER BY s.updated_at DESC`;
+      rawSql = isAdmin
+        ? sql`SELECT s.id, s.title, s.artist, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail} WHERE (s.title LIKE ${pattern} OR s.artist LIKE ${pattern}) ORDER BY s.updated_at DESC`
+        : sql`SELECT s.id, s.title, s.artist, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail} WHERE (s.title LIKE ${pattern} OR s.artist LIKE ${pattern}) AND (s.is_public = 1 OR s.created_by = ${userEmail}) ORDER BY s.updated_at DESC`;
     } else if (mine) {
-      rawSql = sql`SELECT s.id, s.title, s.artist, s.created_by_name, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${user.email} WHERE s.created_by = ${user.email} ORDER BY s.updated_at DESC`;
+      rawSql = isAdmin
+        ? sql`SELECT s.id, s.title, s.artist, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail} WHERE s.created_by = ${userEmail} ORDER BY s.updated_at DESC`
+        : sql`SELECT s.id, s.title, s.artist, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail} WHERE s.created_by = ${userEmail} AND (s.is_public = 1 OR s.created_by = ${userEmail}) ORDER BY s.updated_at DESC`;
     } else {
-      rawSql = sql`SELECT s.id, s.title, s.artist, s.created_by_name, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${user.email} ORDER BY s.updated_at DESC`;
+      rawSql = isAdmin
+        ? sql`SELECT s.id, s.title, s.artist, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail} ORDER BY s.updated_at DESC`
+        : sql`SELECT s.id, s.title, s.artist, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail} WHERE (s.is_public = 1 OR s.created_by = ${userEmail}) ORDER BY s.updated_at DESC`;
     }
     const songs = await db.all(rawSql) as unknown as SongListItem[];
     return NextResponse.json(songs);
   }
 
-  // Non-favorites query: use raw SQL to preserve snake_case column names
+  // Non-favorites query
   if (q && mine && user) {
     const pattern = `%${q}%`;
-    const songs = await db.all(sql`SELECT id, title, artist, created_by_name, created_at, updated_at FROM songs WHERE (title LIKE ${pattern} OR artist LIKE ${pattern}) AND created_by = ${user.email} ORDER BY updated_at DESC`) as unknown as SongListItem[];
+    const songs = isAdmin
+      ? await db.all(sql`SELECT id, title, artist, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE (title LIKE ${pattern} OR artist LIKE ${pattern}) AND created_by = ${userEmail} ORDER BY updated_at DESC`) as unknown as SongListItem[]
+      : await db.all(sql`SELECT id, title, artist, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE (title LIKE ${pattern} OR artist LIKE ${pattern}) AND created_by = ${userEmail} AND (is_public = 1 OR created_by = ${userEmail}) ORDER BY updated_at DESC`) as unknown as SongListItem[];
     return NextResponse.json(songs);
   } else if (q) {
     const pattern = `%${q}%`;
-    const songs = await db.all(sql`SELECT id, title, artist, created_by_name, created_at, updated_at FROM songs WHERE (title LIKE ${pattern} OR artist LIKE ${pattern}) ORDER BY updated_at DESC`) as unknown as SongListItem[];
+    const songs = isAdmin
+      ? await db.all(sql`SELECT id, title, artist, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE (title LIKE ${pattern} OR artist LIKE ${pattern}) ORDER BY updated_at DESC`) as unknown as SongListItem[]
+      : await db.all(sql`SELECT id, title, artist, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE (title LIKE ${pattern} OR artist LIKE ${pattern}) AND is_public = 1 ORDER BY updated_at DESC`) as unknown as SongListItem[];
     return NextResponse.json(songs);
   } else if (mine && user) {
-    const songs = await db.all(sql`SELECT id, title, artist, created_by_name, created_at, updated_at FROM songs WHERE created_by = ${user.email} ORDER BY updated_at DESC`) as unknown as SongListItem[];
+    const songs = isAdmin
+      ? await db.all(sql`SELECT id, title, artist, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE created_by = ${userEmail} ORDER BY updated_at DESC`) as unknown as SongListItem[]
+      : await db.all(sql`SELECT id, title, artist, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE created_by = ${userEmail} AND (is_public = 1 OR created_by = ${userEmail}) ORDER BY updated_at DESC`) as unknown as SongListItem[];
     return NextResponse.json(songs);
   } else {
-    const songs = await db.all(sql`SELECT id, title, artist, created_by_name, created_at, updated_at FROM songs ORDER BY updated_at DESC`) as unknown as SongListItem[];
+    const songs = isAdmin
+      ? await db.all(sql`SELECT id, title, artist, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs ORDER BY updated_at DESC`) as unknown as SongListItem[]
+      : await db.all(sql`SELECT id, title, artist, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE is_public = 1 ORDER BY updated_at DESC`) as unknown as SongListItem[];
     return NextResponse.json(songs);
   }
 }

@@ -55,7 +55,8 @@
     "spotifyConnected": "Spotify連携しました",
     "spotifyDenied": "Spotify連携がキャンセルされました",
     "spotifyTokenFailed": "Spotify認証に失敗しました",
-    "spotifyNoIdentity": "Spotifyユーザー情報を取得できませんでした"
+    "spotifyNoIdentity": "Spotifyユーザー情報を取得できませんでした",
+    "spotifyBlocked": "アカウントがブロックされています"
   },
   "song": {
     "notFound": "曲が見つかりません",
@@ -94,7 +95,14 @@
     "tokenExpired": "トークン期限切れ",
     "reconnect": "再接続",
     "export": "エクスポート",
-    "exportFurigana": "（ふりがな付き）"
+    "exportFurigana": "（ふりがな付き）",
+    "requestPublic": "公開申請",
+    "requestPublicTitle": "この歌詞を公開しますか？",
+    "requestPublicBody": "申請後、管理者が審査します。承認されると他のユーザーにも表示されます。",
+    "requestPublicSuccess": "公開申請を送信しました",
+    "requestPublicCancel": "申請を取り消し",
+    "requestPublicCancelled": "申請を取り消しました",
+    "requestPublicPending": "公開申請中"
   },
   "edit": {
     "title": "曲を編集",
@@ -136,5 +144,42 @@
     "deleteConfirmTitle": "「{title}」を削除しますか？",
     "deleteConfirmBody": "この操作は取り消せません。歌詞データとふりがなが完全に削除されます。",
     "importErrorTitle": "歌詞の取得に失敗"
+  },
+  "admin": {
+    "title": "管理画面",
+    "users": "ユーザー",
+    "songs": "歌詞",
+    "backToHome": "ホームに戻る",
+    "adminRole": "管理者",
+    "userRole": "一般",
+    "active": "有効",
+    "blocked": "ブロック中",
+    "promote": "管理者に昇格",
+    "demote": "一般ユーザーに降格",
+    "block": "ブロック",
+    "unblock": "ブロック解除",
+    "blockReason": "理由",
+    "public": "公開",
+    "private": "非公開",
+    "toggleVisibility": "公開状態を切替",
+    "confirmDeleteUser": "このユーザーとすべてのデータを削除しますか？",
+    "confirmDeleteSong": "この曲を削除しますか？",
+    "userDeleted": "ユーザーを削除しました",
+    "songDeleted": "曲を削除しました",
+    "noUsers": "ユーザーがいません",
+    "noSongs": "曲がありません",
+    "blockedFromLogin": "アカウントがブロックされています",
+    "unblocked": "ブロック解除しました",
+    "pending": "審査待ち",
+    "pendingApproval": "審査待ち",
+    "approve": "承認",
+    "reject": "却下",
+    "approved": "承認しました",
+    "rejected": "却下しました",
+    "noPending": "審査待ちの申請がありません",
+    "you": "自分",
+    "cannotDemoteSelf": "自分自身の管理者権限を解除できません",
+    "cannotBlockSelf": "自分自身をブロックできません",
+    "cannotDeleteSelf": "自分自身を削除できません"
   }
 }

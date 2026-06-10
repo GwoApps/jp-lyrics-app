@@ -55,7 +55,8 @@
     "spotifyConnected": "Spotify 已连接",
     "spotifyDenied": "Spotify 连接已取消",
     "spotifyTokenFailed": "Spotify 认证失败",
-    "spotifyNoIdentity": "无法获取 Spotify 用户信息"
+    "spotifyNoIdentity": "无法获取 Spotify 用户信息",
+    "spotifyBlocked": "您的账户已被封禁"
   },
   "song": {
     "notFound": "找不到歌曲",
@@ -94,7 +95,14 @@
     "tokenExpired": "令牌已过期",
     "reconnect": "重新连接",
     "export": "导出",
-    "exportFurigana": "（含振假名）"
+    "exportFurigana": "（含振假名）",
+    "requestPublic": "申请公开",
+    "requestPublicTitle": "公开这首歌词？",
+    "requestPublicBody": "提交后管理员将审核。批准后其他用户也能看到这首歌词。",
+    "requestPublicSuccess": "已提交公开申请",
+    "requestPublicCancel": "取消申请",
+    "requestPublicCancelled": "已取消申请",
+    "requestPublicPending": "公开申请审核中"
   },
   "edit": {
     "title": "编辑歌曲",
@@ -136,5 +144,42 @@
     "deleteConfirmTitle": "确定删除「{title}」？",
     "deleteConfirmBody": "此操作不可撤销。歌词和注音数据将被永久删除。",
     "importErrorTitle": "歌词获取失败"
+  },
+  "admin": {
+    "title": "管理",
+    "users": "用户",
+    "songs": "歌词",
+    "backToHome": "返回首页",
+    "adminRole": "管理员",
+    "userRole": "用户",
+    "active": "正常",
+    "blocked": "已封禁",
+    "promote": "提升为管理员",
+    "demote": "降为普通用户",
+    "block": "封禁",
+    "unblock": "解封",
+    "blockReason": "原因",
+    "public": "公开",
+    "private": "私密",
+    "toggleVisibility": "切换可见性",
+    "confirmDeleteUser": "删除此用户及其所有数据？",
+    "confirmDeleteSong": "删除此歌曲？",
+    "userDeleted": "用户已删除",
+    "songDeleted": "歌曲已删除",
+    "noUsers": "暂无用户",
+    "noSongs": "暂无歌曲",
+    "blockedFromLogin": "您的账户已被封禁",
+    "unblocked": "已解封",
+    "pending": "待审批",
+    "pendingApproval": "待审批",
+    "approve": "批准",
+    "reject": "拒绝",
+    "approved": "已批准",
+    "rejected": "已拒绝",
+    "noPending": "没有待审批的申请",
+    "you": "我",
+    "cannotDemoteSelf": "不能取消自己的管理员身份",
+    "cannotBlockSelf": "不能封禁自己",
+    "cannotDeleteSelf": "不能删除自己"
   }
 }

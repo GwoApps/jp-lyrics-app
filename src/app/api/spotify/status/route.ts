@@ -28,5 +28,13 @@ export async function DELETE(request: NextRequest) {
   }
 
   await db.delete(schema.spotifyAuth).where(sql`user_email = ${user.email}`);
-  return NextResponse.json({ success: true });
+  const response = NextResponse.json({ success: true });
+  response.cookies.set('jplrc_session', '', {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+    maxAge: 0,
+    path: '/',
+  });
+  return response;
 }

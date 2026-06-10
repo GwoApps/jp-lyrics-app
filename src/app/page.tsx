@@ -12,7 +12,9 @@ interface SongItem {
   id: string;
   title: string;
   artist: string;
+  created_by: string;
   created_by_name: string;
+  is_public: number;
   created_at: string;
   updated_at: string;
 }
@@ -40,7 +42,7 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [mySongsOnly, setMySongsOnly] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [currentUser, setCurrentUser] = useState<{ email: string; name: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ email: string; name: string; isAdmin: boolean } | null>(null);
   const [showPlaylistImport, setShowPlaylistImport] = useState(false);
   const [playlistUrl, setPlaylistUrl] = useState('');
   const [playlistImporting, setPlaylistImporting] = useState(false);
@@ -76,6 +78,7 @@ export default function HomePage() {
           denied: 'home.spotifyDenied',
           token_failed: 'home.spotifyTokenFailed',
           no_identity: 'home.spotifyNoIdentity',
+          blocked: 'home.spotifyBlocked',
         };
         showToast('error', t(keyMap[error] || 'home.spotifyTokenFailed'));
       } else if (success === 'connected') {
@@ -99,7 +102,7 @@ export default function HomePage() {
       .then((r) => r.json())
       .then((data) => {
         if (data.authenticated) {
-          setCurrentUser({ email: data.email, name: data.name });
+          setCurrentUser({ email: data.email, name: data.name, isAdmin: data.isAdmin });
           // Fetch favorites and collections for authenticated users
           fetch('/api/songs?favorites=1').then(r => r.json()).then(favs => {
             setFavorites(new Set(favs.map((f: { id: string }) => f.id)));
@@ -235,7 +238,7 @@ export default function HomePage() {
   };
 
   // Find matching song in DB for currently playing track (uses title + artist scoring)
-  const matchedSong = findBestMatch(songs, nowPlaying?.track);
+  const matchedSong = findBestMatch(songs, nowPlaying?.track, currentUser?.email);
 
   // Filter songs by search query (mySongsOnly is handled server-side via ?mine=1)
   const filteredSongs = songs.filter((s) => {
@@ -271,7 +274,7 @@ export default function HomePage() {
               <span>Spotify</span>
             </a>
           )}
-          <button onClick={() => router.push('/songs/new')} className="inline-flex items-center gap-1.5 rounded-md bg-[var(--primary)] px-3 sm:px-4 py-2 text-xs font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90">
+          <button onClick={() => router.push('/songs/new')} disabled={!spotify?.connected} className="inline-flex items-center gap-1.5 rounded-md bg-[var(--primary)] px-3 sm:px-4 py-2 text-xs font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed">
             <Plus className="h-3.5 w-3.5" />
             <span>{t('common.new')}</span>
           </button>
@@ -464,7 +467,7 @@ export default function HomePage() {
               <ExternalLink className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">{t('home.view')}</span>
             </button>
-          ) : (
+          ) : spotify?.connected ? (
             <button
               onClick={handleImport}
               disabled={importing}
@@ -473,7 +476,7 @@ export default function HomePage() {
               {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
               <span>{importing ? t('home.importing') : t('home.import')}</span>
             </button>
-          )}
+          ) : null}
         </div>
       )}
 
@@ -486,7 +489,7 @@ export default function HomePage() {
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <Music className="h-10 w-10 mb-4 text-[var(--muted-foreground)] opacity-20" />
           <p className="text-sm text-[var(--muted-foreground)]">{t('home.noSongs')}</p>
-          <button onClick={() => router.push('/songs/new')} className="mt-5 inline-flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-4 py-2 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
+          <button onClick={() => router.push('/songs/new')} disabled={!spotify?.connected} className="mt-5 inline-flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-4 py-2 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             <Plus className="h-3.5 w-3.5" /> {t('home.addFirst')}
           </button>
         </div>
@@ -498,7 +501,7 @@ export default function HomePage() {
       ) : (
         <div className="space-y-1.5 sm:space-y-2">
           {filteredSongs.map((song) => {
-            const isPlaying = nowPlaying?.is_playing && isSongPlaying(song, nowPlaying.track);
+            const isPlaying = nowPlaying?.is_playing && isSongPlaying(song, nowPlaying.track, currentUser?.email);
             return (
               <div key={song.id} className={`group flex items-center gap-3 sm:gap-4 rounded-lg bg-[var(--card)] border px-4 sm:px-5 py-3 sm:py-4 transition-colors hover:bg-[var(--muted)] cursor-pointer ${isPlaying ? 'border-[var(--success)]/50 bg-[var(--success-muted)]' : 'border-[var(--border)]'}`} onClick={() => router.push(`/songs/${song.id}`)}>
                 <div className={`flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-md ${isPlaying ? 'bg-[var(--success-muted)]' : 'bg-[var(--muted)]'}`}>
@@ -516,17 +519,19 @@ export default function HomePage() {
                 </div>
                 <div className="text-[10px] sm:text-[11px] text-[var(--muted-foreground)] hidden sm:block shrink-0">{new Date(song.updated_at).toLocaleDateString(localeToBCP47(locale))}</div>
                 <div className="flex items-center gap-0.5 shrink-0">
-                  {currentUser && (
-                    <button onClick={(e) => { e.stopPropagation(); handleToggleFavorite(song.id); }} className={`rounded p-1.5 sm:p-2 transition-colors ${favorites.has(song.id) ? 'text-[var(--warning)]' : 'text-[var(--muted-foreground)] hover:text-[var(--warning)]'}`}>
-                      <Star className={`h-3.5 w-3.5 ${favorites.has(song.id) ? 'fill-current' : ''}`} />
-                    </button>
+                  {spotify?.connected && (
+                    <>
+                      <button onClick={(e) => { e.stopPropagation(); handleToggleFavorite(song.id); }} className={`rounded p-1.5 sm:p-2 transition-colors ${favorites.has(song.id) ? 'text-[var(--warning)]' : 'text-[var(--muted-foreground)] hover:text-[var(--warning)]'}`}>
+                        <Star className={`h-3.5 w-3.5 ${favorites.has(song.id) ? 'fill-current' : ''}`} />
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); router.push(`/songs/${song.id}/edit`); }} className="rounded p-1.5 sm:p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); handleDelete(song.id, song.title); }} className="rounded p-1.5 sm:p-2 text-[var(--destructive)] hover:bg-[var(--destructive)]/10 transition-colors">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </>
                   )}
-                  <button onClick={(e) => { e.stopPropagation(); router.push(`/songs/${song.id}/edit`); }} className="rounded p-1.5 sm:p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors">
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={(e) => { e.stopPropagation(); handleDelete(song.id, song.title); }} className="rounded p-1.5 sm:p-2 text-[var(--destructive)] hover:bg-[var(--destructive)]/10 transition-colors">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
                 </div>
               </div>
             );

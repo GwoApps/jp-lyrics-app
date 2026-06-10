@@ -20,9 +20,13 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/drizzle ./drizzle
 
 # Create data directory — volume mount point for local.db
 RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
+
+# Fix permissions for drizzle migration files (included by standalone build)
+RUN if [ -d /app/drizzle ]; then chown -R nextjs:nodejs /app/drizzle; fi
 
 USER nextjs
 EXPOSE 3000

@@ -16,6 +16,9 @@ interface SongData {
   lyrics_raw: string;
   lyrics_furigana: string;
   lyrics_synced: string;
+  created_by: string;
+  is_public: number;
+  public_requested: number;
   created_at: string;
   updated_at: string;
 }
@@ -28,6 +31,7 @@ interface ToastState {
 export interface UseSongDataReturn {
   song: SongData | null;
   loading: boolean;
+  refreshSong: () => Promise<void>;
   syncLines: ReturnType<typeof parseLrc>;
   furiganaLines: FuriganaLine[];
   furiganaLoading: boolean;
@@ -54,7 +58,7 @@ export interface UseSongDataReturn {
   fontSize: number;
   setFontSize: React.Dispatch<React.SetStateAction<number>>;
   toast: ToastState | null;
-  allSongs: { id: string; title: string; artist: string }[];
+  allSongs: { id: string; title: string; artist: string; created_by: string; is_public: number }[];
   lyricsRef: React.RefObject<HTMLDivElement | null>;
   lineRefs: React.RefObject<(HTMLDivElement | null)[]>;
   handleSync: () => Promise<void>;
@@ -87,7 +91,7 @@ export function useSongData(id: string): UseSongDataReturn {
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState('');
   const [importing, setImporting] = useState(false);
-  const [allSongs, setAllSongs] = useState<{ id: string; title: string; artist: string }[]>([]);
+  const [allSongs, setAllSongs] = useState<{ id: string; title: string; artist: string; created_by: string; is_public: number }[]>([]);
   const [showPasteLrc, setShowPasteLrc] = useState(false);
   const [pasteLrcText, setPasteLrcText] = useState('');
   const [copied, setCopied] = useState(false);
@@ -174,6 +178,18 @@ export function useSongData(id: string): UseSongDataReturn {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 3000);
   }, []);
+
+  // Refresh song data (e.g. after request-public)
+  const refreshSong = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/songs/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSong(data);
+        if (data.lyrics_synced) setSyncLines(parseLrc(data.lyrics_synced));
+      }
+    } catch {}
+  }, [id]);
 
   // Fetch song + all songs on mount
   useEffect(() => {
@@ -387,6 +403,7 @@ export function useSongData(id: string): UseSongDataReturn {
   return {
     song,
     loading,
+    refreshSong,
     syncLines,
     furiganaLines,
     furiganaLoading,
