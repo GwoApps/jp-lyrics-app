@@ -49,8 +49,8 @@ export interface UseSpotifySyncReturn {
   highlightRef: React.MutableRefObject<number>;
 }
 
-export function useSpotifySync(syncRefs: React.MutableRefObject<SyncRefs>): UseSpotifySyncReturn {
-  const nowPlayingData = useNowPlaying();
+export function useSpotifySync(syncRefs: React.MutableRefObject<SyncRefs>, enabled = true): UseSpotifySyncReturn {
+  const nowPlayingData = useNowPlaying(enabled);
   const [spotify, setSpotify] = useState<SpotifyState | null>(null);
   const [activeLine, setActiveLine] = useState(-1);
   const [followPlaying, setFollowPlaying] = useState(() => {

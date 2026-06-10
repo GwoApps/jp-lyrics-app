@@ -46,8 +46,17 @@ export default function SongViewPage() {
     lineRefs: { current: [] },
   });
 
+  // Spotify auth check — skip polling if not connected
+  const [spotifyConnected, setSpotifyConnected] = useState<boolean | null>(null);
+  useEffect(() => {
+    fetch('/api/spotify/status')
+      .then(r => r.json())
+      .then(d => setSpotifyConnected(!!d.connected))
+      .catch(() => setSpotifyConnected(false));
+  }, []);
+
   // Spotify sync hook (polling + rAF + follow-playing)
-  const sync = useSpotifySync(syncRefs);
+  const sync = useSpotifySync(syncRefs, spotifyConnected === true);
 
   // Keep syncRefs in sync with state
   useEffect(() => { syncRefs.current.songTitle = data.song?.title || ''; }, [data.song?.title]);
