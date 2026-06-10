@@ -23,7 +23,7 @@ export interface SongListItem {
   id: string;
   title: string;
   artist: string;
-  created_by: string;
+  created_by_name: string;
   created_at: string;
   updated_at: string;
 }

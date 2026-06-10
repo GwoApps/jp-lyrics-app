@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
+import { anonymizeEmail } from '@/lib/anonymize';
 import type { Song } from '@/lib/types';
+
+/** Strip email from song response, replace with anonymized name */
+function sanitizeSong(song: Song) {
+  return {
+    ...song,
+    created_by: undefined,
+    created_by_name: anonymizeEmail(song.created_by),
+  };
+}
 
 // GET /api/songs/[id] - get single song
 export async function GET(
@@ -12,7 +22,7 @@ export async function GET(
   if (!song) {
     return NextResponse.json({ error: '曲が見つかりません' }, { status: 404 });
   }
-  return NextResponse.json(song);
+  return NextResponse.json(sanitizeSong(song));
 }
 
 // PUT /api/songs/[id] - update song
@@ -50,8 +60,11 @@ export async function PUT(
     id
   );
 
-  const updated = await db.prepare('SELECT * FROM songs WHERE id = ?').get(id);
-  return NextResponse.json(updated);
+  const updated = await db.prepare('SELECT * FROM songs WHERE id = ?').get(id) as unknown as Song | undefined;
+  if (!updated) {
+    return NextResponse.json({ error: '曲が見つかりません' }, { status: 404 });
+  }
+  return NextResponse.json(sanitizeSong(updated));
 }
 
 // DELETE /api/songs/[id] - delete song

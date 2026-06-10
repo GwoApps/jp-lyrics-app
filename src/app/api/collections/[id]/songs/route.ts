@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { anonymizeEmail } from '@/lib/anonymize';
 
 // GET /api/collections/[id]/songs — list songs in a collection
 export async function GET(
@@ -29,9 +30,18 @@ export async function GET(
     JOIN collection_songs cs ON s.id = cs.song_id
     WHERE cs.collection_id = ?
     ORDER BY cs.sort_order, s.title
-  `).all(id);
+  `).all(id) as { id: string; title: string; artist: string; created_by: string; created_at: string; updated_at: string }[];
 
-  return NextResponse.json(songs);
+  const result = songs.map((s) => ({
+    id: s.id,
+    title: s.title,
+    artist: s.artist,
+    created_by_name: anonymizeEmail(s.created_by),
+    created_at: s.created_at,
+    updated_at: s.updated_at,
+  }));
+
+  return NextResponse.json(result);
 }
 
 // POST /api/collections/[id]/songs — add a song to a collection

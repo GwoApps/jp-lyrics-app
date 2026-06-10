@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import db from '@/lib/db';
 import { parseLrc } from '@/lib/lrc';
 import { getAuthUser } from '@/lib/auth';
+import { anonymizeEmail } from '@/lib/anonymize';
 import type { SongListItem } from '@/lib/types';
 
 // GET /api/songs - list songs with optional search and filter
@@ -39,8 +40,17 @@ export async function GET(request: NextRequest) {
   }
   sql += ' ORDER BY s.updated_at DESC';
 
-  const songs = await db.prepare(sql).all(...args) as unknown as SongListItem[];
-  return NextResponse.json(songs);
+  const songs = await db.prepare(sql).all(...args) as unknown as (SongListItem & { created_by: string })[];
+  // Anonymize: replace email with short hash, add created_by_name
+  const result = songs.map((s) => ({
+    id: s.id,
+    title: s.title,
+    artist: s.artist,
+    created_by_name: anonymizeEmail(s.created_by),
+    created_at: s.created_at,
+    updated_at: s.updated_at,
+  }));
+  return NextResponse.json(result);
 }
 
 // POST /api/songs - create a new song
@@ -67,6 +77,10 @@ export async function POST(request: NextRequest) {
     'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)'
   ).run(id, title, artist || '', rawLyrics, '[]', syncedLyrics, user?.email || '');
 
-  const song = await db.prepare('SELECT * FROM songs WHERE id = ?').get(id);
-  return NextResponse.json(song, { status: 201 });
+  const song = await db.prepare('SELECT * FROM songs WHERE id = ?').get(id) as Record<string, unknown>;
+  return NextResponse.json({
+    ...song,
+    created_by: undefined,
+    created_by_name: anonymizeEmail(song.created_by as string),
+  }, { status: 201 });
 }

@@ -12,7 +12,7 @@ interface SongItem {
   id: string;
   title: string;
   artist: string;
-  created_by: string;
+  created_by_name: string;
   created_at: string;
   updated_at: string;
 }
@@ -83,6 +83,15 @@ export default function HomePage() {
       })
       .catch(() => {});
   }, []);
+
+  // Re-fetch songs when "my songs" toggle changes
+  useEffect(() => {
+    const params = mySongsOnly ? '?mine=1' : '';
+    fetch(`/api/songs${params}`)
+      .then((r) => r.json())
+      .then((data) => setSongs(data))
+      .catch(() => {});
+  }, [mySongsOnly]);
 
   useEffect(() => {
     if (!filterCollection) {
@@ -202,9 +211,8 @@ export default function HomePage() {
   // Find matching song in DB for currently playing track (uses title + artist scoring)
   const matchedSong = findBestMatch(songs, nowPlaying?.track);
 
-  // Filter songs by search query and "my songs" toggle
+  // Filter songs by search query (mySongsOnly is handled server-side via ?mine=1)
   const filteredSongs = songs.filter((s) => {
-    if (mySongsOnly && currentUser && s.created_by !== currentUser.email) return false;
     if (favoritesOnly && !favorites.has(s.id)) return false;
     if (filterCollection && !collectionSongs.has(s.id)) return false;
     if (searchQuery) {
@@ -476,8 +484,8 @@ export default function HomePage() {
                     {isPlaying && <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--success)] animate-pulse shrink-0" />}
                   </div>
                   <div className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate">{song.artist || t('common.unknownArtist')}</div>
-                  {song.created_by && (
-                    <div className="text-[10px] text-[var(--muted-foreground)]/60 mt-0.5 truncate">{t('home.createdBy')}: {song.created_by === currentUser?.email ? currentUser?.name || song.created_by : song.created_by}</div>
+                  {song.created_by_name && (
+                    <div className="text-[10px] text-[var(--muted-foreground)]/60 mt-0.5 truncate">{t('home.createdBy')}: {song.created_by_name}</div>
                   )}
                 </div>
                 <div className="text-[10px] sm:text-[11px] text-[var(--muted-foreground)] hidden sm:block shrink-0">{new Date(song.updated_at).toLocaleDateString(localeToBCP47(locale))}</div>
