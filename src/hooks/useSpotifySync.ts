@@ -34,8 +34,9 @@ export interface SyncRefs {
   lineTimestamps: (number | null)[];
   debug: boolean;
   followPlaying: boolean;
-  allSongs: { id: string; title: string; artist: string }[];
+  allSongs: { id: string; title: string; artist: string; created_by: string; is_public: number }[];
   currentSongId: string;
+  currentUserEmail: string;
   pipWindow: Window | null;
   lineRefs: React.RefObject<(HTMLDivElement | null)[]>;
 }
@@ -100,7 +101,7 @@ export function useSpotifySync(syncRefs: React.MutableRefObject<SyncRefs>, enabl
         prevTrackRef.current &&
         prevTrackRef.current !== trackKey
       ) {
-        const match = findBestMatch(refs.allSongs, nowPlayingData.track);
+        const match = findBestMatch(refs.allSongs, nowPlayingData.track, refs.currentUserEmail);
         if (match && match.id !== refs.currentSongId) {
           navigatingRef.current = true;
           window.location.assign(`/songs/${match.id}`);

@@ -42,9 +42,18 @@ export default function SongViewPage() {
     followPlaying: true,
     allSongs: [],
     currentSongId: id,
+    currentUserEmail: '',
     pipWindow: null,
     lineRefs: { current: [] },
   });
+
+  // Current user for match priority
+  const [currentUserEmail, setCurrentUserEmail] = useState('');
+  useEffect(() => {
+    fetch('/api/me').then(r => r.json()).then(d => {
+      if (d.authenticated && d.email) setCurrentUserEmail(d.email);
+    }).catch(() => {});
+  }, []);
 
   // Spotify auth check — skip polling if not connected
   const [spotifyConnected, setSpotifyConnected] = useState<boolean | null>(null);
@@ -66,6 +75,7 @@ export default function SongViewPage() {
   useEffect(() => { syncRefs.current.followPlaying = sync.followPlaying; }, [sync.followPlaying]);
   useEffect(() => { syncRefs.current.allSongs = data.allSongs; }, [data.allSongs]);
   useEffect(() => { syncRefs.current.currentSongId = id; }, [id]);
+  useEffect(() => { syncRefs.current.currentUserEmail = currentUserEmail; }, [currentUserEmail]);
   useEffect(() => { syncRefs.current.pipWindow = sync.pipWindowRef.current; }, [sync.pipWindowRef]);
   useEffect(() => { syncRefs.current.lineRefs = data.lineRefs; }, [data.lineRefs]);
 
@@ -109,7 +119,7 @@ export default function SongViewPage() {
   const hasSyncData = syncLines.length > 0;
   const debugSyncActive = spotify?.is_playing && syncLines.length > 0 ? findActiveLine(syncLines, spotify.progress_ms) : -1;
   const playingMatch = spotify?.track && !isSameSong
-    ? findBestMatch(data.allSongs.filter((s) => s.id !== id), spotify.track)
+    ? findBestMatch(data.allSongs.filter((s) => s.id !== id), spotify.track, currentUserEmail)
     : null;
 
   return (
@@ -129,6 +139,50 @@ export default function SongViewPage() {
           <div className="space-y-0.5 sm:space-y-1 min-w-0">
             <h1 className="text-base sm:text-xl font-semibold tracking-tight">{song.title}</h1>
             {song.artist && <p className="text-xs sm:text-sm text-[var(--muted-foreground)]">{song.artist}</p>}
+            {/* Visibility badge + request public */}
+            <div className="flex items-center gap-2 mt-1">
+              {song.is_public === 1 ? (
+                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--success)]/20 text-[var(--success)]">{t('admin.public')}</span>
+              ) : (
+                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--muted)] text-[var(--muted-foreground)]">{t('admin.private')}</span>
+              )}
+              {song.is_public === 0 && song.public_requested === 1 && (
+                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--warning)]/20 text-[var(--warning)]">{t('song.requestPublicPending')}</span>
+              )}
+              {currentUserEmail && song.created_by === currentUserEmail && song.is_public === 0 && (
+                song.public_requested === 1 ? (
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(`/api/songs/${id}/request-public`, { method: 'DELETE' });
+                        if (res.ok) {
+                          data.refreshSong();
+                          data.showToast('success', t('song.requestPublicCancelled'));
+                        }
+                      } catch {}
+                    }}
+                    className="text-[10px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] underline transition-colors"
+                  >
+                    {t('song.requestPublicCancel')}
+                  </button>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(`/api/songs/${id}/request-public`, { method: 'POST' });
+                        if (res.ok) {
+                          data.refreshSong();
+                          data.showToast('success', t('song.requestPublicSuccess'));
+                        }
+                      } catch {}
+                    }}
+                    className="text-[10px] text-[var(--primary)] hover:text-[var(--primary)]/80 underline transition-colors"
+                  >
+                    {t('song.requestPublic')}
+                  </button>
+                )
+              )}
+            </div>
           </div>
           {/* Desktop buttons */}
           <div className="hidden sm:flex flex-col items-end gap-2 shrink-0">

@@ -95,7 +95,14 @@
     "tokenExpired": "令牌已過期",
     "reconnect": "重新連接",
     "export": "匯出",
-    "exportFurigana": "（含注音）"
+    "exportFurigana": "（含注音）",
+    "requestPublic": "申請公開",
+    "requestPublicTitle": "公開這首歌詞？",
+    "requestPublicBody": "提交後管理員將審核。批准後其他使用者也能看到這首歌詞。",
+    "requestPublicSuccess": "已提交公開申請",
+    "requestPublicCancel": "取消申請",
+    "requestPublicCancelled": "已取消申請",
+    "requestPublicPending": "公開申請審核中"
   },
   "edit": {
     "title": "編輯歌曲",
@@ -162,6 +169,17 @@
     "noUsers": "尚無使用者",
     "noSongs": "尚無歌曲",
     "blockedFromLogin": "帳號已被封鎖",
-    "unblocked": "已解除封鎖"
+    "unblocked": "已解除封鎖",
+    "pending": "待審批",
+    "pendingApproval": "待審批",
+    "approve": "批准",
+    "reject": "拒絕",
+    "approved": "已批准",
+    "rejected": "已拒絕",
+    "noPending": "沒有待審批的申請",
+    "you": "我",
+    "cannotDemoteSelf": "不能取消自己的管理員身份",
+    "cannotBlockSelf": "不能封鎖自己",
+    "cannotDeleteSelf": "不能刪除自己"
   }
 }

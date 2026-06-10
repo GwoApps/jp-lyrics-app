@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDB, sql } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 
-// PUT /api/admin/songs/[id] — update song visibility (admin only)
+// PUT /api/admin/songs/[id] — update song visibility / approve public request (admin only)
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -15,7 +15,7 @@ export async function PUT(
   const db = getDB();
   const { id } = await params;
   const body = await request.json();
-  const { is_public } = body;
+  const { is_public, public_requested } = body;
 
   const existing = await db.get(sql`SELECT id FROM songs WHERE id = ${id}`);
   if (!existing) {
@@ -23,11 +23,12 @@ export async function PUT(
   }
 
   if (is_public !== undefined) {
-    await db.run(sql`UPDATE songs SET is_public = ${is_public}, updated_at = datetime('now', 'localtime') WHERE id = ${id}`);
+    // When admin approves/rejects, also clear the request flag
+    await db.run(sql`UPDATE songs SET is_public = ${is_public}, public_requested = 0, updated_at = datetime('now', 'localtime') WHERE id = ${id}`);
   }
 
   const updated = await db.get(
-    sql`SELECT id, title, artist, created_by, created_by_name, is_public, created_at, updated_at FROM songs WHERE id = ${id}`
+    sql`SELECT id, title, artist, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE id = ${id}`
   );
   return NextResponse.json(updated);
 }

@@ -10,7 +10,8 @@ export const songs = sqliteTable('songs', {
   lyricsSynced: text('lyrics_synced').notNull().default(''),
   createdBy: text('created_by').notNull().default(''),
   createdByName: text('created_by_name').notNull().default(''),
-  isPublic: integer('is_public').notNull().default(1),
+  isPublic: integer('is_public').notNull().default(0),
+  publicRequested: integer('public_requested').notNull().default(0),
   createdAt: text('created_at').notNull().default(sql`(datetime('now', 'localtime'))`),
   updatedAt: text('updated_at').notNull().default(sql`(datetime('now', 'localtime'))`),
 });

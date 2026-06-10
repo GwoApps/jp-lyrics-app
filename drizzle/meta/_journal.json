@@ -8,6 +8,13 @@
       "when": 1781094085744,
       "tag": "0000_shiny_sumo",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1781098952666,
+      "tag": "0001_add_public_requested",
+      "breakpoints": true
     }
   ]
 }

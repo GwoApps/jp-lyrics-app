@@ -95,7 +95,14 @@
     "tokenExpired": "トークン期限切れ",
     "reconnect": "再接続",
     "export": "エクスポート",
-    "exportFurigana": "（ふりがな付き）"
+    "exportFurigana": "（ふりがな付き）",
+    "requestPublic": "公開申請",
+    "requestPublicTitle": "この歌詞を公開しますか？",
+    "requestPublicBody": "申請後、管理者が審査します。承認されると他のユーザーにも表示されます。",
+    "requestPublicSuccess": "公開申請を送信しました",
+    "requestPublicCancel": "申請を取り消し",
+    "requestPublicCancelled": "申請を取り消しました",
+    "requestPublicPending": "公開申請中"
   },
   "edit": {
     "title": "曲を編集",
@@ -162,6 +169,17 @@
     "noUsers": "ユーザーがいません",
     "noSongs": "曲がありません",
     "blockedFromLogin": "アカウントがブロックされています",
-    "unblocked": "ブロック解除しました"
+    "unblocked": "ブロック解除しました",
+    "pending": "審査待ち",
+    "pendingApproval": "審査待ち",
+    "approve": "承認",
+    "reject": "却下",
+    "approved": "承認しました",
+    "rejected": "却下しました",
+    "noPending": "審査待ちの申請がありません",
+    "you": "自分",
+    "cannotDemoteSelf": "自分自身の管理者権限を解除できません",
+    "cannotBlockSelf": "自分自身をブロックできません",
+    "cannotDeleteSelf": "自分自身を削除できません"
   }
 }

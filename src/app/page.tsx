@@ -236,7 +236,7 @@ export default function HomePage() {
   };
 
   // Find matching song in DB for currently playing track (uses title + artist scoring)
-  const matchedSong = findBestMatch(songs, nowPlaying?.track);
+  const matchedSong = findBestMatch(songs, nowPlaying?.track, currentUser?.email);
 
   // Filter songs by search query (mySongsOnly is handled server-side via ?mine=1)
   const filteredSongs = songs.filter((s) => {
@@ -499,7 +499,7 @@ export default function HomePage() {
       ) : (
         <div className="space-y-1.5 sm:space-y-2">
           {filteredSongs.map((song) => {
-            const isPlaying = nowPlaying?.is_playing && isSongPlaying(song, nowPlaying.track);
+            const isPlaying = nowPlaying?.is_playing && isSongPlaying(song, nowPlaying.track, currentUser?.email);
             return (
               <div key={song.id} className={`group flex items-center gap-3 sm:gap-4 rounded-lg bg-[var(--card)] border px-4 sm:px-5 py-3 sm:py-4 transition-colors hover:bg-[var(--muted)] cursor-pointer ${isPlaying ? 'border-[var(--success)]/50 bg-[var(--success-muted)]' : 'border-[var(--border)]'}`} onClick={() => router.push(`/songs/${song.id}`)}>
                 <div className={`flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-md ${isPlaying ? 'bg-[var(--success-muted)]' : 'bg-[var(--muted)]'}`}>

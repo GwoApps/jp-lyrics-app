@@ -95,7 +95,14 @@
     "tokenExpired": "Token expired",
     "reconnect": "Reconnect",
     "export": "Export",
-    "exportFurigana": "(with furigana)"
+    "exportFurigana": "(with furigana)",
+    "requestPublic": "Request Public",
+    "requestPublicTitle": "Make this lyrics public?",
+    "requestPublicBody": "An admin will review your request. Once approved, it will be visible to other users.",
+    "requestPublicSuccess": "Public request submitted",
+    "requestPublicCancel": "Cancel request",
+    "requestPublicCancelled": "Request cancelled",
+    "requestPublicPending": "Public request pending"
   },
   "edit": {
     "title": "Edit Song",
@@ -162,6 +169,17 @@
     "noUsers": "No users",
     "noSongs": "No songs",
     "blockedFromLogin": "Your account has been blocked",
-    "unblocked": "User unblocked"
+    "unblocked": "User unblocked",
+    "pending": "Pending",
+    "pendingApproval": "Pending",
+    "approve": "Approve",
+    "reject": "Reject",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "noPending": "No pending requests",
+    "you": "You",
+    "cannotDemoteSelf": "Cannot remove your own admin status",
+    "cannotBlockSelf": "Cannot block yourself",
+    "cannotDeleteSelf": "Cannot delete yourself"
   }
 }

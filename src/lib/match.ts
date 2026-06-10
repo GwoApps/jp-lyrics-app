@@ -110,6 +110,8 @@ export interface SongCandidate {
   id: string;
   title: string;
   artist: string;
+  created_by?: string;
+  is_public?: number;
 }
 
 export interface PlayingTrack {
@@ -135,39 +137,70 @@ export function songMatchScore(
 
 /**
  * Find the best-matching DB song for a Spotify track.
+ *
+ * Priority:
+ *   1. User's own songs (any visibility)
+ *   2. Public songs from other users
+ *   3. Never match non-public songs from other users
+ *
  * Returns null if no song passes the threshold.
  */
 export function findBestMatch(
   songs: SongCandidate[],
   track: PlayingTrack | null | undefined,
+  currentUserEmail?: string,
 ): SongCandidate | null {
   if (!track) return null;
 
-  let best: SongCandidate | null = null;
-  let bestScore = 0;
+  let bestOwn: SongCandidate | null = null;
+  let bestOwnScore = 0;
+  let bestPublic: SongCandidate | null = null;
+  let bestPublicScore = 0;
 
   for (const song of songs) {
     const score = songMatchScore(song, track);
-    if (score > bestScore) {
-      bestScore = score;
-      best = song;
+    if (score < 0.5) continue;
+
+    const isOwn = currentUserEmail && song.created_by === currentUserEmail;
+    const isPublic = song.is_public === 1;
+
+    if (isOwn) {
+      if (score > bestOwnScore) {
+        bestOwnScore = score;
+        bestOwn = song;
+      }
+    } else if (isPublic) {
+      if (score > bestPublicScore) {
+        bestPublicScore = score;
+        bestPublic = song;
+      }
     }
+    // Non-public songs from other users are ignored
   }
 
-  // Require minimum composite score
-  return bestScore >= 0.5 ? best : null;
+  return bestOwn || bestPublic || null;
 }
 
 /**
  * Check if a specific song is the one currently playing on Spotify.
  * Used for highlighting in the song list.
+ *
+ * Only matches: own songs (any visibility) or public songs.
  */
 export function isSongPlaying(
   song: SongCandidate,
   track: PlayingTrack | null | undefined,
+  currentUserEmail?: string,
 ): boolean {
   if (!track) return false;
-  return songMatchScore(song, track) >= 0.5;
+  if (songMatchScore(song, track) < 0.5) return false;
+
+  // Own songs always match
+  if (currentUserEmail && song.created_by === currentUserEmail) return true;
+  // Public songs match
+  if (song.is_public === 1) return true;
+  // Non-public songs from others don't match
+  return false;
 }
 
 // ─── Lyrics line matching (looser) ────────────────────────────

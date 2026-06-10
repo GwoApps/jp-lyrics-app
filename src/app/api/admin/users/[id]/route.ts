@@ -17,6 +17,16 @@ export async function PUT(
   const body = await request.json();
   const { is_admin, is_blocked, blocked_reason } = body;
 
+  // Self-protection: admin can't ban or demote themselves
+  if (id === user.id) {
+    if (is_blocked === 1) {
+      return NextResponse.json({ error: 'Cannot block yourself' }, { status: 400 });
+    }
+    if (is_admin === 0) {
+      return NextResponse.json({ error: 'Cannot remove your own admin status' }, { status: 400 });
+    }
+  }
+
   const existing = await db.get(sql`SELECT id FROM users WHERE id = ${id}`);
   if (!existing) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -47,6 +57,11 @@ export async function DELETE(
 
   const db = getDB();
   const { id } = await params;
+
+  // Self-protection: admin can't delete themselves
+  if (id === user.id) {
+    return NextResponse.json({ error: 'Cannot delete yourself' }, { status: 400 });
+  }
 
   const existing = await db.get(sql`SELECT id FROM users WHERE id = ${id}`);
   if (!existing) {
