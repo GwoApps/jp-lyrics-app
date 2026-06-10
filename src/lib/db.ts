@@ -10,68 +10,73 @@
  *   - If process.env.DB is a D1Database object → use drizzle-orm/d1
  *   - If TURSO_URL is set → use drizzle-orm/libsql (HTTP)
  *   - Otherwise → use drizzle-orm/libsql with local file
+ *
+ * IMPORTANT: libsql imports use dynamic `import()` instead of `require()` so that
+ * esbuild resolves @libsql/client via the "workerd" condition in its exports map
+ * (→ lib-esm/web.js, pure HTTP/WS, no native bindings). Using require() would hit
+ * the "require" condition (→ lib-cjs/node.js) which pulls in native addons like
+ * @libsql/linux-x64-musl — incompatible with Cloudflare Workers.
  */
 import { type SQLiteTable, type SQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { sql, eq, and, or, like, inArray, desc, asc, isNull, isNotNull } from 'drizzle-orm';
 import * as schema from './schema';
 
-type DrizzleDB = ReturnType<typeof createLocalDB>;
+// Use `any` so getDB() stays synchronous — the actual Drizzle type is the same
+// regardless of driver, and we don't want to expose the async init type.
+type DrizzleDB = any;
 
-let _db: DrizzleDB | null = null;
-
-/** Create Drizzle instance backed by local SQLite file */
-function createLocalDB() {
-  // Ensure data directory exists (Node.js runtime only)
-  try {
-    const fs = require('fs') as typeof import('fs');
-    fs.mkdirSync('data', { recursive: true });
-  } catch { /* already exists, or fs unavailable */ }
-
-  const { drizzle } = require('drizzle-orm/libsql') as typeof import('drizzle-orm/libsql');
-  const { createClient } = require('@libsql/client') as typeof import('@libsql/client');
-  const client = createClient({ url: 'file:data/local.db' });
-  return drizzle(client, { schema });
-}
-
-/** Create Drizzle instance backed by Turso (HTTP) */
-function createTursoDB() {
-  const { drizzle } = require('drizzle-orm/libsql') as typeof import('drizzle-orm/libsql');
-  const { createClient } = require('@libsql/client') as typeof import('@libsql/client');
-  const client = createClient({
-    url: process.env.TURSO_URL!,
-    authToken: process.env.TURSO_AUTH_TOKEN,
-  });
-  return drizzle(client, { schema });
-}
-
-/** Create Drizzle instance backed by Cloudflare D1 binding */
-function createD1DB(d1Binding: unknown) {
-  const { drizzle } = require('drizzle-orm/d1') as typeof import('drizzle-orm/d1');
-  return drizzle(d1Binding as any, { schema });
-}
+let _db: DrizzleDB = null;
 
 /**
  * Get or create the database instance.
  *
  * For Cloudflare D1: call getDB(env.DB) from your Worker/handler to inject the binding.
  * For Turso/Local: call getDB() with no arguments — detected from env vars.
+ *
+ * The libsql/Turso/local path uses top-level await for initialisation so that
+ * getDB() itself remains synchronous on subsequent calls.
  */
-export function getDB(d1Binding?: unknown) {
+export function getDB(d1Binding?: unknown): DrizzleDB {
   // D1 mode: always create fresh (bindings are per-request on CF)
+  // Uses require() — drizzle-orm/d1 has no native deps and is safe to bundle.
   if (d1Binding) {
-    return createD1DB(d1Binding);
+    const { drizzle } = require('drizzle-orm/d1') as typeof import('drizzle-orm/d1');
+    return drizzle(d1Binding as any, { schema });
   }
 
-  // Singleton for Turso / local
-  if (_db) return _db;
+  // Singleton for Turso / local (initialised eagerly below via top-level await)
+  return _db;
+}
+
+// --- Eager initialisation for non-D1 backends (Node.js / Docker) ---
+// Uses top-level await + dynamic import() so esbuild resolves through
+// the "import.workerd" condition in @libsql/client's package.json exports,
+// avoiding native bindings in CF Workers builds.
+// On CF Workers, process.env.DB is always set (D1 binding), so this block
+// is effectively dead code in that environment — but esbuild still bundles
+// the import() target, which is why the workerd resolution matters.
+if (!process.env.DB) {
+  try {
+    // Ensure data directory exists (Node.js runtime only)
+    const fs = require('fs') as typeof import('fs');
+    fs.mkdirSync('data', { recursive: true });
+  } catch { /* already exists, or fs unavailable (edge) */ }
+
+  const [{ drizzle }, { createClient }] = await Promise.all([
+    import('drizzle-orm/libsql'),
+    import('@libsql/client'),
+  ]);
 
   if (process.env.TURSO_URL) {
-    _db = createTursoDB();
+    const client = createClient({
+      url: process.env.TURSO_URL,
+      authToken: process.env.TURSO_AUTH_TOKEN,
+    });
+    _db = drizzle(client, { schema });
   } else {
-    _db = createLocalDB();
+    const client = createClient({ url: 'file:data/local.db' });
+    _db = drizzle(client, { schema });
   }
-
-  return _db;
 }
 
 // --- Schema bootstrap (runs once for non-D1 backends) ---
