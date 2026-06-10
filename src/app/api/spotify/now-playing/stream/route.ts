@@ -6,7 +6,14 @@ import type { DiffMessage } from '@/lib/spotify-poller';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+const POLL_MODE = process.env.SPOTIFY_POLL_MODE || 'client';
+
 export async function GET(request: NextRequest) {
+  // In client mode, SSE stream is disabled — browser polls directly
+  if (POLL_MODE === 'client') {
+    return new Response('SSE disabled — client polls directly', { status: 501 });
+  }
+
   const user = getAuthUser(request);
   if (!user) {
     return new Response('Unauthorized', { status: 401 });

@@ -43,15 +43,22 @@ function applyDiff(base: NowPlayingData, diff: Partial<NowPlayingData>): NowPlay
 }
 
 /**
- * Real-time now-playing via SSE diff + checksum verification.
- * - Primary: EventSource → /api/spotify/now-playing/stream (diff protocol)
- * - Fallback: fetch polling every 3s if SSE fails
- * - Auto-reconnect on page visibility restore (mobile background → foreground)
+ * Polling interval for client mode (ms).
+ * In server mode, the server polls at 2s and pushes via SSE.
+ * In client mode, the browser polls at this interval.
+ */
+const CLIENT_POLL_INTERVAL_MS = 3000;
+
+/**
+ * Real-time now-playing with dual mode:
+ * - Server mode: SSE diff stream from server-side poller (self-hosted)
+ * - Client mode (default): Browser polls /api/spotify/now-playing directly (edge/serverless)
  */
 export function useNowPlaying() {
   const [data, setData] = useState<NowPlayingData | null>(null);
+  const [pollMode, setPollMode] = useState<string | null>(null); // null = loading config
   const esRef = useRef<EventSource | null>(null);
-  const fallbackRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gotMessageRef = useRef(false);
   const localDataRef = useRef<NowPlayingData>(EMPTY);
   const localSeqRef = useRef(0);
@@ -59,15 +66,51 @@ export function useNowPlaying() {
   const mountedRef = useRef(true);
   const lastMessageTimeRef = useRef(0);
 
-  const clearFallback = useCallback(() => {
-    if (fallbackRef.current) {
-      clearInterval(fallbackRef.current);
-      fallbackRef.current = null;
+  // ─── Fetch poll mode config on mount ───
+  useEffect(() => {
+    mountedRef.current = true;
+    fetch('/api/spotify/config')
+      .then(r => r.json())
+      .then(d => { if (mountedRef.current) setPollMode(d.pollMode || 'client'); })
+      .catch(() => { if (mountedRef.current) setPollMode('client'); }); // default to client
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // ─── Client mode: simple polling ───
+  const startClientPolling = useCallback(() => {
+    if (pollRef.current) return;
+
+    const poll = async () => {
+      if (!mountedRef.current) return;
+      try {
+        const res = await fetch('/api/spotify/now-playing');
+        const d = await res.json();
+        if (mountedRef.current) {
+          setData(d);
+          lastMessageTimeRef.current = Date.now();
+        }
+      } catch { /* */ }
+    };
+
+    poll();
+    pollRef.current = setInterval(poll, CLIENT_POLL_INTERVAL_MS);
+  }, []);
+
+  const stopClientPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
     }
   }, []);
 
+  // ─── Server mode: SSE with diff protocol ───
+  const clearFallback = useCallback(() => {
+    // In server mode, fallback = retry SSE; no client polling fallback
+  }, []);
+
   const startFallback = useCallback((reason: string) => {
-    if (fallbackRef.current) return;
+    // In server mode, fall back to REST polling if SSE fails
+    if (pollRef.current) return;
     console.warn(`[now-playing] SSE ${reason}, falling back to polling`);
 
     const poll = async () => {
@@ -82,7 +125,7 @@ export function useNowPlaying() {
     };
 
     poll();
-    fallbackRef.current = setInterval(poll, 3000);
+    pollRef.current = setInterval(poll, 3000);
   }, []);
 
   /** Request full refresh from SSE endpoint */
@@ -100,7 +143,6 @@ export function useNowPlaying() {
       try {
         const msg = JSON.parse(e.data) as DiffMessage;
         if ((msg as unknown as { _heartbeat?: boolean })._heartbeat) return;
-        // Full refresh: d contains the full data object
         const fullData = msg.d as unknown as NowPlayingData;
         if (fullData && typeof fullData.connected === 'boolean') {
           localDataRef.current = fullData;
@@ -108,10 +150,9 @@ export function useNowPlaying() {
           setData(fullData);
           gotMessageRef.current = true;
           lastMessageTimeRef.current = Date.now();
-          clearFallback();
-          // Reconnect to normal diff stream
+          stopClientPolling();
           es.close();
-          if (mountedRef.current) connect();
+          if (mountedRef.current) connectSSE();
         }
       } catch { /* */ }
     };
@@ -120,13 +161,13 @@ export function useNowPlaying() {
       es.close();
       if (!gotMessageRef.current) startFallback('full refresh failed');
     };
-  }, [startFallback, clearFallback]);
+  }, [startFallback, stopClientPolling]);
 
-  const connect = useCallback(() => {
+  const connectSSE = useCallback(() => {
     if (!mountedRef.current) return;
 
     esRef.current?.close();
-    clearFallback();
+    stopClientPolling();
     gotMessageRef.current = false;
 
     const es = new EventSource('/api/spotify/now-playing/stream');
@@ -145,11 +186,10 @@ export function useNowPlaying() {
 
         gotMessageRef.current = true;
         lastMessageTimeRef.current = Date.now();
-        clearFallback();
+        stopClientPolling();
 
         // First message after connect: d is the full data
         if (msg.d && typeof msg.d.connected === 'boolean' && msg.d.progress_ms !== undefined) {
-          // Looks like a full data object
           localDataRef.current = msg.d as unknown as NowPlayingData;
           localSeqRef.current = msg.seq;
           setData(localDataRef.current);
@@ -157,23 +197,20 @@ export function useNowPlaying() {
         }
 
         // Diff message: apply to local state
-        if (msg.seq <= localSeqRef.current) return; // stale
+        if (msg.seq <= localSeqRef.current) return;
 
         const candidate = applyDiff(localDataRef.current, msg.d);
         const expected = computeChecksum(candidate);
 
         if (expected !== msg.c) {
-          // Checksum mismatch — possible packet corruption
           checksumErrRef.current++;
           if (checksumErrRef.current >= 2) {
             requestFullRefresh();
             return;
           }
-          // Allow one retry (next message may fix it)
           return;
         }
 
-        // Checksum OK — apply
         localDataRef.current = candidate;
         localSeqRef.current = msg.seq;
         checksumErrRef.current = 0;
@@ -205,50 +242,65 @@ export function useNowPlaying() {
         }, 5000);
       }
     };
-  }, [startFallback, clearFallback, requestFullRefresh]);
+  }, [startFallback, stopClientPolling, requestFullRefresh]);
 
+  // ─── Start appropriate mode once config is loaded ───
   useEffect(() => {
-    mountedRef.current = true;
-    connect();
+    if (pollMode === null) return; // still loading config
+
+    if (pollMode === 'client') {
+      startClientPolling();
+    } else {
+      connectSSE();
+    }
+
     return () => {
       mountedRef.current = false;
       esRef.current?.close();
       esRef.current = null;
-      clearFallback();
+      stopClientPolling();
     };
-  }, [connect, clearFallback]);
+  }, [pollMode, connectSSE, startClientPolling, stopClientPolling]);
 
-  // Reconnect when page returns from background (mobile tab switch / app switch)
+  // ─── Reconnect on visibility restore (both modes) ───
   useEffect(() => {
-    const STALE_THRESHOLD_MS = 10_000; // 10s without data = stale
+    if (pollMode === null) return;
+    const STALE_THRESHOLD_MS = 10_000;
 
     const handleVisibility = () => {
       if (!mountedRef.current) return;
       if (document.visibilityState !== 'visible') return;
 
-      const es = esRef.current;
-      const hasFallback = fallbackRef.current !== null;
       const lastMsg = lastMessageTimeRef.current;
       const stale = !lastMsg || (Date.now() - lastMsg > STALE_THRESHOLD_MS);
 
-      // Check if SSE is dead or data is stale
-      const sseDead = !es || es.readyState === EventSource.CLOSED;
-      const sseOpenButStale = es?.readyState === EventSource.OPEN && stale;
+      if (!stale) return;
 
-      if (sseDead || sseOpenButStale || (hasFallback && stale)) {
-        console.warn(`[now-playing] visibility restore — reconnecting (sseDead=${sseDead}, stale=${stale})`);
-        clearFallback();
-        esRef.current?.close();
-        esRef.current = null;
-        localSeqRef.current = 0;
-        checksumErrRef.current = 0;
-        connect();
+      if (pollMode === 'client') {
+        // Client mode: just restart polling
+        stopClientPolling();
+        startClientPolling();
+      } else {
+        // Server mode: reconnect SSE
+        const es = esRef.current;
+        const hasFallback = pollRef.current !== null;
+        const sseDead = !es || es.readyState === EventSource.CLOSED;
+        const sseOpenButStale = es?.readyState === EventSource.OPEN && stale;
+
+        if (sseDead || sseOpenButStale || hasFallback) {
+          stopClientPolling();
+          esRef.current?.close();
+          esRef.current = null;
+          localSeqRef.current = 0;
+          checksumErrRef.current = 0;
+          connectSSE();
+        }
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [connect, clearFallback]);
+  }, [pollMode, connectSSE, startClientPolling, stopClientPolling]);
 
   return data;
 }
