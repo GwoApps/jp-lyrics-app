@@ -2,8 +2,8 @@ import { NextRequest } from 'next/server';
 import { getDB, schema, sql } from '@/lib/db';
 
 export interface AuthUser {
-  id: string;       // user identifier (spotify:id or email)
-  email: string;    // same as id for backward compat
+  id: string;       // user identifier (spotify:<id> or email)
+  email: string;    // same as id, kept for backward compat
   name: string;
   role: string;     // 'admin' or 'user'
   isAdmin: boolean;
@@ -30,11 +30,11 @@ async function getSigningKey(): Promise<CryptoKey> {
 }
 
 /**
- * Sign an email into a cookie value: `email.timestamp.base64url(hmac)`
+ * Sign a user id into a cookie value: `id.timestamp.base64url(hmac)`
  */
-export async function signSession(email: string): Promise<string> {
+export async function signSession(userId: string): Promise<string> {
   const ts = Math.floor(Date.now() / 1000);
-  const payload = `${email}.${ts}`;
+  const payload = `${userId}.${ts}`;
   const key = await getSigningKey();
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload));
   const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig)))
@@ -43,30 +43,30 @@ export async function signSession(email: string): Promise<string> {
 }
 
 /**
- * Verify a session cookie value and return the email if valid.
+ * Verify a session cookie value and return the user id if valid.
  * Returns null if tampered, expired, or malformed.
  */
 async function verifySession(token: string): Promise<string | null> {
   const parts = token.split('.');
   if (parts.length !== 3) return null;
 
-  const [email, tsStr, sigB64] = parts;
+  const [userId, tsStr, sigB64] = parts;
   const ts = parseInt(tsStr, 10);
-  if (!email || isNaN(ts)) return null;
+  if (!userId || isNaN(ts)) return null;
 
   // Check expiry
   const now = Math.floor(Date.now() / 1000);
   if (now - ts > SESSION_MAX_AGE) return null;
 
   // Verify signature
-  const payload = `${email}.${ts}`;
+  const payload = `${userId}.${ts}`;
   const key = await getSigningKey();
   // Restore standard base64
   const sigPadded = sigB64.replace(/-/g, '+').replace(/_/g, '/')
     + '==='.slice((sigB64.length + 3) % 4);
   const sigBytes = Uint8Array.from(atob(sigPadded), c => c.charCodeAt(0));
   const valid = await crypto.subtle.verify('HMAC', key, sigBytes, new TextEncoder().encode(payload));
-  return valid ? email : null;
+  return valid ? userId : null;
 }
 
 /**
@@ -87,40 +87,18 @@ async function getUserStatus(userId: string): Promise<{ isAdmin: boolean; isBloc
 }
 
 /**
- * Extract authenticated user from:
- *   1. kazusa-auth forward headers (X-User-Email etc.) — gateway mode
- *   2. Signed session cookie — standalone / Cloudflare Workers mode
- *
- * Header takes precedence (gateway deployments are the canonical auth source).
+ * Extract authenticated user from signed session cookie.
+ * Auth is exclusively via Spotify OAuth — the cookie is set during /api/auth/callback.
  */
 export async function getAuthUser(request: NextRequest): Promise<AuthUser | null> {
-  // 1. Gateway headers (kazusa-home-portal)
-  const headerEmail = request.headers.get('X-User-Email');
-  if (headerEmail) {
-    // Use email (not X-User-Id) as user key — X-User-Id is the gateway's
-    // database auto-increment, not the same identifier used in jplrc's users table
-    const { isAdmin, isBlocked } = await getUserStatus(headerEmail);
-    if (isBlocked) return null;
-    return {
-      id: headerEmail,
-      email: headerEmail,
-      name: decodeURIComponent(request.headers.get('X-User-Name') || ''),
-      role: isAdmin ? 'admin' : (request.headers.get('X-User-Role') || 'user'),
-      isAdmin,
-      isBlocked,
-    };
-  }
-
-  // 2. Session cookie (standalone / CF Workers)
   const cookie = request.cookies.get(COOKIE_NAME)?.value;
-  if (cookie) {
-    const email = await verifySession(cookie);
-    if (email) {
-      const { isAdmin, isBlocked } = await getUserStatus(email);
-      if (isBlocked) return null;
-      return { id: email, email, name: '', role: isAdmin ? 'admin' : 'user', isAdmin, isBlocked };
-    }
-  }
+  if (!cookie) return null;
 
-  return null;
+  const userId = await verifySession(cookie);
+  if (!userId) return null;
+
+  const { isAdmin, isBlocked } = await getUserStatus(userId);
+  if (isBlocked) return null;
+
+  return { id: userId, email: userId, name: '', role: isAdmin ? 'admin' : 'user', isAdmin, isBlocked };
 }

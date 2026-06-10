@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB, schema, sql } from '@/lib/db';
 import { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI, base64Encode } from '@/lib/spotify';
-import { getAuthUser, signSession } from '@/lib/auth';
+import { signSession } from '@/lib/auth';
 
 const APP_ORIGIN = new URL(SPOTIFY_REDIRECT_URI).origin;
 const COOKIE_NAME = 'jplrc_session';
@@ -43,11 +43,9 @@ export async function GET(request: NextRequest) {
   const profile = profileRes.ok ? await profileRes.json() : {};
 
   // Determine user identifier:
-  //   1. From gateway header (kazusa-home-portal)
-  //   2. From Spotify profile email (if user-read-email scope granted)
-  //   3. From Spotify profile ID (always available, e.g. "spotify:abc123")
-  const authUser = await getAuthUser(request);
-  const userId = authUser?.email || profile.email || `spotify:${profile.id}`;
+  //   1. From Spotify profile email (if user-read-email scope granted)
+  //   2. From Spotify profile ID (always available, e.g. "spotify:abc123")
+  const userId = profile.email || `spotify:${profile.id}`;
   if (!userId) {
     return NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=no_identity`);
   }
