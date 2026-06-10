@@ -42,4 +42,11 @@ next-env.d.ts
 data/
 node_modules/
 .next/
-.open-next/
+
+# OpenNext
+.open-next
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
