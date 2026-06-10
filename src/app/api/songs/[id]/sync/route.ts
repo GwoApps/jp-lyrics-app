@@ -136,7 +136,7 @@ export async function POST(
 ) {
   const db = getDB();
   const { id } = await params;
-  const user = getAuthUser(request);
+  const user = await getAuthUser(request);
 
   const song = await db.get(sql`SELECT * FROM songs WHERE id = ${id}`) as Record<string, unknown> | undefined;
   if (!song) {

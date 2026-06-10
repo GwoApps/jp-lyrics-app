@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get('q')?.trim() || '';
   const mine = request.nextUrl.searchParams.get('mine') === '1';
   const favoritesOnly = request.nextUrl.searchParams.get('favorites') === '1';
-  const user = getAuthUser(request);
+  const user = await getAuthUser(request);
 
   if (favoritesOnly) {
     if (!user) {
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
   const db = getDB();
   const body = await request.json();
   const { title, artist, lyrics_raw, lyrics_synced } = body;
-  const user = getAuthUser(request);
+  const user = await getAuthUser(request);
 
   if (!title) {
     return NextResponse.json({ error: '曲名は必須です' }, { status: 400 });

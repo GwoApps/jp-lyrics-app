@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
   // Server mode: dynamic import keeps poller out of client-mode bundles
   const { subscribe } = await import('@/lib/spotify-poller');
 
-  const user = getAuthUser(request);
+  const user = await getAuthUser(request);
   if (!user) {
     return new Response('Unauthorized', { status: 401 });
   }

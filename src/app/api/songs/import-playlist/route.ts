@@ -66,7 +66,7 @@ interface PlaylistResponse {
 // POST /api/songs/import-playlist — batch import from Spotify playlist
 export async function POST(request: NextRequest) {
   const db = getDB();
-  const user = getAuthUser(request);
+  const user = await getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 });
   }
