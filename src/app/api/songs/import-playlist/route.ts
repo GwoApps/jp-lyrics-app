@@ -108,6 +108,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'プレイリストが空です' }, { status: 400 });
   }
 
+  // Look up Spotify display name once
+  const nameRow = await db.prepare('SELECT display_name FROM spotify_auth WHERE user_email = ?').get(user.email) as { display_name: string } | undefined;
+  const createdByName = nameRow?.display_name || '';
+
   // Import each track
   const results = { total: tracks.length, imported: 0, skipped: 0, failed: 0 };
 
@@ -125,7 +129,7 @@ export async function POST(request: NextRequest) {
 
     const id = uuidv4();
     await db.prepare(
-      'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced, created_by, created_by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(
       id,
       track.title,
@@ -133,7 +137,8 @@ export async function POST(request: NextRequest) {
       lyrics?.plain || '',
       '[]',
       lyrics?.synced || '',
-      user.email
+      user.email,
+      createdByName
     );
 
     if (lyrics) {

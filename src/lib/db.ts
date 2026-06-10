@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS songs (
   lyrics_furigana TEXT NOT NULL DEFAULT '[]',
   lyrics_synced TEXT NOT NULL DEFAULT '',
   created_by TEXT NOT NULL DEFAULT '',
+  created_by_name TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
@@ -98,6 +99,27 @@ CREATE TABLE IF NOT EXISTS collection_songs (
   try {
     await client.execute('ALTER TABLE songs ADD COLUMN created_by TEXT NOT NULL DEFAULT \'\'');
   } catch { /* column already exists */ }
+})();
+
+// --- Migration: add created_by_name column if missing ---
+(async () => {
+  try {
+    await client.execute('ALTER TABLE songs ADD COLUMN created_by_name TEXT NOT NULL DEFAULT \'\'');
+  } catch { /* column already exists */ }
+})();
+
+// --- Migration: backfill created_by_name from spotify_auth for existing songs ---
+(async () => {
+  try {
+    await client.execute(`
+      UPDATE songs SET created_by_name = (
+        SELECT COALESCE(sa.display_name, '')
+        FROM spotify_auth sa
+        WHERE sa.user_email = songs.created_by
+      )
+      WHERE created_by_name = '' AND created_by != ''
+    `);
+  } catch { /* ignore */ }
 })();
 
 /**

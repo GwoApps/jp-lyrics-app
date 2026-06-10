@@ -79,9 +79,16 @@ export async function POST(request: NextRequest) {
 
   // Insert
   const id = uuidv4();
+  const createdBy = user?.email || '';
+  // Look up Spotify display name
+  let createdByName = '';
+  if (user) {
+    const row = await db.prepare('SELECT display_name FROM spotify_auth WHERE user_email = ?').get(user.email) as { display_name: string } | undefined;
+    createdByName = row?.display_name || '';
+  }
   await db.prepare(
-    'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(id, cleanTitle, cleanArtist, result.plain, '[]', result.synced || '', user?.email || '');
+    'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced, created_by, created_by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(id, cleanTitle, cleanArtist, result.plain, '[]', result.synced || '', createdBy, createdByName);
 
   return NextResponse.json({ id, alreadyExists: false, hasLyrics: true }, { status: 201 });
 }

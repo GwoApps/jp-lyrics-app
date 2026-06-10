@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
-import { anonymizeEmail } from '@/lib/anonymize';
 import type { Song } from '@/lib/types';
 
-/** Strip email from song response, replace with anonymized name */
+/** Strip internal email from song response */
 function sanitizeSong(song: Song) {
-  return {
-    ...song,
-    created_by: undefined,
-    created_by_name: anonymizeEmail(song.created_by),
-  };
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { created_by, ...rest } = song;
+  return rest;
 }
 
 // GET /api/songs/[id] - get single song
@@ -18,7 +15,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const song = await db.prepare('SELECT * FROM songs WHERE id = ?').get(id) as Song | undefined;
+  const song = await db.prepare('SELECT * FROM songs WHERE id = ?').get(id) as unknown as Song | undefined;
   if (!song) {
     return NextResponse.json({ error: '曲が見つかりません' }, { status: 404 });
   }
@@ -34,7 +31,7 @@ export async function PUT(
   const body = await request.json();
   const { title, artist, lyrics_raw, lyrics_synced } = body;
 
-  const existing = await db.prepare('SELECT * FROM songs WHERE id = ?').get(id) as Song | undefined;
+  const existing = await db.prepare('SELECT * FROM songs WHERE id = ?').get(id) as unknown as Song | undefined;
   if (!existing) {
     return NextResponse.json({ error: '曲が見つかりません' }, { status: 404 });
   }

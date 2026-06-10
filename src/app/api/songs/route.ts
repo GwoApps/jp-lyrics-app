@@ -3,8 +3,15 @@ import { v4 as uuidv4 } from 'uuid';
 import db from '@/lib/db';
 import { parseLrc } from '@/lib/lrc';
 import { getAuthUser } from '@/lib/auth';
-import { anonymizeEmail } from '@/lib/anonymize';
 import type { SongListItem } from '@/lib/types';
+
+/** Look up Spotify display name from spotify_auth table */
+async function getSpotifyDisplayName(email: string): Promise<string> {
+  const row = await db.prepare(
+    'SELECT display_name FROM spotify_auth WHERE user_email = ?'
+  ).get(email) as { display_name: string } | undefined;
+  return row?.display_name || '';
+}
 
 // GET /api/songs - list songs with optional search and filter
 export async function GET(request: NextRequest) {
@@ -13,7 +20,7 @@ export async function GET(request: NextRequest) {
   const favoritesOnly = request.nextUrl.searchParams.get('favorites') === '1';
   const user = getAuthUser(request);
 
-  let sql = 'SELECT s.id, s.title, s.artist, s.created_by, s.created_at, s.updated_at FROM songs s';
+  let sql = 'SELECT s.id, s.title, s.artist, s.created_by_name, s.created_at, s.updated_at FROM songs s';
   const conditions: string[] = [];
   const args: (string | number)[] = [];
 
@@ -40,17 +47,8 @@ export async function GET(request: NextRequest) {
   }
   sql += ' ORDER BY s.updated_at DESC';
 
-  const songs = await db.prepare(sql).all(...args) as unknown as (SongListItem & { created_by: string })[];
-  // Anonymize: replace email with short hash, add created_by_name
-  const result = songs.map((s) => ({
-    id: s.id,
-    title: s.title,
-    artist: s.artist,
-    created_by_name: anonymizeEmail(s.created_by),
-    created_at: s.created_at,
-    updated_at: s.updated_at,
-  }));
-  return NextResponse.json(result);
+  const songs = await db.prepare(sql).all(...args) as unknown as SongListItem[];
+  return NextResponse.json(songs);
 }
 
 // POST /api/songs - create a new song
@@ -73,14 +71,15 @@ export async function POST(request: NextRequest) {
     rawLyrics = parsed.map((l) => l.text).join('\n');
   }
 
+  const createdBy = user?.email || '';
+  const createdByName = user ? await getSpotifyDisplayName(user.email) : '';
+
   await db.prepare(
-    'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(id, title, artist || '', rawLyrics, '[]', syncedLyrics, user?.email || '');
+    'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced, created_by, created_by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(id, title, artist || '', rawLyrics, '[]', syncedLyrics, createdBy, createdByName);
 
   const song = await db.prepare('SELECT * FROM songs WHERE id = ?').get(id) as Record<string, unknown>;
-  return NextResponse.json({
-    ...song,
-    created_by: undefined,
-    created_by_name: anonymizeEmail(song.created_by as string),
-  }, { status: 201 });
+  // Strip internal email from response
+  const { created_by, ...rest } = song as { created_by?: string; [k: string]: unknown };
+  return NextResponse.json(rest, { status: 201 });
 }
