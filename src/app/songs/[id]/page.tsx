@@ -45,6 +45,7 @@ export default function SongViewPage() {
     currentUserEmail: '',
     pipWindow: null,
     lineRefs: { current: [] },
+    lyricsRef: { current: null },
   });
 
   // Current user for match priority
@@ -78,11 +79,17 @@ export default function SongViewPage() {
   useEffect(() => { syncRefs.current.currentUserEmail = currentUserEmail; }, [currentUserEmail]);
   useEffect(() => { syncRefs.current.pipWindow = sync.pipWindowRef.current; }, [sync.pipWindowRef]);
   useEffect(() => { syncRefs.current.lineRefs = data.lineRefs; }, [data.lineRefs]);
+  useEffect(() => { syncRefs.current.lyricsRef = data.lyricsRef; }, [data.lyricsRef]);
 
   // Re-center on active line when debug toggled off
   useEffect(() => {
     if (!data.debug && sync.activeLine >= 0 && data.lineRefs.current?.[sync.activeLine]) {
-      data.lineRefs.current[sync.activeLine]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const lineEl = data.lineRefs.current[sync.activeLine];
+      const container = data.lyricsRef.current;
+      if (lineEl && container) {
+        const lineTop = lineEl.offsetTop - container.offsetTop;
+        container.scrollTo({ top: lineTop - container.clientHeight / 2 + lineEl.offsetHeight / 2, behavior: 'smooth' });
+      }
     }
   }, [data.debug]);
 

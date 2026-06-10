@@ -39,6 +39,7 @@ export interface SyncRefs {
   currentUserEmail: string;
   pipWindow: Window | null;
   lineRefs: React.RefObject<(HTMLDivElement | null)[]>;
+  lyricsRef: React.RefObject<HTMLDivElement | null>;
 }
 
 export interface UseSpotifySyncReturn {
@@ -164,7 +165,12 @@ export function useSpotifySync(syncRefs: React.MutableRefObject<SyncRefs>, enabl
         highlightRef.current = newActive;
         setActiveLine(newActive);
         if (!refs.debug && refs.lineRefs.current?.[newActive]) {
-          refs.lineRefs.current[newActive]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const lineEl = refs.lineRefs.current[newActive];
+          const container = refs.lyricsRef.current;
+          if (lineEl && container) {
+            const lineTop = lineEl.offsetTop - container.offsetTop;
+            container.scrollTo({ top: lineTop - container.clientHeight / 2 + lineEl.offsetHeight / 2, behavior: 'smooth' });
+          }
         }
         // Update PiP window if open
         try {
