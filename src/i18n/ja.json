@@ -51,7 +51,11 @@
     "collections": "コレクション",
     "collectionsTitle": "コレクション管理",
     "newCollectionPlaceholder": "新しいコレクション名...",
-    "createCollection": "作成"
+    "createCollection": "作成",
+    "spotifyConnected": "Spotify連携しました",
+    "spotifyDenied": "Spotify連携がキャンセルされました",
+    "spotifyTokenFailed": "Spotify認証に失敗しました",
+    "spotifyNoIdentity": "Spotifyユーザー情報を取得できませんでした"
   },
   "song": {
     "notFound": "曲が見つかりません",

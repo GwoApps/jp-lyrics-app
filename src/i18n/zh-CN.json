@@ -51,7 +51,11 @@
     "collections": "收藏夹",
     "collectionsTitle": "管理收藏夹",
     "newCollectionPlaceholder": "新收藏夹名称...",
-    "createCollection": "创建"
+    "createCollection": "创建",
+    "spotifyConnected": "Spotify 已连接",
+    "spotifyDenied": "Spotify 连接已取消",
+    "spotifyTokenFailed": "Spotify 认证失败",
+    "spotifyNoIdentity": "无法获取 Spotify 用户信息"
   },
   "song": {
     "notFound": "找不到歌曲",
