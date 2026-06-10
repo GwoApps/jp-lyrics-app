@@ -160,6 +160,7 @@
     "unblock": "解除封鎖",
     "blockReason": "原因",
     "public": "公開",
+    "setPublic": "設為公開",
     "private": "非公開",
     "toggleVisibility": "切換公開狀態",
     "confirmDeleteUser": "確定刪除此使用者及其所有資料？",

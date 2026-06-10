@@ -160,6 +160,7 @@
     "unblock": "ブロック解除",
     "blockReason": "理由",
     "public": "公開",
+    "setPublic": "公開する",
     "private": "非公開",
     "toggleVisibility": "公開状態を切替",
     "confirmDeleteUser": "このユーザーとすべてのデータを削除しますか？",

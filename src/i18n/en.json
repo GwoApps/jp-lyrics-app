@@ -160,6 +160,7 @@
     "unblock": "Unblock",
     "blockReason": "Reason",
     "public": "Public",
+    "setPublic": "Set Public",
     "private": "Private",
     "toggleVisibility": "Toggle visibility",
     "confirmDeleteUser": "Delete this user and all their data?",
