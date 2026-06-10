@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import db from '@/lib/db';
+import { getDB, schema, sql } from '@/lib/db';
 import { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI, base64Encode } from '@/lib/spotify';
 import { getAuthUser } from '@/lib/auth';
 
 const APP_ORIGIN = new URL(SPOTIFY_REDIRECT_URI).origin;
 
 export async function GET(request: NextRequest) {
+  const db = getDB();
   const code = request.nextUrl.searchParams.get('code');
   const error = request.nextUrl.searchParams.get('error');
 
@@ -45,17 +46,17 @@ export async function GET(request: NextRequest) {
 
   const expiresAt = Math.floor(Date.now() / 1000) + tokenData.expires_in;
 
-  // Upsert: insert or replace for this user
-  await db.prepare(
-    `INSERT INTO spotify_auth (user_email, access_token, refresh_token, expires_at, display_name, updated_at)
-     VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))
-     ON CONFLICT(user_email) DO UPDATE SET
-       access_token = excluded.access_token,
-       refresh_token = excluded.refresh_token,
-       expires_at = excluded.expires_at,
-       display_name = excluded.display_name,
-       updated_at = excluded.updated_at`
-  ).run(user.email, tokenData.access_token, tokenData.refresh_token, expiresAt, profile.display_name || '');
+  // Upsert: insert or replace for this user using raw SQL (ON CONFLICT not supported by Drizzle insert)
+  await db.run(sql`
+    INSERT INTO spotify_auth (user_email, access_token, refresh_token, expires_at, display_name, updated_at)
+    VALUES (${user.email}, ${tokenData.access_token}, ${tokenData.refresh_token}, ${expiresAt}, ${profile.display_name || ''}, datetime('now', 'localtime'))
+    ON CONFLICT(user_email) DO UPDATE SET
+      access_token = excluded.access_token,
+      refresh_token = excluded.refresh_token,
+      expires_at = excluded.expires_at,
+      display_name = excluded.display_name,
+      updated_at = excluded.updated_at
+  `);
 
   return NextResponse.redirect(`${APP_ORIGIN}/?spotify=connected`);
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import db from '@/lib/db';
+import { getDB, schema, sql } from '@/lib/db';
 import { getSpotifyTokenForUser } from '@/lib/spotify';
 import { getAuthUser } from '@/lib/auth';
 
@@ -134,10 +134,11 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const db = getDB();
   const { id } = await params;
   const user = getAuthUser(request);
 
-  const song = await db.prepare('SELECT * FROM songs WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+  const song = await db.get(sql`SELECT * FROM songs WHERE id = ${id}`) as Record<string, unknown> | undefined;
   if (!song) {
     return NextResponse.json({ error: '曲が見つかりません' }, { status: 404 });
   }
@@ -174,8 +175,12 @@ export async function POST(
   }
 
   // Store lyrics — furigana will be computed client-side via kuromoji-es
-  await db.prepare(`UPDATE songs SET lyrics_raw = ?, lyrics_furigana = '[]', lyrics_synced = ?, updated_at = datetime('now','localtime') WHERE id = ?`)
-    .run(result.plain, result.synced, id);
+  await db.update(schema.songs).set({
+    lyricsRaw: result.plain,
+    lyricsFurigana: '[]',
+    lyricsSynced: result.synced,
+    updatedAt: sql`(datetime('now', 'localtime'))`,
+  }).where(sql`id = ${id}`);
 
   const parsed = parseLrc(result.synced);
   return NextResponse.json({ synced: true, source, lines: parsed.length, lrc: result.synced });

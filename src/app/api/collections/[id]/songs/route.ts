@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import db from '@/lib/db';
+import { getDB, schema, sql } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 
 // GET /api/collections/[id]/songs — list songs in a collection
@@ -7,6 +7,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const db = getDB();
   const user = getAuthUser(request);
   if (!user) {
     return NextResponse.json([]);
@@ -15,21 +16,21 @@ export async function GET(
   const { id } = await params;
 
   // Verify ownership
-  const collection = await db.prepare(
-    'SELECT id FROM collections WHERE id = ? AND user_email = ?'
-  ).get(id, user.email);
+  const collection = await db.get(
+    sql`SELECT id FROM collections WHERE id = ${id} AND user_email = ${user.email}`
+  );
 
   if (!collection) {
     return NextResponse.json([]);
   }
 
-  const songs = await db.prepare(`
+  const songs = await db.all(sql`
     SELECT s.id, s.title, s.artist, s.created_by_name, s.created_at, s.updated_at
     FROM songs s
     JOIN collection_songs cs ON s.id = cs.song_id
-    WHERE cs.collection_id = ?
+    WHERE cs.collection_id = ${id}
     ORDER BY cs.sort_order, s.title
-  `).all(id);
+  `);
 
   return NextResponse.json(songs);
 }
@@ -39,6 +40,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const db = getDB();
   const user = getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -52,26 +54,28 @@ export async function POST(
   }
 
   // Verify ownership
-  const collection = await db.prepare(
-    'SELECT id FROM collections WHERE id = ? AND user_email = ?'
-  ).get(id, user.email);
+  const collection = await db.get(
+    sql`SELECT id FROM collections WHERE id = ${id} AND user_email = ${user.email}`
+  );
 
   if (!collection) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
   // Get max sort order
-  const maxOrder = await db.prepare(
-    'SELECT MAX(sort_order) as max FROM collection_songs WHERE collection_id = ?'
-  ).get(id) as { max: number | null };
+  const maxOrder = await db.get(
+    sql`SELECT MAX(sort_order) as max FROM collection_songs WHERE collection_id = ${id}`
+  ) as { max: number | null };
 
   const sortOrder = (maxOrder.max ?? -1) + 1;
 
   // Add song (ignore if already exists)
   try {
-    await db.prepare(
-      'INSERT INTO collection_songs (collection_id, song_id, sort_order) VALUES (?, ?, ?)'
-    ).run(id, songId, sortOrder);
+    await db.insert(schema.collectionSongs).values({
+      collectionId: id,
+      songId,
+      sortOrder,
+    });
   } catch {
     // Already in collection
   }
@@ -84,6 +88,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const db = getDB();
   const user = getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -97,17 +102,16 @@ export async function DELETE(
   }
 
   // Verify ownership
-  const collection = await db.prepare(
-    'SELECT id FROM collections WHERE id = ? AND user_email = ?'
-  ).get(id, user.email);
+  const collection = await db.get(
+    sql`SELECT id FROM collections WHERE id = ${id} AND user_email = ${user.email}`
+  );
 
   if (!collection) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  await db.prepare(
-    'DELETE FROM collection_songs WHERE collection_id = ? AND song_id = ?'
-  ).run(id, songId);
+  await db.delete(schema.collectionSongs)
+    .where(sql`collection_id = ${id} AND song_id = ${songId}`);
 
   return NextResponse.json({ success: true });
 }

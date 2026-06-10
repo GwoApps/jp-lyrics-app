@@ -1,58 +1,69 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
-import db from '@/lib/db';
+import { getDB, schema, sql } from '@/lib/db';
 import { parseLrc } from '@/lib/lrc';
 import { getAuthUser } from '@/lib/auth';
 import type { SongListItem } from '@/lib/types';
 
 /** Look up Spotify display name from spotify_auth table */
 async function getSpotifyDisplayName(email: string): Promise<string> {
-  const row = await db.prepare(
-    'SELECT display_name FROM spotify_auth WHERE user_email = ?'
-  ).get(email) as { display_name: string } | undefined;
-  return row?.display_name || '';
+  const db = getDB();
+  const row = await db.select({ displayName: schema.spotifyAuth.displayName })
+    .from(schema.spotifyAuth)
+    .where(sql`user_email = ${email}`)
+    .get();
+  return row?.displayName || '';
 }
 
 // GET /api/songs - list songs with optional search and filter
 export async function GET(request: NextRequest) {
+  const db = getDB();
   const q = request.nextUrl.searchParams.get('q')?.trim() || '';
   const mine = request.nextUrl.searchParams.get('mine') === '1';
   const favoritesOnly = request.nextUrl.searchParams.get('favorites') === '1';
   const user = getAuthUser(request);
 
-  let sql = 'SELECT s.id, s.title, s.artist, s.created_by_name, s.created_at, s.updated_at FROM songs s';
-  const conditions: string[] = [];
-  const args: (string | number)[] = [];
-
   if (favoritesOnly) {
     if (!user) {
       return NextResponse.json([]);
     }
-    sql += ' INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ?';
-    args.push(user.email);
+    // Use raw SQL for the JOIN query to preserve snake_case column names in response
+    const pattern = q ? `%${q}%` : null;
+    let rawSql;
+    if (q && mine) {
+      rawSql = sql`SELECT s.id, s.title, s.artist, s.created_by_name, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${user.email} WHERE (s.title LIKE ${pattern} OR s.artist LIKE ${pattern}) AND s.created_by = ${user.email} ORDER BY s.updated_at DESC`;
+    } else if (q) {
+      rawSql = sql`SELECT s.id, s.title, s.artist, s.created_by_name, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${user.email} WHERE (s.title LIKE ${pattern} OR s.artist LIKE ${pattern}) ORDER BY s.updated_at DESC`;
+    } else if (mine) {
+      rawSql = sql`SELECT s.id, s.title, s.artist, s.created_by_name, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${user.email} WHERE s.created_by = ${user.email} ORDER BY s.updated_at DESC`;
+    } else {
+      rawSql = sql`SELECT s.id, s.title, s.artist, s.created_by_name, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${user.email} ORDER BY s.updated_at DESC`;
+    }
+    const songs = await db.all(rawSql) as unknown as SongListItem[];
+    return NextResponse.json(songs);
   }
 
-  if (q) {
-    conditions.push('(s.title LIKE ? OR s.artist LIKE ?)');
+  // Non-favorites query: use raw SQL to preserve snake_case column names
+  if (q && mine && user) {
     const pattern = `%${q}%`;
-    args.push(pattern, pattern);
+    const songs = await db.all(sql`SELECT id, title, artist, created_by_name, created_at, updated_at FROM songs WHERE (title LIKE ${pattern} OR artist LIKE ${pattern}) AND created_by = ${user.email} ORDER BY updated_at DESC`) as unknown as SongListItem[];
+    return NextResponse.json(songs);
+  } else if (q) {
+    const pattern = `%${q}%`;
+    const songs = await db.all(sql`SELECT id, title, artist, created_by_name, created_at, updated_at FROM songs WHERE (title LIKE ${pattern} OR artist LIKE ${pattern}) ORDER BY updated_at DESC`) as unknown as SongListItem[];
+    return NextResponse.json(songs);
+  } else if (mine && user) {
+    const songs = await db.all(sql`SELECT id, title, artist, created_by_name, created_at, updated_at FROM songs WHERE created_by = ${user.email} ORDER BY updated_at DESC`) as unknown as SongListItem[];
+    return NextResponse.json(songs);
+  } else {
+    const songs = await db.all(sql`SELECT id, title, artist, created_by_name, created_at, updated_at FROM songs ORDER BY updated_at DESC`) as unknown as SongListItem[];
+    return NextResponse.json(songs);
   }
-  if (mine && user) {
-    conditions.push('s.created_by = ?');
-    args.push(user.email);
-  }
-
-  if (conditions.length > 0) {
-    sql += ' WHERE ' + conditions.join(' AND ');
-  }
-  sql += ' ORDER BY s.updated_at DESC';
-
-  const songs = await db.prepare(sql).all(...args) as unknown as SongListItem[];
-  return NextResponse.json(songs);
 }
 
 // POST /api/songs - create a new song
 export async function POST(request: NextRequest) {
+  const db = getDB();
   const body = await request.json();
   const { title, artist, lyrics_raw, lyrics_synced } = body;
   const user = getAuthUser(request);
@@ -74,11 +85,19 @@ export async function POST(request: NextRequest) {
   const createdBy = user?.email || '';
   const createdByName = user ? await getSpotifyDisplayName(user.email) : '';
 
-  await db.prepare(
-    'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced, created_by, created_by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(id, title, artist || '', rawLyrics, '[]', syncedLyrics, createdBy, createdByName);
+  await db.insert(schema.songs).values({
+    id,
+    title,
+    artist: artist || '',
+    lyricsRaw: rawLyrics,
+    lyricsFurigana: '[]',
+    lyricsSynced: syncedLyrics,
+    createdBy,
+    createdByName,
+  });
 
-  const song = await db.prepare('SELECT * FROM songs WHERE id = ?').get(id) as Record<string, unknown>;
+  // Re-fetch to get all fields with defaults populated; use raw SQL for snake_case response
+  const song = await db.get(sql`SELECT * FROM songs WHERE id = ${id}`) as Record<string, unknown>;
   // Strip internal email from response
   const { created_by, ...rest } = song as { created_by?: string; [k: string]: unknown };
   return NextResponse.json(rest, { status: 201 });

@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import db from '@/lib/db';
+import { getDB, sql } from '@/lib/db';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const db = getDB();
   const { id } = await params;
   const format = request.nextUrl.searchParams.get('format') || 'text';
 
-  const song = await db.prepare('SELECT title, artist, lyrics_raw, lyrics_synced, lyrics_furigana FROM songs WHERE id = ?').get(id) as {
+  const song = await db.get(sql`SELECT title, artist, lyrics_raw, lyrics_synced, lyrics_furigana FROM songs WHERE id = ${id}`) as {
     title: string;
     artist: string;
     lyrics_raw: string;

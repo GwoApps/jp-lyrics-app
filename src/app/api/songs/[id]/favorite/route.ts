@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import db from '@/lib/db';
+import { getDB, schema, sql, eq, and } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 
 // POST /api/songs/[id]/favorite — toggle favorite
@@ -7,6 +7,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const db = getDB();
   const user = getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -15,17 +16,19 @@ export async function POST(
   const { id } = await params;
 
   // Check if already favorited
-  const existing = await db.prepare(
-    'SELECT 1 FROM favorites WHERE user_email = ? AND song_id = ?'
-  ).get(user.email, id);
+  const existing = await db.select({ songId: schema.favorites.songId })
+    .from(schema.favorites)
+    .where(and(eq(schema.favorites.userEmail, user.email), eq(schema.favorites.songId, id)))
+    .get();
 
   if (existing) {
     // Remove favorite
-    await db.prepare('DELETE FROM favorites WHERE user_email = ? AND song_id = ?').run(user.email, id);
+    await db.delete(schema.favorites)
+      .where(and(eq(schema.favorites.userEmail, user.email), eq(schema.favorites.songId, id)));
     return NextResponse.json({ favorited: false });
   } else {
     // Add favorite
-    await db.prepare('INSERT INTO favorites (user_email, song_id) VALUES (?, ?)').run(user.email, id);
+    await db.insert(schema.favorites).values({ userEmail: user.email, songId: id });
     return NextResponse.json({ favorited: true });
   }
 }
@@ -35,15 +38,17 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const db = getDB();
   const user = getAuthUser(request);
   if (!user) {
     return NextResponse.json({ favorited: false });
   }
 
   const { id } = await params;
-  const existing = await db.prepare(
-    'SELECT 1 FROM favorites WHERE user_email = ? AND song_id = ?'
-  ).get(user.email, id);
+  const existing = await db.select({ songId: schema.favorites.songId })
+    .from(schema.favorites)
+    .where(and(eq(schema.favorites.userEmail, user.email), eq(schema.favorites.songId, id)))
+    .get();
 
   return NextResponse.json({ favorited: !!existing });
 }

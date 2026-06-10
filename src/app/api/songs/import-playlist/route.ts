@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
-import db from '@/lib/db';
+import { getDB, schema, sql } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { getSpotifyTokenForUser } from '@/lib/spotify';
 
@@ -65,6 +65,7 @@ interface PlaylistResponse {
 
 // POST /api/songs/import-playlist — batch import from Spotify playlist
 export async function POST(request: NextRequest) {
+  const db = getDB();
   const user = getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 });
@@ -109,16 +110,20 @@ export async function POST(request: NextRequest) {
   }
 
   // Look up Spotify display name once
-  const nameRow = await db.prepare('SELECT display_name FROM spotify_auth WHERE user_email = ?').get(user.email) as { display_name: string } | undefined;
-  const createdByName = nameRow?.display_name || '';
+  const nameRow = await db.select({ displayName: schema.spotifyAuth.displayName })
+    .from(schema.spotifyAuth)
+    .where(sql`user_email = ${user.email}`)
+    .get();
+  const createdByName = nameRow?.displayName || '';
 
   // Import each track
   const results = { total: tracks.length, imported: 0, skipped: 0, failed: 0 };
 
   for (const track of tracks) {
-    const existing = await db.prepare(
-      'SELECT id FROM songs WHERE title = ? AND artist = ?'
-    ).get(track.title, track.artist) as { id: string } | undefined;
+    const existing = await db.select({ id: schema.songs.id })
+      .from(schema.songs)
+      .where(sql`title = ${track.title} AND artist = ${track.artist}`)
+      .get();
 
     if (existing) {
       results.skipped++;
@@ -128,18 +133,16 @@ export async function POST(request: NextRequest) {
     const lyrics = await fetchLyrics(track.title, track.artist);
 
     const id = uuidv4();
-    await db.prepare(
-      'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced, created_by, created_by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(
+    await db.insert(schema.songs).values({
       id,
-      track.title,
-      track.artist,
-      lyrics?.plain || '',
-      '[]',
-      lyrics?.synced || '',
-      user.email,
-      createdByName
-    );
+      title: track.title,
+      artist: track.artist,
+      lyricsRaw: lyrics?.plain || '',
+      lyricsFurigana: '[]',
+      lyricsSynced: lyrics?.synced || '',
+      createdBy: user.email,
+      createdByName,
+    });
 
     if (lyrics) {
       results.imported++;

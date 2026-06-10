@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
-import db from '@/lib/db';
+import { getDB, schema, sql } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 
 const LRCLIB_HEADERS = { 'User-Agent': 'jp-lyrics-app/1.0' };
@@ -51,6 +51,7 @@ async function fetchLyrics(title: string, artist: string): Promise<{ synced: str
 
 // POST /api/songs/import — one-click import from lrclib
 export async function POST(request: NextRequest) {
+  const db = getDB();
   const { title, artist } = await request.json();
   const user = getAuthUser(request);
 
@@ -62,9 +63,10 @@ export async function POST(request: NextRequest) {
   const cleanArtist = (artist || '').trim();
 
   // Check if already exists (exact match)
-  const existing = await db.prepare(
-    'SELECT id FROM songs WHERE title = ? AND artist = ?'
-  ).get(cleanTitle, cleanArtist) as { id: string } | undefined;
+  const existing = await db.select({ id: schema.songs.id })
+    .from(schema.songs)
+    .where(sql`title = ${cleanTitle} AND artist = ${cleanArtist}`)
+    .get();
 
   if (existing) {
     return NextResponse.json({ id: existing.id, alreadyExists: true });
@@ -83,12 +85,22 @@ export async function POST(request: NextRequest) {
   // Look up Spotify display name
   let createdByName = '';
   if (user) {
-    const row = await db.prepare('SELECT display_name FROM spotify_auth WHERE user_email = ?').get(user.email) as { display_name: string } | undefined;
-    createdByName = row?.display_name || '';
+    const row = await db.select({ displayName: schema.spotifyAuth.displayName })
+      .from(schema.spotifyAuth)
+      .where(sql`user_email = ${user.email}`)
+      .get();
+    createdByName = row?.displayName || '';
   }
-  await db.prepare(
-    'INSERT INTO songs (id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced, created_by, created_by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(id, cleanTitle, cleanArtist, result.plain, '[]', result.synced || '', createdBy, createdByName);
+  await db.insert(schema.songs).values({
+    id,
+    title: cleanTitle,
+    artist: cleanArtist,
+    lyricsRaw: result.plain,
+    lyricsFurigana: '[]',
+    lyricsSynced: result.synced || '',
+    createdBy,
+    createdByName,
+  });
 
   return NextResponse.json({ id, alreadyExists: false, hasLyrics: true }, { status: 201 });
 }

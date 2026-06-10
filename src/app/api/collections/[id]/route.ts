@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import db from '@/lib/db';
+import { getDB, schema, sql } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 
 // DELETE /api/collections/[id] — delete a collection
@@ -7,6 +7,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const db = getDB();
   const user = getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -15,16 +16,16 @@ export async function DELETE(
   const { id } = await params;
 
   // Verify ownership
-  const collection = await db.prepare(
-    'SELECT id FROM collections WHERE id = ? AND user_email = ?'
-  ).get(id, user.email);
+  const collection = await db.get(
+    sql`SELECT id FROM collections WHERE id = ${id} AND user_email = ${user.email}`
+  );
 
   if (!collection) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
   // Delete collection (cascade will handle collection_songs)
-  await db.prepare('DELETE FROM collections WHERE id = ?').run(id);
+  await db.delete(schema.collections).where(sql`id = ${id}`);
 
   return NextResponse.json({ success: true });
 }
@@ -34,6 +35,7 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const db = getDB();
   const user = getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -47,15 +49,15 @@ export async function PUT(
   }
 
   // Verify ownership
-  const collection = await db.prepare(
-    'SELECT id FROM collections WHERE id = ? AND user_email = ?'
-  ).get(id, user.email);
+  const collection = await db.get(
+    sql`SELECT id FROM collections WHERE id = ${id} AND user_email = ${user.email}`
+  );
 
   if (!collection) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  await db.prepare('UPDATE collections SET name = ? WHERE id = ?').run(name.trim(), id);
+  await db.update(schema.collections).set({ name: name.trim() }).where(sql`id = ${id}`);
 
   return NextResponse.json({ id, name: name.trim() });
 }
