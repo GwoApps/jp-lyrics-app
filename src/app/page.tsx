@@ -72,8 +72,12 @@ export default function HomePage() {
       window.history.replaceState({}, '', url.pathname + url.search);
 
       if (error) {
-        const key = `home.spotify${error.charAt(0).toUpperCase() + error.slice(1)}`;
-        showToast('error', t(key));
+        const keyMap: Record<string, string> = {
+          denied: 'home.spotifyDenied',
+          token_failed: 'home.spotifyTokenFailed',
+          no_identity: 'home.spotifyNoIdentity',
+        };
+        showToast('error', t(keyMap[error] || 'home.spotifyTokenFailed'));
       } else if (success === 'connected') {
         showToast('success', t('home.spotifyConnected'));
       }
