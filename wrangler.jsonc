@@ -44,5 +44,12 @@
 	],
 	"vars": {
 		"SPOTIFY_POLL_MODE": "client"
-	}
+	},
+	"observability": {
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    },
+    "traces": {}
+  }
 }
