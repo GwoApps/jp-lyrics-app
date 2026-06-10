@@ -53,7 +53,7 @@ async function fetchLyrics(title: string, artist: string): Promise<{ synced: str
 export async function POST(request: NextRequest) {
   const db = getDB();
   const { title, artist } = await request.json();
-  const user = getAuthUser(request);
+  const user = await getAuthUser(request);
 
   if (!title?.trim()) {
     return NextResponse.json({ error: '曲名を入力してください' }, { status: 400 });

@@ -6,7 +6,7 @@ import { getAuthUser } from '@/lib/auth';
 // GET /api/collections — list user's collections
 export async function GET(request: NextRequest) {
   const db = getDB();
-  const user = getAuthUser(request);
+  const user = await getAuthUser(request);
   if (!user) {
     return NextResponse.json([]);
   }
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 // POST /api/collections — create a new collection
 export async function POST(request: NextRequest) {
   const db = getDB();
-  const user = getAuthUser(request);
+  const user = await getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

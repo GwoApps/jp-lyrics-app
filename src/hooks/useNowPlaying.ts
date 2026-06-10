@@ -53,8 +53,10 @@ const CLIENT_POLL_INTERVAL_MS = 3000;
  * Real-time now-playing with dual mode:
  * - Server mode: SSE diff stream from server-side poller (self-hosted)
  * - Client mode (default): Browser polls /api/spotify/now-playing directly (edge/serverless)
+ *
+ * @param enabled When false, skip all polling/SSE and return null immediately.
  */
-export function useNowPlaying() {
+export function useNowPlaying(enabled = true) {
   const [data, setData] = useState<NowPlayingData | null>(null);
   const [pollMode, setPollMode] = useState<string | null>(null); // null = loading config
   const esRef = useRef<EventSource | null>(null);
@@ -66,15 +68,31 @@ export function useNowPlaying() {
   const mountedRef = useRef(true);
   const lastMessageTimeRef = useRef(0);
 
-  // ─── Fetch poll mode config on mount ───
+  const stopClientPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  // ─── Fetch poll mode config on mount (only when enabled) ───
   useEffect(() => {
+    if (!enabled) {
+      // Clean up any existing connections when disabled
+      esRef.current?.close();
+      esRef.current = null;
+      stopClientPolling();
+      setData(null);
+      setPollMode(null);
+      return;
+    }
     mountedRef.current = true;
     fetch('/api/spotify/config')
       .then(r => r.json())
       .then(d => { if (mountedRef.current) setPollMode(d.pollMode || 'client'); })
       .catch(() => { if (mountedRef.current) setPollMode('client'); }); // default to client
     return () => { mountedRef.current = false; };
-  }, []);
+  }, [enabled, stopClientPolling]);
 
   // ─── Client mode: simple polling ───
   const startClientPolling = useCallback(() => {
@@ -94,13 +112,6 @@ export function useNowPlaying() {
 
     poll();
     pollRef.current = setInterval(poll, CLIENT_POLL_INTERVAL_MS);
-  }, []);
-
-  const stopClientPolling = useCallback(() => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
   }, []);
 
   // ─── Server mode: SSE with diff protocol ───

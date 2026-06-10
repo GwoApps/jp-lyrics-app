@@ -32,7 +32,7 @@ export default function HomePage() {
   const [songs, setSongs] = useState<SongItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [spotify, setSpotify] = useState<SpotifyStatus | null>(null);
-  const nowPlaying = useNowPlaying();
+  const nowPlaying = useNowPlaying(!!spotify?.connected);
   const [importing, setImporting] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);

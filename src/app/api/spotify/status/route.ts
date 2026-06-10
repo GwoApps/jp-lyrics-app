@@ -4,7 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   const db = getDB();
-  const user = getAuthUser(request);
+  const user = await getAuthUser(request);
   if (!user) {
     return NextResponse.json({ connected: false });
   }
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   const db = getDB();
-  const user = getAuthUser(request);
+  const user = await getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }

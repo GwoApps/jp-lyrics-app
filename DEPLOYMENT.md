@@ -166,6 +166,7 @@ Set secrets:
 ```bash
 wrangler secret put SPOTIFY_CLIENT_ID
 wrangler secret put SPOTIFY_CLIENT_SECRET
+wrangler secret put SESSION_SECRET   # optional, falls back to SPOTIFY_CLIENT_SECRET
 ```
 
 ### Step 4: Build & Deploy
@@ -227,6 +228,7 @@ In the Vercel dashboard, go to **Settings → Environment Variables** and add:
 | `SPOTIFY_CLIENT_SECRET` | Your Spotify client secret |
 | `SPOTIFY_REDIRECT_URI` | `https://your-app.vercel.app/api/auth/callback` |
 | `SPOTIFY_POLL_MODE` | `client` |
+| `SESSION_SECRET` | Cookie signing key (optional, defaults to `SPOTIFY_CLIENT_SECRET`) |
 
 ### Step 3: Deploy
 
