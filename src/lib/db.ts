@@ -2,12 +2,12 @@
  * Database client — Drizzle ORM with multi-driver support.
  *
  * Supported backends:
- *   1. Cloudflare D1 — via Workers binding (process.env.DB)
+ *   1. Cloudflare D1 — via Workers binding (auto-detected from CF context)
  *   2. Turso          — via TURSO_URL + TURSO_AUTH_TOKEN
  *   3. Local SQLite   — via file:data/local.db (Docker / self-hosted)
  *
  * Detection order:
- *   - If process.env.DB is a D1Database object → use drizzle-orm/d1
+ *   - If Cloudflare D1 binding `DB` exists in the CF runtime context → use drizzle-orm/d1
  *   - If TURSO_URL is set → use drizzle-orm/libsql (HTTP)
  *   - Otherwise → use drizzle-orm/libsql with local file
  *
@@ -26,22 +26,42 @@ import * as schema from './schema';
 type DrizzleDB = any;
 
 let _db: DrizzleDB = null;
+let _isD1 = false;
+
+/**
+ * Try to get the D1 binding from the Cloudflare runtime context.
+ * OpenNext stores `{ env, ctx, cf }` on globalThis via Symbol("__cloudflare-context__").
+ */
+function getD1Binding(): unknown | undefined {
+  try {
+    const ctx = (globalThis as any)[Symbol.for('__cloudflare-context__')];
+    const binding = ctx?.['env']?.['DB'];
+    // D1 bindings are objects with a `prepare` method, not strings
+    if (binding && typeof binding === 'object' && typeof (binding as any).prepare === 'function') {
+      return binding;
+    }
+  } catch { /* not on CF Workers */ }
+  return undefined;
+}
 
 /**
  * Get or create the database instance.
  *
- * For Cloudflare D1: call getDB(env.DB) from your Worker/handler to inject the binding.
- * For Turso/Local: call getDB() with no arguments — detected from env vars.
+ * Auto-detects the backend:
+ *   1. Cloudflare D1 — checks `globalThis[Symbol.for("__cloudflare-context__")].env.DB`
+ *   2. Turso — checks `TURSO_URL` env var
+ *   3. Local SQLite — fallback to `file:data/local.db`
  *
  * The libsql/Turso/local path uses top-level await for initialisation so that
  * getDB() itself remains synchronous on subsequent calls.
  */
-export function getDB(d1Binding?: unknown): DrizzleDB {
-  // D1 mode: always create fresh (bindings are per-request on CF)
+export function getDB(): DrizzleDB {
+  // D1 mode: create fresh per call (bindings are per-request on CF)
   // Uses require() — drizzle-orm/d1 has no native deps and is safe to bundle.
-  if (d1Binding) {
+  if (_isD1) {
+    const binding = getD1Binding()!;
     const { drizzle } = require('drizzle-orm/d1') as typeof import('drizzle-orm/d1');
-    return drizzle(d1Binding as any, { schema });
+    return drizzle(binding as any, { schema });
   }
 
   // Singleton for Turso / local (initialised eagerly below via top-level await)
@@ -52,10 +72,13 @@ export function getDB(d1Binding?: unknown): DrizzleDB {
 // Uses top-level await + dynamic import() so esbuild resolves through
 // the "import.workerd" condition in @libsql/client's package.json exports,
 // avoiding native bindings in CF Workers builds.
-// On CF Workers, process.env.DB is always set (D1 binding), so this block
-// is effectively dead code in that environment — but esbuild still bundles
-// the import() target, which is why the workerd resolution matters.
-if (!process.env.DB) {
+// On CF Workers with D1, getD1Binding() returns a binding → set _isD1 flag.
+// The libsql import() is still bundled (esbuild can't tree-shake it), but
+// with the workerd condition it resolves to the pure-JS web.js entry point.
+const _d1 = getD1Binding();
+if (_d1) {
+  _isD1 = true;
+} else {
   try {
     // Ensure data directory exists (Node.js runtime only)
     const fs = require('fs') as typeof import('fs');
@@ -123,7 +146,7 @@ CREATE TABLE IF NOT EXISTS collection_songs (
 `;
 
 async function bootstrapSchema() {
-  if (process.env.DB) return; // D1 manages its own schema
+  if (_isD1) return; // D1 manages its own schema
   try {
     const db = getDB();
     for (const stmt of SCHEMA_SQL.split(';').map(s => s.trim()).filter(Boolean)) {
