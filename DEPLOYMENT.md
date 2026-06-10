@@ -134,25 +134,31 @@ wrangler d1 execute jplrc-db --file=./dump.sql
 
 ### Step 3: Configure Wrangler
 
-Create `wrangler.toml`:
+Create `wrangler.jsonc` (not `.toml` — OpenNext uses JSONC format):
 
-```toml
-name = "jplrc"
-main = ".open-next/worker.js"
-compatibility_date = "2025-01-01"
-compatibility_flags = ["nodejs_compat"]
-
-[[d1_databases]]
-binding = "DB"
-database_name = "jplrc-db"
-database_id = "<your-database-id>"
-
-[vars]
-SPOTIFY_POLL_MODE = "client"
-SPOTIFY_REDIRECT_URI = "https://jplrc.your-domain.com/api/auth/callback"
-
-[observability]
-enabled = true
+```jsonc
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "main": ".open-next/worker.js",
+  "name": "jplrc",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "jplrc-db",
+      "database_id": "<your-database-id>"
+    }
+  ],
+  "vars": {
+    "SPOTIFY_POLL_MODE": "client",
+    "SPOTIFY_REDIRECT_URI": "https://jplrc.your-domain.com/api/auth/callback"
+  }
+}
 ```
 
 Set secrets:
@@ -165,11 +171,14 @@ wrangler secret put SPOTIFY_CLIENT_SECRET
 ### Step 4: Build & Deploy
 
 ```bash
-# Install OpenNext Cloudflare adapter
+# Install OpenNext Cloudflare adapter (one-time)
 npm install -D @opennextjs/cloudflare
 
-# Build for Cloudflare
+# Build — this runs next build internally and outputs to .open-next/
 npx @opennextjs/cloudflare build
+
+# Verify output exists
+ls .open-next/worker.js  # must exist before deploy
 
 # Deploy
 wrangler deploy
