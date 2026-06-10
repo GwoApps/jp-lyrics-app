@@ -2,7 +2,7 @@
 
 ふりがな表示・Spotify リアルタイム同期・PWA 対応の日本語歌詞管理 Web アプリ。
 
-[English](README.md) | [中文](README-zh.md)
+[English](README.md) | [中文](README-zh.md) | [Deploy Guide](DEPLOYMENT.md)
 
 ## 機能
 

@@ -2,7 +2,7 @@
 
 日语歌词管理 Web 应用，支持振假名标注、Spotify 实时同步和 PWA 安装。
 
-[English](README.md) | [日本語](README-ja.md)
+[English](README.md) | [日本語](README-ja.md) | [部署指南](DEPLOYMENT.md)
 
 ## 功能
 

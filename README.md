@@ -2,12 +2,12 @@
 
 A Japanese lyrics management web app with furigana annotation, Spotify real-time sync, and PWA support.
 
-[日本語](README-ja.md) | [中文](README-zh.md)
+[日本語](README-ja.md) | [中文](README-zh.md) | [Deployment Guide](DEPLOYMENT.md)
 
 ## Features
 
-- **Furigana Lyrics** — Paste Japanese lyrics; kuroshiro auto-converts kanji to hiragana furigana via `<ruby>` annotations
-- **Spotify Real-Time Sync** — OAuth-connected playback tracking with SSE streaming, line-by-line auto-scroll, and diff protocol
+- **Furigana Lyrics** — Paste Japanese lyrics; client-side kuromoji-es auto-converts kanji to hiragana furigana via `<ruby>` annotations (lazy-loaded on first use)
+- **Spotify Real-Time Sync** — OAuth-connected playback tracking with SSE streaming (server mode) or direct polling (client mode), line-by-line auto-scroll
 - **PiP (Picture-in-Picture)** — Floating lyrics window over other apps (desktop Chrome)
 - **PWA** — Installable on Android/iOS with offline caching and update notifications
 - **Dark / Light Theme** — System-aware with manual toggle, persisted via localStorage
@@ -25,13 +25,13 @@ A Japanese lyrics management web app with furigana annotation, Spotify real-time
 
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 14 (App Router) |
+| Framework | Next.js 16 (App Router) |
 | UI | React 19, Tailwind CSS v4, Lucide Icons |
-| Database | SQLite (better-sqlite3) |
-| Furigana Engine | kuroshiro + kuromoji |
+| Database | @libsql/client (Turso or local SQLite) |
+| Furigana Engine | kuromoji-es (browser CDN, lazy-loaded) |
 | Lyrics Source | lrclib.net |
-| Music Integration | Spotify Web API (OAuth 2.0) + SSE streaming |
-| Deployment | Docker, Traefik reverse proxy |
+| Music Integration | Spotify Web API (OAuth 2.0) + SSE / client polling |
+| Deployment | Docker (self-hosted), Cloudflare Workers, Vercel Edge |
 
 ## Quick Start
 
@@ -59,18 +59,21 @@ npm run dev
 | `SPOTIFY_CLIENT_ID` | No | Spotify app client ID |
 | `SPOTIFY_CLIENT_SECRET` | No | Spotify app client secret |
 | `SPOTIFY_REDIRECT_URI` | No | Override callback URL (default: request origin + `/api/auth/callback`) |
+| `SPOTIFY_POLL_MODE` | No | `client` (default) or `server`. See [DEPLOYMENT.md](DEPLOYMENT.md) |
+| `TURSO_URL` | No | Turso database URL (e.g. `libsql://xxx.turso.io`). Without this, falls back to local SQLite file |
+| `TURSO_AUTH_TOKEN` | No | Turso auth token (required when `TURSO_URL` is set) |
 
 Spotify integration is optional. Without it, you can still manage lyrics manually.
 
 Create an app on the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) and set the redirect URI to `http://localhost:3000/api/auth/callback`.
 
-## Docker Deployment
+## Deployment
 
-```bash
-docker compose up -d --build
-```
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed guides:
 
-The included `docker-compose.yml` assumes a Traefik reverse proxy network. Adjust labels for your setup.
+- **Docker** (self-hosted) — Local SQLite, Traefik reverse proxy
+- **Cloudflare Workers** — Turso database, edge-compatible
+- **Vercel** — Turso database, edge runtime
 
 ## Project Structure
 
@@ -93,7 +96,11 @@ src/
 │       ├── songs/[id]/favorite/          # Toggle favorite
 │       ├── collections/                  # Collection CRUD
 │       ├── auth/                         # Spotify OAuth
-│       ├── spotify/now-playing/stream/   # SSE endpoint with diff protocol
+│       ├── spotify/
+│       │   ├── config/                   # Poll mode config for client
+│       │   ├── now-playing/              # Current track (REST)
+│       │   ├── now-playing/stream/       # SSE endpoint (server mode only)
+│       │   └── status/                   # Connection status
 │       └── me/                           # Current user
 ├── components/
 │   ├── FuriganaLine.tsx                  # Ruby annotation renderer
@@ -101,15 +108,18 @@ src/
 │   ├── LanguageSwitcher.tsx              # Locale picker
 │   └── AppShell.tsx                      # Theme + i18n providers
 ├── hooks/
-│   ├── useNowPlaying.ts                  # SSE + polling fallback
+│   ├── useNowPlaying.ts                  # SSE + polling dual mode
 │   ├── useSpotifySync.ts                 # Playback state + lyrics sync
 │   └── useSongData.ts                    # Song data + handlers
 ├── lib/
-│   ├── db.ts                             # SQLite connection + schema
-│   ├── kuroshiro.ts                      # Furigana conversion
+│   ├── db.ts                             # @libsql/client (Turso / local SQLite)
+│   ├── kuroshiro-client.ts               # Client-side furigana (CDN lazy-load)
+│   ├── compound-readings.ts              # Compound reading corrections
 │   ├── match.ts                          # Multi-level song matching
 │   ├── lrc.ts                            # LRC parsing utilities
-│   ├── spotify-poller.ts                 # Singleton poller with auto-cleanup
+│   ├── spotify.ts                        # Spotify token management + base64 util
+│   ├── spotify-poller.ts                 # Singleton poller (server mode only)
+│   ├── auth.ts                           # Auth helpers
 │   ├── theme.tsx                         # ThemeProvider + useTheme
 │   ├── i18n.tsx                          # I18nProvider + useI18n
 │   └── types.ts                          # Shared types
@@ -125,7 +135,7 @@ src/
 | Endpoint | Method | Description |
 |---|---|---|
 | `/api/songs` | GET | List songs (`?q=`, `?mine=1`, `?favorites=1`) |
-| `/api/songs` | POST | Create song (auto furigana conversion) |
+| `/api/songs` | POST | Create song |
 | `/api/songs/import` | POST | Import from lrclib by title + artist |
 | `/api/songs/import-playlist` | POST | Batch import from Spotify playlist |
 | `/api/songs/[id]` | GET/PUT/DELETE | Single song CRUD |
@@ -134,7 +144,9 @@ src/
 | `/api/songs/[id]/favorite` | POST | Toggle favorite |
 | `/api/auth/login` | GET | Spotify OAuth login |
 | `/api/auth/callback` | GET | Spotify OAuth callback |
-| `/api/spotify/now-playing/stream` | GET | SSE now-playing (diff protocol) |
+| `/api/spotify/config` | GET | Poll mode config |
+| `/api/spotify/now-playing` | GET | Current track (REST) |
+| `/api/spotify/now-playing/stream` | GET | SSE now-playing (server mode only) |
 | `/api/collections` | GET/POST | Collections CRUD |
 | `/api/me` | GET | Current authenticated user |
 
