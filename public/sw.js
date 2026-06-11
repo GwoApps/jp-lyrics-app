@@ -1,5 +1,6 @@
 const CACHE_NAME = 'jplrc-v3';
 const IMMUTABLE_CACHE = 'jplrc-immutable-v1';
+const KUROMOJI_CACHE = 'jplrc-kuromoji-v1';
 
 // Install: precache icons only
 self.addEventListener('install', (event) => {
@@ -24,7 +25,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) =>
       Promise.all(
         keys
-          .filter((k) => k !== CACHE_NAME && k !== IMMUTABLE_CACHE)
+          .filter((k) => k !== CACHE_NAME && k !== IMMUTABLE_CACHE && k !== KUROMOJI_CACHE)
           .map((k) => caches.delete(k))
       )
     ).then(() => self.clients.claim())
@@ -38,7 +39,24 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // Skip cross-origin (Spotify, Google Fonts handled separately)
+  // Cross-origin: kuromoji-es + zlib.js CDN → cache-first (persistent)
+  if (url.hostname.includes('code4fukui.github.io') || url.hostname.includes('taisukef.github.io')) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(KUROMOJI_CACHE).then((c) => c.put(request, clone));
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Skip other cross-origin (Spotify, Google Fonts handled separately)
   if (url.origin !== self.location.origin) {
     // Google Fonts: cache-first
     if (url.hostname.includes('fonts.googleapis.com') || url.hostname.includes('fonts.gstatic.com')) {

@@ -139,13 +139,23 @@ export function useSongData(id: string): UseSongDataReturn {
     setFuriganaLoading(true);
     setFuriganaError('');
     convertToFuriganaClient(song.lyrics_raw)
-      .then((lines) => setClientFurigana(lines))
+      .then((lines) => {
+        setClientFurigana(lines);
+        // Persist to server so next load skips kuromoji entirely
+        if (lines.length > 0 && id) {
+          fetch(`/api/songs/${id}/furigana`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lyrics_furigana: lines }),
+          }).catch(() => {}); // fire-and-forget
+        }
+      })
       .catch((e) => {
         console.error('Client furigana conversion failed:', e);
         setFuriganaError(t('song.furiganaLoadFailed'));
       })
       .finally(() => setFuriganaLoading(false));
-  }, [song?.lyrics_raw, serverFurigana.length, clientFurigana.length, furiganaLoading]);
+  }, [song?.lyrics_raw, serverFurigana.length, clientFurigana.length, furiganaLoading, id, t]);
 
   const lineTimestamps = useMemo(() => {
     if (!syncLines.length || !furiganaLines.length) return [] as (number | null)[];
