@@ -4,8 +4,12 @@ services:
     container_name: jplrc
     restart: unless-stopped
     env_file: .env
+    environment:
+      - YT_MUSIC_SIDECAR_URL=http://yt-sidecar:8910
     volumes:
       - jplrc-data:/app/data
+    depends_on:
+      - yt-sidecar
     networks:
       - traefik-net
     labels:
@@ -28,6 +32,14 @@ services:
       - "homepage.description=日本語歌詞管理・ふりがな表示"
       - "homepage.icon=🎵"
       - "homepage.category=music"
+
+  yt-sidecar:
+    build: ./yt-sidecar
+    container_name: yt-sidecar
+    restart: unless-stopped
+    env_file: .env
+    networks:
+      - traefik-net
 
 volumes:
   jplrc-data:
