@@ -151,14 +151,8 @@ export function useSpotifySync(syncRefs: React.MutableRefObject<SyncRefs>, enabl
             break;
           }
         }
-      } else {
-        // Fallback: proportional scroll
-        const nonEmpty = fls.filter(l => l.segments.length > 0);
-        if (nonEmpty.length && durationMs) {
-          const progress = Math.min(currentMs / durationMs, 1);
-          newActive = Math.min(Math.floor(progress * nonEmpty.length), nonEmpty.length - 1);
-        }
       }
+      // No timestamps → newActive stays -1 (no follow)
 
       // Update highlight + scroll only when line actually changes
       if (newActive !== highlightRef.current) {
