@@ -72,6 +72,7 @@ export interface UseSongDataReturn {
     song: SongData | null,
     highlightLine: number,
     pipWindowRef: React.MutableRefObject<Window | null>,
+    timestamps?: (number | null)[],
   ) => Promise<void>;
   showToast: (type: 'success' | 'error', msg: string) => void;
 }
