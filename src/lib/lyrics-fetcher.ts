@@ -221,8 +221,7 @@ export async function fetchLyrics(
   // 4. PetitLyrics
   const pl = await fetchFromPetitLyrics(title, artist);
   if (pl && (pl.synced || pl.plain)) {
-    if (!result) return { result: pl, source: 'petitlyrics' };
-    if (!result.synced && pl.synced) return { result: { synced: pl.synced, plain: result.plain || pl.plain }, source: 'petitlyrics' };
+    return { result: pl, source: 'petitlyrics' };
   }
 
   // 5. Uta-Net
