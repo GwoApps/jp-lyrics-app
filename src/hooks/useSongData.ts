@@ -323,6 +323,7 @@ export function useSongData(id: string): UseSongDataReturn {
     songArg: SongData | null,
     highlightLine: number,
     pipWindowRef: React.MutableRefObject<Window | null>,
+    timestamps?: (number | null)[],
   ) => {
     if (pipWindowRef.current && !pipWindowRef.current.closed) {
       pipWindowRef.current.close();
@@ -363,6 +364,8 @@ export function useSongData(id: string): UseSongDataReturn {
             #pip-header .title { color: #e5e5e5; font-weight: 500; }
             #pip-lyrics { height: calc(100% - 36px); overflow-y: auto; padding: 12px; scroll-behavior: smooth; }
             .line { line-height: 2.2; padding: 2px 4px; border-radius: 4px; transition: color 0.3s, transform 0.3s, opacity 0.3s; transform-origin: left; opacity: 0.6; font-size: ${fontSize}px; }
+            .line.has-ts { cursor: pointer; }
+            .line.has-ts:hover { color: #e5e5e5; opacity: 0.9; }
             @keyframes lyricActivate { 0% { transform: scale(1); filter: brightness(1); } 40% { transform: scale(1.06); filter: brightness(1.25); } 100% { transform: scale(1.03); filter: brightness(1); } }
             .line.active { color: #ffffff; transform: scale(1.03); opacity: 1; font-weight: 700; animation: lyricActivate 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
             .line.empty { height: 1.5em; }
@@ -379,11 +382,50 @@ export function useSongData(id: string): UseSongDataReturn {
                 if (!seg.reading) return seg.text;
                 return `<ruby>${seg.text}<rp>(</rp><rt>${seg.reading}</rt><rp>)</rp></ruby>`;
               }).join('');
-              return `<div class="line" data-line="${i}">${html}</div>`;
+              const ts = timestamps?.[i];
+              const tsAttr = ts != null ? ` data-ts="${ts}"` : '';
+              const tsClass = ts != null ? ' has-ts' : '';
+              return `<div class="line${tsClass}" data-line="${i}"${tsAttr}>${html}</div>`;
             }).join('')}
           </div>
         </body>
       `;
+
+      // Add click-to-seek handler in PiP
+      if (timestamps?.some(t => t != null)) {
+        const script = pipWindow.document.createElement('script');
+        script.textContent = `
+          document.getElementById('pip-lyrics').addEventListener('click', function(e) {
+            var line = e.target.closest('.line.has-ts');
+            if (!line) return;
+            var ts = line.getAttribute('data-ts');
+            if (ts && window.opener && !window.opener.closed) {
+              window.opener.postMessage({ type: 'pip-seek', position_ms: parseInt(ts) }, '*');
+            }
+          });
+        `;
+        pipWindow.document.body.appendChild(script);
+
+        // Listen for seek messages from PiP in main window
+        const onPipMessage = (e: MessageEvent) => {
+          if (e.data?.type === 'pip-seek' && typeof e.data.position_ms === 'number') {
+            fetch('/api/spotify/seek', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ position_ms: e.data.position_ms }),
+            }).catch(() => {});
+          }
+        };
+        window.addEventListener('message', onPipMessage);
+        pipWindow.addEventListener('pagehide', () => {
+          window.removeEventListener('message', onPipMessage);
+          pipWindowRef.current = null;
+        });
+      } else {
+        pipWindow.addEventListener('pagehide', () => {
+          pipWindowRef.current = null;
+        });
+      }
 
       // Sync current active line immediately
       if (highlightLine >= 0) {
@@ -395,10 +437,6 @@ export function useSongData(id: string): UseSongDataReturn {
           }
         });
       }
-
-      pipWindow.addEventListener('pagehide', () => {
-        pipWindowRef.current = null;
-      });
     } catch (e) {
       console.error('PiP failed:', e);
       showToast('error', t('song.pipFailed'));

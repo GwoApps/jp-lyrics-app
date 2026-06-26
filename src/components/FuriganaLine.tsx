@@ -4,10 +4,12 @@ import { useRef, useEffect, useState } from 'react';
 import type { FuriganaLine } from '@/lib/types';
 import { fmtMs } from '@/lib/lrc';
 
-export default function FuriganaLineView({ line, isActive, debugTs }: {
+export default function FuriganaLineView({ line, isActive, debugTs, timestamp, onSeek }: {
   line: FuriganaLine;
   isActive: boolean;
   debugTs?: number | null;
+  timestamp?: number | null;
+  onSeek?: (positionMs: number) => void;
 }) {
   const [animKey, setAnimKey] = useState(0);
   const wasActiveRef = useRef(false);
@@ -21,7 +23,9 @@ export default function FuriganaLineView({ line, isActive, debugTs }: {
 
   if (line.segments.length === 0) return <div className="h-5 sm:h-6" />;
   return (
-    <div className="flex items-baseline gap-2 sm:gap-3">
+    <div className={`flex items-baseline gap-2 sm:gap-3 ${onSeek && timestamp != null ? 'cursor-pointer' : ''}`}
+      onClick={onSeek && timestamp != null ? () => onSeek(timestamp) : undefined}
+    >
       {debugTs != null && (
         <span className="shrink-0 w-[60px] sm:w-[72px] text-right font-mono text-[10px] text-[var(--primary)] opacity-70 tabular-nums">
           {fmtMs(debugTs)}
@@ -33,7 +37,7 @@ export default function FuriganaLineView({ line, isActive, debugTs }: {
           isActive
             ? 'text-[var(--foreground)] scale-[1.03] origin-left lyric-active'
             : 'text-[var(--muted-foreground)] opacity-60'
-        }`}
+        } ${onSeek && timestamp != null ? 'hover:text-[var(--foreground)] hover:opacity-100' : ''}`}
         style={{ fontWeight: isActive ? 700 : 400 }}
       >
         {line.segments.map((seg, i) => {

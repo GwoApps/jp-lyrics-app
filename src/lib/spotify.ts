@@ -3,7 +3,7 @@ import { getDB, schema, sql, eq } from './db';
 export const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID || '';
 export const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || '';
 export const SPOTIFY_REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI || 'https://jplrc.kazusa.feng.moe/api/auth/callback';
-export const SPOTIFY_SCOPES = 'user-read-currently-playing user-read-playback-state';
+export const SPOTIFY_SCOPES = 'user-read-currently-playing user-read-playback-state user-modify-playback-state';
 
 /** Base64 encode — Node Buffer first, btoa fallback for Edge/CF Workers */
 export function base64Encode(str: string): string {

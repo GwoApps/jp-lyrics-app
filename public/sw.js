@@ -76,8 +76,24 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API: network-only
-  if (url.pathname.startsWith('/api/')) return;
+  // API: song data → network-first (cache for offline); other API → network-only
+  if (url.pathname.startsWith('/api/')) {
+    // Cache song list and song detail for offline
+    if (url.pathname === '/api/songs' || /^\/api\/songs\/[^/]+$/.test(url.pathname)) {
+      event.respondWith(
+        fetch(request)
+          .then((response) => {
+            if (response.ok) {
+              const clone = response.clone();
+              caches.open(CACHE_NAME).then((c) => c.put(request, clone));
+            }
+            return response;
+          })
+          .catch(() => caches.match(request))
+      );
+    }
+    return;
+  }
 
   // Next.js immutable static assets (/_next/static/*): cache-first
   // These have content hashes in filenames — safe to cache forever
