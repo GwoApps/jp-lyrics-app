@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
     headers: { Authorization: `Bearer ${tokenData.access_token}` },
   });
   const profile = profileRes.ok ? await profileRes.json() : {};
+  console.log('[spotify-auth] /me profile:', JSON.stringify(profile, null, 2));
 
   // Determine user identifier:
   //   1. From Spotify profile email (if user-read-email scope granted)
