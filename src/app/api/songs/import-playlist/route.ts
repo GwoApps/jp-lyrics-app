@@ -3,11 +3,16 @@ import { v4 as uuidv4 } from 'uuid';
 import { getDB, schema, sql } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { getSpotifyTokenForUser } from '@/lib/spotify';
+import { fetchLyrics } from '@/lib/lyrics-fetcher';
 
-const LRCLIB_HEADERS = { 'User-Agent': 'jp-lyrics-app/1.0' };
+interface SpotifyTrack {
+  name: string;
+  artists: { name: string }[];
+}
 
-function stripTimestamps(lrc: string): string {
-  return lrc.replace(/^\[\d{2}:\d{2}\.\d{2,3}\]\s*/gm, '').trim();
+interface PlaylistResponse {
+  items: { track: SpotifyTrack | null }[];
+  next: string | null;
 }
 
 function extractPlaylistId(input: string): string | null {
@@ -19,48 +24,12 @@ function extractPlaylistId(input: string): string | null {
   return null;
 }
 
-async function fetchLyrics(title: string, artist: string): Promise<{ synced: string; plain: string } | null> {
-  async function fetchWithTimeout(url: string, timeoutMs = 10000): Promise<Response> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      return await fetch(url, { headers: LRCLIB_HEADERS, signal: controller.signal });
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  try {
-    const params = new URLSearchParams({ track_name: title, artist_name: artist });
-    const r = await fetchWithTimeout(`https://lrclib.net/api/get?${params}`);
-    if (r.ok) {
-      const d = await r.json();
-      if (d.syncedLyrics) return { synced: d.syncedLyrics, plain: d.plainLyrics || stripTimestamps(d.syncedLyrics) };
-    }
-  } catch { /* */ }
-
-  try {
-    const params = new URLSearchParams({ q: `${title} ${artist}` });
-    const r = await fetchWithTimeout(`https://lrclib.net/api/search?${params}`);
-    if (r.ok) {
-      const results = await r.json();
-      for (const item of results) {
-        if (item.syncedLyrics) return { synced: item.syncedLyrics, plain: item.plainLyrics || stripTimestamps(item.syncedLyrics) };
-      }
-    }
-  } catch { /* */ }
-
-  return null;
-}
-
-interface SpotifyTrack {
-  name: string;
-  artists: { name: string }[];
-}
-
-interface PlaylistResponse {
-  items: { track: SpotifyTrack | null }[];
-  next: string | null;
+interface TrackResult {
+  title: string;
+  artist: string;
+  status: 'imported' | 'skipped' | 'failed';
+  source?: string;
+  synced?: boolean;
 }
 
 // POST /api/songs/import-playlist — batch import from Spotify playlist
@@ -116,40 +85,61 @@ export async function POST(request: NextRequest) {
     .get();
   const createdByName = nameRow?.displayName || '';
 
-  // Import each track
-  const results = { total: tracks.length, imported: 0, skipped: 0, failed: 0 };
+  // Import each track — allow failures, continue on error
+  const results: TrackResult[] = [];
+  let imported = 0, skipped = 0, failed = 0;
 
   for (const track of tracks) {
+    // Skip duplicates
     const existing = await db.select({ id: schema.songs.id })
       .from(schema.songs)
       .where(sql`title = ${track.title} AND artist = ${track.artist}`)
       .get();
 
     if (existing) {
-      results.skipped++;
+      results.push({ title: track.title, artist: track.artist, status: 'skipped' });
+      skipped++;
       continue;
     }
 
-    const lyrics = await fetchLyrics(track.title, track.artist);
+    // Fetch lyrics from all sources — failure is non-fatal
+    let lyrics: { synced: string; plain: string } | null = null;
+    let source = '';
+    try {
+      const r = await fetchLyrics(track.title, track.artist);
+      lyrics = r.result;
+      source = r.source;
+    } catch {
+      // Individual track failure — continue to next
+    }
 
-    const id = uuidv4();
-    await db.insert(schema.songs).values({
-      id,
-      title: track.title,
-      artist: track.artist,
-      lyricsRaw: lyrics?.plain || '',
-      lyricsFurigana: '[]',
-      lyricsSynced: lyrics?.synced || '',
-      createdBy: user.email,
-      createdByName,
-    });
+    try {
+      const id = uuidv4();
+      await db.insert(schema.songs).values({
+        id,
+        title: track.title,
+        artist: track.artist,
+        lyricsRaw: lyrics?.plain || '',
+        lyricsFurigana: '[]',
+        lyricsSynced: lyrics?.synced || '',
+        createdBy: user.email,
+        createdByName,
+      });
 
-    if (lyrics) {
-      results.imported++;
-    } else {
-      results.failed++;
+      const synced = !!(lyrics?.synced);
+      results.push({ title: track.title, artist: track.artist, status: 'imported', source, synced });
+      imported++;
+    } catch {
+      results.push({ title: track.title, artist: track.artist, status: 'failed' });
+      failed++;
     }
   }
 
-  return NextResponse.json(results);
+  return NextResponse.json({
+    total: tracks.length,
+    imported,
+    skipped,
+    failed,
+    tracks: results,
+  });
 }

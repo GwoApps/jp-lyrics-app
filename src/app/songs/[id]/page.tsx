@@ -122,6 +122,15 @@ export default function SongViewPage() {
     );
   }
 
+  // Spotify seek — click lyrics line to jump to that time
+  const handleSeek = (positionMs: number) => {
+    fetch('/api/spotify/seek', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ position_ms: positionMs }),
+    }).catch(() => {});
+  };
+
   // Derived state
   const { song, furiganaLines, syncLines, lineTimestamps } = data;
   const { spotify, activeLine, followPlaying, setFollowPlaying, pipWindowRef, highlightRef } = sync;
@@ -278,7 +287,7 @@ export default function SongViewPage() {
             </div>
             {furiganaLines.length > 0 && pipSupported && (
               <button
-                onClick={() => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef)}
+                onClick={() => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef, lineTimestamps)}
                 className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
               >
                 <PictureInPicture className="h-3.5 w-3.5" />
@@ -392,7 +401,13 @@ export default function SongViewPage() {
             {furiganaLines.length > 0 ? (
               furiganaLines.map((line, i) => (
                 <div key={i} ref={(el) => { data.lineRefs.current[i] = el; }}>
-                  <FuriganaLineView line={line} isActive={i === activeLine && !!isSynced} debugTs={data.debug && lineTimestamps[i] != null ? lineTimestamps[i] : undefined} />
+                  <FuriganaLineView
+                    line={line}
+                    isActive={i === activeLine && !!isSynced}
+                    debugTs={data.debug && lineTimestamps[i] != null ? lineTimestamps[i] : undefined}
+                    timestamp={hasSyncData && lineTimestamps[i] != null ? lineTimestamps[i] : undefined}
+                    onSeek={hasSyncData && spotify?.connected ? handleSeek : undefined}
+                  />
                 </div>
               ))
             ) : data.furiganaLoading ? (
@@ -431,6 +446,7 @@ export default function SongViewPage() {
         data={data} sync={sync} song={song} id={id} router={router}
         furiganaLines={furiganaLines} hasSyncData={hasSyncData} pipSupported={pipSupported}
         highlightRef={highlightRef} pipWindowRef={pipWindowRef} spotifyConnected={spotifyConnected === true}
+        lineTimestamps={lineTimestamps}
       />
 
       {data.toast && <div className={`toast toast-${data.toast.type}`}>{data.toast.msg}</div>}
@@ -442,7 +458,7 @@ export default function SongViewPage() {
 }
 
 /** Mobile bottom toolbar — A-/A+, Sync, Copy visible; rest in 3-dot menu */
-function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, pipSupported, highlightRef, pipWindowRef, spotifyConnected }: {
+function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, pipSupported, highlightRef, pipWindowRef, spotifyConnected, lineTimestamps }: {
   data: ReturnType<typeof useSongData>;
   sync: ReturnType<typeof useSpotifySync>;
   song: NonNullable<ReturnType<typeof useSongData>['song']>;
@@ -454,6 +470,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
   highlightRef: React.MutableRefObject<number>;
   pipWindowRef: React.MutableRefObject<Window | null>;
   spotifyConnected: boolean;
+  lineTimestamps: (number | null)[];
 }) {
   const { t } = useI18n();
   const [showMenu, setShowMenu] = useState(false);
@@ -472,7 +489,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
 
   const menuItems = [
     { icon: <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />, label: data.syncing ? t('song.syncing') : t('song.sync'), onClick: data.handleSync, disabled: data.syncing },
-    ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: 'PiP', onClick: () => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef) }] : []),
+    ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: 'PiP', onClick: () => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef, lineTimestamps) }] : []),
     { icon: <Bug className="h-4 w-4" />, label: 'Debug', onClick: () => data.setDebug(!data.debug), active: data.debug },
     ...(spotifyConnected ? [
       { icon: <Pencil className="h-4 w-4" />, label: t('common.edit'), onClick: () => router.push(`/songs/${id}/edit`) },
