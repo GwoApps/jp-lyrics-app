@@ -44,10 +44,27 @@ export async function GET(request: NextRequest) {
 
   // Determine user identifier:
   //   1. From Spotify profile email (if user-read-email scope granted)
-  //   2. From Spotify profile ID (always available, e.g. "spotify:abc123")
-  const userId = profile.email || `spotify:${profile.id}`;
+  //   2. From Spotify account_id (always available, e.g. "spotify:abc123")
+  const userId = profile.email || `spotify:${profile.account_id}`;
   if (!userId) {
     return NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=no_identity`);
+  }
+
+  // Migrate from deprecated profile.id to account_id
+  // profile.id (Spotify deprecated) was used historically as fallback identity
+  const oldId = profile.email ? null : `spotify:${profile.id}`;
+  if (oldId && oldId !== userId) {
+    try {
+      const oldUser = await db.get(sql`SELECT 1 FROM users WHERE id = ${oldId}`) as any;
+      if (oldUser) {
+        // Migrate all user-associated data to new identity
+        await db.run(sql`UPDATE users SET id = ${userId} WHERE id = ${oldId}`);
+        await db.run(sql`UPDATE spotify_auth SET user_email = ${userId} WHERE user_email = ${oldId}`);
+        await db.run(sql`UPDATE favorites SET user_email = ${userId} WHERE user_email = ${oldId}`);
+        await db.run(sql`UPDATE collections SET user_email = ${userId} WHERE user_email = ${oldId}`);
+        await db.run(sql`UPDATE songs SET created_by = ${userId} WHERE created_by = ${oldId}`);
+      }
+    } catch { /* migration best-effort */ }
   }
 
   // Check if user is blocked
