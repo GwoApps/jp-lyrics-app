@@ -56,7 +56,8 @@
     "spotifyDenied": "Spotify 連線已取消",
     "spotifyTokenFailed": "Spotify 驗證失敗",
     "spotifyNoIdentity": "無法取得 Spotify 使用者資訊",
-    "spotifyBlocked": "您的帳號已被封鎖"
+    "spotifyBlocked": "您的帳號已被封鎖",
+    "spotifyInvalidProfile": "目前 Spotify 帳號無法使用此應用，請聯繫網站開發者了解詳情"
   },
   "song": {
     "notFound": "找不到歌曲",

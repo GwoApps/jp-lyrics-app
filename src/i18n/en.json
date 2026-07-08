@@ -56,7 +56,8 @@
     "spotifyDenied": "Spotify connection cancelled",
     "spotifyTokenFailed": "Spotify authentication failed",
     "spotifyNoIdentity": "Could not retrieve Spotify user info",
-    "spotifyBlocked": "Your account has been blocked"
+    "spotifyBlocked": "Your account has been blocked",
+    "spotifyInvalidProfile": "This Spotify account cannot be used with this app. Please contact the site developer for details."
   },
   "song": {
     "notFound": "Song not found",

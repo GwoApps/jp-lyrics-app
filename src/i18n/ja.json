@@ -56,7 +56,8 @@
     "spotifyDenied": "Spotify連携がキャンセルされました",
     "spotifyTokenFailed": "Spotify認証に失敗しました",
     "spotifyNoIdentity": "Spotifyユーザー情報を取得できませんでした",
-    "spotifyBlocked": "アカウントがブロックされています"
+    "spotifyBlocked": "アカウントがブロックされています",
+    "spotifyInvalidProfile": "このSpotifyアカウントはご利用いただけません。サイト開発者にお問い合わせください"
   },
   "song": {
     "notFound": "曲が見つかりません",
