@@ -148,6 +148,26 @@
     "saveFailed": "Save failed",
     "error": "An error occurred"
   },
+  "furigana": {
+    "title": "Correct Furigana",
+    "editBreadcrumb": "Furigana",
+    "reset": "Reset to auto",
+    "reconvert": "Reconvert",
+    "reconverting": "Converting...",
+    "empty": "No furigana to correct",
+    "line": "Line {n}",
+    "readingPlaceholder": "e.g. ひらがな",
+    "remove": "Remove",
+    "split": "Split",
+    "merge": "Merge",
+    "applyAll": "Apply to {count} same words",
+    "saved": "Furigana saved",
+    "saveFailed": "Failed to save",
+    "unsavedConfirm": "You have unsaved changes. Leave?",
+    "noKanji": "No kanji in this line",
+    "loginRequired": "Please connect Spotify to edit furigana",
+    "forbidden": "You don't have permission to edit this song"
+  },
   "dialog": {
     "deleteConfirmTitle": "Delete「{title}」?",
     "deleteConfirmBody": "This action cannot be undone. Lyrics and furigana data will be permanently deleted.",

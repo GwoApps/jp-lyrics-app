@@ -148,6 +148,26 @@
     "saveFailed": "保存に失敗しました",
     "error": "エラーが発生しました"
   },
+  "furigana": {
+    "title": "ふりがな修正",
+    "editBreadcrumb": "ふりがな",
+    "reset": "自動変換に戻す",
+    "reconvert": "再変換",
+    "reconverting": "変換中...",
+    "empty": "修正するふりがながありません",
+    "line": "{n}行目",
+    "readingPlaceholder": "例：ひらがな",
+    "remove": "削除",
+    "split": "分割",
+    "merge": "結合",
+    "applyAll": "同じ語 {count} 箇所に適用",
+    "saved": "ふりがなを保存しました",
+    "saveFailed": "保存に失敗しました",
+    "unsavedConfirm": "保存されていない変更があります。破棄しますか？",
+    "noKanji": "この行に漢字がありません",
+    "loginRequired": "ふりがなを編集するには Spotify に接続してください",
+    "forbidden": "この歌詞を編集する権限がありません"
+  },
   "dialog": {
     "deleteConfirmTitle": "「{title}」を削除しますか？",
     "deleteConfirmBody": "この操作は取り消せません。歌詞データとふりがなが完全に削除されます。",

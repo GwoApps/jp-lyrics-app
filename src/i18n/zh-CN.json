@@ -148,6 +148,26 @@
     "saveFailed": "保存失败",
     "error": "发生错误"
   },
+  "furigana": {
+    "title": "纠正注音",
+    "editBreadcrumb": "注音",
+    "reset": "恢复自动转换",
+    "reconvert": "重新转换",
+    "reconverting": "转换中...",
+    "empty": "没有需要纠正的注音",
+    "line": "第 {n} 行",
+    "readingPlaceholder": "例如：ひらがな",
+    "remove": "移除",
+    "split": "拆字",
+    "merge": "合并",
+    "applyAll": "应用到 {count} 处相同词",
+    "saved": "注音已保存",
+    "saveFailed": "保存失败",
+    "unsavedConfirm": "有未保存的修改，确定离开？",
+    "noKanji": "这一行没有汉字",
+    "loginRequired": "请先连接 Spotify 以编辑注音",
+    "forbidden": "没有权限修改这首歌词"
+  },
   "dialog": {
     "deleteConfirmTitle": "确定删除「{title}」？",
     "deleteConfirmBody": "此操作不可撤销。歌词和注音数据将被永久删除。",

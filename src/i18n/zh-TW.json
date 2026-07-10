@@ -148,6 +148,26 @@
     "saveFailed": "儲存失敗",
     "error": "發生錯誤"
   },
+  "furigana": {
+    "title": "糾正注音",
+    "editBreadcrumb": "注音",
+    "reset": "恢復自動轉換",
+    "reconvert": "重新轉換",
+    "reconverting": "轉換中...",
+    "empty": "沒有需要糾正的注音",
+    "line": "第 {n} 行",
+    "readingPlaceholder": "例如：ひらがな",
+    "remove": "移除",
+    "split": "拆字",
+    "merge": "合併",
+    "applyAll": "套用到 {count} 處相同詞",
+    "saved": "注音已儲存",
+    "saveFailed": "儲存失敗",
+    "unsavedConfirm": "有未儲存的修改，確定離開？",
+    "noKanji": "這一行沒有漢字",
+    "loginRequired": "請先連接 Spotify 以編輯注音",
+    "forbidden": "沒有權限修改這首歌詞"
+  },
   "dialog": {
     "deleteConfirmTitle": "確定刪除「{title}」？",
     "deleteConfirmBody": "此操作不可撤銷。歌詞和注音資料將被永久刪除。",
