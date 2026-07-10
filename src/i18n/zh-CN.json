@@ -56,7 +56,15 @@
     "spotifyDenied": "Spotify 连接已取消",
     "spotifyTokenFailed": "Spotify 认证失败",
     "spotifyNoIdentity": "无法获取 Spotify 用户信息",
-    "spotifyBlocked": "您的账户已被封禁"
+    "spotifyBlocked": "您的账户已被封禁",
+    "spotifyInvalidProfile": "当前 Spotify 账号无法使用此应用，请联系网站开发者了解详情",
+    "importTitleRequired": "请输入歌曲标题",
+    "importLyricsNotFound": "未找到歌词 — 请手动粘贴",
+    "importLoginRequired": "请先登录",
+    "importInvalidPlaylistUrl": "请输入有效的 Spotify 播放列表链接",
+    "importSpotifyNotConnected": "请先连接 Spotify",
+    "importPlaylistFetchFailed": "播放列表获取失败",
+    "importPlaylistEmpty": "播放列表为空"
   },
   "song": {
     "notFound": "找不到歌曲",
@@ -139,6 +147,26 @@
     "saved": "已保存 — 注音转换完成",
     "saveFailed": "保存失败",
     "error": "发生错误"
+  },
+  "furigana": {
+    "title": "纠正注音",
+    "editBreadcrumb": "注音",
+    "reset": "恢复自动转换",
+    "reconvert": "重新转换",
+    "reconverting": "转换中...",
+    "empty": "没有需要纠正的注音",
+    "line": "第 {n} 行",
+    "readingPlaceholder": "例如：ひらがな",
+    "remove": "移除",
+    "split": "拆字",
+    "merge": "合并",
+    "applyAll": "应用到 {count} 处相同词",
+    "saved": "注音已保存",
+    "saveFailed": "保存失败",
+    "unsavedConfirm": "有未保存的修改，确定离开？",
+    "noKanji": "这一行没有汉字",
+    "loginRequired": "请先连接 Spotify 以编辑注音",
+    "forbidden": "没有权限修改这首歌词"
   },
   "dialog": {
     "deleteConfirmTitle": "确定删除「{title}」？",

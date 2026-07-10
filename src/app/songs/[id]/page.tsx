@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture, Repeat, Copy, Check, MoreVertical } from 'lucide-react';
+import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import FuriganaLineView from '@/components/FuriganaLine';
 import { useI18n } from '@/lib/i18n';
@@ -266,6 +266,9 @@ export default function SongViewPage() {
               <button onClick={() => router.push(`/songs/${id}/edit`)} disabled={!spotifyConnected} className={btnCls()}>
                 <Pencil className="h-3.5 w-3.5" />
               </button>
+              <button onClick={() => router.push(`/songs/${id}/furigana/edit`)} disabled={!spotifyConnected} className={btnCls()} title={t('furigana.title')}>
+                <Languages className="h-3.5 w-3.5" />
+              </button>
               <button onClick={data.handleDelete} disabled={!spotifyConnected} className={btnCls(false, 'danger')}>
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -493,6 +496,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
     { icon: <Bug className="h-4 w-4" />, label: 'Debug', onClick: () => data.setDebug(!data.debug), active: data.debug },
     ...(spotifyConnected ? [
       { icon: <Pencil className="h-4 w-4" />, label: t('common.edit'), onClick: () => router.push(`/songs/${id}/edit`) },
+      { icon: <Languages className="h-4 w-4" />, label: t('furigana.title'), onClick: () => router.push(`/songs/${id}/furigana/edit`) },
       { icon: <Trash2 className="h-4 w-4" />, label: t('common.delete'), onClick: data.handleDelete, danger: true },
     ] : []),
   ];

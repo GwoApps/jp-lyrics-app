@@ -41,6 +41,12 @@ export async function GET(request: NextRequest) {
     headers: { Authorization: `Bearer ${tokenData.access_token}` },
   });
   const profile = profileRes.ok ? await profileRes.json() : {};
+  console.log('[spotify-auth] /me profile:', JSON.stringify(profile, null, 2));
+
+  // Reject if we couldn't get a valid profile — token is likely scoped wrong
+  if (!profile.account_id && !profile.id) {
+    return NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=invalid_profile`);
+  }
 
   // Determine user identifier:
   //   1. From Spotify profile email (if user-read-email scope granted)

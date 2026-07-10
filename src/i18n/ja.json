@@ -56,7 +56,15 @@
     "spotifyDenied": "Spotify連携がキャンセルされました",
     "spotifyTokenFailed": "Spotify認証に失敗しました",
     "spotifyNoIdentity": "Spotifyユーザー情報を取得できませんでした",
-    "spotifyBlocked": "アカウントがブロックされています"
+    "spotifyBlocked": "アカウントがブロックされています",
+    "spotifyInvalidProfile": "このSpotifyアカウントはご利用いただけません。サイト開発者にお問い合わせください",
+    "importTitleRequired": "曲名を入力してください",
+    "importLyricsNotFound": "歌詞が見つかりませんでした — 手動で貼り付けてください",
+    "importLoginRequired": "ログインが必要です",
+    "importInvalidPlaylistUrl": "有効なSpotifyプレイリストURLを入力してください",
+    "importSpotifyNotConnected": "Spotifyの接続が必要です",
+    "importPlaylistFetchFailed": "プレイリストの取得に失敗しました",
+    "importPlaylistEmpty": "プレイリストが空です"
   },
   "song": {
     "notFound": "曲が見つかりません",
@@ -139,6 +147,26 @@
     "saved": "保存しました — ふりがな変換完了",
     "saveFailed": "保存に失敗しました",
     "error": "エラーが発生しました"
+  },
+  "furigana": {
+    "title": "ふりがな修正",
+    "editBreadcrumb": "ふりがな",
+    "reset": "自動変換に戻す",
+    "reconvert": "再変換",
+    "reconverting": "変換中...",
+    "empty": "修正するふりがながありません",
+    "line": "{n}行目",
+    "readingPlaceholder": "例：ひらがな",
+    "remove": "削除",
+    "split": "分割",
+    "merge": "結合",
+    "applyAll": "同じ語 {count} 箇所に適用",
+    "saved": "ふりがなを保存しました",
+    "saveFailed": "保存に失敗しました",
+    "unsavedConfirm": "保存されていない変更があります。破棄しますか？",
+    "noKanji": "この行に漢字がありません",
+    "loginRequired": "ふりがなを編集するには Spotify に接続してください",
+    "forbidden": "この歌詞を編集する権限がありません"
   },
   "dialog": {
     "deleteConfirmTitle": "「{title}」を削除しますか？",

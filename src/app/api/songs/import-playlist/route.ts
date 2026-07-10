@@ -37,18 +37,18 @@ export async function POST(request: NextRequest) {
   const db = getDB();
   const user = await getAuthUser(request);
   if (!user) {
-    return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 });
+    return NextResponse.json({ error: 'login_required' }, { status: 401 });
   }
 
   const { playlistUrl } = await request.json();
   const playlistId = extractPlaylistId(playlistUrl || '');
   if (!playlistId) {
-    return NextResponse.json({ error: '有効なSpotifyプレイリストURLを入力してください' }, { status: 400 });
+    return NextResponse.json({ error: 'invalid_playlist_url' }, { status: 400 });
   }
 
   const accessToken = await getSpotifyTokenForUser(user.email);
   if (!accessToken) {
-    return NextResponse.json({ error: 'Spotifyの接続が必要です' }, { status: 401 });
+    return NextResponse.json({ error: 'spotify_not_connected' }, { status: 401 });
   }
 
   // Fetch playlist tracks from Spotify
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!spotifyRes.ok) {
-      return NextResponse.json({ error: 'プレイリストの取得に失敗しました' }, { status: spotifyRes.status });
+      return NextResponse.json({ error: 'playlist_fetch_failed' }, { status: spotifyRes.status });
     }
     const data: PlaylistResponse = await spotifyRes.json();
     for (const item of data.items || []) {
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (tracks.length === 0) {
-    return NextResponse.json({ error: 'プレイリストが空です' }, { status: 400 });
+    return NextResponse.json({ error: 'playlist_empty' }, { status: 400 });
   }
 
   // Look up Spotify display name once
