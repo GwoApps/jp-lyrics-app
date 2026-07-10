@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
   const user = await getAuthUser(request);
 
   if (!title?.trim()) {
-    return NextResponse.json({ error: '曲名を入力してください' }, { status: 400 });
+    return NextResponse.json({ error: 'title_required' }, { status: 400 });
   }
 
   const cleanTitle = title.trim();
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
   const result = await fetchLyrics(cleanTitle, cleanArtist);
 
   if (!result) {
-    return NextResponse.json({ error: '歌詞が見つかりませんでした — 手動で貼り付けてください', hasLyrics: false }, { status: 404 });
+    return NextResponse.json({ error: 'lyrics_not_found', hasLyrics: false }, { status: 404 });
   }
 
   // Insert

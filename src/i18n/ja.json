@@ -57,7 +57,14 @@
     "spotifyTokenFailed": "Spotify認証に失敗しました",
     "spotifyNoIdentity": "Spotifyユーザー情報を取得できませんでした",
     "spotifyBlocked": "アカウントがブロックされています",
-    "spotifyInvalidProfile": "このSpotifyアカウントはご利用いただけません。サイト開発者にお問い合わせください"
+    "spotifyInvalidProfile": "このSpotifyアカウントはご利用いただけません。サイト開発者にお問い合わせください",
+    "importTitleRequired": "曲名を入力してください",
+    "importLyricsNotFound": "歌詞が見つかりませんでした — 手動で貼り付けてください",
+    "importLoginRequired": "ログインが必要です",
+    "importInvalidPlaylistUrl": "有効なSpotifyプレイリストURLを入力してください",
+    "importSpotifyNotConnected": "Spotifyの接続が必要です",
+    "importPlaylistFetchFailed": "プレイリストの取得に失敗しました",
+    "importPlaylistEmpty": "プレイリストが空です"
   },
   "song": {
     "notFound": "曲が見つかりません",

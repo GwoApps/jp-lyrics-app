@@ -57,7 +57,14 @@
     "spotifyTokenFailed": "Spotify authentication failed",
     "spotifyNoIdentity": "Could not retrieve Spotify user info",
     "spotifyBlocked": "Your account has been blocked",
-    "spotifyInvalidProfile": "This Spotify account cannot be used with this app. Please contact the site developer for details."
+    "spotifyInvalidProfile": "This Spotify account cannot be used with this app. Please contact the site developer for details.",
+    "importTitleRequired": "Please enter a song title",
+    "importLyricsNotFound": "Lyrics not found — please paste manually",
+    "importLoginRequired": "Login required",
+    "importInvalidPlaylistUrl": "Please enter a valid Spotify playlist URL",
+    "importSpotifyNotConnected": "Please connect Spotify first",
+    "importPlaylistFetchFailed": "Failed to fetch playlist",
+    "importPlaylistEmpty": "Playlist is empty"
   },
   "song": {
     "notFound": "Song not found",

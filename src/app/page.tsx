@@ -29,6 +29,22 @@ function localeToBCP47(locale: string): string {
   return map[locale] ?? 'ja-JP';
 }
 
+const importErrorKeyMap: Record<string, string> = {
+  title_required: 'home.importTitleRequired',
+  lyrics_not_found: 'home.importLyricsNotFound',
+  login_required: 'home.importLoginRequired',
+  invalid_playlist_url: 'home.importInvalidPlaylistUrl',
+  spotify_not_connected: 'home.importSpotifyNotConnected',
+  playlist_fetch_failed: 'home.importPlaylistFetchFailed',
+  playlist_empty: 'home.importPlaylistEmpty',
+};
+
+function importErrorMsg(t: (k: string) => string, error?: string, fallbackKey?: string): string {
+  if (!error) return fallbackKey ? t(fallbackKey) : error || '';
+  const key = importErrorKeyMap[error];
+  return key ? t(key) : error;
+}
+
 export default function HomePage() {
   const { t, locale } = useI18n();
   const [songs, setSongs] = useState<SongItem[]>([]);
@@ -164,7 +180,7 @@ export default function HomePage() {
       });
       const data = await res.json();
       if (!res.ok || data.error) {
-        setImportAlert(data.error || t('home.importErrorDefault'));
+        setImportAlert(importErrorMsg(t, data.error, 'home.importErrorDefault'));
         return;
       }
       router.push(`/songs/${data.id}`);
@@ -187,7 +203,7 @@ export default function HomePage() {
       });
       const data = await res.json();
       if (!res.ok || data.error) {
-        setImportAlert(data.error || t('home.playlistImportError'));
+        setImportAlert(importErrorMsg(t, data.error, 'home.playlistImportError'));
         return;
       }
       setPlaylistResult(data);
