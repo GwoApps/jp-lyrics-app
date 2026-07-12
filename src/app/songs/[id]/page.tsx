@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages } from 'lucide-react';
+import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import FuriganaLineView from '@/components/FuriganaLine';
 import { useI18n } from '@/lib/i18n';
@@ -22,6 +22,16 @@ function btnCls(active?: boolean, variant?: 'danger') {
       ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
       : 'text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)]';
   return `${base} ${size} ${colors}`;
+}
+
+function btnTextCls(active?: boolean, variant?: 'danger') {
+  const base = 'inline-flex items-center justify-center gap-1.5 rounded-xl sm:rounded-md transition-colors disabled:opacity-50 text-xs font-medium px-3 py-2';
+  const colors = variant === 'danger'
+    ? 'text-[var(--destructive)] bg-[var(--destructive)]/10 hover:bg-[var(--destructive)]/20'
+    : active
+      ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+      : 'text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]';
+  return `${base} ${colors}`;
 }
 
 export default function SongViewPage() {
@@ -241,62 +251,84 @@ export default function SongViewPage() {
               )}
             </div>
           </div>
-          {/* Desktop buttons */}
-          <div className="hidden sm:flex flex-col items-end gap-2 shrink-0">
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-0.5 rounded-md bg-[var(--accent)] px-1 py-0.5">
-                <button onClick={() => data.setFontSize(s => Math.max(14, s - 2))} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Minus className="h-3 w-3" /></button>
-                <span className="text-[10px] w-5 text-center text-[var(--muted-foreground)] tabular-nums">{data.fontSize}</span>
-                <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Plus className="h-3 w-3" /></button>
-              </div>
-              <button onClick={data.handleSync} disabled={data.syncing || !spotifyConnected} className={btnCls()}>
-                <RefreshCw className={`h-3.5 w-3.5 ${data.syncing ? 'animate-spin' : ''}`} />
-              </button>
-              {!hasSyncData && (
-                <button onClick={() => data.setShowPasteLrc(!data.showPasteLrc)} disabled={!spotifyConnected} className={btnCls(data.showPasteLrc)}>
-                  <ClipboardPaste className="h-3.5 w-3.5" />
-                </button>
-              )}
-              <button onClick={() => data.setDebug(!data.debug)} className={btnCls(data.debug)}>
-                <Bug className="h-3.5 w-3.5" />
-              </button>
-              <button onClick={() => data.setShowRaw(!data.showRaw)} className={btnCls()}>
-                {data.showRaw ? <BookOpen className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
-              </button>
-              <button onClick={() => router.push(`/songs/${id}/edit`)} disabled={!spotifyConnected} className={btnCls()}>
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-              <button onClick={() => router.push(`/songs/${id}/furigana/edit`)} disabled={!spotifyConnected} className={btnCls()} title={t('furigana.title')}>
-                <Languages className="h-3.5 w-3.5" />
-              </button>
-              <button onClick={data.handleDelete} disabled={!spotifyConnected} className={btnCls(false, 'danger')}>
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-              <button onClick={data.handleCopy} className={btnCls(data.copied)}>
-                {data.copied ? <Check className="h-3.5 w-3.5 text-[var(--success)]" /> : <Copy className="h-3.5 w-3.5" />}
-              </button>
-              <div className="relative">
-                <button onClick={() => data.setShowExport(!data.showExport)} className={btnCls(data.showExport)}>
-                  <Download className="h-3.5 w-3.5" />
-                </button>
-                {data.showExport && (
-                  <div className="absolute right-0 top-full mt-1 z-50 rounded-lg bg-[var(--card)] border border-[var(--border)] shadow-lg py-1 min-w-[120px]">
-                    <a href={`/api/songs/${id}/export?format=text`} onClick={() => data.setShowExport(false)} className="block px-3 py-1.5 text-xs text-[var(--foreground)] hover:bg-[var(--accent)]">.txt</a>
-                    <a href={`/api/songs/${id}/export?format=lrc`} onClick={() => data.setShowExport(false)} className="block px-3 py-1.5 text-xs text-[var(--foreground)] hover:bg-[var(--accent)]">.lrc</a>
-                    <a href={`/api/songs/${id}/export?format=html`} onClick={() => data.setShowExport(false)} className="block px-3 py-1.5 text-xs text-[var(--foreground)] hover:bg-[var(--accent)]">.html {t('song.exportFurigana')}</a>
-                  </div>
-                )}
-              </div>
+          {/* Desktop toolbar */}
+          <div className="hidden sm:flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-0.5 rounded-md bg-[var(--accent)] px-1 py-0.5" title={t('song.fontSize')}>
+              <button onClick={() => data.setFontSize(s => Math.max(14, s - 2))} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Minus className="h-3 w-3" /></button>
+              <span className="text-[10px] w-5 text-center text-[var(--muted-foreground)] tabular-nums">{data.fontSize}</span>
+              <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Plus className="h-3 w-3" /></button>
             </div>
-            {furiganaLines.length > 0 && pipSupported && (
-              <button
-                onClick={() => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef, lineTimestamps)}
-                className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
-              >
-                <PictureInPicture className="h-3.5 w-3.5" />
-                <span>{t('song.pipBtn')}</span>
-              </button>
-            )}
+            <button onClick={data.handleSync} disabled={data.syncing || !spotifyConnected} className={btnTextCls()}>
+              <RefreshCw className={`h-3.5 w-3.5 ${data.syncing ? 'animate-spin' : ''}`} />
+              {data.syncing ? t('song.syncing') : t('song.sync')}
+            </button>
+            <button onClick={data.handleCopy} className={btnTextCls(data.copied)}>
+              {data.copied ? <Check className="h-3.5 w-3.5 text-[var(--success)]" /> : <Copy className="h-3.5 w-3.5" />}
+              {t('song.copy')}
+            </button>
+            <button onClick={() => router.push(`/songs/${id}/edit`)} disabled={!spotifyConnected} className={btnTextCls()}>
+              <Pencil className="h-3.5 w-3.5" /> {t('common.edit')}
+            </button>
+            <button onClick={() => router.push(`/songs/${id}/furigana/edit`)} disabled={!spotifyConnected} className={btnTextCls()}>
+              <Languages className="h-3.5 w-3.5" /> {t('furigana.title')}
+            </button>
+
+            <ToolbarMenu
+              label={<span className="inline-flex items-center gap-1">{t('song.view')} <ChevronDown className="h-3 w-3 opacity-60" /></span>}
+              items={[
+                {
+                  icon: data.showRaw ? <BookOpen className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />,
+                  label: data.showRaw ? t('song.furigana') : t('song.raw'),
+                  active: data.showRaw,
+                  onClick: () => data.setShowRaw(!data.showRaw),
+                },
+                {
+                  icon: <Bug className="h-3.5 w-3.5" />,
+                  label: t('song.debug'),
+                  active: data.debug,
+                  onClick: () => data.setDebug(!data.debug),
+                },
+                ...(furiganaLines.length > 0 && pipSupported ? [{
+                  icon: <PictureInPicture className="h-3.5 w-3.5" />,
+                  label: t('song.pipBtn'),
+                  onClick: () => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef, lineTimestamps),
+                } as const] : []),
+              ]}
+            />
+
+            <ToolbarMenu
+              label={<span className="inline-flex items-center gap-1">{t('song.more')} <ChevronDown className="h-3 w-3 opacity-60" /></span>}
+              items={[
+                ...(!hasSyncData ? [{
+                  icon: <ClipboardPaste className="h-3.5 w-3.5" />,
+                  label: t('song.paste'),
+                  onClick: () => data.setShowPasteLrc(!data.showPasteLrc),
+                  disabled: !spotifyConnected,
+                } as const] : []),
+                {
+                  icon: <Download className="h-3.5 w-3.5" />,
+                  label: '.txt',
+                  href: `/api/songs/${id}/export?format=text`,
+                },
+                {
+                  icon: <Download className="h-3.5 w-3.5" />,
+                  label: '.lrc',
+                  href: `/api/songs/${id}/export?format=lrc`,
+                },
+                {
+                  icon: <Download className="h-3.5 w-3.5" />,
+                  label: `.html ${t('song.exportFurigana')}`,
+                  href: `/api/songs/${id}/export?format=html`,
+                },
+                {
+                  icon: <Trash2 className="h-3.5 w-3.5" />,
+                  label: t('common.delete'),
+                  danger: true,
+                  onClick: data.handleDelete,
+                  disabled: !spotifyConnected,
+                },
+              ]}
+            />
           </div>
         </div>
 
@@ -460,6 +492,69 @@ export default function SongViewPage() {
   );
 }
 
+type ToolbarMenuItem = {
+  icon?: ReactNode;
+  label: ReactNode;
+  active?: boolean;
+  danger?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+  href?: string;
+};
+
+function ToolbarMenu({ label, items }: { label: ReactNode; items: ToolbarMenuItem[] }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button onClick={() => setOpen(!open)} className={btnTextCls(open)}>
+        {label}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-50 rounded-lg bg-[var(--card)] border border-[var(--border)] shadow-lg py-1 min-w-[160px]">
+          {items.map((item, i) => {
+            const base = "w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors disabled:opacity-50";
+            const cls = item.danger
+              ? `${base} text-[var(--destructive)] hover:bg-[var(--destructive)]/10`
+              : item.active
+                ? `${base} text-[var(--primary)] bg-[var(--primary)]/10`
+                : `${base} text-[var(--foreground)] hover:bg-[var(--accent)]`;
+            if (item.href) {
+              return (
+                <a key={i} href={item.href} onClick={() => setOpen(false)} className={cls}>
+                  {item.icon}
+                  <span>{item.label}</span>
+                </a>
+              );
+            }
+            return (
+              <button
+                key={i}
+                onClick={() => { item.onClick?.(); setOpen(false); }}
+                disabled={item.disabled}
+                className={cls}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Mobile bottom toolbar — A-/A+, Sync, Copy visible; rest in 3-dot menu */
 function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, pipSupported, highlightRef, pipWindowRef, spotifyConnected, lineTimestamps }: {
   data: ReturnType<typeof useSongData>;
@@ -493,7 +588,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
   const menuItems = [
     { icon: <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />, label: data.syncing ? t('song.syncing') : t('song.sync'), onClick: data.handleSync, disabled: data.syncing },
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: 'PiP', onClick: () => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef, lineTimestamps) }] : []),
-    { icon: <Bug className="h-4 w-4" />, label: 'Debug', onClick: () => data.setDebug(!data.debug), active: data.debug },
+    { icon: <Bug className="h-4 w-4" />, label: t('song.debug'), onClick: () => data.setDebug(!data.debug), active: data.debug },
     ...(spotifyConnected ? [
       { icon: <Pencil className="h-4 w-4" />, label: t('common.edit'), onClick: () => router.push(`/songs/${id}/edit`) },
       { icon: <Languages className="h-4 w-4" />, label: t('furigana.title'), onClick: () => router.push(`/songs/${id}/furigana/edit`) },
