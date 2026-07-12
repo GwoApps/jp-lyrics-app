@@ -258,20 +258,36 @@ export default function SongViewPage() {
               <span className="text-[10px] w-5 text-center text-[var(--muted-foreground)] tabular-nums">{data.fontSize}</span>
               <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Plus className="h-3 w-3" /></button>
             </div>
-            <button onClick={data.handleSync} disabled={data.syncing || !spotifyConnected} className={btnTextCls()}>
-              <RefreshCw className={`h-3.5 w-3.5 ${data.syncing ? 'animate-spin' : ''}`} />
-              {data.syncing ? t('song.syncing') : t('song.sync')}
-            </button>
             <button onClick={data.handleCopy} className={btnTextCls(data.copied)}>
               {data.copied ? <Check className="h-3.5 w-3.5 text-[var(--success)]" /> : <Copy className="h-3.5 w-3.5" />}
               {t('song.copy')}
             </button>
-            <button onClick={() => router.push(`/songs/${id}/edit`)} disabled={!spotifyConnected} className={btnTextCls()}>
-              <Pencil className="h-3.5 w-3.5" /> {t('common.edit')}
-            </button>
-            <button onClick={() => router.push(`/songs/${id}/furigana/edit`)} disabled={!spotifyConnected} className={btnTextCls()}>
-              <Languages className="h-3.5 w-3.5" /> {t('furigana.title')}
-            </button>
+            {furiganaLines.length > 0 && pipSupported && (
+              <button
+                onClick={() => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef, lineTimestamps)}
+                className={btnTextCls()}
+              >
+                <PictureInPicture className="h-3.5 w-3.5" /> {t('song.pipBtn')}
+              </button>
+            )}
+
+            <ToolbarMenu
+              label={<span className="inline-flex items-center gap-1">{t('common.edit')} <ChevronDown className="h-3 w-3 opacity-60" /></span>}
+              items={[
+                {
+                  icon: <Pencil className="h-3.5 w-3.5" />,
+                  label: t('common.edit'),
+                  onClick: () => router.push(`/songs/${id}/edit`),
+                  disabled: !spotifyConnected,
+                },
+                {
+                  icon: <Languages className="h-3.5 w-3.5" />,
+                  label: t('furigana.title'),
+                  onClick: () => router.push(`/songs/${id}/furigana/edit`),
+                  disabled: !spotifyConnected,
+                },
+              ]}
+            />
 
             <ToolbarMenu
               label={<span className="inline-flex items-center gap-1">{t('song.view')} <ChevronDown className="h-3 w-3 opacity-60" /></span>}
@@ -288,17 +304,18 @@ export default function SongViewPage() {
                   active: data.debug,
                   onClick: () => data.setDebug(!data.debug),
                 },
-                ...(furiganaLines.length > 0 && pipSupported ? [{
-                  icon: <PictureInPicture className="h-3.5 w-3.5" />,
-                  label: t('song.pipBtn'),
-                  onClick: () => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef, lineTimestamps),
-                } as const] : []),
               ]}
             />
 
             <ToolbarMenu
               label={<span className="inline-flex items-center gap-1">{t('song.more')} <ChevronDown className="h-3 w-3 opacity-60" /></span>}
               items={[
+                {
+                  icon: <RefreshCw className={`h-3.5 w-3.5 ${data.syncing ? 'animate-spin' : ''}`} />,
+                  label: data.syncing ? t('song.syncing') : t('song.sync'),
+                  onClick: data.handleSync,
+                  disabled: data.syncing || !spotifyConnected,
+                },
                 ...(!hasSyncData ? [{
                   icon: <ClipboardPaste className="h-3.5 w-3.5" />,
                   label: t('song.paste'),
@@ -587,7 +604,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
 
   const menuItems = [
     { icon: <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />, label: data.syncing ? t('song.syncing') : t('song.sync'), onClick: data.handleSync, disabled: data.syncing },
-    ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: 'PiP', onClick: () => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef, lineTimestamps) }] : []),
+    ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: t('song.pipBtn'), onClick: () => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef, lineTimestamps) }] : []),
     { icon: <Bug className="h-4 w-4" />, label: t('song.debug'), onClick: () => data.setDebug(!data.debug), active: data.debug },
     ...(spotifyConnected ? [
       { icon: <Pencil className="h-4 w-4" />, label: t('common.edit'), onClick: () => router.push(`/songs/${id}/edit`) },
