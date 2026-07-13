@@ -234,7 +234,7 @@ async function drawPortrait(
   drawCover(ctx, song, coverImg, coverX, coverY, coverSize);
 
   // Title + artist (centered)
-  let textY = coverY + coverSize + 40;
+  let textY = coverY + coverSize + 64;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#ffffff';
@@ -243,7 +243,7 @@ async function drawPortrait(
     ctx.fillText(line, centerX, textY);
     textY += 58;
   }
-  textY += 8;
+  textY += 12;
   ctx.fillStyle = '#94a3b8';
   ctx.font = '26px sans-serif';
   for (const line of wrapText(ctx, song.artist || '', contentW, 1)) {
@@ -252,10 +252,10 @@ async function drawPortrait(
   }
 
   ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  ctx.fillRect(pad, textY + 24, contentW, 1);
+  ctx.fillRect(pad, textY + 36, contentW, 1);
 
   // Lyrics
-  const lyricsY = textY + 52;
+  const lyricsY = textY + 84;
   const lyricsLineH = 44;
   const lyricsMaxLines = 4;
   ctx.fillStyle = '#e2e8f0';
