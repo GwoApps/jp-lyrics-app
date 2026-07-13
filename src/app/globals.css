@@ -52,7 +52,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: 'Inter', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Inter', 'Noto Sans JP', 'Noto Sans SC', 'Source Han Sans SC', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.6;
@@ -83,7 +83,7 @@ rp { display: none; }
 
 /* Textarea */
 textarea {
-  font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Noto Sans JP', 'Noto Sans SC', 'Source Han Sans SC', sans-serif;
 }
 
 /* Transition */
