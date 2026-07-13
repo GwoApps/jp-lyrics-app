@@ -204,6 +204,23 @@ textarea {
   background: color-mix(in srgb, var(--primary) 88%, var(--song-accent));
   border-color: color-mix(in srgb, var(--primary) 80%, var(--song-accent));
 }
+/* Light mode keeps desktop controls close to white even with a very dark cover. */
+[data-theme="light"] .song-accent-button {
+  background: color-mix(in srgb, var(--background) 96%, var(--song-accent));
+  border-color: color-mix(in srgb, var(--border) 94%, var(--song-accent));
+}
+[data-theme="light"] .song-accent-button:hover {
+  background: color-mix(in srgb, var(--background) 92%, var(--song-accent));
+  border-color: color-mix(in srgb, var(--border) 88%, var(--song-accent));
+}
+[data-theme="light"] .song-accent-button--active {
+  background: color-mix(in srgb, var(--primary) 94%, var(--song-accent));
+  border-color: color-mix(in srgb, var(--primary) 88%, var(--song-accent));
+}
+[data-theme="light"] .song-accent-surface {
+  background: color-mix(in srgb, var(--background) 95%, var(--song-accent));
+  border-color: color-mix(in srgb, var(--border) 94%, var(--song-accent));
+}
 .song-mobile-button {
   color: var(--muted-foreground);
   background: var(--accent);
