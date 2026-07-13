@@ -148,9 +148,6 @@ async function drawLandscape(
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, LANDSCAPE_W, LANDSCAPE_H);
 
-  ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  ctx.fillRect(60, 40, LANDSCAPE_W - 120, 2);
-
   const coverImg = await loadImage(song.cover_url);
   drawCover(ctx, song, coverImg, 60, 60, 240);
 
@@ -225,44 +222,47 @@ async function drawPortrait(
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, PORTRAIT_W, PORTRAIT_H);
 
-  ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  ctx.fillRect(60, 60, PORTRAIT_W - 120, 2);
+  const pad = 60;
+  const contentW = PORTRAIT_W - pad * 2;
+  const centerX = PORTRAIT_W / 2;
+
+  const coverSize = 380;
+  const coverX = (PORTRAIT_W - coverSize) / 2;
+  const coverY = 80;
 
   const coverImg = await loadImage(song.cover_url);
-  drawCover(ctx, song, coverImg, 105, 80, 420);
+  drawCover(ctx, song, coverImg, coverX, coverY, coverSize);
 
   // Title + artist (centered)
-  const centerX = PORTRAIT_W / 2;
-  let textY = 540;
+  let textY = coverY + coverSize + 40;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 44px sans-serif';
-  for (const line of wrapText(ctx, song.title, 510, 2)) {
+  for (const line of wrapText(ctx, song.title, contentW, 2)) {
     ctx.fillText(line, centerX, textY);
     textY += 58;
   }
   textY += 8;
   ctx.fillStyle = '#94a3b8';
   ctx.font = '26px sans-serif';
-  for (const line of wrapText(ctx, song.artist || '', 510, 1)) {
+  for (const line of wrapText(ctx, song.artist || '', contentW, 1)) {
     ctx.fillText(line, centerX, textY);
     textY += 38;
   }
 
   ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  ctx.fillRect(60, 640, PORTRAIT_W - 120, 1);
+  ctx.fillRect(pad, textY + 24, contentW, 1);
 
   // Lyrics
-  const lyricsY = 680;
-  const lyricsW = 510;
+  const lyricsY = textY + 52;
   const lyricsLineH = 44;
   const lyricsMaxLines = 4;
   ctx.fillStyle = '#e2e8f0';
   ctx.font = '28px sans-serif';
   const lyricsLines: string[] = [];
   for (const line of selectedLyrics) {
-    const wrapped = wrapText(ctx, line, lyricsW, lyricsMaxLines - lyricsLines.length);
+    const wrapped = wrapText(ctx, line, contentW, lyricsMaxLines - lyricsLines.length);
     lyricsLines.push(...wrapped);
     if (lyricsLines.length >= lyricsMaxLines) break;
   }
@@ -273,7 +273,7 @@ async function drawPortrait(
   // QR
   const qrSize = 180;
   const qrX = (PORTRAIT_W - qrSize) / 2;
-  const qrY = 940;
+  const qrY = PORTRAIT_H - qrSize - 120;
   const qrImg = await loadImage(qrDataUrl);
   if (qrImg) {
     ctx.save();
@@ -460,15 +460,44 @@ export default function SharePage() {
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <div className={`mx-auto px-4 py-6 ${cardAspectClass}`}>
-        <div className="mb-6 flex items-center gap-3">
-          <button
-            onClick={() => router.back()}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-            aria-label={t('common.close')}
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <h1 className="text-xl font-semibold">{t('share.title')}</h1>
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.back()}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              aria-label={t('common.close')}
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <h1 className="text-xl font-semibold">{t('share.title')}</h1>
+          </div>
+
+          <div className="inline-flex items-center gap-1 rounded-lg bg-[var(--accent)] p-1">
+            <button
+              onClick={() => setOrientation('landscape')}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                orientation === 'landscape'
+                  ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                  : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+              }`}
+              title={t('share.landscape')}
+            >
+              <Monitor className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{t('share.landscape')}</span>
+            </button>
+            <button
+              onClick={() => setOrientation('portrait')}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                orientation === 'portrait'
+                  ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                  : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+              }`}
+              title={t('share.portrait')}
+            >
+              <Smartphone className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{t('share.portrait')}</span>
+            </button>
+          </div>
         </div>
 
         <div className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-sm">
@@ -508,70 +537,43 @@ export default function SharePage() {
         </div>
 
         {hasLyrics && (
-          <div className="mt-8 space-y-4">
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-medium text-[var(--muted-foreground)]">
-                  {t('share.selectLyrics')}
-                </h2>
-                {selected.size > 0 && (
-                  <button
-                    onClick={clearSelection}
-                    className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
-                  >
-                    {t('share.clear')}
-                  </button>
-                )}
-              </div>
-              <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-                {lyricsLines.map((line, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => toggleLine(idx)}
-                    className={`flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left transition-colors ${
+          <div className="mt-8 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-medium text-[var(--muted-foreground)]">
+                {t('share.selectLyrics')}
+              </h2>
+              {selected.size > 0 && (
+                <button
+                  onClick={clearSelection}
+                  className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                >
+                  {t('share.clear')}
+                </button>
+              )}
+            </div>
+            <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+              {lyricsLines.map((line, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => toggleLine(idx)}
+                  className={`flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left transition-colors ${
+                    selected.has(idx)
+                      ? 'bg-[var(--primary)]/10 text-[var(--foreground)]'
+                      : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                  }`}
+                >
+                  <span
+                    className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
                       selected.has(idx)
-                        ? 'bg-[var(--primary)]/10 text-[var(--foreground)]'
-                        : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                        ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]'
+                        : 'border-[var(--border)] bg-[var(--background)]'
                     }`}
                   >
-                    <span
-                      className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
-                        selected.has(idx)
-                          ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]'
-                          : 'border-[var(--border)] bg-[var(--background)]'
-                      }`}
-                    >
-                      {selected.has(idx) && <Check className="h-3.5 w-3.5" />}
-                    </span>
-                    <span className="line-clamp-2 text-sm">{line}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-center gap-2">
-              <button
-                onClick={() => setOrientation('landscape')}
-                className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
-                  orientation === 'landscape'
-                    ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
-                    : 'bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--muted)]'
-                }`}
-              >
-                <Monitor className="h-4 w-4" />
-                {t('share.landscape')}
-              </button>
-              <button
-                onClick={() => setOrientation('portrait')}
-                className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
-                  orientation === 'portrait'
-                    ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
-                    : 'bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--muted)]'
-                }`}
-              >
-                <Smartphone className="h-4 w-4" />
-                {t('share.portrait')}
-              </button>
+                    {selected.has(idx) && <Check className="h-3.5 w-3.5" />}
+                  </span>
+                  <span className="line-clamp-2 text-sm">{line}</span>
+                </button>
+              ))}
             </div>
           </div>
         )}
