@@ -328,7 +328,7 @@ export default function SongViewPage() {
             />
 
             <ToolbarMenu
-              label={<span className="inline-flex items-center gap-1">{t('song.view')} <ChevronDown className="h-3 w-3 opacity-60" /></span>}
+              label={<span className="inline-flex items-center gap-1">{t('song.more')} <ChevronDown className="h-3 w-3 opacity-60" /></span>}
               items={[
                 {
                   icon: data.showRaw ? <BookOpen className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />,
@@ -342,12 +342,6 @@ export default function SongViewPage() {
                   active: data.debug,
                   onClick: () => data.setDebug(!data.debug),
                 },
-              ]}
-            />
-
-            <ToolbarMenu
-              label={<span className="inline-flex items-center gap-1">{t('song.more')} <ChevronDown className="h-3 w-3 opacity-60" /></span>}
-              items={[
                 {
                   icon: <RefreshCw className={`h-3.5 w-3.5 ${data.syncing ? 'animate-spin' : ''}`} />,
                   label: data.syncing ? t('song.syncing') : t('song.sync'),
