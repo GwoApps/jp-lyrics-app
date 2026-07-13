@@ -142,6 +142,41 @@ textarea {
 
 /* Safe area for iOS bottom bar */
 /* Active lyrics line highlight */
+.lyrics-panel {
+  --lyric-accent: var(--primary);
+  background: color-mix(in srgb, var(--card) 90%, var(--lyric-accent));
+  border: 1px solid color-mix(in srgb, var(--border) 76%, var(--lyric-accent));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--lyric-accent) 9%, transparent),
+    0 18px 48px -28px color-mix(in srgb, var(--lyric-accent) 70%, transparent);
+}
+.lyrics-ambient {
+  z-index: 0;
+  opacity: 0.72;
+  background:
+    radial-gradient(ellipse 72% 56% at 14% 8%, color-mix(in srgb, var(--lyric-accent) 34%, transparent), transparent 70%),
+    radial-gradient(ellipse 66% 52% at 88% 95%, color-mix(in srgb, var(--lyric-accent) 24%, transparent), transparent 74%);
+  filter: blur(22px) saturate(1.12);
+  animation: lyricsAmbientDrift 13s ease-in-out infinite alternate;
+}
+@keyframes lyricsAmbientDrift {
+  from { transform: scale(1) translate3d(-1%, -1%, 0); }
+  to { transform: scale(1.08) translate3d(1.5%, 1%, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lyrics-ambient { animation: none; }
+}
+.lyric-line {
+  color: var(--foreground);
+  opacity: 0.4;
+}
+.lyric-line:hover { opacity: 0.72; }
+.lyric-line--active {
+  color: var(--foreground);
+  opacity: 1;
+  text-shadow: 0 0 18px color-mix(in srgb, var(--lyric-accent) 42%, transparent);
+}
+.lyric-line rt { color: currentColor; opacity: 0.65; }
 @keyframes lyricActivate {
   0% { transform: scale(1); filter: brightness(1); }
   40% { transform: scale(1.06); filter: brightness(1.25); }

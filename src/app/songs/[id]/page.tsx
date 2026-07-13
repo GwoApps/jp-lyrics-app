@@ -13,6 +13,7 @@ import { fmtMs, fmtTime, findActiveLine } from '@/lib/lrc';
 import { isTitleMatch, findBestMatch } from '@/lib/match';
 import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
+import { extractMaterialCoverColor, type CoverColor } from '@/lib/cover-color';
 import type { SyncRefs } from '@/hooks/useSpotifySync';
 
 /** Reusable button class builder */
@@ -123,9 +124,27 @@ export default function SongViewPage() {
 
   // Album cover
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [coverColor, setCoverColor] = useState<CoverColor | null>(null);
   useEffect(() => {
     if (data.song?.cover_url) setCoverUrl(data.song.cover_url);
   }, [data.song?.cover_url]);
+  useEffect(() => {
+    if (!coverUrl) {
+      setCoverColor(null);
+      return;
+    }
+
+    let cancelled = false;
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.onload = () => {
+      const color = extractMaterialCoverColor(image);
+      if (!cancelled) setCoverColor(color);
+    };
+    image.onerror = () => { if (!cancelled) setCoverColor(null); };
+    image.src = coverUrl;
+    return () => { cancelled = true; };
+  }, [coverUrl]);
   useEffect(() => {
     if (!id || !currentUserEmail || !spotifyConnected || coverUrl) return;
     fetch(`/api/songs/${id}/cover`)
@@ -197,6 +216,9 @@ export default function SongViewPage() {
   const playingMatch = spotify?.track && !isSameSong
     ? findBestMatch(data.allSongs.filter((s) => s.id !== id), spotify.track, currentUserEmail)
     : null;
+  const lyricPanelStyle = coverColor
+    ? { ['--lyric-accent' as string]: `rgb(${coverColor.r} ${coverColor.g} ${coverColor.b})` }
+    : undefined;
 
   return (
     <div className="fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-hidden sm:block sm:h-auto sm:pb-0">
@@ -495,11 +517,12 @@ export default function SongViewPage() {
       </div>
 
       {/* Lyrics */}
-      <div className="rounded-lg bg-[var(--card)] border border-[var(--border)] overflow-hidden flex-1 min-h-0">
+      <div className="lyrics-panel relative isolate rounded-lg overflow-hidden flex-1 min-h-0" style={lyricPanelStyle}>
+        <div className="lyrics-ambient pointer-events-none absolute -inset-10" aria-hidden="true" />
         {data.showRaw ? (
-          <pre className="p-4 sm:p-6 whitespace-pre-wrap font-sans leading-relaxed h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden" style={{ fontSize: `${data.fontSize}px` }}>{song.lyrics_raw || t('song.noLyricsParen')}</pre>
+          <pre className="relative z-10 p-4 sm:p-6 whitespace-pre-wrap font-sans leading-relaxed h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden" style={{ fontSize: `${data.fontSize}px` }}>{song.lyrics_raw || t('song.noLyricsParen')}</pre>
         ) : (
-          <div ref={data.lyricsRef} className="p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden scroll-smooth" style={{ fontSize: `${data.fontSize}px` }}>
+          <div ref={data.lyricsRef} className="relative z-10 p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden scroll-smooth" style={{ fontSize: `${data.fontSize}px` }}>
             {furiganaLines.length > 0 ? (
               furiganaLines.map((line, i) => (
                 <div key={i} ref={(el) => { data.lineRefs.current[i] = el; }}>
