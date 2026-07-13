@@ -612,6 +612,63 @@ type ToolbarMenuItem = {
   href?: string;
 };
 
+/** Icon-only mobile controls reveal their localized action on a touch long-press. */
+function MobileIconButton({ label, className = '', children, onClick, ...props }: React.ComponentProps<'button'> & { label: string }) {
+  const [showLabel, setShowLabel] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressedRef = useRef(false);
+
+  const clearLongPress = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+  };
+
+  useEffect(() => clearLongPress, []);
+
+  return (
+    <button
+      {...props}
+      aria-label={label}
+      title={label}
+      className={`song-mobile-button relative flex items-center justify-center rounded-lg p-2 ${className}`}
+      onPointerDown={(event) => {
+        props.onPointerDown?.(event);
+        if (event.pointerType === 'mouse') return;
+        longPressedRef.current = false;
+        timerRef.current = setTimeout(() => {
+          longPressedRef.current = true;
+          setShowLabel(true);
+        }, 450);
+      }}
+      onPointerUp={(event) => {
+        props.onPointerUp?.(event);
+        clearLongPress();
+      }}
+      onPointerCancel={(event) => {
+        props.onPointerCancel?.(event);
+        clearLongPress();
+        setShowLabel(false);
+      }}
+      onContextMenu={(event) => {
+        props.onContextMenu?.(event);
+        event.preventDefault();
+      }}
+      onClick={(event) => {
+        if (longPressedRef.current) {
+          event.preventDefault();
+          longPressedRef.current = false;
+          setShowLabel(false);
+          return;
+        }
+        onClick?.(event);
+      }}
+    >
+      {children}
+      {showLabel && <span role="status" className="song-mobile-tooltip">{label}</span>}
+    </button>
+  );
+}
+
 function ToolbarMenu({ label, items }: { label: ReactNode; items: ToolbarMenuItem[] }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -714,42 +771,41 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
       <div className="mx-auto max-w-[860px] flex items-center justify-between px-2" style={{ paddingTop: 8, paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
         {/* A-/A+ */}
         <div className="song-mobile-surface flex items-stretch rounded-lg overflow-hidden">
-          <button onClick={() => data.setFontSize(s => Math.max(14, s - 2))} className="flex items-center justify-center px-2 py-1 text-sm font-medium text-[var(--muted-foreground)] active:text-[var(--foreground)] active:bg-[var(--accent)]">A-</button>
+          <button onClick={() => data.setFontSize(s => Math.max(14, s - 2))} className="song-mobile-text-button flex items-center justify-center px-2 py-1 text-sm font-medium">A-</button>
           <div className="w-px bg-[var(--border)]" />
-          <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="flex items-center justify-center px-2 py-1 text-base font-medium text-[var(--muted-foreground)] active:text-[var(--foreground)] active:bg-[var(--accent)]">A+</button>
+          <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="song-mobile-text-button flex items-center justify-center px-2 py-1 text-base font-medium">A+</button>
         </div>
 
         {/* Copy */}
-        <button onClick={data.handleCopy} className={`song-mobile-button flex items-center justify-center rounded-lg p-2 ${data.copied ? 'text-[var(--success)]' : ''}`}>
+        <MobileIconButton label={data.copied ? t('share.copied') : t('song.copy')} onClick={data.handleCopy} className={data.copied ? 'text-[var(--success)]' : ''}>
           {data.copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
-        </button>
+        </MobileIconButton>
 
         {/* Paste */}
         {!hasSyncData && (
-          <button onClick={() => data.setShowPasteLrc(!data.showPasteLrc)} className={`song-mobile-button flex items-center justify-center rounded-lg p-2 ${data.showPasteLrc ? 'song-mobile-button--active' : ''}`}>
+          <MobileIconButton label={t('song.paste')} onClick={() => data.setShowPasteLrc(!data.showPasteLrc)} className={data.showPasteLrc ? 'song-mobile-button--active' : ''}>
             <ClipboardPaste className="h-5 w-5" />
-          </button>
+          </MobileIconButton>
         )}
 
         {/* Raw / Furigana */}
-        <button onClick={() => data.setShowRaw(!data.showRaw)} className={`song-mobile-button flex items-center justify-center rounded-lg p-2 ${data.showRaw ? 'song-mobile-button--active' : ''}`}>
+        <MobileIconButton label={data.showRaw ? t('song.furigana') : t('song.raw')} onClick={() => data.setShowRaw(!data.showRaw)} className={data.showRaw ? 'song-mobile-button--active' : ''}>
           {data.showRaw ? <BookOpen className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
-        </button>
+        </MobileIconButton>
 
         {/* Share */}
-        <button
+        <MobileIconButton
+          label={t('song.share')}
           onClick={() => router.push(sync.activeLine >= 0 ? `/songs/${id}/share?line=${sync.activeLine}` : `/songs/${id}/share`)}
-          className="song-mobile-button flex items-center justify-center rounded-lg p-2"
-          title={t('song.share')}
         >
           <Share2 className="h-5 w-5" />
-        </button>
+        </MobileIconButton>
 
         {/* 3-dot menu */}
         <div className="relative" ref={menuRef}>
-          <button onClick={() => setShowMenu(!showMenu)} className={`flex items-center justify-center p-2 rounded-lg transition-colors ${showMenu ? 'text-[var(--foreground)] bg-[var(--accent)]' : 'text-[var(--muted-foreground)]'}`}>
+          <MobileIconButton label={t('song.more')} onClick={() => setShowMenu(!showMenu)} className={showMenu ? 'song-mobile-button--active' : ''}>
             <MoreVertical className="h-5 w-5" />
-          </button>
+          </MobileIconButton>
           {showMenu && (
             <div className="absolute right-0 bottom-full mb-2 z-50 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-xl py-1.5 min-w-[180px] fade-in">
               {menuItems.map((item, i) => (
