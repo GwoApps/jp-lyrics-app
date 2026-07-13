@@ -533,7 +533,6 @@ export default function SongViewPage() {
 
       {/* Lyrics */}
       <div className="lyrics-panel relative isolate rounded-lg overflow-hidden flex-1 min-h-0" style={lyricPanelStyle}>
-        <div className="lyrics-ambient pointer-events-none absolute -inset-10" aria-hidden="true" />
         {data.showRaw ? (
           <pre className="relative z-10 p-4 sm:p-6 whitespace-pre-wrap font-sans leading-relaxed h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden" style={{ fontSize: `${data.fontSize}px` }}>{song.lyrics_raw || t('song.noLyricsParen')}</pre>
         ) : (
