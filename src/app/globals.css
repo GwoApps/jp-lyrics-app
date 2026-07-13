@@ -147,15 +147,17 @@ textarea {
   background: color-mix(in srgb, var(--card) 90%, var(--lyric-accent));
   border: 1px solid color-mix(in srgb, var(--border) 76%, var(--lyric-accent));
   box-shadow:
-    0 0 0 1px color-mix(in srgb, var(--lyric-accent) 9%, transparent),
-    0 18px 48px -28px color-mix(in srgb, var(--lyric-accent) 70%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--lyric-accent) 12%, transparent),
+    0 0 52px -20px color-mix(in srgb, var(--lyric-accent) 72%, transparent);
 }
 .lyrics-ambient {
   z-index: 0;
-  opacity: 0.72;
+  opacity: 0.76;
   background:
-    radial-gradient(ellipse 72% 56% at 14% 8%, color-mix(in srgb, var(--lyric-accent) 34%, transparent), transparent 70%),
-    radial-gradient(ellipse 66% 52% at 88% 95%, color-mix(in srgb, var(--lyric-accent) 24%, transparent), transparent 74%);
+    radial-gradient(ellipse 58% 54% at 0% 0%, color-mix(in srgb, var(--lyric-accent) 34%, transparent), transparent 72%),
+    radial-gradient(ellipse 58% 54% at 100% 0%, color-mix(in srgb, var(--lyric-accent) 27%, transparent), transparent 72%),
+    radial-gradient(ellipse 58% 54% at 0% 100%, color-mix(in srgb, var(--lyric-accent) 27%, transparent), transparent 72%),
+    radial-gradient(ellipse 58% 54% at 100% 100%, color-mix(in srgb, var(--lyric-accent) 34%, transparent), transparent 72%);
   filter: blur(22px) saturate(1.12);
   animation: lyricsAmbientDrift 13s ease-in-out infinite alternate;
 }
