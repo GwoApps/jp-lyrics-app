@@ -265,12 +265,12 @@ export default function HomePage() {
       router.push(path);
       return;
     }
-    const vt = (document as Document & { startViewTransition?: (cb: () => Promise<void> | void) => { ready: Promise<void> } }).startViewTransition;
-    if (!vt) {
+    const doc = document as Document & { startViewTransition?: (cb: () => Promise<void> | void) => { ready: Promise<void> } };
+    if (!doc.startViewTransition) {
       router.push(path);
       return;
     }
-    const transition = vt(async () => {
+    const transition = doc.startViewTransition(async () => {
       router.push(path);
       // Give Next.js a tick to render the new route before the browser captures the new state.
       await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 50)));
