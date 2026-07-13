@@ -155,6 +155,17 @@ textarea {
 }
 .toast-success { background: var(--success-muted); color: var(--success); border: 1px solid var(--success); border-opacity: 0.3; }
 .toast-error { background: color-mix(in oklab, var(--destructive) 15%, transparent); color: var(--destructive); border: 1px solid color-mix(in oklab, var(--destructive) 30%, transparent); }
+
+/* Cover image shared element transition */
+.cover-transition {
+  view-transition-name: var(--vt-name);
+}
+@supports not (view-transition-name: var(--vt-name)) {
+  .cover-transition {
+    view-transition-name: none;
+  }
+}
+
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }

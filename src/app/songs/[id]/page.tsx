@@ -139,7 +139,32 @@ export default function SongViewPage() {
   }, [id, currentUserEmail, spotifyConnected, coverUrl]);
 
   if (data.loading) {
-    return <div className="flex items-center justify-center py-32"><div className="h-5 w-5 border-2 border-[var(--muted-foreground)]/30 border-t-[var(--muted-foreground)] rounded-full animate-spin" /></div>;
+    return (
+      <div className="fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-hidden sm:block sm:h-auto sm:pb-0">
+        {/* Breadcrumb */}
+        <div className="shrink-0 mb-3 sm:mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
+          <button onClick={() => transitionRouter.push('/')} className="hover:text-[var(--foreground)] transition-colors inline-flex items-center gap-1">
+            <ArrowLeft className="h-3 w-3" /> {t('common.list')}
+          </button>
+        </div>
+        {/* Header placeholder with named cover */}
+        <div className="shrink-0 mb-4 sm:mb-6">
+          <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
+            <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
+              <CoverImage src={null} alt="" size="md" viewTransitionName={`song-cover-${id}`} />
+              <div className="space-y-0.5 sm:space-y-1 min-w-0 flex-1 py-0.5">
+                <div className="h-6 w-48 bg-[var(--muted)] rounded animate-pulse" />
+                <div className="h-4 w-32 bg-[var(--muted)] rounded animate-pulse" />
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* Spinner */}
+        <div className="flex-1 flex items-center justify-center">
+          <div className="h-5 w-5 border-2 border-[var(--muted-foreground)]/30 border-t-[var(--muted-foreground)] rounded-full animate-spin" />
+        </div>
+      </div>
+    );
   }
 
   if (!data.song) {

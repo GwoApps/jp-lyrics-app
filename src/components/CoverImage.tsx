@@ -33,8 +33,8 @@ export default function CoverImage({
 
   return (
     <div
-      style={{ viewTransitionName }}
-      className={`relative shrink-0 overflow-hidden bg-[var(--muted)] flex items-center justify-center ${sizeMap[size]} ${className}`}
+      style={{ ['--vt-name' as string]: viewTransitionName }}
+      className={`relative shrink-0 overflow-hidden bg-[var(--muted)] flex items-center justify-center cover-transition ${sizeMap[size]} ${className}`}
     >
       <Music
         className={`absolute h-5 w-5 text-[var(--muted-foreground)]/40 transition-opacity duration-300 ${hidden ? 'opacity-100' : 'opacity-0'} ${placeholderClassName}`}
