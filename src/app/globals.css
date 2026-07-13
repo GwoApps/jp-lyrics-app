@@ -143,7 +143,7 @@ textarea {
 /* Safe area for iOS bottom bar */
 /* Active lyrics line highlight */
 .lyrics-panel {
-  --lyric-accent: var(--primary);
+  --lyric-accent: var(--border);
   background: color-mix(in srgb, var(--card) 90%, var(--lyric-accent));
   border: 1px solid color-mix(in srgb, var(--border) 76%, var(--lyric-accent));
   box-shadow:
@@ -151,7 +151,7 @@ textarea {
     0 0 52px -20px color-mix(in srgb, var(--lyric-accent) 72%, transparent);
 }
 .song-view {
-  --song-accent: var(--primary);
+  --song-accent: var(--border);
 }
 .song-accent-button {
   color: color-mix(in srgb, var(--foreground) 82%, var(--song-accent));
