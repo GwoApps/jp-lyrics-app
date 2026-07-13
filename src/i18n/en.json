@@ -187,7 +187,9 @@
     "error": "Failed to load",
     "notFound": "Song not found",
     "back": "Back to home",
-    "hint": "Long-press or right-click the image to save, or tap Download to save as PNG."
+    "hint": "Long-press or right-click the image to save, or tap Download to save as PNG.",
+    "scan": "Scan to view lyrics",
+    "site": "Shared from {site}"
   },
   "admin": {
     "title": "Admin",

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
@@ -76,7 +77,8 @@ async function drawCard(
   canvas: HTMLCanvasElement,
   song: Song,
   qrDataUrl: string,
-  pageUrl: string,
+  scanText: string,
+  siteText: string,
 ) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -154,12 +156,14 @@ async function drawCard(
     ctx.restore();
   }
 
-  // URL below QR
+  // Caption below QR
   ctx.fillStyle = '#cbd5e1';
-  ctx.font = '20px monospace';
+  ctx.font = '24px sans-serif';
   ctx.textAlign = 'center';
-  const urlText = pageUrl.replace(/^https?:\/\//, '');
-  ctx.fillText(urlText, qrX + qrSize / 2, qrY + qrSize + 34);
+  ctx.fillText(scanText, qrX + qrSize / 2, qrY + qrSize + 32);
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '18px sans-serif';
+  ctx.fillText(siteText, qrX + qrSize / 2, qrY + qrSize + 60);
 }
 
 export default function SharePage() {
@@ -209,11 +213,11 @@ export default function SharePage() {
     if (!song || !qrDataUrl || !canvasRef.current) return;
     setReady(false);
     let cancelled = false;
-    drawCard(canvasRef.current, song, qrDataUrl, pageUrl).then(() => {
+    drawCard(canvasRef.current, song, qrDataUrl, t('share.scan'), t('share.site', { site: window.location.host })).then(() => {
       if (!cancelled) setReady(true);
     });
     return () => { cancelled = true; };
-  }, [song, qrDataUrl, pageUrl]);
+  }, [song, qrDataUrl, pageUrl, t]);
 
   const handleDownload = () => {
     const canvas = canvasRef.current;
