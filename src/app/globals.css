@@ -181,8 +181,11 @@ textarea {
 
 /* Safe area for iOS bottom bar */
 /* Active lyrics line highlight */
-.lyrics-panel {
+.lyrics-panel-shell {
   --lyric-accent: var(--border);
+  --lyric-orbit-accent: var(--lyric-accent);
+}
+.lyrics-panel {
   z-index: 1;
   background: color-mix(in srgb, var(--card) 90%, var(--lyric-accent));
   border: 1px solid color-mix(in srgb, var(--border) 76%, var(--lyric-accent));
@@ -200,7 +203,7 @@ textarea {
   pointer-events: none;
   opacity: 0.96;
   border-radius: 50%;
-  background: radial-gradient(ellipse at 38% 42%, color-mix(in srgb, var(--lyric-accent) 78%, transparent) 0%, color-mix(in srgb, var(--lyric-accent) 52%, transparent) 42%, color-mix(in srgb, var(--lyric-accent) 20%, transparent) 68%, transparent 86%);
+  background: radial-gradient(ellipse at 38% 42%, color-mix(in srgb, var(--lyric-orbit-accent) 78%, transparent) 0%, color-mix(in srgb, var(--lyric-orbit-accent) 52%, transparent) 42%, color-mix(in srgb, var(--lyric-orbit-accent) 20%, transparent) 68%, transparent 86%);
   filter: blur(42px);
   transform: translate(-50%, -50%);
   animation: lyricsAmbientOrbit 20s linear infinite;

@@ -13,7 +13,7 @@ import { fmtMs, fmtTime, findActiveLine } from '@/lib/lrc';
 import { isTitleMatch, findBestMatch } from '@/lib/match';
 import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
-import { extractMaterialCoverColor, type CoverColor } from '@/lib/cover-color';
+import { extractMaterialCoverPalette, type CoverPalette } from '@/lib/cover-color';
 import type { SyncRefs } from '@/hooks/useSpotifySync';
 
 /** Reusable button class builder */
@@ -124,7 +124,7 @@ export default function SongViewPage() {
 
   // Album cover
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
-  const [coverColor, setCoverColor] = useState<CoverColor | null>(null);
+  const [coverColor, setCoverColor] = useState<CoverPalette | null>(null);
   useEffect(() => {
     if (data.song?.cover_url) setCoverUrl(data.song.cover_url);
   }, [data.song?.cover_url]);
@@ -138,7 +138,7 @@ export default function SongViewPage() {
     const image = new Image();
     image.crossOrigin = 'anonymous';
     image.onload = () => {
-      const color = extractMaterialCoverColor(image);
+      const color = extractMaterialCoverPalette(image);
       if (!cancelled) setCoverColor(color);
     };
     image.onerror = () => { if (!cancelled) setCoverColor(null); };
@@ -160,7 +160,7 @@ export default function SongViewPage() {
   // current light/dark theme dominant while giving the page a cover-derived cast.
   useEffect(() => {
     if (!coverColor) return;
-    const accent = `rgb(${coverColor.r} ${coverColor.g} ${coverColor.b})`;
+    const accent = `rgb(${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b})`;
     document.body.style.setProperty('--song-page-accent', accent);
     document.body.classList.add('song-page-themed');
     return () => {
@@ -229,10 +229,13 @@ export default function SongViewPage() {
     ? findBestMatch(data.allSongs.filter((s) => s.id !== id), spotify.track, currentUserEmail)
     : null;
   const songThemeStyle = coverColor
-    ? { ['--song-accent' as string]: `rgb(${coverColor.r} ${coverColor.g} ${coverColor.b})` }
+    ? { ['--song-accent' as string]: `rgb(${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b})` }
     : undefined;
   const lyricPanelStyle = coverColor
-    ? { ['--lyric-accent' as string]: `rgb(${coverColor.r} ${coverColor.g} ${coverColor.b})` }
+    ? {
+        ['--lyric-accent' as string]: `rgb(${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b})`,
+        ['--lyric-orbit-accent' as string]: `rgb(${coverColor.secondary.r} ${coverColor.secondary.g} ${coverColor.secondary.b})`,
+      }
     : undefined;
 
   return (
@@ -532,9 +535,9 @@ export default function SongViewPage() {
       </div>
 
       {/* Lyrics */}
-      <div className="lyrics-panel-shell relative isolate flex-1 min-h-0">
+      <div className="lyrics-panel-shell relative isolate flex-1 min-h-0" style={lyricPanelStyle}>
         <div className="lyrics-ambient-orbit" aria-hidden="true" />
-        <div className="lyrics-panel relative isolate h-full rounded-lg overflow-hidden" style={lyricPanelStyle}>
+        <div className="lyrics-panel relative isolate h-full rounded-lg overflow-hidden">
           {data.showRaw ? (
           <pre className="relative z-10 p-4 sm:p-6 whitespace-pre-wrap font-sans leading-relaxed h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden" style={{ fontSize: `${data.fontSize}px` }}>{song.lyrics_raw || t('song.noLyricsParen')}</pre>
         ) : (

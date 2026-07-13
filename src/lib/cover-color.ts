@@ -3,12 +3,21 @@
 import { QuantizerCelebi, Score, argbFromRgb, blueFromArgb, greenFromArgb, redFromArgb } from '@material/material-color-utilities';
 
 export type CoverColor = { r: number; g: number; b: number };
+export type CoverPalette = { primary: CoverColor; secondary: CoverColor };
+
+function fromArgb(argb: number): CoverColor {
+  return { r: redFromArgb(argb), g: greenFromArgb(argb), b: blueFromArgb(argb) };
+}
+
+function colorDistance(a: CoverColor, b: CoverColor): number {
+  return Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
+}
 
 /**
  * Derive a theme-worthy source color using Material Design's image pipeline:
  * Celebi quantization followed by Material's chroma/population scorer.
  */
-export function extractMaterialCoverColor(image: HTMLImageElement): CoverColor | null {
+export function extractMaterialCoverPalette(image: HTMLImageElement): CoverPalette | null {
   try {
     const edge = 96;
     const canvas = document.createElement('canvas');
@@ -34,13 +43,19 @@ export function extractMaterialCoverColor(image: HTMLImageElement): CoverColor |
     const source = ranked[0];
     if (source == null) return null;
 
-    return {
-      r: redFromArgb(source),
-      g: greenFromArgb(source),
-      b: blueFromArgb(source),
-    };
+    const primary = fromArgb(source);
+    const secondary = ranked
+      .slice(1)
+      .map(fromArgb)
+      .find((color) => colorDistance(primary, color) >= 72) ?? primary;
+    return { primary, secondary };
   } catch {
     // Remote images without usable CORS headers taint Canvas. Keep the neutral fallback.
     return null;
   }
+}
+
+/** Compatibility helper for surfaces that only need the main cover color. */
+export function extractMaterialCoverColor(image: HTMLImageElement): CoverColor | null {
+  return extractMaterialCoverPalette(image)?.primary ?? null;
 }
