@@ -459,8 +459,8 @@ export default function SharePage() {
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <div className={`mx-auto px-4 py-6 ${cardAspectClass}`}>
-        <div className="mb-6 flex items-center justify-between gap-3">
+      <div className={`mx-auto px-3 py-3 sm:px-4 sm:py-6 ${cardAspectClass}`}>
+        <div className="mb-3 flex items-center justify-between gap-2 sm:mb-6 sm:gap-3">
           <div className="flex items-center gap-3">
             <button
               onClick={() => router.back()}
@@ -514,11 +514,11 @@ export default function SharePage() {
           )}
         </div>
 
-        <p className="mt-4 text-center text-sm text-[var(--muted-foreground)]">
+        <p className="mt-2 text-center text-sm text-[var(--muted-foreground)] sm:mt-4">
           {t('share.hint')}
         </p>
 
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2 sm:mt-6 sm:gap-3">
           <button
             onClick={handleDownload}
             disabled={!ready}
@@ -537,7 +537,7 @@ export default function SharePage() {
         </div>
 
         {hasLyrics && (
-          <div className="mt-8 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
+          <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3 sm:mt-8 sm:p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-medium text-[var(--muted-foreground)]">
                 {t('share.selectLyrics')}
@@ -579,7 +579,7 @@ export default function SharePage() {
         )}
 
         {!hasLyrics && (
-          <p className="mt-8 text-center text-sm text-[var(--muted-foreground)]">
+          <p className="mt-5 text-center text-sm text-[var(--muted-foreground)] sm:mt-8">
             {t('share.noLyrics')}
           </p>
         )}
