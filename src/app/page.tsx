@@ -48,6 +48,29 @@ function importErrorMsg(t: (k: string) => string, error?: string, fallbackKey?: 
   return key ? t(key) : error;
 }
 
+const SONGS_CACHE_KEY = 'jplrc:songs:list';
+const SONGS_CACHE_TTL = 5 * 60 * 1000;
+
+function getCachedSongs(): SongItem[] | null {
+  if (typeof sessionStorage === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(SONGS_CACHE_KEY);
+    if (!raw) return null;
+    const { data, timestamp } = JSON.parse(raw);
+    if (Date.now() - timestamp > SONGS_CACHE_TTL) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedSongs(data: SongItem[]) {
+  if (typeof sessionStorage === 'undefined') return;
+  try {
+    sessionStorage.setItem(SONGS_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
+  } catch {}
+}
+
 export default function HomePage() {
   const { t, locale } = useI18n();
   const [songs, setSongs] = useState<SongItem[]>([]);
@@ -109,9 +132,15 @@ export default function HomePage() {
   }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    const cached = getCachedSongs();
+    if (cached) {
+      setSongs(cached);
+      setLoading(false);
+    }
+
     fetch('/api/songs')
       .then((r) => r.json())
-      .then((data) => { setSongs(data); setLoading(false); })
+      .then((data) => { setSongs(data); setCachedSongs(data); setLoading(false); })
       .catch(() => setLoading(false));
 
     fetch('/api/spotify/status')
@@ -213,7 +242,11 @@ export default function HomePage() {
       setPlaylistResult(data);
       // Refresh song list
       const songsRes = await fetch('/api/songs');
-      if (songsRes.ok) setSongs(await songsRes.json());
+      if (songsRes.ok) {
+        const data = await songsRes.json();
+        setSongs(data);
+        setCachedSongs(data);
+      }
     } catch {
       showToast('error', t('home.playlistImportFailed'));
     } finally {
