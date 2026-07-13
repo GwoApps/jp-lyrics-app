@@ -162,7 +162,7 @@ async function drawLandscape(
     ctx.fillText(line, textX, textY);
     textY += 66;
   }
-  textY += 6;
+  textY += 2;
   ctx.fillStyle = '#94a3b8';
   ctx.font = '30px sans-serif';
   for (const line of wrapText(ctx, song.artist || '', 560, 1)) {
@@ -243,7 +243,7 @@ async function drawPortrait(
     ctx.fillText(line, centerX, textY);
     textY += 58;
   }
-  textY += 12;
+  textY += 4;
   ctx.fillStyle = '#94a3b8';
   ctx.font = '26px sans-serif';
   for (const line of wrapText(ctx, song.artist || '', contentW, 1)) {
