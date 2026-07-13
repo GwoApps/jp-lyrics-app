@@ -191,7 +191,8 @@
     "scan": "扫码查看歌词",
     "site": "分享自 {site}",
     "selectLyrics": "选择歌词",
-    "noLyrics": "暂无歌词"
+    "noLyrics": "暂无歌词",
+    "clear": "清空"
   },
   "admin": {
     "title": "管理",

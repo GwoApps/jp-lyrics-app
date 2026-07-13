@@ -164,9 +164,9 @@ async function drawCard(
   ctx.fillRect(textX, 230, 560, 1);
 
   // Selected lyrics
-  const lyricsX = 60;
+  const lyricsX = 330;
   const lyricsY = 270;
-  const lyricsW = 820;
+  const lyricsW = 560;
   const lyricsLineH = 44;
   const lyricsMaxLines = 6;
   ctx.fillStyle = '#e2e8f0';
@@ -244,17 +244,6 @@ export default function SharePage() {
   }, [id, t]);
 
   useEffect(() => {
-    if (lyricsLines.length > 0 && selected.size === 0) {
-      // Default: select first 4 lines
-      const initial = new Set<number>();
-      for (let i = 0; i < Math.min(4, lyricsLines.length); i++) {
-        initial.add(i);
-      }
-      setSelected(initial);
-    }
-  }, [lyricsLines, selected.size]);
-
-  useEffect(() => {
     if (!pageUrl) return;
     let cancelled = false;
     QRCode.toDataURL(pageUrl, { width: 360, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } })
@@ -291,6 +280,8 @@ export default function SharePage() {
       return next;
     });
   };
+
+  const clearSelection = () => setSelected(new Set());
 
   const handleDownload = () => {
     const canvas = canvasRef.current;
@@ -398,9 +389,19 @@ export default function SharePage() {
 
         {hasLyrics && (
           <div className="mt-8 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
-            <h2 className="mb-3 text-sm font-medium text-[var(--muted-foreground)]">
-              {t('share.selectLyrics')}
-            </h2>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-medium text-[var(--muted-foreground)]">
+                {t('share.selectLyrics')}
+              </h2>
+              {selected.size > 0 && (
+                <button
+                  onClick={clearSelection}
+                  className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                >
+                  {t('share.clear')}
+                </button>
+              )}
+            </div>
             <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
               {lyricsLines.map((line, idx) => (
                 <button

@@ -191,7 +191,8 @@
     "scan": "Scan to view lyrics",
     "site": "Shared from {site}",
     "selectLyrics": "Select lyrics",
-    "noLyrics": "No lyrics available"
+    "noLyrics": "No lyrics available",
+    "clear": "Clear"
   },
   "admin": {
     "title": "Admin",

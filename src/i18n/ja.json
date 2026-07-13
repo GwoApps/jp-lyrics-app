@@ -191,7 +191,8 @@
     "scan": "歌詞を見るにはQRコードをスキャン",
     "site": "{site} から共有",
     "selectLyrics": "歌詞を選択",
-    "noLyrics": "歌詞がありません"
+    "noLyrics": "歌詞がありません",
+    "clear": "クリア"
   },
   "admin": {
     "title": "管理画面",
