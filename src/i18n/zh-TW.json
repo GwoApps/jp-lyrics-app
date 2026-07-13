@@ -178,6 +178,17 @@
     "deleteConfirmBody": "此操作不可撤銷。歌詞和注音資料將被永久刪除。",
     "importErrorTitle": "歌詞取得失敗"
   },
+  "share": {
+    "title": "分享",
+    "download": "下載圖片",
+    "copyLink": "複製連結",
+    "copied": "已複製",
+    "loading": "載入中...",
+    "error": "載入失敗",
+    "notFound": "找不到歌曲",
+    "back": "返回首頁",
+    "hint": "長按或右鍵圖片可儲存，也可以點擊下載按鈕儲存 PNG。"
+  },
   "admin": {
     "title": "管理後台",
     "users": "使用者",

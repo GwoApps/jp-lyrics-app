@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
 import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2 } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import FuriganaLineView from '@/components/FuriganaLine';
@@ -300,13 +301,13 @@ export default function SongViewPage() {
                 <PictureInPicture className="h-3.5 w-3.5" /> {t('song.pipBtn')}
               </button>
             )}
-            <button
-              onClick={() => window.open(`/api/songs/${id}/share`, '_blank', 'noopener,noreferrer')}
+            <Link
+              href={`/songs/${id}/share`}
               className={btnTextCls()}
               title={t('song.share')}
             >
               <Share2 className="h-3.5 w-3.5" /> {t('song.share')}
-            </button>
+            </Link>
 
             <ToolbarMenu
               label={<span className="inline-flex items-center gap-1">{t('common.edit')} <ChevronDown className="h-3 w-3 opacity-60" /></span>}
@@ -641,7 +642,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
   }, [showMenu]);
 
   const menuItems = [
-    { icon: <Share2 className="h-4 w-4" />, label: t('song.share'), onClick: () => window.open(`/api/songs/${id}/share`, '_blank', 'noopener,noreferrer') },
+    { icon: <Share2 className="h-4 w-4" />, label: t('song.share'), onClick: () => router.push(`/songs/${id}/share`) },
     { icon: <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />, label: data.syncing ? t('song.syncing') : t('song.sync'), onClick: data.handleSync, disabled: data.syncing },
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: t('song.pipBtn'), onClick: () => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef, lineTimestamps) }] : []),
     { icon: <Bug className="h-4 w-4" />, label: t('song.debug'), onClick: () => data.setDebug(!data.debug), active: data.debug },

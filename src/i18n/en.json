@@ -178,6 +178,17 @@
     "deleteConfirmBody": "This action cannot be undone. Lyrics and furigana data will be permanently deleted.",
     "importErrorTitle": "Failed to fetch lyrics"
   },
+  "share": {
+    "title": "Share",
+    "download": "Download Image",
+    "copyLink": "Copy Link",
+    "copied": "Copied",
+    "loading": "Loading...",
+    "error": "Failed to load",
+    "notFound": "Song not found",
+    "back": "Back to home",
+    "hint": "Long-press or right-click the image to save, or tap Download to save as PNG."
+  },
   "admin": {
     "title": "Admin",
     "users": "Users",

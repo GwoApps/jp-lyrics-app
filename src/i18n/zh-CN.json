@@ -178,6 +178,17 @@
     "deleteConfirmBody": "此操作不可撤销。歌词和注音数据将被永久删除。",
     "importErrorTitle": "歌词获取失败"
   },
+  "share": {
+    "title": "分享",
+    "download": "下载图片",
+    "copyLink": "复制链接",
+    "copied": "已复制",
+    "loading": "加载中...",
+    "error": "加载失败",
+    "notFound": "找不到歌曲",
+    "back": "返回首页",
+    "hint": "长按或右键图片可保存，也可以点击下载按钮保存 PNG。"
+  },
   "admin": {
     "title": "管理",
     "users": "用户",
