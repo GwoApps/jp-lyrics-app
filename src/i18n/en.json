@@ -95,6 +95,8 @@
     "furigana": "Furigana",
     "raw": "Raw",
     "spotify": "Spotify",
+    "spotifyLoading": "Loading Spotify playback status…",
+    "spotifyDisconnected": "Spotify is not connected",
     "pipBtn": "Floating Display",
     "share": "Share",
     "followOn": "Following",

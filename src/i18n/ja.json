@@ -95,6 +95,8 @@
     "furigana": "ふりがな",
     "raw": "原文",
     "spotify": "Spotify連携",
+    "spotifyLoading": "Spotifyの再生状態を読み込み中…",
+    "spotifyDisconnected": "Spotifyは未接続です",
     "pipBtn": "フローティング表示",
     "share": "シェア",
     "followOn": "フォロー中",

@@ -439,10 +439,16 @@ export default function SongViewPage() {
         </div>
       </div>
 
-        {/* Spotify sync indicator */}
-        {spotify?.connected && (
-          <div className="mt-2 sm:mt-4 flex items-center gap-2">
-            {spotify.error ? (
+        {/* Spotify playback status stays mounted so loading/resolved state cannot move the lyrics layout. */}
+        <div className="mt-2 sm:mt-4 flex min-h-7 items-center gap-2">
+            {spotifyConnected === null || !spotify ? (
+              <div className="song-playing-surface flex items-center gap-1.5 sm:gap-2 rounded-full px-2 sm:px-3 py-1">
+                {spotifyConnected === null ? <Loader2 className="h-3 w-3 animate-spin text-[var(--muted-foreground)]" /> : <span className="inline-block h-2 w-2 rounded-full bg-[var(--muted-foreground)]" />}
+                <span className="text-xs text-[var(--muted-foreground)] truncate max-w-[180px] sm:max-w-none">
+                  {spotifyConnected === null ? t('song.spotifyLoading') : t('song.spotifyDisconnected')}
+                </span>
+              </div>
+            ) : spotify.error ? (
               <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--warning-muted)] border border-[var(--warning)]/30 px-2 sm:px-3 py-1">
                 <span className="inline-block h-2 w-2 rounded-full bg-[var(--warning)]" />
                 <span className="text-xs text-[var(--warning)]">{t('song.tokenExpired')}</span>
@@ -486,16 +492,17 @@ export default function SongViewPage() {
                 ) : null}
               </div>
             ) : null}
-            <button
-              onClick={() => setFollowPlaying((v) => !v)}
-              className={`song-follow-button shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium transition-colors ${followPlaying ? 'song-follow-button--active' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
-              title={followPlaying ? t('song.followOn') : t('song.followOff')}
-            >
-              <Repeat className="h-3 w-3" />
-              <span className="hidden sm:inline">{followPlaying ? t('song.followOn') : t('song.followOff')}</span>
-            </button>
+            {spotify?.connected && (
+              <button
+                onClick={() => setFollowPlaying((v) => !v)}
+                className={`song-follow-button shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium transition-colors ${followPlaying ? 'song-follow-button--active' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
+                title={followPlaying ? t('song.followOn') : t('song.followOff')}
+              >
+                <Repeat className="h-3 w-3" />
+                <span className="hidden sm:inline">{followPlaying ? t('song.followOn') : t('song.followOff')}</span>
+              </button>
+            )}
           </div>
-        )}
 
         {/* Debug panel */}
         {data.debug && (

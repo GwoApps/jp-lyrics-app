@@ -95,6 +95,8 @@
     "furigana": "注音",
     "raw": "原文",
     "spotify": "Spotify",
+    "spotifyLoading": "正在加载 Spotify 播放状态…",
+    "spotifyDisconnected": "Spotify 未连接",
     "pipBtn": "悬浮展示",
     "share": "分享",
     "followOn": "跟随中",
