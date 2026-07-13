@@ -12,9 +12,9 @@ interface CoverImageProps {
 }
 
 const sizeMap = {
-  sm: 'h-9 w-9 sm:h-10 sm:w-10',
-  md: 'h-16 w-16 sm:h-20 sm:w-20',
-  lg: 'h-24 w-24 sm:h-32 sm:w-32',
+  sm: 'h-9 w-9 sm:h-10 sm:w-10 rounded-md',
+  md: 'h-16 w-16 sm:h-20 sm:w-20 rounded-xl',
+  lg: 'h-24 w-24 sm:h-32 sm:w-32 rounded-xl',
 };
 
 export default function CoverImage({
@@ -31,7 +31,7 @@ export default function CoverImage({
 
   return (
     <div
-      className={`relative shrink-0 overflow-hidden rounded-xl bg-[var(--muted)] flex items-center justify-center ${sizeMap[size]} ${className}`}
+      className={`relative shrink-0 overflow-hidden bg-[var(--muted)] flex items-center justify-center ${sizeMap[size]} ${className}`}
     >
       <Music
         className={`absolute h-5 w-5 text-[var(--muted-foreground)]/40 transition-opacity duration-300 ${hidden ? 'opacity-100' : 'opacity-0'} ${placeholderClassName}`}
