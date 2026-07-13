@@ -183,13 +183,16 @@ textarea {
 /* Active lyrics line highlight */
 .lyrics-panel {
   --lyric-accent: var(--border);
+  z-index: 1;
   background: color-mix(in srgb, var(--card) 90%, var(--lyric-accent));
   border: 1px solid color-mix(in srgb, var(--border) 76%, var(--lyric-accent));
+  /* Keep the original, always-visible external glow as the base layer. */
+  box-shadow: 0 0 52px -18px color-mix(in srgb, var(--lyric-accent) 62%, transparent);
 }
 /* One uneven light source lives behind (not inside) the clipped lyrics panel. */
 .lyrics-ambient-orbit {
   position: absolute;
-  z-index: -1;
+  z-index: 0;
   top: 50%;
   left: 50%;
   width: 58%;
