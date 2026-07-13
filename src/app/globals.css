@@ -185,6 +185,8 @@ textarea {
   --lyric-accent: var(--border);
   background: color-mix(in srgb, var(--card) 90%, var(--lyric-accent));
   border: 1px solid color-mix(in srgb, var(--border) 76%, var(--lyric-accent));
+  /* External, all-direction cover glow — deliberately no internal corner gradients. */
+  box-shadow: 0 0 48px -20px color-mix(in srgb, var(--lyric-accent) 58%, transparent);
 }
 .song-view {
   --song-accent: var(--border);
