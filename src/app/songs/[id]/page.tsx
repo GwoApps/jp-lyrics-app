@@ -448,7 +448,7 @@ export default function SongViewPage() {
                 </a>
               </div>
             ) : isSynced ? (
-              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--success-muted)] border border-[var(--success)]/30 px-2 sm:px-3 py-1">
+              <div className="song-playing-surface song-playing-surface--synced flex items-center gap-1.5 sm:gap-2 rounded-full px-2 sm:px-3 py-1">
                 <span className="inline-block h-2 w-2 rounded-full bg-[var(--success)] animate-pulse" />
                 <Music className="h-3 w-3 text-[var(--success)]" />
                 <span className="text-xs text-[var(--success)] truncate max-w-[180px] sm:max-w-none">
@@ -457,7 +457,7 @@ export default function SongViewPage() {
                 </span>
               </div>
             ) : isSameSong ? (
-              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--success-muted)]/50 border border-[var(--success)]/20 px-2 sm:px-3 py-1">
+              <div className="song-playing-surface song-playing-surface--matching flex items-center gap-1.5 sm:gap-2 rounded-full px-2 sm:px-3 py-1">
                 <span className="inline-block h-2 w-2 rounded-full bg-[var(--success)]/50 animate-pulse" />
                 <Music className="h-3 w-3 text-[var(--success)]/50" />
                 <span className="text-xs text-[var(--success)]/60 truncate max-w-[180px] sm:max-w-none">
@@ -466,18 +466,18 @@ export default function SongViewPage() {
                 </span>
               </div>
             ) : spotify.is_playing && spotify.track ? (
-              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--accent)] px-2 sm:px-3 py-1">
+              <div className="song-playing-surface flex items-center gap-1.5 sm:gap-2 rounded-full px-2 sm:px-3 py-1">
                 <span className="inline-block h-2 w-2 rounded-full bg-[var(--muted-foreground)]" />
                 <span className="text-xs text-[var(--muted-foreground)] truncate max-w-[140px] sm:max-w-none">
                   {spotify.track.name}
                   {data.debug && <span className="ml-1 font-mono text-[10px]">[{fmtTime(spotify.progress_ms)}/{fmtTime(spotify.duration_ms)}]</span>}
                 </span>
                 {playingMatch ? (
-                  <button onClick={() => router.push(`/songs/${playingMatch.id}`)} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--border)] transition-colors shrink-0">
+                  <button onClick={() => router.push(`/songs/${playingMatch.id}`)} className="song-playing-action inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-[var(--foreground)] transition-colors shrink-0">
                     <ExternalLink className="h-3 w-3" /><span>{t('song.show')}</span>
                   </button>
                 ) : spotifyConnected ? (
-                  <button onClick={() => data.handleImportPlaying(spotify)} disabled={data.importing} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--primary)] text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0">
+                  <button onClick={() => data.handleImportPlaying(spotify)} disabled={data.importing} className="song-playing-action--primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0">
                     {data.importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}<span>{data.importing ? t('home.importing') : t('song.importBtn')}</span>
                   </button>
                 ) : null}
@@ -485,7 +485,7 @@ export default function SongViewPage() {
             ) : null}
             <button
               onClick={() => setFollowPlaying((v) => !v)}
-              className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium transition-colors ${followPlaying ? 'bg-[var(--primary)]/20 text-[var(--primary)]' : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
+              className={`song-follow-button shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium transition-colors ${followPlaying ? 'song-follow-button--active' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
               title={followPlaying ? t('song.followOn') : t('song.followOff')}
             >
               <Repeat className="h-3 w-3" />

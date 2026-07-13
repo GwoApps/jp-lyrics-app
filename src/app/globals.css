@@ -156,23 +156,53 @@ textarea {
   --song-accent: var(--border);
 }
 .song-accent-button {
-  color: color-mix(in srgb, var(--foreground) 82%, var(--song-accent));
-  background: color-mix(in srgb, var(--accent) 82%, var(--song-accent));
-  border: 1px solid color-mix(in srgb, var(--border) 76%, var(--song-accent));
+  color: color-mix(in srgb, var(--foreground) 90%, var(--song-accent));
+  background: color-mix(in srgb, var(--accent) 90%, var(--song-accent));
+  border: 1px solid color-mix(in srgb, var(--border) 86%, var(--song-accent));
 }
 .song-accent-button:hover {
   color: var(--foreground);
-  background: color-mix(in srgb, var(--accent) 70%, var(--song-accent));
-  border-color: color-mix(in srgb, var(--border) 56%, var(--song-accent));
+  background: color-mix(in srgb, var(--accent) 82%, var(--song-accent));
+  border-color: color-mix(in srgb, var(--border) 72%, var(--song-accent));
 }
 .song-accent-button--active {
   color: var(--primary-foreground);
-  background: color-mix(in srgb, var(--song-accent) 78%, var(--primary));
-  border-color: color-mix(in srgb, var(--song-accent) 88%, var(--border));
+  background: color-mix(in srgb, var(--primary) 88%, var(--song-accent));
+  border-color: color-mix(in srgb, var(--primary) 80%, var(--song-accent));
 }
 .song-accent-surface {
-  background: color-mix(in srgb, var(--accent) 80%, var(--song-accent));
-  border: 1px solid color-mix(in srgb, var(--border) 78%, var(--song-accent));
+  background: color-mix(in srgb, var(--accent) 88%, var(--song-accent));
+  border: 1px solid color-mix(in srgb, var(--border) 86%, var(--song-accent));
+}
+.song-playing-surface {
+  background: color-mix(in srgb, var(--accent) 88%, var(--song-accent));
+  border: 1px solid color-mix(in srgb, var(--border) 86%, var(--song-accent));
+}
+.song-playing-surface--synced {
+  background: color-mix(in srgb, var(--success-muted) 88%, var(--song-accent));
+  border-color: color-mix(in srgb, var(--success) 76%, var(--song-accent));
+}
+.song-playing-surface--matching {
+  background: color-mix(in srgb, var(--success-muted) 74%, var(--song-accent));
+  border-color: color-mix(in srgb, var(--success) 66%, var(--song-accent));
+}
+.song-playing-action {
+  background: color-mix(in srgb, var(--accent) 86%, var(--song-accent));
+}
+.song-playing-action:hover {
+  background: color-mix(in srgb, var(--border) 80%, var(--song-accent));
+}
+.song-playing-action--primary {
+  background: color-mix(in srgb, var(--primary) 88%, var(--song-accent));
+}
+.song-follow-button {
+  background: color-mix(in srgb, var(--accent) 88%, var(--song-accent));
+  border: 1px solid color-mix(in srgb, var(--border) 86%, var(--song-accent));
+}
+.song-follow-button--active {
+  color: var(--primary-foreground);
+  background: color-mix(in srgb, var(--primary) 88%, var(--song-accent));
+  border-color: color-mix(in srgb, var(--primary) 80%, var(--song-accent));
 }
 .song-mobile-button {
   color: var(--muted-foreground);
