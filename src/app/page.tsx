@@ -75,6 +75,8 @@ export default function HomePage() {
   const { t, locale } = useI18n();
   const [songs, setSongs] = useState<SongItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // `null` means the Spotify login state is still being resolved. Keep login UI hidden
+  // until that request completes so authenticated users never see a misleading login button.
   const [spotify, setSpotify] = useState<SpotifyStatus | null>(null);
   const nowPlaying = useNowPlaying(!!spotify?.connected);
   const [importing, setImporting] = useState(false);
@@ -146,7 +148,7 @@ export default function HomePage() {
     fetch('/api/spotify/status')
       .then((r) => r.json())
       .then((data) => setSpotify(data))
-      .catch(() => {});
+      .catch(() => setSpotify({ connected: false }));
 
     fetch('/api/me')
       .then((r) => r.json())
@@ -314,7 +316,7 @@ export default function HomePage() {
           <p className="text-xs text-[var(--muted-foreground)] mt-1">{t('home.songCount', { count: filteredSongs.length })}{(searchQuery || mySongsOnly || favoritesOnly) && filteredSongs.length !== songs.length ? ` / ${songs.length}` : ''}</p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
-          {spotify?.connected ? (
+          {spotify === null ? null : spotify.connected ? (
             <div className="flex items-center gap-2 flex-1 sm:flex-none">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
               <span className="text-xs text-[var(--muted-foreground)] truncate">{spotify.display_name}</span>
