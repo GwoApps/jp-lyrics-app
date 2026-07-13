@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { I18nProvider, useI18n } from '@/lib/i18n';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
@@ -79,11 +80,15 @@ function Nav() {
 }
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  // The share page owns its responsive gutters; avoid nesting the global page padding.
+  const isSharePage = /^\/songs\/[^/]+\/share\/?$/.test(pathname || '');
+
   return (
     <ThemeProvider>
       <I18nProvider>
         <Nav />
-        <main className="mx-auto max-w-[860px] px-4 sm:px-6 py-6 sm:py-8">
+        <main className={isSharePage ? '' : 'mx-auto max-w-[860px] px-4 py-6 sm:px-6 sm:py-8'}>
           {children}
         </main>
       </I18nProvider>
