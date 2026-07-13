@@ -5,7 +5,7 @@ export interface NowPlayingData {
   is_playing: boolean;
   progress_ms: number;
   duration_ms: number;
-  track: { name: string; artist: string; album: string } | null;
+  track: { name: string; artist: string; album: string; cover_url?: string | null } | null;
   error?: number;
 }
 
@@ -33,7 +33,7 @@ const MAX_CONSECUTIVE_ERRORS = 10;
 
 /** Fast 32-bit hash for checksum */
 function computeChecksum(data: NowPlayingData): number {
-  const s = `${data.progress_ms}|${data.is_playing}|${data.track?.name ?? ''}|${data.track?.artist ?? ''}|${data.duration_ms}|${data.connected}`;
+  const s = `${data.progress_ms}|${data.is_playing}|${data.track?.name ?? ''}|${data.track?.artist ?? ''}|${data.track?.album ?? ''}|${data.track?.cover_url ?? ''}|${data.duration_ms}|${data.connected}`;
   let h = 0;
   for (let i = 0; i < s.length; i++) {
     h = ((h << 5) - h + s.charCodeAt(i)) | 0;
@@ -50,7 +50,12 @@ function computeDiff(prev: NowPlayingData | null, curr: NowPlayingData): Partial
   if (prev.progress_ms !== curr.progress_ms) diff.progress_ms = curr.progress_ms;
   if (prev.duration_ms !== curr.duration_ms) diff.duration_ms = curr.duration_ms;
   if (prev.error !== curr.error) diff.error = curr.error;
-  if (prev.track?.name !== curr.track?.name || prev.track?.artist !== curr.track?.artist || prev.track?.album !== curr.track?.album) {
+  if (
+    prev.track?.name !== curr.track?.name ||
+    prev.track?.artist !== curr.track?.artist ||
+    prev.track?.album !== curr.track?.album ||
+    prev.track?.cover_url !== curr.track?.cover_url
+  ) {
     diff.track = curr.track;
   }
   return diff;
@@ -76,6 +81,11 @@ async function fetchNowPlaying(userEmail: string): Promise<NowPlayingData> {
     return { connected: true, is_playing: false, progress_ms: 0, duration_ms: 0, track: null };
   }
 
+  const images = data.item.album?.images || [];
+  const coverUrl = images.length > 0
+    ? (images.reduce((big: { width: number; url: string }, img: { width: number; url: string }) => img.width > big.width ? img : big, images[0]).url as string)
+    : null;
+
   return {
     connected: true,
     is_playing: data.is_playing,
@@ -85,6 +95,7 @@ async function fetchNowPlaying(userEmail: string): Promise<NowPlayingData> {
       name: data.item.name,
       artist: data.item.artists?.map((a: { name: string }) => a.name).join(', ') || '',
       album: data.item.album?.name || '',
+      cover_url: coverUrl,
     },
   };
 }

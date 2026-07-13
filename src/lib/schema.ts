@@ -8,6 +8,7 @@ export const songs = sqliteTable('songs', {
   lyricsRaw: text('lyrics_raw').notNull().default(''),
   lyricsFurigana: text('lyrics_furigana').notNull().default('[]'),
   lyricsSynced: text('lyrics_synced').notNull().default(''),
+  coverUrl: text('cover_url'),
   createdBy: text('created_by').notNull().default(''),
   createdByName: text('created_by_name').notNull().default(''),
   isPublic: integer('is_public').notNull().default(0),

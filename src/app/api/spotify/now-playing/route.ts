@@ -30,6 +30,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ connected: true, is_playing: false });
   }
 
+  const images = data.item.album?.images || [];
+  const coverUrl = images.length > 0
+    ? (images.reduce((big: { width: number; url: string }, img: { width: number; url: string }) => img.width > big.width ? img : big, images[0]).url as string)
+    : null;
+
   return NextResponse.json({
     connected: true,
     is_playing: data.is_playing,
@@ -39,6 +44,7 @@ export async function GET(request: NextRequest) {
       name: data.item.name,
       artist: data.item.artists?.map((a: { name: string }) => a.name).join(', ') || '',
       album: data.item.album?.name || '',
+      cover_url: coverUrl,
     },
   });
 }

@@ -7,7 +7,7 @@ export interface NowPlayingData {
   is_playing: boolean;
   progress_ms: number;
   duration_ms: number;
-  track: { name: string; artist: string; album: string } | null;
+  track: { name: string; artist: string; album: string; cover_url?: string | null } | null;
   error?: number;
 }
 
@@ -22,7 +22,7 @@ const EMPTY: NowPlayingData = { connected: false, is_playing: false, progress_ms
 
 /** Fast 32-bit hash — must match server */
 function computeChecksum(data: NowPlayingData): number {
-  const s = `${data.progress_ms}|${data.is_playing}|${data.track?.name ?? ''}|${data.track?.artist ?? ''}|${data.duration_ms}|${data.connected}`;
+  const s = `${data.progress_ms}|${data.is_playing}|${data.track?.name ?? ''}|${data.track?.artist ?? ''}|${data.track?.album ?? ''}|${data.track?.cover_url ?? ''}|${data.duration_ms}|${data.connected}`;
   let h = 0;
   for (let i = 0; i < s.length; i++) {
     h = ((h << 5) - h + s.charCodeAt(i)) | 0;

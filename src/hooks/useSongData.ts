@@ -16,6 +16,7 @@ interface SongData {
   lyrics_raw: string;
   lyrics_furigana: string;
   lyrics_synced: string;
+  cover_url?: string | null;
   created_by: string;
   is_public: number;
   public_requested: number;

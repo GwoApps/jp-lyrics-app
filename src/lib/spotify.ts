@@ -47,3 +47,26 @@ export async function getSpotifyTokenForUser(userEmail: string): Promise<string 
 
   return auth.accessToken;
 }
+
+/** Pick the largest image URL from a Spotify image array */
+export function pickLargestImage(images: { width?: number; url: string }[]): string | null {
+  if (!images || images.length === 0) return null;
+  return images.reduce((big, img) => (img.width || 0) > (big.width || 0) ? img : big, images[0]).url || null;
+}
+
+/** Search Spotify for a track and return the largest album cover URL */
+export async function searchSpotifyCover(userEmail: string, title: string, artist: string): Promise<string | null> {
+  const accessToken = await getSpotifyTokenForUser(userEmail);
+  if (!accessToken) return null;
+
+  const q = artist.trim()
+    ? `track:${title.trim()} artist:${artist.trim()}`
+    : title.trim();
+  const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=1`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const track = data?.tracks?.items?.[0];
+  return pickLargestImage(track?.album?.images || []) || pickLargestImage(track?.images || []) || null;
+}

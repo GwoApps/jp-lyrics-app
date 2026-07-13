@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown } from 'lucide-react';
+import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2 } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import FuriganaLineView from '@/components/FuriganaLine';
 import { useI18n } from '@/lib/i18n';
@@ -117,6 +117,26 @@ export default function SongViewPage() {
     } catch { setPipSupported(false); }
   }, []);
 
+  // Album cover
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [coverLoading, setCoverLoading] = useState(false);
+  useEffect(() => {
+    if (data.song?.cover_url) setCoverUrl(data.song.cover_url);
+  }, [data.song?.cover_url]);
+  useEffect(() => {
+    if (!id || !currentUserEmail || !spotifyConnected || coverUrl) return;
+    setCoverLoading(true);
+    fetch(`/api/songs/${id}/cover`)
+      .then(async (r) => {
+        if (!r.ok) return null;
+        const d = await r.json();
+        return d.cover_url as string | null;
+      })
+      .then((url) => { if (url) setCoverUrl(url); })
+      .catch(() => {})
+      .finally(() => setCoverLoading(false));
+  }, [id, currentUserEmail, spotifyConnected, coverUrl]);
+
   if (data.loading) {
     return <div className="flex items-center justify-center py-32"><div className="h-5 w-5 border-2 border-[var(--muted-foreground)]/30 border-t-[var(--muted-foreground)] rounded-full animate-spin" /></div>;
   }
@@ -166,11 +186,21 @@ export default function SongViewPage() {
       {/* Header */}
       <div className="shrink-0 mb-3 sm:mb-8">
         <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
-          <div className="space-y-0.5 sm:space-y-1 min-w-0">
-            <h1 className="text-base sm:text-xl font-semibold tracking-tight">{song.title}</h1>
-            {song.artist && <p className="text-xs sm:text-sm text-[var(--muted-foreground)]">{song.artist}</p>}
-            {/* Visibility badge + request public */}
-            <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
+            {coverUrl ? (
+              <img
+                src={coverUrl}
+                alt={song.title}
+                className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl object-cover shadow-md shrink-0 bg-[var(--muted)]"
+              />
+            ) : coverLoading ? (
+              <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl bg-[var(--accent)] animate-pulse shrink-0" />
+            ) : null}
+            <div className="space-y-0.5 sm:space-y-1 min-w-0">
+              <h1 className="text-base sm:text-xl font-semibold tracking-tight">{song.title}</h1>
+              {song.artist && <p className="text-xs sm:text-sm text-[var(--muted-foreground)]">{song.artist}</p>}
+              {/* Visibility badge + request public */}
+              <div className="flex items-center gap-2 mt-1">
               {song.is_public === 1 ? (
                 <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--success)]/20 text-[var(--success)]">{t('admin.public')}</span>
               ) : (
@@ -270,6 +300,13 @@ export default function SongViewPage() {
                 <PictureInPicture className="h-3.5 w-3.5" /> {t('song.pipBtn')}
               </button>
             )}
+            <button
+              onClick={() => window.open(`/api/songs/${id}/share`, '_blank', 'noopener,noreferrer')}
+              className={btnTextCls()}
+              title={t('song.share')}
+            >
+              <Share2 className="h-3.5 w-3.5" /> {t('song.share')}
+            </button>
 
             <ToolbarMenu
               label={<span className="inline-flex items-center gap-1">{t('common.edit')} <ChevronDown className="h-3 w-3 opacity-60" /></span>}
@@ -348,6 +385,7 @@ export default function SongViewPage() {
             />
           </div>
         </div>
+      </div>
 
         {/* Spotify sync indicator */}
         {spotify?.connected && (
@@ -603,6 +641,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
   }, [showMenu]);
 
   const menuItems = [
+    { icon: <Share2 className="h-4 w-4" />, label: t('song.share'), onClick: () => window.open(`/api/songs/${id}/share`, '_blank', 'noopener,noreferrer') },
     { icon: <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />, label: data.syncing ? t('song.syncing') : t('song.sync'), onClick: data.handleSync, disabled: data.syncing },
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: t('song.pipBtn'), onClick: () => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef, lineTimestamps) }] : []),
     { icon: <Bug className="h-4 w-4" />, label: t('song.debug'), onClick: () => data.setDebug(!data.debug), active: data.debug },
