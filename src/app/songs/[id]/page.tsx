@@ -532,8 +532,10 @@ export default function SongViewPage() {
       </div>
 
       {/* Lyrics */}
-      <div className="lyrics-panel relative isolate rounded-lg overflow-hidden flex-1 min-h-0" style={lyricPanelStyle}>
-        {data.showRaw ? (
+      <div className="lyrics-panel-shell relative isolate flex-1 min-h-0">
+        <div className="lyrics-ambient-orbit" aria-hidden="true" />
+        <div className="lyrics-panel relative isolate h-full rounded-lg overflow-hidden" style={lyricPanelStyle}>
+          {data.showRaw ? (
           <pre className="relative z-10 p-4 sm:p-6 whitespace-pre-wrap font-sans leading-relaxed h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden" style={{ fontSize: `${data.fontSize}px` }}>{song.lyrics_raw || t('song.noLyricsParen')}</pre>
         ) : (
           <div ref={data.lyricsRef} className="relative z-10 p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden scroll-smooth" style={{ fontSize: `${data.fontSize}px` }}>
@@ -565,7 +567,8 @@ export default function SongViewPage() {
               <p className="text-sm text-[var(--muted-foreground)]">{t('song.noLyricsSimple')}</p>
             )}
           </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Meta */}
