@@ -9,6 +9,7 @@ interface CoverImageProps {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
   placeholderClassName?: string;
+  viewTransitionName?: string;
 }
 
 const sizeMap = {
@@ -23,6 +24,7 @@ export default function CoverImage({
   size = 'md',
   className = '',
   placeholderClassName = '',
+  viewTransitionName,
 }: CoverImageProps) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
@@ -31,6 +33,7 @@ export default function CoverImage({
 
   return (
     <div
+      style={{ viewTransitionName }}
       className={`relative shrink-0 overflow-hidden bg-[var(--muted)] flex items-center justify-center ${sizeMap[size]} ${className}`}
     >
       <Music

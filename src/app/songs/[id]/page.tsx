@@ -186,7 +186,7 @@ export default function SongViewPage() {
       <div className="shrink-0 mb-3 sm:mb-8">
         <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
           <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
-            <CoverImage src={coverUrl} alt={song.title} size="md" />
+            <CoverImage src={coverUrl} alt={song.title} size="md" viewTransitionName={`song-cover-${id}`} />
             <div className="space-y-0.5 sm:space-y-1 min-w-0">
               <h1 className="text-base sm:text-xl font-semibold tracking-tight">{song.title}</h1>
               {song.artist && <p className="text-xs sm:text-sm text-[var(--muted-foreground)]">{song.artist}</p>}
