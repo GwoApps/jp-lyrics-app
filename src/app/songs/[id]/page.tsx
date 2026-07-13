@@ -707,33 +707,33 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
     <div className="fixed bottom-0 left-0 right-0 sm:hidden z-50 bg-[var(--background)]/95 backdrop-blur-sm border-t border-[var(--border)]">
       <div className="mx-auto max-w-[860px] flex items-center justify-between px-2" style={{ paddingTop: 8, paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
         {/* A-/A+ */}
-        <div className="song-accent-surface flex items-stretch rounded-lg overflow-hidden">
+        <div className="song-mobile-surface flex items-stretch rounded-lg overflow-hidden">
           <button onClick={() => data.setFontSize(s => Math.max(14, s - 2))} className="flex items-center justify-center px-2 py-1 text-sm font-medium text-[var(--muted-foreground)] active:text-[var(--foreground)] active:bg-[var(--accent)]">A-</button>
           <div className="w-px bg-[var(--border)]" />
           <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="flex items-center justify-center px-2 py-1 text-base font-medium text-[var(--muted-foreground)] active:text-[var(--foreground)] active:bg-[var(--accent)]">A+</button>
         </div>
 
         {/* Copy */}
-        <button onClick={data.handleCopy} className={`song-accent-button flex items-center justify-center rounded-lg p-2 ${data.copied ? 'text-[var(--success)]' : ''}`}>
+        <button onClick={data.handleCopy} className={`song-mobile-button flex items-center justify-center rounded-lg p-2 ${data.copied ? 'text-[var(--success)]' : ''}`}>
           {data.copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
         </button>
 
         {/* Paste */}
         {!hasSyncData && (
-          <button onClick={() => data.setShowPasteLrc(!data.showPasteLrc)} className={`song-accent-button flex items-center justify-center rounded-lg p-2 ${data.showPasteLrc ? 'song-accent-button--active' : ''}`}>
+          <button onClick={() => data.setShowPasteLrc(!data.showPasteLrc)} className={`song-mobile-button flex items-center justify-center rounded-lg p-2 ${data.showPasteLrc ? 'song-mobile-button--active' : ''}`}>
             <ClipboardPaste className="h-5 w-5" />
           </button>
         )}
 
         {/* Raw / Furigana */}
-        <button onClick={() => data.setShowRaw(!data.showRaw)} className={`song-accent-button flex items-center justify-center rounded-lg p-2 ${data.showRaw ? 'song-accent-button--active' : ''}`}>
+        <button onClick={() => data.setShowRaw(!data.showRaw)} className={`song-mobile-button flex items-center justify-center rounded-lg p-2 ${data.showRaw ? 'song-mobile-button--active' : ''}`}>
           {data.showRaw ? <BookOpen className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
         </button>
 
         {/* Share */}
         <button
           onClick={() => router.push(sync.activeLine >= 0 ? `/songs/${id}/share?line=${sync.activeLine}` : `/songs/${id}/share`)}
-          className="song-accent-button flex items-center justify-center rounded-lg p-2"
+          className="song-mobile-button flex items-center justify-center rounded-lg p-2"
           title={t('song.share')}
         >
           <Share2 className="h-5 w-5" />
