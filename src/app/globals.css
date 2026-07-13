@@ -195,13 +195,13 @@ textarea {
   z-index: 0;
   top: 50%;
   left: 50%;
-  width: 58%;
-  height: 72%;
+  width: 78%;
+  height: 104%;
   pointer-events: none;
-  opacity: 0.82;
+  opacity: 0.96;
   border-radius: 50%;
-  background: radial-gradient(ellipse at 38% 42%, color-mix(in srgb, var(--lyric-accent) 70%, transparent) 0%, color-mix(in srgb, var(--lyric-accent) 42%, transparent) 34%, transparent 72%);
-  filter: blur(24px);
+  background: radial-gradient(ellipse at 38% 42%, color-mix(in srgb, var(--lyric-accent) 78%, transparent) 0%, color-mix(in srgb, var(--lyric-accent) 52%, transparent) 42%, color-mix(in srgb, var(--lyric-accent) 20%, transparent) 68%, transparent 86%);
+  filter: blur(42px);
   transform: translate(-50%, -50%);
   animation: lyricsAmbientOrbit 20s linear infinite;
 }
