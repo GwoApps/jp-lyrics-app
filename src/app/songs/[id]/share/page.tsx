@@ -1,10 +1,10 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
-import { ArrowLeft, Download, Link2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Download, Link2, Loader2, Check } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
 interface Song {
@@ -12,6 +12,8 @@ interface Song {
   title: string;
   artist: string;
   cover_url: string | null;
+  lyrics_raw: string | null;
+  lyrics_synced: string | null;
 }
 
 const CARD_W = 1200;
@@ -73,12 +75,26 @@ async function loadImage(src: string | null): Promise<HTMLImageElement | null> {
   });
 }
 
+function stripLrcTags(line: string): string {
+  return line.replace(/\[\d{2}:\d{2}(\.\d+)?\]/g, '').trim();
+}
+
+function getLyricsLines(song: Song): string[] {
+  const raw = song.lyrics_raw || song.lyrics_synced;
+  if (!raw) return [];
+  return raw
+    .split('\n')
+    .map(stripLrcTags)
+    .filter((line) => line.length > 0);
+}
+
 async function drawCard(
   canvas: HTMLCanvasElement,
   song: Song,
   qrDataUrl: string,
   scanText: string,
   siteText: string,
+  selectedLyrics: string[],
 ) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -97,15 +113,15 @@ async function drawCard(
 
   // Subtle top accent line
   ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  ctx.fillRect(80, 40, CARD_W - 160, 2);
+  ctx.fillRect(60, 40, CARD_W - 120, 2);
 
   // Cover
-  const coverX = 80;
-  const coverY = 75;
-  const coverSize = 480;
+  const coverSize = 240;
+  const coverX = 60;
+  const coverY = 60;
   const coverImg = await loadImage(song.cover_url);
   ctx.save();
-  roundRect(ctx, coverX, coverY, coverSize, coverSize, 32);
+  roundRect(ctx, coverX, coverY, coverSize, coverSize, 24);
   ctx.clip();
   if (coverImg) {
     ctx.drawImage(coverImg, coverX, coverY, coverSize, coverSize);
@@ -113,7 +129,7 @@ async function drawCard(
     ctx.fillStyle = '#334155';
     ctx.fillRect(coverX, coverY, coverSize, coverSize);
     ctx.fillStyle = '#94a3b8';
-    ctx.font = '120px sans-serif';
+    ctx.font = '96px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('🎵', coverX + coverSize / 2, coverY + coverSize / 2);
@@ -121,32 +137,57 @@ async function drawCard(
   ctx.restore();
 
   // Title
-  const textX = 620;
-  let textY = 150;
+  const textX = 330;
+  let textY = 115;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 64px sans-serif';
-  const titleLines = wrapText(ctx, song.title, 520, 3);
+  ctx.font = 'bold 52px sans-serif';
+  const titleLines = wrapText(ctx, song.title, 560, 2);
   for (const line of titleLines) {
     ctx.fillText(line, textX, textY);
-    textY += 78;
+    textY += 66;
   }
 
   // Artist
-  textY += 10;
+  textY += 6;
   ctx.fillStyle = '#94a3b8';
-  ctx.font = '42px sans-serif';
-  const artistLines = wrapText(ctx, song.artist || '', 520, 2);
+  ctx.font = '30px sans-serif';
+  const artistLines = wrapText(ctx, song.artist || '', 560, 1);
   for (const line of artistLines) {
     ctx.fillText(line, textX, textY);
-    textY += 56;
+    textY += 42;
+  }
+
+  // Divider under header
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.fillRect(textX, 230, 560, 1);
+
+  // Selected lyrics
+  const lyricsX = 60;
+  const lyricsY = 270;
+  const lyricsW = 820;
+  const lyricsLineH = 44;
+  const lyricsMaxLines = 6;
+  ctx.fillStyle = '#e2e8f0';
+  ctx.font = '28px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+
+  const lyricsLines: string[] = [];
+  for (const line of selectedLyrics) {
+    const wrapped = wrapText(ctx, line, lyricsW, lyricsMaxLines - lyricsLines.length);
+    lyricsLines.push(...wrapped);
+    if (lyricsLines.length >= lyricsMaxLines) break;
+  }
+  for (let i = 0; i < lyricsLines.length; i++) {
+    ctx.fillText(lyricsLines[i], lyricsX, lyricsY + i * lyricsLineH);
   }
 
   // QR code
-  const qrSize = 200;
-  const qrX = 920;
-  const qrY = 360;
+  const qrSize = 180;
+  const qrX = 940;
+  const qrY = 270;
   const qrImg = await loadImage(qrDataUrl);
   if (qrImg) {
     ctx.save();
@@ -156,14 +197,15 @@ async function drawCard(
     ctx.restore();
   }
 
-  // Caption below QR
+  // Caption below QR with larger margin
+  const captionY = qrY + qrSize + 52;
   ctx.fillStyle = '#cbd5e1';
-  ctx.font = '24px sans-serif';
+  ctx.font = '22px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(scanText, qrX + qrSize / 2, qrY + qrSize + 32);
+  ctx.fillText(scanText, qrX + qrSize / 2, captionY);
   ctx.fillStyle = '#94a3b8';
   ctx.font = '18px sans-serif';
-  ctx.fillText(siteText, qrX + qrSize / 2, qrY + qrSize + 60);
+  ctx.fillText(siteText, qrX + qrSize / 2, captionY + 32);
 }
 
 export default function SharePage() {
@@ -179,8 +221,11 @@ export default function SharePage() {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
 
   const pageUrl = typeof window !== 'undefined' ? `${window.location.origin}/songs/${id}` : '';
+
+  const lyricsLines = useMemo(() => (song ? getLyricsLines(song) : []), [song]);
 
   useEffect(() => {
     if (!id) {
@@ -199,6 +244,17 @@ export default function SharePage() {
   }, [id, t]);
 
   useEffect(() => {
+    if (lyricsLines.length > 0 && selected.size === 0) {
+      // Default: select first 4 lines
+      const initial = new Set<number>();
+      for (let i = 0; i < Math.min(4, lyricsLines.length); i++) {
+        initial.add(i);
+      }
+      setSelected(initial);
+    }
+  }, [lyricsLines, selected.size]);
+
+  useEffect(() => {
     if (!pageUrl) return;
     let cancelled = false;
     QRCode.toDataURL(pageUrl, { width: 360, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } })
@@ -213,11 +269,28 @@ export default function SharePage() {
     if (!song || !qrDataUrl || !canvasRef.current) return;
     setReady(false);
     let cancelled = false;
-    drawCard(canvasRef.current, song, qrDataUrl, t('share.scan'), t('share.site', { site: window.location.host })).then(() => {
+    const selectedLines = lyricsLines.filter((_, i) => selected.has(i));
+    drawCard(
+      canvasRef.current,
+      song,
+      qrDataUrl,
+      t('share.scan'),
+      t('share.site', { site: window.location.host }),
+      selectedLines,
+    ).then(() => {
       if (!cancelled) setReady(true);
     });
     return () => { cancelled = true; };
-  }, [song, qrDataUrl, pageUrl, t]);
+  }, [song, qrDataUrl, pageUrl, t, selected, lyricsLines]);
+
+  const toggleLine = (idx: number) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  };
 
   const handleDownload = () => {
     const canvas = canvasRef.current;
@@ -233,7 +306,6 @@ export default function SharePage() {
         URL.revokeObjectURL(url);
       }, 'image/png');
     } catch {
-      // Fallback: open image in new tab
       const url = canvas.toDataURL('image/png');
       window.open(url, '_blank', 'noopener,noreferrer');
     }
@@ -271,6 +343,8 @@ export default function SharePage() {
       </div>
     );
   }
+
+  const hasLyrics = lyricsLines.length > 0;
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
@@ -321,6 +395,44 @@ export default function SharePage() {
             {copied ? t('share.copied') : t('share.copyLink')}
           </button>
         </div>
+
+        {hasLyrics && (
+          <div className="mt-8 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
+            <h2 className="mb-3 text-sm font-medium text-[var(--muted-foreground)]">
+              {t('share.selectLyrics')}
+            </h2>
+            <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+              {lyricsLines.map((line, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => toggleLine(idx)}
+                  className={`flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left transition-colors ${
+                    selected.has(idx)
+                      ? 'bg-[var(--primary)]/10 text-[var(--foreground)]'
+                      : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                  }`}
+                >
+                  <span
+                    className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
+                      selected.has(idx)
+                        ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]'
+                        : 'border-[var(--border)] bg-[var(--background)]'
+                    }`}
+                  >
+                    {selected.has(idx) && <Check className="h-3.5 w-3.5" />}
+                  </span>
+                  <span className="line-clamp-2 text-sm">{line}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!hasLyrics && (
+          <p className="mt-8 text-center text-sm text-[var(--muted-foreground)]">
+            {t('share.noLyrics')}
+          </p>
+        )}
       </div>
     </div>
   );
