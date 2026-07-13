@@ -209,11 +209,11 @@ textarea {
   animation: lyricsAmbientOrbit 20s linear infinite;
 }
 @keyframes lyricsAmbientOrbit {
-  0% { transform: translate(-48%, -62%) scale(1.06); }
-  25% { transform: translate(-34%, -49%) scale(0.95); }
-  50% { transform: translate(-51%, -37%) scale(1.03); }
-  75% { transform: translate(-66%, -51%) scale(0.97); }
-  100% { transform: translate(-48%, -62%) scale(1.06); }
+  0% { transform: translate(-50%, -60%) scale(1.04); }
+  25% { transform: translate(-24%, -50%) scale(0.96); }
+  50% { transform: translate(-50%, -40%) scale(1.02); }
+  75% { transform: translate(-76%, -50%) scale(0.96); }
+  100% { transform: translate(-50%, -60%) scale(1.04); }
 }
 @media (prefers-reduced-motion: reduce) {
   .lyrics-ambient-orbit { animation: none; }
