@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { ViewTransitions } from 'next-view-transitions';
 import AppShell from '@/components/AppShell';
 
 export const metadata: Metadata = {
@@ -56,7 +57,9 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <AppShell>{children}</AppShell>
+        <ViewTransitions>
+          <AppShell>{children}</AppShell>
+        </ViewTransitions>
         <script dangerouslySetInnerHTML={{ __html: `
           if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {

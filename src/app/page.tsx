@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTransitionRouter } from 'next-view-transitions';
 import { Music, Pencil, Trash2, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User, Star, FolderPlus, Trash } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
@@ -72,6 +73,7 @@ export default function HomePage() {
   const [filterCollection, setFilterCollection] = useState<string | null>(null);
   const [collectionSongs, setCollectionSongs] = useState<Set<string>>(new Set());
   const router = useRouter();
+  const transitionRouter = useTransitionRouter();
   const searchParams = useSearchParams();
 
   const showToast = (type: 'success' | 'error', msg: string) => {
@@ -260,24 +262,6 @@ export default function HomePage() {
   const matchedSong = findBestMatch(songs, nowPlaying?.track, currentUser?.email);
 
   // Filter songs by search query (mySongsOnly is handled server-side via ?mine=1)
-  const navigateWithTransition = async (path: string, name?: string) => {
-    if (!name || typeof document === 'undefined' || !('startViewTransition' in document)) {
-      router.push(path);
-      return;
-    }
-    const doc = document as Document & { startViewTransition?: (cb: () => Promise<void> | void) => { ready: Promise<void> } };
-    if (!doc.startViewTransition) {
-      router.push(path);
-      return;
-    }
-    const transition = doc.startViewTransition(async () => {
-      router.push(path);
-      // Give Next.js a tick to render the new route before the browser captures the new state.
-      await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 50)));
-    });
-    transition.ready.catch(() => {});
-  };
-
   const filteredSongs = songs.filter((s) => {
     if (favoritesOnly && !favorites.has(s.id)) return false;
     if (filterCollection && !collectionSongs.has(s.id)) return false;
@@ -540,7 +524,7 @@ export default function HomePage() {
           {filteredSongs.map((song) => {
             const isPlaying = nowPlaying?.is_playing && isSongPlaying(song, nowPlaying.track, currentUser?.email);
             return (
-              <div key={song.id} className={`group flex items-center gap-3 sm:gap-4 rounded-lg bg-[var(--card)] border px-4 sm:px-5 py-3 sm:py-4 transition-colors hover:bg-[var(--muted)] cursor-pointer ${isPlaying ? 'border-[var(--success)]/50 bg-[var(--success-muted)]' : 'border-[var(--border)]'}`} onClick={() => navigateWithTransition(`/songs/${song.id}`, `song-cover-${song.id}`)}>
+              <div key={song.id} className={`group flex items-center gap-3 sm:gap-4 rounded-lg bg-[var(--card)] border px-4 sm:px-5 py-3 sm:py-4 transition-colors hover:bg-[var(--muted)] cursor-pointer ${isPlaying ? 'border-[var(--success)]/50 bg-[var(--success-muted)]' : 'border-[var(--border)]'}`} onClick={() => transitionRouter.push(`/songs/${song.id}`)}>
                 <CoverImage src={song.cover_url} alt={song.title} size="sm" viewTransitionName={`song-cover-${song.id}`} />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate flex items-center gap-2">

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { useTransitionRouter } from 'next-view-transitions';
 import Link from 'next/link';
 import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2 } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
@@ -38,6 +39,7 @@ function btnTextCls(active?: boolean, variant?: 'danger') {
 
 export default function SongViewPage() {
   const router = useRouter();
+  const transitionRouter = useTransitionRouter();
   const params = useParams();
   const { t } = useI18n();
   const id = params?.id as string;
@@ -144,7 +146,7 @@ export default function SongViewPage() {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
         <p className="text-sm text-[var(--muted-foreground)]">{t('song.notFound')}</p>
-        <button onClick={() => router.push('/')} className="mt-4 text-xs text-[var(--primary)] hover:underline inline-flex items-center gap-1">
+        <button onClick={() => transitionRouter.push('/')} className="mt-4 text-xs text-[var(--primary)] hover:underline inline-flex items-center gap-1">
           <ArrowLeft className="h-3 w-3" /> {t('song.backToList')}
         </button>
       </div>
@@ -175,9 +177,9 @@ export default function SongViewPage() {
     <div className="fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-hidden sm:block sm:h-auto sm:pb-0">
       {/* Breadcrumb */}
       <div className="shrink-0 mb-3 sm:mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
-        <a href="/" className="hover:text-[var(--foreground)] transition-colors inline-flex items-center gap-1">
+        <button onClick={() => transitionRouter.push('/')} className="hover:text-[var(--foreground)] transition-colors inline-flex items-center gap-1">
           <ArrowLeft className="h-3 w-3" /> {t('common.list')}
-        </a>
+        </button>
         <span className="opacity-40">/</span>
         <span className="text-[var(--foreground)] truncate max-w-[200px] sm:max-w-[320px]">{song.title}</span>
       </div>
