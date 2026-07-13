@@ -2,9 +2,9 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import QRCode from 'qrcode';
-import { ArrowLeft, Download, Link2, Loader2, Check } from 'lucide-react';
+import { ArrowLeft, Download, Link2, Loader2, Check, Smartphone, Monitor } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
 interface Song {
@@ -16,8 +16,12 @@ interface Song {
   lyrics_synced: string | null;
 }
 
-const CARD_W = 1200;
-const CARD_H = 630;
+type Orientation = 'landscape' | 'portrait';
+
+const LANDSCAPE_W = 1200;
+const LANDSCAPE_H = 630;
+const PORTRAIT_W = 630;
+const PORTRAIT_H = 1200;
 
 function roundRect(
   ctx: CanvasRenderingContext2D,
@@ -88,83 +92,92 @@ function getLyricsLines(song: Song): string[] {
     .filter((line) => line.length > 0);
 }
 
-async function drawCard(
-  canvas: HTMLCanvasElement,
+function drawCover(
+  ctx: CanvasRenderingContext2D,
+  song: Song,
+  coverImg: HTMLImageElement | null,
+  x: number,
+  y: number,
+  size: number,
+) {
+  ctx.save();
+  roundRect(ctx, x, y, size, size, Math.min(24, size / 10));
+  ctx.clip();
+  if (coverImg) {
+    ctx.drawImage(coverImg, x, y, size, size);
+  } else {
+    ctx.fillStyle = '#334155';
+    ctx.fillRect(x, y, size, size);
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = `${Math.floor(size * 0.4)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🎵', x + size / 2, y + size / 2);
+  }
+  ctx.restore();
+}
+
+function drawCaption(
+  ctx: CanvasRenderingContext2D,
+  scanText: string,
+  siteText: string,
+  centerX: number,
+  startY: number,
+) {
+  ctx.fillStyle = '#cbd5e1';
+  ctx.font = '22px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(scanText, centerX, startY);
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '18px sans-serif';
+  ctx.fillText(siteText, centerX, startY + 32);
+}
+
+async function drawLandscape(
+  ctx: CanvasRenderingContext2D,
   song: Song,
   qrDataUrl: string,
   scanText: string,
   siteText: string,
   selectedLyrics: string[],
 ) {
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-
-  // Wait for system fonts to settle
-  if (typeof document !== 'undefined' && 'fonts' in document) {
-    await document.fonts.ready;
-  }
-
-  // Background gradient
-  const grad = ctx.createLinearGradient(0, 0, CARD_W, CARD_H);
+  // Background
+  const grad = ctx.createLinearGradient(0, 0, LANDSCAPE_W, LANDSCAPE_H);
   grad.addColorStop(0, '#0f172a');
   grad.addColorStop(1, '#1e293b');
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, CARD_W, CARD_H);
+  ctx.fillRect(0, 0, LANDSCAPE_W, LANDSCAPE_H);
 
-  // Subtle top accent line
   ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  ctx.fillRect(60, 40, CARD_W - 120, 2);
+  ctx.fillRect(60, 40, LANDSCAPE_W - 120, 2);
 
-  // Cover
-  const coverSize = 240;
-  const coverX = 60;
-  const coverY = 60;
   const coverImg = await loadImage(song.cover_url);
-  ctx.save();
-  roundRect(ctx, coverX, coverY, coverSize, coverSize, 24);
-  ctx.clip();
-  if (coverImg) {
-    ctx.drawImage(coverImg, coverX, coverY, coverSize, coverSize);
-  } else {
-    ctx.fillStyle = '#334155';
-    ctx.fillRect(coverX, coverY, coverSize, coverSize);
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '96px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('🎵', coverX + coverSize / 2, coverY + coverSize / 2);
-  }
-  ctx.restore();
+  drawCover(ctx, song, coverImg, 60, 60, 240);
 
-  // Title
+  // Title + artist
   const textX = 330;
   let textY = 115;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 52px sans-serif';
-  const titleLines = wrapText(ctx, song.title, 560, 2);
-  for (const line of titleLines) {
+  for (const line of wrapText(ctx, song.title, 560, 2)) {
     ctx.fillText(line, textX, textY);
     textY += 66;
   }
-
-  // Artist
   textY += 6;
   ctx.fillStyle = '#94a3b8';
   ctx.font = '30px sans-serif';
-  const artistLines = wrapText(ctx, song.artist || '', 560, 1);
-  for (const line of artistLines) {
+  for (const line of wrapText(ctx, song.artist || '', 560, 1)) {
     ctx.fillText(line, textX, textY);
     textY += 42;
   }
 
-  // Divider under header
   ctx.fillStyle = 'rgba(255,255,255,0.08)';
   ctx.fillRect(textX, 230, 560, 1);
 
-  // Selected lyrics
-  const lyricsX = 330;
+  // Lyrics
+  const lyricsX = textX;
   const lyricsY = 270;
   const lyricsW = 560;
   const lyricsLineH = 44;
@@ -172,8 +185,6 @@ async function drawCard(
   ctx.fillStyle = '#e2e8f0';
   ctx.font = '28px sans-serif';
   ctx.textAlign = 'left';
-  ctx.textBaseline = 'alphabetic';
-
   const lyricsLines: string[] = [];
   for (const line of selectedLyrics) {
     const wrapped = wrapText(ctx, line, lyricsW, lyricsMaxLines - lyricsLines.length);
@@ -184,7 +195,7 @@ async function drawCard(
     ctx.fillText(lyricsLines[i], lyricsX, lyricsY + i * lyricsLineH);
   }
 
-  // QR code
+  // QR
   const qrSize = 180;
   const qrX = 940;
   const qrY = 270;
@@ -196,23 +207,118 @@ async function drawCard(
     ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
     ctx.restore();
   }
+  drawCaption(ctx, scanText, siteText, qrX + qrSize / 2, qrY + qrSize + 52);
+}
 
-  // Caption below QR with larger margin
-  const captionY = qrY + qrSize + 52;
-  ctx.fillStyle = '#cbd5e1';
-  ctx.font = '22px sans-serif';
+async function drawPortrait(
+  ctx: CanvasRenderingContext2D,
+  song: Song,
+  qrDataUrl: string,
+  scanText: string,
+  siteText: string,
+  selectedLyrics: string[],
+) {
+  // Background
+  const grad = ctx.createLinearGradient(0, 0, 0, PORTRAIT_H);
+  grad.addColorStop(0, '#0f172a');
+  grad.addColorStop(1, '#1e293b');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, PORTRAIT_W, PORTRAIT_H);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.fillRect(60, 60, PORTRAIT_W - 120, 2);
+
+  const coverImg = await loadImage(song.cover_url);
+  drawCover(ctx, song, coverImg, 105, 80, 420);
+
+  // Title + artist (centered)
+  const centerX = PORTRAIT_W / 2;
+  let textY = 540;
   ctx.textAlign = 'center';
-  ctx.fillText(scanText, qrX + qrSize / 2, captionY);
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 44px sans-serif';
+  for (const line of wrapText(ctx, song.title, 510, 2)) {
+    ctx.fillText(line, centerX, textY);
+    textY += 58;
+  }
+  textY += 8;
   ctx.fillStyle = '#94a3b8';
-  ctx.font = '18px sans-serif';
-  ctx.fillText(siteText, qrX + qrSize / 2, captionY + 32);
+  ctx.font = '26px sans-serif';
+  for (const line of wrapText(ctx, song.artist || '', 510, 1)) {
+    ctx.fillText(line, centerX, textY);
+    textY += 38;
+  }
+
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.fillRect(60, 640, PORTRAIT_W - 120, 1);
+
+  // Lyrics
+  const lyricsY = 680;
+  const lyricsW = 510;
+  const lyricsLineH = 44;
+  const lyricsMaxLines = 4;
+  ctx.fillStyle = '#e2e8f0';
+  ctx.font = '28px sans-serif';
+  const lyricsLines: string[] = [];
+  for (const line of selectedLyrics) {
+    const wrapped = wrapText(ctx, line, lyricsW, lyricsMaxLines - lyricsLines.length);
+    lyricsLines.push(...wrapped);
+    if (lyricsLines.length >= lyricsMaxLines) break;
+  }
+  for (let i = 0; i < lyricsLines.length; i++) {
+    ctx.fillText(lyricsLines[i], centerX, lyricsY + i * lyricsLineH);
+  }
+
+  // QR
+  const qrSize = 180;
+  const qrX = (PORTRAIT_W - qrSize) / 2;
+  const qrY = 940;
+  const qrImg = await loadImage(qrDataUrl);
+  if (qrImg) {
+    ctx.save();
+    roundRect(ctx, qrX, qrY, qrSize, qrSize, 16);
+    ctx.clip();
+    ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+    ctx.restore();
+  }
+  drawCaption(ctx, scanText, siteText, centerX, qrY + qrSize + 52);
+}
+
+async function drawCard(
+  canvas: HTMLCanvasElement,
+  song: Song,
+  qrDataUrl: string,
+  scanText: string,
+  siteText: string,
+  selectedLyrics: string[],
+  orientation: Orientation,
+) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  if (typeof document !== 'undefined' && 'fonts' in document) {
+    await document.fonts.ready;
+  }
+
+  if (orientation === 'portrait') {
+    canvas.width = PORTRAIT_W;
+    canvas.height = PORTRAIT_H;
+    await drawPortrait(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics);
+  } else {
+    canvas.width = LANDSCAPE_W;
+    canvas.height = LANDSCAPE_H;
+    await drawLandscape(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics);
+  }
 }
 
 export default function SharePage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { t } = useI18n();
   const id = (params?.id as string) || '';
+  const defaultLine = searchParams?.get('line');
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [song, setSong] = useState<Song | null>(null);
@@ -222,6 +328,7 @@ export default function SharePage() {
   const [ready, setReady] = useState(false);
   const [copied, setCopied] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [orientation, setOrientation] = useState<Orientation>('landscape');
 
   const pageUrl = typeof window !== 'undefined' ? `${window.location.origin}/songs/${id}` : '';
 
@@ -242,6 +349,15 @@ export default function SharePage() {
       .catch(() => setError(t('share.error')))
       .finally(() => setLoading(false));
   }, [id, t]);
+
+  useEffect(() => {
+    if (defaultLine !== null && lyricsLines.length > 0) {
+      const idx = parseInt(defaultLine, 10);
+      if (!Number.isNaN(idx) && idx >= 0 && idx < lyricsLines.length) {
+        setSelected(new Set([idx]));
+      }
+    }
+  }, [defaultLine, lyricsLines.length]);
 
   useEffect(() => {
     if (!pageUrl) return;
@@ -266,11 +382,12 @@ export default function SharePage() {
       t('share.scan'),
       t('share.site', { site: window.location.host }),
       selectedLines,
+      orientation,
     ).then(() => {
       if (!cancelled) setReady(true);
     });
     return () => { cancelled = true; };
-  }, [song, qrDataUrl, pageUrl, t, selected, lyricsLines]);
+  }, [song, qrDataUrl, pageUrl, t, selected, lyricsLines, orientation]);
 
   const toggleLine = (idx: number) => {
     setSelected((prev) => {
@@ -292,7 +409,7 @@ export default function SharePage() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `share-${song.title || id}.png`;
+        a.download = `share-${song.title || id}-${orientation}.png`;
         a.click();
         URL.revokeObjectURL(url);
       }, 'image/png');
@@ -336,10 +453,13 @@ export default function SharePage() {
   }
 
   const hasLyrics = lyricsLines.length > 0;
+  const cardAspectClass = orientation === 'portrait'
+    ? 'max-w-md'
+    : 'max-w-3xl';
 
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <div className="mx-auto max-w-3xl px-4 py-6">
+      <div className={`mx-auto px-4 py-6 ${cardAspectClass}`}>
         <div className="mb-6 flex items-center gap-3">
           <button
             onClick={() => router.back()}
@@ -354,8 +474,8 @@ export default function SharePage() {
         <div className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-sm">
           <canvas
             ref={canvasRef}
-            width={CARD_W}
-            height={CARD_H}
+            width={LANDSCAPE_W}
+            height={LANDSCAPE_H}
             className="h-auto w-full"
           />
           {!ready && (
@@ -388,43 +508,70 @@ export default function SharePage() {
         </div>
 
         {hasLyrics && (
-          <div className="mt-8 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-medium text-[var(--muted-foreground)]">
-                {t('share.selectLyrics')}
-              </h2>
-              {selected.size > 0 && (
-                <button
-                  onClick={clearSelection}
-                  className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
-                >
-                  {t('share.clear')}
-                </button>
-              )}
-            </div>
-            <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-              {lyricsLines.map((line, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => toggleLine(idx)}
-                  className={`flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left transition-colors ${
-                    selected.has(idx)
-                      ? 'bg-[var(--primary)]/10 text-[var(--foreground)]'
-                      : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
-                  }`}
-                >
-                  <span
-                    className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
+          <div className="mt-8 space-y-4">
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-medium text-[var(--muted-foreground)]">
+                  {t('share.selectLyrics')}
+                </h2>
+                {selected.size > 0 && (
+                  <button
+                    onClick={clearSelection}
+                    className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                  >
+                    {t('share.clear')}
+                  </button>
+                )}
+              </div>
+              <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                {lyricsLines.map((line, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => toggleLine(idx)}
+                    className={`flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left transition-colors ${
                       selected.has(idx)
-                        ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]'
-                        : 'border-[var(--border)] bg-[var(--background)]'
+                        ? 'bg-[var(--primary)]/10 text-[var(--foreground)]'
+                        : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
                     }`}
                   >
-                    {selected.has(idx) && <Check className="h-3.5 w-3.5" />}
-                  </span>
-                  <span className="line-clamp-2 text-sm">{line}</span>
-                </button>
-              ))}
+                    <span
+                      className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
+                        selected.has(idx)
+                          ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]'
+                          : 'border-[var(--border)] bg-[var(--background)]'
+                      }`}
+                    >
+                      {selected.has(idx) && <Check className="h-3.5 w-3.5" />}
+                    </span>
+                    <span className="line-clamp-2 text-sm">{line}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => setOrientation('landscape')}
+                className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
+                  orientation === 'landscape'
+                    ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                    : 'bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--muted)]'
+                }`}
+              >
+                <Monitor className="h-4 w-4" />
+                {t('share.landscape')}
+              </button>
+              <button
+                onClick={() => setOrientation('portrait')}
+                className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
+                  orientation === 'portrait'
+                    ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                    : 'bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--muted)]'
+                }`}
+              >
+                <Smartphone className="h-4 w-4" />
+                {t('share.portrait')}
+              </button>
             </div>
           </div>
         )}

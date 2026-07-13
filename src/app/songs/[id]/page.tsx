@@ -302,7 +302,7 @@ export default function SongViewPage() {
               </button>
             )}
             <Link
-              href={`/songs/${id}/share`}
+              href={isSynced && activeLine >= 0 ? `/songs/${id}/share?line=${activeLine}` : `/songs/${id}/share`}
               className={btnTextCls()}
               title={t('song.share')}
             >
@@ -636,7 +636,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
   }, [showMenu]);
 
   const menuItems = [
-    { icon: <Share2 className="h-4 w-4" />, label: t('song.share'), onClick: () => router.push(`/songs/${id}/share`) },
+    { icon: <Share2 className="h-4 w-4" />, label: t('song.share'), onClick: () => router.push(sync.activeLine >= 0 ? `/songs/${id}/share?line=${sync.activeLine}` : `/songs/${id}/share`) },
     { icon: <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />, label: data.syncing ? t('song.syncing') : t('song.sync'), onClick: data.handleSync, disabled: data.syncing },
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: t('song.pipBtn'), onClick: () => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef, lineTimestamps) }] : []),
     { icon: <Bug className="h-4 w-4" />, label: t('song.debug'), onClick: () => data.setDebug(!data.debug), active: data.debug },

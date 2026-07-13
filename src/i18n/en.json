@@ -192,7 +192,9 @@
     "site": "Shared from {site}",
     "selectLyrics": "Select lyrics",
     "noLyrics": "No lyrics available",
-    "clear": "Clear"
+    "clear": "Clear",
+    "landscape": "Landscape",
+    "portrait": "Portrait"
   },
   "admin": {
     "title": "Admin",

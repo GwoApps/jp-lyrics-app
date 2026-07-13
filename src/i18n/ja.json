@@ -192,7 +192,9 @@
     "site": "{site} から共有",
     "selectLyrics": "歌詞を選択",
     "noLyrics": "歌詞がありません",
-    "clear": "クリア"
+    "clear": "クリア",
+    "landscape": "横向き",
+    "portrait": "縦向き"
   },
   "admin": {
     "title": "管理画面",
