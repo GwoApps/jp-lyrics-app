@@ -23,8 +23,8 @@ function btnCls(active?: boolean, variant?: 'danger') {
   const colors = variant === 'danger'
     ? 'text-[var(--destructive)] bg-[var(--destructive)]/10 hover:bg-[var(--destructive)]/20'
     : active
-      ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
-      : 'text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)]';
+      ? 'song-accent-button song-accent-button--active'
+      : 'song-accent-button';
   return `${base} ${size} ${colors}`;
 }
 
@@ -33,8 +33,8 @@ function btnTextCls(active?: boolean, variant?: 'danger') {
   const colors = variant === 'danger'
     ? 'text-[var(--destructive)] bg-[var(--destructive)]/10 hover:bg-[var(--destructive)]/20'
     : active
-      ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
-      : 'text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] hover:bg-[var(--muted)]';
+      ? 'song-accent-button song-accent-button--active'
+      : 'song-accent-button';
   return `${base} ${colors}`;
 }
 
@@ -216,12 +216,15 @@ export default function SongViewPage() {
   const playingMatch = spotify?.track && !isSameSong
     ? findBestMatch(data.allSongs.filter((s) => s.id !== id), spotify.track, currentUserEmail)
     : null;
-  const lyricPanelStyle = coverColor
-    ? { ['--lyric-accent' as string]: `rgb(${coverColor.r} ${coverColor.g} ${coverColor.b})` }
+  const songThemeStyle = coverColor
+    ? {
+        ['--lyric-accent' as string]: `rgb(${coverColor.r} ${coverColor.g} ${coverColor.b})`,
+        ['--song-accent' as string]: `rgb(${coverColor.r} ${coverColor.g} ${coverColor.b})`,
+      }
     : undefined;
 
   return (
-    <div className="fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-hidden sm:block sm:h-auto sm:pb-0">
+    <div className="song-view fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-visible sm:block sm:h-auto sm:pb-0" style={songThemeStyle}>
       {/* Breadcrumb */}
       <div className="shrink-0 mb-3 sm:mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
         <button onClick={() => transitionRouter.push('/')} className="hover:text-[var(--foreground)] transition-colors inline-flex items-center gap-1">
@@ -323,7 +326,7 @@ export default function SongViewPage() {
           </div>
           {/* Desktop toolbar */}
           <div className="hidden sm:flex items-center gap-2 shrink-0 ml-auto">
-            <div className="inline-flex items-center justify-center gap-1.5 rounded-md bg-[var(--accent)] px-3 py-2" title={t('song.fontSize')}>
+            <div className="song-accent-surface inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2" title={t('song.fontSize')}>
               <button onClick={() => data.setFontSize(s => Math.max(14, s - 2))} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Minus className="h-3.5 w-3.5" /></button>
               <span className="text-xs w-5 text-center text-[var(--muted-foreground)] tabular-nums">{data.fontSize}</span>
               <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Plus className="h-3.5 w-3.5" /></button>
@@ -517,7 +520,7 @@ export default function SongViewPage() {
       </div>
 
       {/* Lyrics */}
-      <div className="lyrics-panel relative isolate rounded-lg overflow-hidden flex-1 min-h-0" style={lyricPanelStyle}>
+      <div className="lyrics-panel relative isolate rounded-lg overflow-hidden flex-1 min-h-0">
         <div className="lyrics-ambient pointer-events-none absolute -inset-10" aria-hidden="true" />
         {data.showRaw ? (
           <pre className="relative z-10 p-4 sm:p-6 whitespace-pre-wrap font-sans leading-relaxed h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden" style={{ fontSize: `${data.fontSize}px` }}>{song.lyrics_raw || t('song.noLyricsParen')}</pre>
@@ -693,33 +696,33 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
     <div className="fixed bottom-0 left-0 right-0 sm:hidden z-50 bg-[var(--background)]/95 backdrop-blur-sm border-t border-[var(--border)]">
       <div className="mx-auto max-w-[860px] flex items-center justify-between px-2" style={{ paddingTop: 8, paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
         {/* A-/A+ */}
-        <div className="flex items-stretch rounded-lg bg-[var(--accent)] overflow-hidden">
+        <div className="song-accent-surface flex items-stretch rounded-lg overflow-hidden">
           <button onClick={() => data.setFontSize(s => Math.max(14, s - 2))} className="flex items-center justify-center px-2 py-1 text-sm font-medium text-[var(--muted-foreground)] active:text-[var(--foreground)] active:bg-[var(--accent)]">A-</button>
           <div className="w-px bg-[var(--border)]" />
           <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="flex items-center justify-center px-2 py-1 text-base font-medium text-[var(--muted-foreground)] active:text-[var(--foreground)] active:bg-[var(--accent)]">A+</button>
         </div>
 
         {/* Copy */}
-        <button onClick={data.handleCopy} className={`flex items-center justify-center p-2 ${data.copied ? 'text-[var(--success)]' : 'text-[var(--muted-foreground)]'}`}>
+        <button onClick={data.handleCopy} className={`song-accent-button flex items-center justify-center rounded-lg p-2 ${data.copied ? 'text-[var(--success)]' : ''}`}>
           {data.copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
         </button>
 
         {/* Paste */}
         {!hasSyncData && (
-          <button onClick={() => data.setShowPasteLrc(!data.showPasteLrc)} className={`flex items-center justify-center p-2 ${data.showPasteLrc ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)]'}`}>
+          <button onClick={() => data.setShowPasteLrc(!data.showPasteLrc)} className={`song-accent-button flex items-center justify-center rounded-lg p-2 ${data.showPasteLrc ? 'song-accent-button--active' : ''}`}>
             <ClipboardPaste className="h-5 w-5" />
           </button>
         )}
 
         {/* Raw / Furigana */}
-        <button onClick={() => data.setShowRaw(!data.showRaw)} className="flex items-center justify-center p-2 text-[var(--muted-foreground)]">
+        <button onClick={() => data.setShowRaw(!data.showRaw)} className={`song-accent-button flex items-center justify-center rounded-lg p-2 ${data.showRaw ? 'song-accent-button--active' : ''}`}>
           {data.showRaw ? <BookOpen className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
         </button>
 
         {/* Share */}
         <button
           onClick={() => router.push(sync.activeLine >= 0 ? `/songs/${id}/share?line=${sync.activeLine}` : `/songs/${id}/share`)}
-          className="flex items-center justify-center p-2 text-[var(--muted-foreground)]"
+          className="song-accent-button flex items-center justify-center rounded-lg p-2"
           title={t('song.share')}
         >
           <Share2 className="h-5 w-5" />

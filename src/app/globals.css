@@ -150,6 +150,28 @@ textarea {
     0 0 0 1px color-mix(in srgb, var(--lyric-accent) 12%, transparent),
     0 0 52px -20px color-mix(in srgb, var(--lyric-accent) 72%, transparent);
 }
+.song-view {
+  --song-accent: var(--primary);
+}
+.song-accent-button {
+  color: color-mix(in srgb, var(--foreground) 82%, var(--song-accent));
+  background: color-mix(in srgb, var(--accent) 82%, var(--song-accent));
+  border: 1px solid color-mix(in srgb, var(--border) 76%, var(--song-accent));
+}
+.song-accent-button:hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--accent) 70%, var(--song-accent));
+  border-color: color-mix(in srgb, var(--border) 56%, var(--song-accent));
+}
+.song-accent-button--active {
+  color: var(--primary-foreground);
+  background: color-mix(in srgb, var(--song-accent) 78%, var(--primary));
+  border-color: color-mix(in srgb, var(--song-accent) 88%, var(--border));
+}
+.song-accent-surface {
+  background: color-mix(in srgb, var(--accent) 80%, var(--song-accent));
+  border: 1px solid color-mix(in srgb, var(--border) 78%, var(--song-accent));
+}
 .lyrics-ambient {
   z-index: 0;
   opacity: 0.76;
