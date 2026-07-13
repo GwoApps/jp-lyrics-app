@@ -283,11 +283,11 @@ export default function SongViewPage() {
             </div>
           </div>
           {/* Desktop toolbar */}
-          <div className="hidden sm:flex items-center gap-2 shrink-0">
-            <div className="flex items-center gap-0.5 rounded-md bg-[var(--accent)] px-1 py-0.5" title={t('song.fontSize')}>
-              <button onClick={() => data.setFontSize(s => Math.max(14, s - 2))} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Minus className="h-3 w-3" /></button>
-              <span className="text-[10px] w-5 text-center text-[var(--muted-foreground)] tabular-nums">{data.fontSize}</span>
-              <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Plus className="h-3 w-3" /></button>
+          <div className="hidden sm:flex items-center gap-2 shrink-0 ml-auto">
+            <div className="inline-flex items-center justify-center gap-1.5 rounded-md bg-[var(--accent)] px-3 py-2" title={t('song.fontSize')}>
+              <button onClick={() => data.setFontSize(s => Math.max(14, s - 2))} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Minus className="h-3.5 w-3.5" /></button>
+              <span className="text-xs w-5 text-center text-[var(--muted-foreground)] tabular-nums">{data.fontSize}</span>
+              <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Plus className="h-3.5 w-3.5" /></button>
             </div>
             <button onClick={data.handleCopy} className={btnTextCls(data.copied)}>
               {data.copied ? <Check className="h-3.5 w-3.5 text-[var(--success)]" /> : <Copy className="h-3.5 w-3.5" />}
