@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2 } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import CoverImage from '@/components/CoverImage';
 import FuriganaLineView from '@/components/FuriganaLine';
 import { useI18n } from '@/lib/i18n';
 import { fmtMs, fmtTime, findActiveLine } from '@/lib/lrc';
@@ -120,13 +121,11 @@ export default function SongViewPage() {
 
   // Album cover
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
-  const [coverLoading, setCoverLoading] = useState(false);
   useEffect(() => {
     if (data.song?.cover_url) setCoverUrl(data.song.cover_url);
   }, [data.song?.cover_url]);
   useEffect(() => {
     if (!id || !currentUserEmail || !spotifyConnected || coverUrl) return;
-    setCoverLoading(true);
     fetch(`/api/songs/${id}/cover`)
       .then(async (r) => {
         if (!r.ok) return null;
@@ -134,8 +133,7 @@ export default function SongViewPage() {
         return d.cover_url as string | null;
       })
       .then((url) => { if (url) setCoverUrl(url); })
-      .catch(() => {})
-      .finally(() => setCoverLoading(false));
+      .catch(() => {});
   }, [id, currentUserEmail, spotifyConnected, coverUrl]);
 
   if (data.loading) {
@@ -188,15 +186,7 @@ export default function SongViewPage() {
       <div className="shrink-0 mb-3 sm:mb-8">
         <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
           <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
-            {coverUrl ? (
-              <img
-                src={coverUrl}
-                alt={song.title}
-                className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl object-cover shadow-md shrink-0 bg-[var(--muted)]"
-              />
-            ) : coverLoading ? (
-              <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl bg-[var(--accent)] animate-pulse shrink-0" />
-            ) : null}
+            <CoverImage src={coverUrl} alt={song.title} size="md" />
             <div className="space-y-0.5 sm:space-y-1 min-w-0">
               <h1 className="text-base sm:text-xl font-semibold tracking-tight">{song.title}</h1>
               {song.artist && <p className="text-xs sm:text-sm text-[var(--muted-foreground)]">{song.artist}</p>}

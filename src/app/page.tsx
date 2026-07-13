@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Music, Pencil, Trash2, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User, Star, FolderPlus, Trash } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import CoverImage from '@/components/CoverImage';
 import { useI18n } from '@/lib/i18n';
 import { findBestMatch, isSongPlaying } from '@/lib/match';
 import { useNowPlaying } from '@/hooks/useNowPlaying';
@@ -12,6 +13,7 @@ interface SongItem {
   id: string;
   title: string;
   artist: string;
+  cover_url?: string | null;
   created_by: string;
   created_by_name: string;
   is_public: number;
@@ -521,9 +523,7 @@ export default function HomePage() {
             const isPlaying = nowPlaying?.is_playing && isSongPlaying(song, nowPlaying.track, currentUser?.email);
             return (
               <div key={song.id} className={`group flex items-center gap-3 sm:gap-4 rounded-lg bg-[var(--card)] border px-4 sm:px-5 py-3 sm:py-4 transition-colors hover:bg-[var(--muted)] cursor-pointer ${isPlaying ? 'border-[var(--success)]/50 bg-[var(--success-muted)]' : 'border-[var(--border)]'}`} onClick={() => router.push(`/songs/${song.id}`)}>
-                <div className={`flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-md ${isPlaying ? 'bg-[var(--success-muted)]' : 'bg-[var(--muted)]'}`}>
-                  <Music className={`h-4 w-4 ${isPlaying ? 'text-[var(--success)]' : 'text-[var(--muted-foreground)]'}`} />
-                </div>
+                <CoverImage src={song.cover_url} alt={song.title} size="sm" />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate flex items-center gap-2">
                     {song.title}
