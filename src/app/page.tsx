@@ -533,10 +533,12 @@ export default function HomePage() {
                 <CoverImage src={song.cover_url} alt={song.title} size="sm" viewTransitionName={`song-cover-${song.id}`} />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate flex items-center gap-2">
-                    {song.title}
+                    <span className="cover-transition truncate" style={{ ['--vt-name' as string]: `song-title-${song.id}` }}>{song.title}</span>
                     {isPlaying && <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--success)] animate-pulse shrink-0" />}
                   </div>
-                  <div className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate">{song.artist || t('common.unknownArtist')}</div>
+                  <div className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate">
+                    <span className="cover-transition truncate" style={{ ['--vt-name' as string]: `song-artist-${song.id}` }}>{song.artist || t('common.unknownArtist')}</span>
+                  </div>
                   {song.created_by_name && (
                     <div className="text-[10px] text-[var(--muted-foreground)]/60 mt-0.5 truncate">{t('home.createdBy')}: {song.created_by_name}</div>
                   )}
