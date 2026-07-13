@@ -56,6 +56,11 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.6;
+  transition: background-color 240ms ease;
+}
+/* Applied only while a song detail has a successfully extracted cover color. */
+body.song-page-themed {
+  background: color-mix(in srgb, var(--background) 96%, var(--song-page-accent));
 }
 
 /* Scrollbar */

@@ -156,6 +156,18 @@ export default function SongViewPage() {
       .then((url) => { if (url) setCoverUrl(url); })
       .catch(() => {});
   }, [id, currentUserEmail, spotifyConnected, coverUrl]);
+  // Tint the viewport itself, not only the content column. The 4% mix keeps the
+  // current light/dark theme dominant while giving the page a cover-derived cast.
+  useEffect(() => {
+    if (!coverColor) return;
+    const accent = `rgb(${coverColor.r} ${coverColor.g} ${coverColor.b})`;
+    document.body.style.setProperty('--song-page-accent', accent);
+    document.body.classList.add('song-page-themed');
+    return () => {
+      document.body.classList.remove('song-page-themed');
+      document.body.style.removeProperty('--song-page-accent');
+    };
+  }, [coverColor]);
 
   if (data.loading) {
     return (
