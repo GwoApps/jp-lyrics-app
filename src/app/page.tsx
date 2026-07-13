@@ -505,36 +505,40 @@ export default function HomePage() {
       )}
 
       {/* Now Playing bar */}
-      {nowPlaying?.is_playing && nowPlaying.track && (
-        <div className="mb-5 sm:mb-6 rounded-lg bg-[var(--card)] border border-[var(--border)] p-3 sm:p-4 flex items-center gap-3">
-          <div className="relative shrink-0">
-            <Music className="h-5 w-5 text-[var(--success)]" />
-            <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-[var(--success)] animate-pulse" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium truncate">{nowPlaying.track.name}</div>
-            <div className="text-xs text-[var(--muted-foreground)] truncate">{nowPlaying.track.artist}</div>
-          </div>
-          {matchedSong ? (
-            <button
-              onClick={() => router.push(`/songs/${matchedSong.id}`)}
-              className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors shrink-0"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{t('home.view')}</span>
-            </button>
-          ) : spotify?.connected ? (
-            <button
-              onClick={handleImport}
-              disabled={importing}
-              className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium bg-[var(--primary)] text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0"
-            >
-              {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-              <span>{importing ? t('home.importing') : t('home.import')}</span>
-            </button>
-          ) : null}
+      <div className={`now-playing-slot ${nowPlaying?.is_playing && nowPlaying.track ? 'now-playing-slot--visible' : ''}`}>
+        <div className="now-playing-reveal">
+          {nowPlaying?.is_playing && nowPlaying.track && (
+            <div className="now-playing-card rounded-lg bg-[var(--card)] border border-[var(--border)] p-3 sm:p-4 flex items-center gap-3">
+              <div className="relative shrink-0">
+                <Music className="h-5 w-5 text-[var(--success)]" />
+                <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-[var(--success)] animate-pulse" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate">{nowPlaying.track.name}</div>
+                <div className="text-xs text-[var(--muted-foreground)] truncate">{nowPlaying.track.artist}</div>
+              </div>
+              {matchedSong ? (
+                <button
+                  onClick={() => router.push(`/songs/${matchedSong.id}`)}
+                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors shrink-0"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">{t('home.view')}</span>
+                </button>
+              ) : spotify?.connected ? (
+                <button
+                  onClick={handleImport}
+                  disabled={importing}
+                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium bg-[var(--primary)] text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0"
+                >
+                  {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                  <span>{importing ? t('home.importing') : t('home.import')}</span>
+                </button>
+              ) : null}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Song list */}
       {loading ? (

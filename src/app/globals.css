@@ -95,6 +95,40 @@ textarea {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* The now-playing row reserves and releases space gradually, so the song list moves with it. */
+.now-playing-slot {
+  display: grid;
+  grid-template-rows: 0fr;
+  padding-bottom: 0;
+  transition: grid-template-rows 320ms cubic-bezier(0.22, 1, 0.36, 1), padding-bottom 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.now-playing-slot--visible {
+  grid-template-rows: 1fr;
+  padding-bottom: 1.25rem;
+}
+.now-playing-reveal { min-height: 0; overflow: hidden; }
+.now-playing-card {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.985);
+  transition: opacity 220ms ease-out 70ms, transform 320ms cubic-bezier(0.22, 1, 0.36, 1) 70ms;
+}
+.now-playing-slot--visible .now-playing-card {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  animation: nowPlayingEnter 320ms cubic-bezier(0.22, 1, 0.36, 1) 70ms both;
+}
+@keyframes nowPlayingEnter {
+  from { opacity: 0; transform: translateY(-8px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (min-width: 640px) {
+  .now-playing-slot--visible { padding-bottom: 1.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .now-playing-slot, .now-playing-card { transition: none; }
+  .now-playing-card { animation: none !important; }
+}
+
 /* Confirm Dialog */
 .confirm-overlay {
   position: fixed; inset: 0; z-index: 100;
