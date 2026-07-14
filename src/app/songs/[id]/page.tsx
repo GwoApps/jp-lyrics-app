@@ -14,6 +14,7 @@ import { isTitleMatch, findBestMatch } from '@/lib/match';
 import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
 import { extractMaterialCoverPalette, type CoverColor, type CoverPalette } from '@/lib/cover-color';
+import { useAuthSession } from '@/lib/auth-session';
 import type { SyncRefs } from '@/hooks/useSpotifySync';
 
 /** Reusable button class builder */
@@ -72,26 +73,11 @@ export default function SongViewPage() {
     lyricsRef: { current: null },
   });
 
-  // Current user for match priority
-  const [currentUserEmail, setCurrentUserEmail] = useState('');
-  const [isAdmin, setIsAdmin] = useState(false);
-  useEffect(() => {
-    fetch('/api/me').then(r => r.json()).then(d => {
-      if (d.authenticated && d.email) {
-        setCurrentUserEmail(d.email);
-        if (d.isAdmin) setIsAdmin(true);
-      }
-    }).catch(() => {});
-  }, []);
-
-  // Spotify auth check — skip polling if not connected
-  const [spotifyConnected, setSpotifyConnected] = useState<boolean | null>(null);
-  useEffect(() => {
-    fetch('/api/spotify/status')
-      .then(r => r.json())
-      .then(d => setSpotifyConnected(!!d.connected))
-      .catch(() => setSpotifyConnected(false));
-  }, []);
+  // Cached login state renders immediately; useAuthSession revalidates it on every entry.
+  const { session } = useAuthSession();
+  const currentUserEmail = session?.user?.email || '';
+  const isAdmin = session?.user?.isAdmin === true;
+  const spotifyConnected = session ? session.spotify.connected : null;
 
   // Spotify sync hook (polling + rAF + follow-playing)
   const sync = useSpotifySync(syncRefs, spotifyConnected === true);

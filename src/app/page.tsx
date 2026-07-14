@@ -9,6 +9,7 @@ import CoverImage from '@/components/CoverImage';
 import { useI18n } from '@/lib/i18n';
 import { findBestMatch, isSongPlaying } from '@/lib/match';
 import { useNowPlaying } from '@/hooks/useNowPlaying';
+import { useAuthSession } from '@/lib/auth-session';
 
 interface SongItem {
   id: string;
@@ -20,11 +21,6 @@ interface SongItem {
   is_public: number;
   created_at: string;
   updated_at: string;
-}
-
-interface SpotifyStatus {
-  connected: boolean;
-  display_name?: string;
 }
 
 function localeToBCP47(locale: string): string {
@@ -75,9 +71,10 @@ export default function HomePage() {
   const { t, locale } = useI18n();
   const [songs, setSongs] = useState<SongItem[]>([]);
   const [loading, setLoading] = useState(true);
-  // `null` means the Spotify login state is still being resolved. Keep login UI hidden
-  // until that request completes so authenticated users never see a misleading login button.
-  const [spotify, setSpotify] = useState<SpotifyStatus | null>(null);
+  const { session, updateSession } = useAuthSession();
+  // A cached session renders immediately; the hook revalidates it on every page entry.
+  const spotify = session?.spotify ?? null;
+  const currentUser = session?.user ?? null;
   const nowPlaying = useNowPlaying(!!spotify?.connected);
   const [importing, setImporting] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
@@ -86,7 +83,6 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [mySongsOnly, setMySongsOnly] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [currentUser, setCurrentUser] = useState<{ email: string; name: string; isAdmin: boolean } | null>(null);
   const [showPlaylistImport, setShowPlaylistImport] = useState(false);
   const [playlistUrl, setPlaylistUrl] = useState('');
   const [playlistImporting, setPlaylistImporting] = useState(false);
@@ -144,26 +140,20 @@ export default function HomePage() {
       .then((r) => r.json())
       .then((data) => { setSongs(data); setCachedSongs(data); setLoading(false); })
       .catch(() => setLoading(false));
-
-    fetch('/api/spotify/status')
-      .then((r) => r.json())
-      .then((data) => setSpotify(data))
-      .catch(() => setSpotify({ connected: false }));
-
-    fetch('/api/me')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.authenticated) {
-          setCurrentUser({ email: data.email, name: data.name, isAdmin: data.isAdmin });
-          // Fetch favorites and collections for authenticated users
-          fetch('/api/songs?favorites=1').then(r => r.json()).then(favs => {
-            setFavorites(new Set(favs.map((f: { id: string }) => f.id)));
-          }).catch(() => {});
-          fetch('/api/collections').then(r => r.json()).then(setCollections).catch(() => {});
-        }
-      })
-      .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setFavorites(new Set());
+      setCollections([]);
+      return;
+    }
+    // Cached identity may be shown first; refresh-backed state re-runs this only when it changed.
+    fetch('/api/songs?favorites=1').then(r => r.json()).then(favs => {
+      setFavorites(new Set(favs.map((f: { id: string }) => f.id)));
+    }).catch(() => {});
+    fetch('/api/collections').then(r => r.json()).then(setCollections).catch(() => {});
+  }, [currentUser?.email]);
 
   // Re-fetch songs when "my songs" toggle changes
   useEffect(() => {
@@ -200,8 +190,8 @@ export default function HomePage() {
   };
 
   const handleDisconnect = async () => {
-    await fetch('/api/spotify/status', { method: 'DELETE' });
-    setSpotify({ connected: false });
+    const response = await fetch('/api/spotify/status', { method: 'DELETE' });
+    if (response.ok) updateSession({ user: null, spotify: { connected: false } });
   };
 
   const handleImport = async () => {

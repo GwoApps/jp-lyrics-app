@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB, schema, sql } from '@/lib/db';
 import type { Song } from '@/lib/types';
+import { getAuthUser } from '@/lib/auth';
 
 /** Strip internal email from song response */
 function sanitizeSong(song: Song) {
@@ -11,14 +12,15 @@ function sanitizeSong(song: Song) {
 
 // GET /api/songs/[id] - get single song
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await getAuthUser(request);
   const db = getDB();
   const { id } = await params;
   const song = await db.get(sql`SELECT * FROM songs WHERE id = ${id}`) as unknown as Song | undefined;
-  if (!song) {
-    return NextResponse.json({ error: '曲が見つかりません' }, { status: 404 });
+  if (!song || (song.is_public !== 1 && !user?.isAdmin && song.created_by !== user?.id)) {
+    return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
   }
   return NextResponse.json(sanitizeSong(song));
 }
@@ -28,6 +30,11 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await getAuthUser(request);
+  if (!user) {
+    return NextResponse.json({ error: 'login_required' }, { status: 401 });
+  }
+
   const db = getDB();
   const { id } = await params;
   const body = await request.json();
@@ -35,7 +42,10 @@ export async function PUT(
 
   const existing = await db.get(sql`SELECT * FROM songs WHERE id = ${id}`) as unknown as Song | undefined;
   if (!existing) {
-    return NextResponse.json({ error: '曲が見つかりません' }, { status: 404 });
+    return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
+  }
+  if (!user.isAdmin && existing.created_by !== user.id) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
   let lyricsFurigana = existing.lyrics_furigana;
@@ -59,22 +69,29 @@ export async function PUT(
 
   const updated = await db.get(sql`SELECT * FROM songs WHERE id = ${id}`) as unknown as Song | undefined;
   if (!updated) {
-    return NextResponse.json({ error: '曲が見つかりません' }, { status: 404 });
+    return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
   }
   return NextResponse.json(sanitizeSong(updated));
 }
 
 // DELETE /api/songs/[id] - delete song
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await getAuthUser(request);
+  if (!user) {
+    return NextResponse.json({ error: 'login_required' }, { status: 401 });
+  }
+
   const db = getDB();
   const { id } = await params;
-  // Check existence first
-  const existing = await db.get(sql`SELECT id FROM songs WHERE id = ${id}`);
+  const existing = await db.get(sql`SELECT id, created_by FROM songs WHERE id = ${id}`) as { id: string; created_by: string } | undefined;
   if (!existing) {
-    return NextResponse.json({ error: '曲が見つかりません' }, { status: 404 });
+    return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
+  }
+  if (!user.isAdmin && existing.created_by !== user.id) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
   await db.delete(schema.songs).where(sql`id = ${id}`);
   return NextResponse.json({ success: true });

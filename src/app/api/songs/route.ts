@@ -80,10 +80,14 @@ export async function GET(request: NextRequest) {
 
 // POST /api/songs - create a new song
 export async function POST(request: NextRequest) {
+  const user = await getAuthUser(request);
+  if (!user) {
+    return NextResponse.json({ error: 'login_required' }, { status: 401 });
+  }
+
   const db = getDB();
   const body = await request.json();
   const { title, artist, lyrics_raw, lyrics_synced } = body;
-  const user = await getAuthUser(request);
 
   if (!title) {
     return NextResponse.json({ error: '曲名は必須です' }, { status: 400 });
@@ -93,7 +97,7 @@ export async function POST(request: NextRequest) {
 
   // If LRC synced lyrics provided, strip timestamps to get raw text
   let rawLyrics = lyrics_raw || '';
-  let syncedLyrics = lyrics_synced || '';
+  const syncedLyrics = lyrics_synced || '';
   if (syncedLyrics && !rawLyrics) {
     const parsed = parseLrc(syncedLyrics);
     rawLyrics = parsed.map((l) => l.text).join('\n');

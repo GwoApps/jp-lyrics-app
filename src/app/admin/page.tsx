@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Users, Music, Shield, ShieldOff, Ban, Trash2, ArrowLeft, Eye, EyeOff, Loader2, Clock, Check, X } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useI18n } from '@/lib/i18n';
+import { useAuthSession } from '@/lib/auth-session';
 
 interface AdminUser {
   id: string;
@@ -42,8 +43,9 @@ export default function AdminPage() {
   const [deleteSongTarget, setDeleteSongTarget] = useState<AdminSong | null>(null);
   const [blockUserTarget, setBlockUserTarget] = useState<AdminUser | null>(null);
   const [blockReason, setBlockReason] = useState('');
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState('');
+  const { session } = useAuthSession();
+  const isAdmin = session?.user?.isAdmin === true;
+  const currentUserId = session?.user?.email || '';
 
   const showToast = (type: 'success' | 'error', msg: string) => {
     setToast({ type, msg });
@@ -51,21 +53,16 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-    fetch('/api/me')
-      .then(r => r.json())
-      .then(data => {
-        if (!data.authenticated || !data.isAdmin) {
-          router.push('/');
-          return;
-        }
-        setIsAdmin(true);
-        setCurrentUserId(data.email || '');
-        loadData();
-      })
-      .catch(() => router.push('/'));
-  }, []);
+    // Wait for the first server revalidation only when no cached state exists.
+    if (session === null) return;
+    if (!isAdmin) {
+      router.replace('/');
+      return;
+    }
+    void loadData();
+  }, [session, isAdmin, router]);
 
-  const loadData = async () => {
+  async function loadData() {
     setLoading(true);
     try {
       const [usersRes, songsRes] = await Promise.all([

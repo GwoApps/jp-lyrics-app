@@ -1,35 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { I18nProvider, useI18n } from '@/lib/i18n';
 import { ThemeProvider, useTheme } from '@/lib/theme';
+import { useAuthSession } from '@/lib/auth-session';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { Sun, Moon } from 'lucide-react';
 
 function Nav() {
   const { t } = useI18n();
   const { theme, toggleTheme } = useTheme();
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [spotifyConnected, setSpotifyConnected] = useState(false);
-
-  useEffect(() => {
-    fetch('/api/spotify/status')
-      .then(r => r.json())
-      .then(data => {
-        if (data.connected) {
-          setSpotifyConnected(true);
-          return fetch('/api/me').then(r => r.json());
-        }
-        return null;
-      })
-      .then(data => {
-        if (data?.authenticated && data.isAdmin) {
-          setIsAdmin(true);
-        }
-      })
-      .catch(() => {});
-  }, []);
+  const { session } = useAuthSession();
+  const spotifyConnected = session?.spotify.connected === true;
+  const isAdmin = session?.user?.isAdmin === true;
 
   return (
     <nav className="sticky top-0 z-50 border-b border-[var(--border)] bg-[var(--background)]/80 backdrop-blur-sm">

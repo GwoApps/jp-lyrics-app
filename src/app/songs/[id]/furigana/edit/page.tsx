@@ -10,6 +10,7 @@ import { useI18n } from '@/lib/i18n';
 import FuriganaEditor from '@/components/FuriganaEditor';
 import { convertToFuriganaClient } from '@/lib/kuroshiro-client';
 import type { FuriganaLine } from '@/lib/types';
+import { useAuthSession } from '@/lib/auth-session';
 
 interface SongData {
   id: string;
@@ -34,7 +35,11 @@ export default function FuriganaEditPage() {
   const [draft, setDraft] = useState<FuriganaLine[]>([]);
   const [original, setOriginal] = useState<FuriganaLine[]>([]);
   const [loading, setLoading] = useState(true);
-  const [auth, setAuth] = useState<AuthState | null>(null);
+  const { session } = useAuthSession();
+  const auth: AuthState | null = session === null ? null : {
+    authenticated: session.user !== null,
+    isAdmin: session.user?.isAdmin === true,
+  };
   const [saving, setSaving] = useState(false);
   const [reconverting, setReconverting] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
@@ -76,13 +81,6 @@ export default function FuriganaEditPage() {
   useEffect(() => {
     loadSong();
   }, [loadSong]);
-
-  useEffect(() => {
-    fetch('/api/me')
-      .then((r) => r.json())
-      .then((d) => setAuth({ authenticated: !!d.authenticated, isAdmin: !!d.isAdmin }))
-      .catch(() => setAuth({ authenticated: false }));
-  }, []);
 
   useEffect(() => {
     if (!song?.lyrics_raw) return;

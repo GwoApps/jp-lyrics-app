@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { getDB, schema, sql } from '@/lib/db';
+import { getDB, schema, eq } from '@/lib/db';
 
 export interface AuthUser {
   id: string;       // user identifier (spotify:<id> or email)
@@ -70,20 +70,23 @@ async function verifySession(token: string): Promise<string | null> {
 }
 
 /**
- * Query the users table for admin/blocked status.
- * Returns { isAdmin, isBlocked } or defaults if user not found.
+ * Load the current authorization flags from the canonical users table.
+ * A signed cookie alone is insufficient: deleted, blocked, or unregistered users
+ * must not be allowed to execute protected API logic.
  */
-async function getUserStatus(userId: string): Promise<{ isAdmin: boolean; isBlocked: boolean }> {
+async function getUserStatus(userId: string): Promise<{ isAdmin: boolean; isBlocked: boolean } | null> {
   try {
     const db = getDB();
-    const row = await db.get(
-      sql`SELECT is_admin, is_blocked FROM users WHERE id = ${userId}`
-    ) as { is_admin: number; is_blocked: number } | undefined;
-    if (row) {
-      return { isAdmin: row.is_admin === 1, isBlocked: row.is_blocked === 1 };
-    }
-  } catch { /* users table may not exist yet */ }
-  return { isAdmin: false, isBlocked: false };
+    const row = await db.select({
+      isAdmin: schema.users.isAdmin,
+      isBlocked: schema.users.isBlocked,
+    }).from(schema.users).where(eq(schema.users.id, userId)).get();
+    if (!row) return null;
+    return { isAdmin: row.isAdmin === 1, isBlocked: row.isBlocked === 1 };
+  } catch {
+    // Fail closed: authentication cannot be trusted if its authority store is unavailable.
+    return null;
+  }
 }
 
 /**
@@ -97,8 +100,8 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser | null
   const userId = await verifySession(cookie);
   if (!userId) return null;
 
-  const { isAdmin, isBlocked } = await getUserStatus(userId);
-  if (isBlocked) return null;
+  const status = await getUserStatus(userId);
+  if (!status || status.isBlocked) return null;
 
-  return { id: userId, email: userId, name: '', role: isAdmin ? 'admin' : 'user', isAdmin, isBlocked };
+  return { id: userId, email: userId, name: '', role: status.isAdmin ? 'admin' : 'user', isAdmin: status.isAdmin, isBlocked: false };
 }
