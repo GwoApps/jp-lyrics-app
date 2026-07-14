@@ -718,11 +718,11 @@ function ToolbarMenu({ label, items }: { label: ReactNode; items: ToolbarMenuIte
       {open && (
         <div className="absolute right-0 top-full mt-1 z-50 rounded-lg bg-[var(--card)] border border-[var(--border)] shadow-lg py-1 min-w-[160px]">
           {items.map((item, i) => {
-            const base = "song-toolbar-menu-item w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors disabled:opacity-50";
+            const base = "w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors disabled:opacity-50";
             const cls = item.danger
               ? `${base} text-[var(--destructive)] hover:bg-[var(--destructive)]/10`
               : item.active
-                ? `${base} song-toolbar-menu-item--active text-[var(--primary)] bg-[var(--primary)]/10`
+                ? `${base} text-[var(--primary)] bg-[var(--primary)]/10`
                 : `${base} text-[var(--foreground)] hover:bg-[var(--accent)]`;
             if (item.href) {
               return (
