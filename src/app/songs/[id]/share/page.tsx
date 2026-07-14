@@ -510,17 +510,18 @@ export default function SharePage() {
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
       <div className={`mx-auto px-3 py-3 sm:px-4 sm:py-6 ${cardAspectClass}`}>
+        {/* Align navigation and heading scale with the song-detail page. */}
+        <div className="mb-3 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] sm:mb-8">
+          <button onClick={() => router.push(`/songs/${id}`)} className="inline-flex items-center gap-1 transition-colors hover:text-[var(--foreground)]">
+            <ArrowLeft className="h-3 w-3" />
+            <span className="max-w-[200px] truncate sm:max-w-[320px]">{song.title}</span>
+          </button>
+          <span className="opacity-40">/</span>
+          <span className="text-[var(--foreground)]">{t('share.title')}</span>
+        </div>
+
         <div className="mb-3 flex items-center justify-between gap-2 sm:mb-6 sm:gap-3">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.back()}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-              aria-label={t('common.close')}
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-            <h1 className="text-xl font-semibold">{t('share.title')}</h1>
-          </div>
+          <h1 className="text-base font-semibold tracking-tight sm:text-xl">{t('share.title')}</h1>
 
           <div className="inline-flex items-center gap-1 rounded-lg bg-[var(--accent)] p-1">
             <button
