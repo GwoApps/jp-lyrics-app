@@ -258,11 +258,11 @@ export default function SongViewPage() {
 
       {/* Header */}
       <div className="shrink-0 mb-3 sm:mb-8">
-        <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
-          <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
+        <div className="flex flex-col items-start gap-3 sm:gap-4">
+          <div className="flex items-start gap-3 sm:gap-4 min-w-0 w-full">
             <CoverImage src={coverUrl} alt={song.title} size="md" viewTransitionName={`song-cover-${id}`} />
-            <div className="space-y-0.5 sm:space-y-1 min-w-0">
-              <h1 className="text-base sm:text-xl font-semibold tracking-tight cover-transition" style={{ ['--vt-name' as string]: `song-title-${id}` }}>{song.title}</h1>
+            <div className="space-y-0.5 sm:space-y-1 min-w-0 flex-1">
+              <h1 className="text-base sm:text-xl font-semibold tracking-tight break-words cover-transition" style={{ ['--vt-name' as string]: `song-title-${id}` }}>{song.title}</h1>
               {song.artist && <p className="text-xs sm:text-sm text-[var(--muted-foreground)] cover-transition" style={{ ['--vt-name' as string]: `song-artist-${id}` }}>{song.artist}</p>}
               {/* Visibility badge + request public */}
               <div className="flex items-center gap-2 mt-1">
@@ -346,8 +346,8 @@ export default function SongViewPage() {
               )}
             </div>
           </div>
-          {/* Desktop toolbar */}
-          <div className="hidden sm:flex items-center gap-2 shrink-0 ml-auto">
+          {/* Desktop toolbar: its own full-width, wrapping row so the title keeps priority. */}
+          <div className="hidden sm:flex w-full flex-wrap items-center justify-end gap-2">
             <div className="song-accent-surface inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2" title={t('song.fontSize')}>
               <button onClick={() => data.setFontSize(s => Math.max(14, s - 2))} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Minus className="h-3.5 w-3.5" /></button>
               <span className="text-xs w-5 text-center text-[var(--muted-foreground)] tabular-nums">{data.fontSize}</span>
