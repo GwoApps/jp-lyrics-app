@@ -209,24 +209,28 @@ async function drawLandscape(
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 52px sans-serif';
-  for (const line of wrapText(ctx, song.title, 560, 2)) {
+  const titleLines = wrapText(ctx, song.title, 560, 2);
+  for (const line of titleLines) {
     ctx.fillText(line, textX, textY);
     textY += 66;
   }
   textY += 2;
   ctx.fillStyle = '#94a3b8';
   ctx.font = '30px sans-serif';
-  for (const line of wrapText(ctx, song.artist || '', 560, 1)) {
+  const artistLines = wrapText(ctx, song.artist || '', 560, 1);
+  for (const line of artistLines) {
     ctx.fillText(line, textX, textY);
     textY += 42;
   }
 
+  // These rows share the header's measured flow: a two-line title now pushes both down.
+  const dividerY = artistLines.length > 0 ? textY + 5 : 230;
   ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  ctx.fillRect(textX, 230, 560, 1);
+  ctx.fillRect(textX, dividerY, 560, 1);
 
   // Lyrics
   const lyricsX = textX;
-  const lyricsY = 270;
+  const lyricsY = dividerY + 40;
   const lyricsW = 560;
   const lyricsLineH = 44;
   const lyricsMaxLines = 6;
