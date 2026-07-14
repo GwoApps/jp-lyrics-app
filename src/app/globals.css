@@ -270,12 +270,12 @@ textarea {
   border: 1px solid color-mix(in srgb, var(--border) 86%, var(--song-accent));
 }
 .song-playing-surface--synced {
-  background: color-mix(in srgb, var(--success-muted) 88%, var(--song-accent));
-  border-color: color-mix(in srgb, var(--success) 76%, var(--song-accent));
+  background: var(--success-muted);
+  border-color: color-mix(in srgb, var(--success) 30%, transparent);
 }
 .song-playing-surface--matching {
-  background: color-mix(in srgb, var(--success-muted) 74%, var(--song-accent));
-  border-color: color-mix(in srgb, var(--success) 66%, var(--song-accent));
+  background: color-mix(in srgb, var(--success-muted) 50%, transparent);
+  border-color: color-mix(in srgb, var(--success) 20%, transparent);
 }
 .song-playing-action {
   background: color-mix(in srgb, var(--accent) 86%, var(--song-accent));
