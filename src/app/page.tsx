@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
-import { Music, Pencil, Trash2, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User, Star, FolderPlus, Trash } from 'lucide-react';
+import { Music, Share2, Trash2, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User, Star, FolderPlus, Trash } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import { useI18n } from '@/lib/i18n';
@@ -589,8 +589,8 @@ export default function HomePage() {
                       <button onClick={(e) => { e.stopPropagation(); handleToggleFavorite(song.id); }} className={`rounded p-1.5 sm:p-2 transition-colors ${favorites.has(song.id) ? 'text-[var(--warning)]' : 'text-[var(--muted-foreground)] hover:text-[var(--warning)]'}`}>
                         <Star className={`h-3.5 w-3.5 ${favorites.has(song.id) ? 'fill-current' : ''}`} />
                       </button>
-                      <button onClick={(e) => { e.stopPropagation(); router.push(`/songs/${song.id}/edit`); }} className="rounded p-1.5 sm:p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors">
-                        <Pencil className="h-3.5 w-3.5" />
+                      <button onClick={(e) => { e.stopPropagation(); router.push(`/songs/${song.id}/share`); }} title={t('song.share')} aria-label={t('song.share')} className="rounded p-1.5 sm:p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors">
+                        <Share2 className="h-3.5 w-3.5" />
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); handleDelete(song.id, song.title); }} className="rounded p-1.5 sm:p-2 text-[var(--destructive)] hover:bg-[var(--destructive)]/10 transition-colors">
                         <Trash2 className="h-3.5 w-3.5" />
