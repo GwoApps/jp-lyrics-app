@@ -242,7 +242,7 @@ export default function SongViewPage() {
     : undefined;
   const coverSaturation = coverColor ? Math.max(colorSaturation(coverColor.primary), colorSaturation(coverColor.secondary)) : 0;
   const ambientProfile = coverSaturation >= 0.68
-    ? { opacity: 0.42, core: '50%', mid: '28%', edge: '8%', blur: '40px', shadow: '22%' }
+    ? { opacity: 0.5, core: '56%', mid: '32%', edge: '10%', blur: '40px', shadow: '27%' }
     : coverSaturation >= 0.42
       ? { opacity: 0.56, core: '57%', mid: '36%', edge: '12%', blur: '35px', shadow: '28%' }
       : { opacity: 0.68, core: '64%', mid: '43%', edge: '15%', blur: '30px', shadow: '34%' };
