@@ -6,6 +6,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import QRCode from 'qrcode';
 import { ArrowLeft, Download, Link2, Loader2, Check, Smartphone, Monitor } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { extractMaterialCoverPalette, type CoverColor, type CoverPalette } from '@/lib/cover-color';
 
 interface Song {
   id: string;
@@ -79,6 +80,60 @@ async function loadImage(src: string | null): Promise<HTMLImageElement | null> {
   });
 }
 
+function colorString({ r, g, b }: CoverColor, alpha = 1) {
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function shade({ r, g, b }: CoverColor, amount: number): CoverColor {
+  return { r: Math.round(r * amount), g: Math.round(g * amount), b: Math.round(b * amount) };
+}
+
+/** Cover-derived, layered card background: dark base, soft light pools, sheen and deterministic film grain. */
+function drawCardBackground(ctx: CanvasRenderingContext2D, width: number, height: number, palette: CoverPalette | null) {
+  const primary = palette?.primary ?? { r: 51, g: 65, b: 85 };
+  const secondary = palette?.secondary ?? { r: 71, g: 85, b: 105 };
+
+  const base = ctx.createLinearGradient(0, 0, width, height);
+  base.addColorStop(0, colorString(shade(primary, 0.19)));
+  base.addColorStop(0.48, '#101827');
+  base.addColorStop(1, colorString(shade(secondary, 0.24)));
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, width, height);
+
+  const primaryGlow = ctx.createRadialGradient(width * 0.13, height * 0.08, 0, width * 0.13, height * 0.08, Math.max(width, height) * 0.72);
+  primaryGlow.addColorStop(0, colorString(primary, 0.42));
+  primaryGlow.addColorStop(0.42, colorString(primary, 0.16));
+  primaryGlow.addColorStop(1, colorString(primary, 0));
+  ctx.fillStyle = primaryGlow;
+  ctx.fillRect(0, 0, width, height);
+
+  const secondaryGlow = ctx.createRadialGradient(width * 0.9, height * 0.9, 0, width * 0.9, height * 0.9, Math.max(width, height) * 0.62);
+  secondaryGlow.addColorStop(0, colorString(secondary, 0.3));
+  secondaryGlow.addColorStop(0.48, colorString(secondary, 0.1));
+  secondaryGlow.addColorStop(1, colorString(secondary, 0));
+  ctx.fillStyle = secondaryGlow;
+  ctx.fillRect(0, 0, width, height);
+
+  const sheen = ctx.createLinearGradient(0, 0, width, height);
+  sheen.addColorStop(0, 'rgba(255,255,255,0.09)');
+  sheen.addColorStop(0.26, 'rgba(255,255,255,0.018)');
+  sheen.addColorStop(0.62, 'rgba(255,255,255,0)');
+  sheen.addColorStop(1, 'rgba(0,0,0,0.22)');
+  ctx.fillStyle = sheen;
+  ctx.fillRect(0, 0, width, height);
+
+  // Stable, subtle grain gives exported PNGs material depth without flicker between redraws.
+  let seed = width * 92821 + height * 68917;
+  ctx.fillStyle = 'rgba(255,255,255,0.025)';
+  for (let i = 0; i < 1500; i++) {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    const x = seed % width;
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    const y = seed % height;
+    ctx.fillRect(x, y, 1, 1);
+  }
+}
+
 function stripLrcTags(line: string): string {
   return line.replace(/\[\d{2}:\d{2}(\.\d+)?\]/g, '').trim();
 }
@@ -140,15 +195,11 @@ async function drawLandscape(
   scanText: string,
   siteText: string,
   selectedLyrics: string[],
+  coverImg: HTMLImageElement | null,
+  palette: CoverPalette | null,
 ) {
-  // Background
-  const grad = ctx.createLinearGradient(0, 0, LANDSCAPE_W, LANDSCAPE_H);
-  grad.addColorStop(0, '#0f172a');
-  grad.addColorStop(1, '#1e293b');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, LANDSCAPE_W, LANDSCAPE_H);
+  drawCardBackground(ctx, LANDSCAPE_W, LANDSCAPE_H, palette);
 
-  const coverImg = await loadImage(song.cover_url);
   drawCover(ctx, song, coverImg, 60, 60, 240);
 
   // Title + artist
@@ -214,13 +265,10 @@ async function drawPortrait(
   scanText: string,
   siteText: string,
   selectedLyrics: string[],
+  coverImg: HTMLImageElement | null,
+  palette: CoverPalette | null,
 ) {
-  // Background
-  const grad = ctx.createLinearGradient(0, 0, 0, PORTRAIT_H);
-  grad.addColorStop(0, '#0f172a');
-  grad.addColorStop(1, '#1e293b');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, PORTRAIT_W, PORTRAIT_H);
+  drawCardBackground(ctx, PORTRAIT_W, PORTRAIT_H, palette);
 
   const pad = 60;
   const contentW = PORTRAIT_W - pad * 2;
@@ -230,7 +278,6 @@ async function drawPortrait(
   const coverX = (PORTRAIT_W - coverSize) / 2;
   const coverY = 80;
 
-  const coverImg = await loadImage(song.cover_url);
   drawCover(ctx, song, coverImg, coverX, coverY, coverSize);
 
   // Title + artist (centered)
@@ -301,14 +348,17 @@ async function drawCard(
     await document.fonts.ready;
   }
 
+  const coverImg = await loadImage(song.cover_url);
+  const palette = coverImg ? extractMaterialCoverPalette(coverImg) : null;
+
   if (orientation === 'portrait') {
     canvas.width = PORTRAIT_W;
     canvas.height = PORTRAIT_H;
-    await drawPortrait(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics);
+    await drawPortrait(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics, coverImg, palette);
   } else {
     canvas.width = LANDSCAPE_W;
     canvas.height = LANDSCAPE_H;
-    await drawLandscape(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics);
+    await drawLandscape(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics, coverImg, palette);
   }
 }
 
