@@ -255,13 +255,11 @@ textarea {
   background: color-mix(in srgb, var(--primary) 88%, var(--song-accent));
   border-color: color-mix(in srgb, var(--primary) 80%, var(--song-accent));
 }
-/* An open toolbar's selected item has no hover state; make that persistent highlight cover-derived too. */
-.song-view--accented .song-toolbar-menu-item--active {
-  color: color-mix(in srgb, var(--foreground) 30%, var(--song-accent));
-  background: color-mix(in srgb, var(--accent) 80%, var(--song-accent));
-}
-.song-view--accented .song-toolbar-menu-item--active:hover {
-  background: color-mix(in srgb, var(--accent) 70%, var(--song-accent));
+/* Only when palette extraction succeeds, an expanded menu trigger uses the cover tone rather than the generic primary. */
+.song-view--accented .song-accent-button--active {
+  color: color-mix(in srgb, var(--foreground) 50%, var(--song-accent));
+  background: color-mix(in srgb, var(--primary) 35%, var(--song-accent));
+  border-color: color-mix(in srgb, var(--border) 42%, var(--song-accent));
 }
 .song-accent-surface {
   background: color-mix(in srgb, var(--accent) 88%, var(--song-accent));
