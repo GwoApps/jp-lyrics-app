@@ -184,6 +184,12 @@ textarea {
 .lyrics-panel-shell {
   --lyric-accent: var(--border);
   --lyric-orbit-accent: var(--lyric-accent);
+  --lyric-ambient-opacity: 0.68;
+  --lyric-ambient-core: 64%;
+  --lyric-ambient-mid: 43%;
+  --lyric-ambient-edge: 15%;
+  --lyric-ambient-blur: 30px;
+  --lyric-shadow-strength: 34%;
 }
 .lyrics-panel {
   z-index: 1;
@@ -207,6 +213,19 @@ textarea {
   filter: blur(30px);
   transform: translate(-50%, -50%);
   animation: lyricsAmbientOrbit 20s linear infinite;
+}
+@media (min-width: 640px) {
+  /* A larger, lower-opacity source keeps desktop ambient light airy; saturated art is softened further by its runtime profile. */
+  .lyrics-panel {
+    box-shadow: 0 0 68px -30px color-mix(in srgb, var(--lyric-accent) var(--lyric-shadow-strength), transparent);
+  }
+  .lyrics-ambient-orbit {
+    width: 72%;
+    height: 92%;
+    opacity: var(--lyric-ambient-opacity);
+    background: radial-gradient(ellipse at 38% 42%, color-mix(in srgb, var(--lyric-orbit-accent) var(--lyric-ambient-core), transparent) 0%, color-mix(in srgb, var(--lyric-orbit-accent) var(--lyric-ambient-mid), transparent) 40%, color-mix(in srgb, var(--lyric-orbit-accent) var(--lyric-ambient-edge), transparent) 66%, transparent 82%);
+    filter: blur(var(--lyric-ambient-blur));
+  }
 }
 @keyframes lyricsAmbientOrbit {
   0% { transform: translate(-50%, -60%) scale(1.04); }

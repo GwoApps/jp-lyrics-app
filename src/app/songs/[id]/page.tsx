@@ -13,7 +13,7 @@ import { fmtMs, fmtTime, findActiveLine } from '@/lib/lrc';
 import { isTitleMatch, findBestMatch } from '@/lib/match';
 import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
-import { extractMaterialCoverPalette, type CoverPalette } from '@/lib/cover-color';
+import { extractMaterialCoverPalette, type CoverColor, type CoverPalette } from '@/lib/cover-color';
 import type { SyncRefs } from '@/hooks/useSpotifySync';
 
 /** Reusable button class builder */
@@ -36,6 +36,15 @@ function btnTextCls(active?: boolean, variant?: 'danger') {
       ? 'song-accent-button song-accent-button--active'
       : 'song-accent-button';
   return `${base} ${colors}`;
+}
+
+/** HSL saturation gives vibrant cover art a gentler ambient-light profile. */
+function colorSaturation({ r, g, b }: CoverColor) {
+  const max = Math.max(r, g, b) / 255;
+  const min = Math.min(r, g, b) / 255;
+  const lightness = (max + min) / 2;
+  if (max === min) return 0;
+  return (max - min) / (1 - Math.abs(2 * lightness - 1));
 }
 
 export default function SongViewPage() {
@@ -231,10 +240,22 @@ export default function SongViewPage() {
   const songThemeStyle = coverColor
     ? { ['--song-accent' as string]: `rgb(${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b})` }
     : undefined;
+  const coverSaturation = coverColor ? Math.max(colorSaturation(coverColor.primary), colorSaturation(coverColor.secondary)) : 0;
+  const ambientProfile = coverSaturation >= 0.68
+    ? { opacity: 0.42, core: '50%', mid: '28%', edge: '8%', blur: '40px', shadow: '22%' }
+    : coverSaturation >= 0.42
+      ? { opacity: 0.56, core: '57%', mid: '36%', edge: '12%', blur: '35px', shadow: '28%' }
+      : { opacity: 0.68, core: '64%', mid: '43%', edge: '15%', blur: '30px', shadow: '34%' };
   const lyricPanelStyle = coverColor
     ? {
         ['--lyric-accent' as string]: `rgb(${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b})`,
         ['--lyric-orbit-accent' as string]: `rgb(${coverColor.secondary.r} ${coverColor.secondary.g} ${coverColor.secondary.b})`,
+        ['--lyric-ambient-opacity' as string]: String(ambientProfile.opacity),
+        ['--lyric-ambient-core' as string]: ambientProfile.core,
+        ['--lyric-ambient-mid' as string]: ambientProfile.mid,
+        ['--lyric-ambient-edge' as string]: ambientProfile.edge,
+        ['--lyric-ambient-blur' as string]: ambientProfile.blur,
+        ['--lyric-shadow-strength' as string]: ambientProfile.shadow,
       }
     : undefined;
 
