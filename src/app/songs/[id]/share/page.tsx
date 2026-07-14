@@ -383,6 +383,7 @@ export default function SharePage() {
   const [copied, setCopied] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [orientation, setOrientation] = useState<Orientation>('landscape');
+  const [coverColor, setCoverColor] = useState<CoverPalette | null>(null);
 
   const pageUrl = typeof window !== 'undefined' ? `${window.location.origin}/songs/${id}` : '';
 
@@ -403,6 +404,36 @@ export default function SharePage() {
       .catch(() => setError(t('share.error')))
       .finally(() => setLoading(false));
   }, [id, t]);
+
+  // Reuse the exact detail-page palette pipeline for the surrounding share-page background.
+  useEffect(() => {
+    if (!song?.cover_url) {
+      setCoverColor(null);
+      return;
+    }
+    let cancelled = false;
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.onload = () => {
+      const color = extractMaterialCoverPalette(image);
+      if (!cancelled) setCoverColor(color);
+    };
+    image.onerror = () => { if (!cancelled) setCoverColor(null); };
+    image.src = song.cover_url;
+    return () => { cancelled = true; };
+  }, [song?.cover_url]);
+
+  // Match the detail page's restrained viewport tint (96% theme background + 4% cover accent).
+  useEffect(() => {
+    if (!coverColor) return;
+    const accent = `rgb(${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b})`;
+    document.body.style.setProperty('--song-page-accent', accent);
+    document.body.classList.add('song-page-themed');
+    return () => {
+      document.body.classList.remove('song-page-themed');
+      document.body.style.removeProperty('--song-page-accent');
+    };
+  }, [coverColor]);
 
   useEffect(() => {
     if (defaultLine !== null && lyricsLines.length > 0) {
@@ -512,7 +543,7 @@ export default function SharePage() {
     : 'max-w-3xl';
 
   return (
-    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+    <div className="min-h-screen text-[var(--foreground)]">
       <div className={`mx-auto px-3 py-3 sm:px-4 sm:py-6 ${cardAspectClass}`}>
         {/* Align navigation and heading scale with the song-detail page. */}
         <div className="mb-3 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] sm:mb-8">
