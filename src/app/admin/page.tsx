@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Users, Music, Shield, ShieldOff, Ban, Trash2, ArrowLeft, Eye, EyeOff, Loader2, Clock, Check, X } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import Toast from '@/components/Toast';
 import { useI18n } from '@/lib/i18n';
 import { useAuthSession } from '@/lib/auth-session';
 
@@ -492,7 +493,7 @@ export default function AdminPage() {
         )
       )}
 
-      {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
+      {toast && <Toast type={toast.type} message={toast.msg} />}
 
       {/* Delete User Confirmation */}
       <ConfirmDialog

@@ -8,6 +8,7 @@ import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, P
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import FuriganaLineView from '@/components/FuriganaLine';
+import Toast from '@/components/Toast';
 import { useI18n } from '@/lib/i18n';
 import { fmtMs, fmtTime, findActiveLine } from '@/lib/lrc';
 import { isTitleMatch, findBestMatch } from '@/lib/match';
@@ -608,7 +609,7 @@ export default function SongViewPage() {
         lineTimestamps={lineTimestamps}
       />
 
-      {data.toast && <div className={`toast toast-${data.toast.type}`}>{data.toast.msg}</div>}
+      {data.toast && <Toast type={data.toast.type} message={data.toast.msg} />}
 
       <ConfirmDialog open={data.deleteConfirm} title={t('dialog.deleteConfirmTitle', { title: song?.title || '' })} body={t('dialog.deleteConfirmBody')} confirmLabel={t('common.delete')} cancelLabel={t('common.cancel')} variant="danger" onConfirm={data.confirmDelete} onCancel={() => data.setDeleteConfirm(false)} />
       <ConfirmDialog open={!!data.importAlert} title={t('dialog.importErrorTitle')} body={data.importAlert || undefined} confirmLabel={t('common.confirm')} alert onConfirm={() => data.setImportAlert(null)} />

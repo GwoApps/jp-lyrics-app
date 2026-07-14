@@ -78,7 +78,23 @@ export default function RootLayout({
                         // Show update toast
                         const toast = document.createElement('div');
                         toast.className = 'toast toast-success';
-                        toast.textContent = '🔄 New version — tap to refresh';
+                        toast.setAttribute('role', 'alert');
+                        toast.setAttribute('aria-live', 'polite');
+                        const icon = document.createElement('span');
+                        icon.className = 'toast-icon';
+                        icon.setAttribute('aria-hidden', 'true');
+                        icon.textContent = '↻';
+                        const description = document.createElement('div');
+                        description.className = 'toast-description';
+                        const locale = localStorage.getItem('jplrc-locale') || 'ja';
+                        const updateMessages = {
+                          ja: '新しいバージョンがあります — タップして更新',
+                          en: 'New version available — tap to refresh',
+                          'zh-CN': '有新版本可用 — 点击刷新',
+                          'zh-TW': '有新版本可用 — 點擊重新整理',
+                        };
+                        description.textContent = updateMessages[locale] || updateMessages.ja;
+                        toast.append(icon, description);
                         toast.style.cursor = 'pointer';
                         toast.style.bottom = '5.5rem';
                         toast.onclick = () => { toast.remove(); window.location.reload(); };

@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { ArrowLeft, RotateCcw, Sparkles } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import FuriganaEditor from '@/components/FuriganaEditor';
+import Toast from '@/components/Toast';
 import { convertToFuriganaClient } from '@/lib/kuroshiro-client';
 import type { FuriganaLine } from '@/lib/types';
 import { useAuthSession } from '@/lib/auth-session';
@@ -257,7 +258,7 @@ export default function FuriganaEditPage() {
 
       <FuriganaEditor lines={draft} rawLines={rawLines} onChange={setDraft} />
 
-      {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
+      {toast && <Toast type={toast.type} message={toast.msg} />}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { useTransitionRouter } from 'next-view-transitions';
 import { Music, Share2, Trash2, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User, Star, FolderPlus, Trash } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
+import Toast from '@/components/Toast';
 import { useI18n } from '@/lib/i18n';
 import { findBestMatch, isSongPlaying } from '@/lib/match';
 import { useNowPlaying } from '@/hooks/useNowPlaying';
@@ -594,7 +595,7 @@ export default function HomePage() {
         </div>
       )}
 
-      {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
+      {toast && <Toast type={toast.type} message={toast.msg} />}
 
       <ConfirmDialog
         open={!!deleteTarget}

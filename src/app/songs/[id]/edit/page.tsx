@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { Upload } from 'lucide-react';
+import Toast from '@/components/Toast';
 import { useI18n } from '@/lib/i18n';
 
 type LyricsMode = 'text' | 'lrc';
@@ -217,7 +218,7 @@ export default function EditSongPage() {
         </div>
       </div>
 
-      {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
+      {toast && <Toast type={toast.type} message={toast.msg} />}
     </div>
   );
 }
