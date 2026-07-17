@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jplrc-v3';
+const CACHE_NAME = 'jplrc-v4';
 const IMMUTABLE_CACHE = 'jplrc-immutable-v1';
 const KUROMOJI_CACHE = 'jplrc-kuromoji-v1';
 
@@ -11,6 +11,7 @@ self.addEventListener('install', (event) => {
         cache.add('/icon-32x32.png'),
         cache.add('/icon-192x192.png'),
         cache.add('/icon-512x512.png'),
+        cache.add('/icon-maskable-512x512.png'),
         cache.add('/apple-touch-icon.png'),
         cache.add('/manifest.json'),
       ]);
