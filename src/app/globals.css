@@ -210,6 +210,7 @@ textarea {
   --lyric-ambient-edge: 15%;
   --lyric-ambient-blur: 30px;
   --lyric-shadow-strength: 34%;
+  --lyric-static-shadow-strength: 52%;
   --lyric-ambient-secondary-opacity: 0;
   --lyric-ambient-breath-opacity: 0;
   --lyric-ambient-breath-min-opacity: 0;
@@ -219,7 +220,7 @@ textarea {
   background: color-mix(in srgb, var(--card) 90%, var(--lyric-accent));
   border: 1px solid color-mix(in srgb, var(--border) 76%, var(--lyric-accent));
   /* Keep the original, always-visible external glow as the base layer. */
-  box-shadow: 0 0 52px -18px color-mix(in srgb, var(--lyric-accent) 62%, transparent);
+  box-shadow: 0 0 52px -18px color-mix(in srgb, var(--lyric-accent) var(--lyric-static-shadow-strength), transparent);
 }
 /* Fixed edge layer uses the exact card-border mix, so the panel appears to breathe in place. */
 .lyrics-ambient-breath {
@@ -302,6 +303,8 @@ textarea {
 }
 .song-view {
   --song-accent: var(--border);
+  /* Decorative orbits are visual-only and must not create horizontal page overflow. */
+  overflow-x: clip;
 }
 .song-accent-button {
   color: color-mix(in srgb, var(--foreground) 90%, var(--song-accent));
