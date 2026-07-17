@@ -50,6 +50,11 @@ function colorSaturation({ r, g, b }: CoverColor) {
   return (max - min) / (1 - Math.abs(2 * lightness - 1));
 }
 
+/** RGB separation determines whether a second palette colour can read as a distinct light. */
+function colorDistance(a: CoverColor, b: CoverColor) {
+  return Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
+}
+
 export default function SongViewPage() {
   const router = useRouter();
   const transitionRouter = useTransitionRouter();
@@ -228,22 +233,33 @@ export default function SongViewPage() {
   const songThemeStyle = coverColor
     ? { ['--song-accent' as string]: `rgb(${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b})` }
     : undefined;
-  const coverSaturation = coverColor ? Math.max(colorSaturation(coverColor.primary), colorSaturation(coverColor.secondary)) : 0;
+  const coverSaturation = coverColor ? Math.max(colorSaturation(coverColor.primary), colorSaturation(coverColor.secondary), colorSaturation(coverColor.tertiary)) : 0;
+  // Near-monochrome covers retain the main halo without manufacturing a second,
+  // muddy source. A clearly separated tertiary colour earns a visible rim light.
+  const paletteSeparation = coverColor
+    ? Math.max(
+        colorDistance(coverColor.primary, coverColor.tertiary),
+        colorDistance(coverColor.secondary, coverColor.tertiary),
+      )
+    : 0;
+  const sideLightPresence = Math.max(0, Math.min(1, (paletteSeparation - 36) / 112));
   const ambientProfile = coverSaturation >= 0.68
-    ? { opacity: 0.5, core: '56%', mid: '32%', edge: '10%', blur: '40px', shadow: '27%' }
+    ? { opacity: 0.62, core: '64%', mid: '40%', edge: '14%', blur: '38px', shadow: '30%', sideOpacity: 0.16 + sideLightPresence * 0.28 }
     : coverSaturation >= 0.42
-      ? { opacity: 0.56, core: '57%', mid: '36%', edge: '12%', blur: '35px', shadow: '28%' }
-      : { opacity: 0.68, core: '64%', mid: '43%', edge: '15%', blur: '30px', shadow: '34%' };
+      ? { opacity: 0.68, core: '66%', mid: '44%', edge: '16%', blur: '33px', shadow: '32%', sideOpacity: 0.18 + sideLightPresence * 0.30 }
+      : { opacity: 0.78, core: '72%', mid: '50%', edge: '18%', blur: '28px', shadow: '38%', sideOpacity: 0.20 + sideLightPresence * 0.32 };
   const lyricPanelStyle = coverColor
     ? {
         ['--lyric-accent' as string]: `rgb(${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b})`,
         ['--lyric-orbit-accent' as string]: `rgb(${coverColor.secondary.r} ${coverColor.secondary.g} ${coverColor.secondary.b})`,
+        ['--lyric-orbit-accent-2' as string]: `rgb(${coverColor.tertiary.r} ${coverColor.tertiary.g} ${coverColor.tertiary.b})`,
         ['--lyric-ambient-opacity' as string]: String(ambientProfile.opacity),
         ['--lyric-ambient-core' as string]: ambientProfile.core,
         ['--lyric-ambient-mid' as string]: ambientProfile.mid,
         ['--lyric-ambient-edge' as string]: ambientProfile.edge,
         ['--lyric-ambient-blur' as string]: ambientProfile.blur,
         ['--lyric-shadow-strength' as string]: ambientProfile.shadow,
+        ['--lyric-ambient-secondary-opacity' as string]: String(ambientProfile.sideOpacity),
       }
     : undefined;
 
@@ -553,6 +569,7 @@ export default function SongViewPage() {
       {/* Lyrics */}
       <div className="lyrics-panel-shell relative isolate flex-1 min-h-0" style={lyricPanelStyle}>
         <div className="lyrics-ambient-orbit" aria-hidden="true" />
+        <div className="lyrics-ambient-orbit lyrics-ambient-orbit--secondary" aria-hidden="true" />
         <div className="lyrics-panel relative isolate h-full rounded-lg overflow-hidden">
           {data.showRaw ? (
           <pre className="relative z-10 p-4 sm:p-6 whitespace-pre-wrap font-sans leading-relaxed h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden" style={{ fontSize: `${data.fontSize}px` }}>{song.lyrics_raw || t('song.noLyricsParen')}</pre>

@@ -3,7 +3,7 @@
 import { QuantizerCelebi, Score, argbFromRgb, blueFromArgb, greenFromArgb, redFromArgb } from '@material/material-color-utilities';
 
 export type CoverColor = { r: number; g: number; b: number };
-export type CoverPalette = { primary: CoverColor; secondary: CoverColor };
+export type CoverPalette = { primary: CoverColor; secondary: CoverColor; tertiary: CoverColor };
 
 function fromArgb(argb: number): CoverColor {
   return { r: redFromArgb(argb), g: greenFromArgb(argb), b: blueFromArgb(argb) };
@@ -48,7 +48,11 @@ export function extractMaterialCoverPalette(image: HTMLImageElement): CoverPalet
       .slice(1)
       .map(fromArgb)
       .find((color) => colorDistance(primary, color) >= 72) ?? primary;
-    return { primary, secondary };
+    const tertiary = ranked
+      .slice(1)
+      .map(fromArgb)
+      .find((color) => colorDistance(primary, color) >= 72 && colorDistance(secondary, color) >= 72) ?? secondary;
+    return { primary, secondary, tertiary };
   } catch {
     // Remote images without usable CORS headers taint Canvas. Keep the neutral fallback.
     return null;
