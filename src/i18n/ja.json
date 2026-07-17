@@ -19,6 +19,18 @@
     "lightMode": "ライトモード",
     "darkMode": "ダークモード"
   },
+  "loginGate": {
+    "title": "Spotify ログインは制限されています",
+    "description": "Spotify の開発アプリでは、事前に登録されたテストユーザーのみログインできます。招待されていないアカウントは利用できません。",
+    "selfHost": "試してみたい場合は、GitHub からコードを取得してご自身でデプロイできます。",
+    "passphraseLabel": "合言葉",
+    "passphrasePlaceholder": "合言葉を入力してください",
+    "submit": "ログインを続ける",
+    "submitting": "確認中...",
+    "cancel": "キャンセル",
+    "invalid": "合言葉が正しくありません",
+    "requestFailed": "合言葉を確認できませんでした。しばらくしてからもう一度お試しください"
+  },
   "home": {
     "songList": "曲一覧",
     "songCount": "{count} 曲",
@@ -58,6 +70,7 @@
     "spotifyNoIdentity": "Spotifyユーザー情報を取得できませんでした",
     "spotifyBlocked": "アカウントがブロックされています",
     "spotifyInvalidProfile": "このSpotifyアカウントはご利用いただけません。サイト開発者にお問い合わせください",
+    "spotifyPassphraseRequired": "先にログイン用の合言葉を入力してください",
     "importTitleRequired": "曲名を入力してください",
     "importLyricsNotFound": "歌詞が見つかりませんでした — 手動で貼り付けてください",
     "importLoginRequired": "ログインが必要です",

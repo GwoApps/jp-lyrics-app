@@ -19,6 +19,18 @@
     "lightMode": "浅色模式",
     "darkMode": "深色模式"
   },
+  "loginGate": {
+    "title": "Spotify 登录受限",
+    "description": "由于 Spotify 开发应用仅允许预先配置的测试人员登录，未受邀请的账号无法使用。",
+    "selfHost": "如需体验，可从 GitHub 获取代码并自行部署。",
+    "passphraseLabel": "暗号",
+    "passphrasePlaceholder": "请输入暗号",
+    "submit": "继续登录",
+    "submitting": "验证中...",
+    "cancel": "取消",
+    "invalid": "暗号不正确",
+    "requestFailed": "无法验证暗号，请稍后再试"
+  },
   "home": {
     "songList": "歌曲列表",
     "songCount": "{count} 首",
@@ -58,6 +70,7 @@
     "spotifyNoIdentity": "无法获取 Spotify 用户信息",
     "spotifyBlocked": "您的账户已被封禁",
     "spotifyInvalidProfile": "当前 Spotify 账号无法使用此应用，请联系网站开发者了解详情",
+    "spotifyPassphraseRequired": "请先输入登录暗号",
     "importTitleRequired": "请输入歌曲标题",
     "importLyricsNotFound": "未找到歌词 — 请手动粘贴",
     "importLoginRequired": "请先登录",

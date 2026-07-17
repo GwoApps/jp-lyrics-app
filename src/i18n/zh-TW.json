@@ -19,6 +19,18 @@
     "lightMode": "淺色模式",
     "darkMode": "深色模式"
   },
+  "loginGate": {
+    "title": "Spotify 登入受限",
+    "description": "由於 Spotify 開發應用程式僅允許預先設定的測試人員登入，未受邀請的帳號無法使用。",
+    "selfHost": "如需體驗，可從 GitHub 取得程式碼並自行部署。",
+    "passphraseLabel": "暗號",
+    "passphrasePlaceholder": "請輸入暗號",
+    "submit": "繼續登入",
+    "submitting": "驗證中...",
+    "cancel": "取消",
+    "invalid": "暗號不正確",
+    "requestFailed": "無法驗證暗號，請稍後再試"
+  },
   "home": {
     "songList": "歌曲列表",
     "songCount": "{count} 首",
@@ -58,6 +70,7 @@
     "spotifyNoIdentity": "無法取得 Spotify 使用者資訊",
     "spotifyBlocked": "您的帳號已被封鎖",
     "spotifyInvalidProfile": "目前 Spotify 帳號無法使用此應用，請聯繫網站開發者了解詳情",
+    "spotifyPassphraseRequired": "請先輸入登入暗號",
     "importTitleRequired": "請輸入歌曲標題",
     "importLyricsNotFound": "未找到歌詞 — 請手動貼上",
     "importLoginRequired": "請先登入",

@@ -9,6 +9,7 @@ import { ArrowLeft, RotateCcw, Sparkles } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import FuriganaEditor from '@/components/FuriganaEditor';
 import Toast from '@/components/Toast';
+import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { convertToFuriganaClient } from '@/lib/kuroshiro-client';
 import type { FuriganaLine } from '@/lib/types';
 import { useAuthSession } from '@/lib/auth-session';
@@ -193,12 +194,11 @@ export default function FuriganaEditPage() {
         </div>
         <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-6 text-center">
           <p className="text-sm text-[var(--muted-foreground)]">{t('furigana.loginRequired')}</p>
-          <a
-            href="/api/auth/login"
+          <SpotifyLoginButton
             className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90"
           >
             {t('song.spotify')}
-          </a>
+          </SpotifyLoginButton>
         </div>
       </div>
     );

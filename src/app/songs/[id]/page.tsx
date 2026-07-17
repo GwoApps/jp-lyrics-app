@@ -9,6 +9,7 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import FuriganaLineView from '@/components/FuriganaLine';
 import Toast from '@/components/Toast';
+import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useI18n } from '@/lib/i18n';
 import { fmtMs, fmtTime, findActiveLine } from '@/lib/lrc';
 import { isTitleMatch, findBestMatch } from '@/lib/match';
@@ -460,9 +461,9 @@ export default function SongViewPage() {
               <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--warning-muted)] border border-[var(--warning)]/30 px-2 sm:px-3 py-1">
                 <span className="inline-block h-2 w-2 rounded-full bg-[var(--warning)]" />
                 <span className="text-xs text-[var(--warning)]">{t('song.tokenExpired')}</span>
-                <a href="/api/auth/login" className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--warning)]/20 text-[var(--warning)] hover:bg-[var(--warning)]/30 transition-colors shrink-0">
+                <SpotifyLoginButton className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--warning)]/20 text-[var(--warning)] hover:bg-[var(--warning)]/30 transition-colors shrink-0 disabled:opacity-60">
                   <RefreshCw className="h-3 w-3" /><span>{t('song.reconnect')}</span>
-                </a>
+                </SpotifyLoginButton>
               </div>
             ) : isSynced ? (
               <div className="song-playing-surface song-playing-surface--synced flex items-center gap-1.5 sm:gap-2 rounded-full px-2 sm:px-3 py-1">
@@ -597,7 +598,7 @@ export default function SongViewPage() {
           {hasSyncData && <span className="text-green-500/60">{t('common.linesSynced', { count: String(syncLines.length) })}</span>}
         </div>
         {!spotify?.connected && (
-          <a href="/api/auth/login" className="text-[11px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">{t('song.spotify')}</a>
+          <SpotifyLoginButton className="text-[11px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors disabled:opacity-60">{t('song.spotify')}</SpotifyLoginButton>
         )}
       </div>
 

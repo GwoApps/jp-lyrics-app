@@ -19,6 +19,18 @@
     "lightMode": "Light mode",
     "darkMode": "Dark mode"
   },
+  "loginGate": {
+    "title": "Spotify login is restricted",
+    "description": "This Spotify development app only allows pre-approved test users to sign in. Accounts that have not been invited cannot use it.",
+    "selfHost": "To try the app, you can get the code from GitHub and deploy your own instance.",
+    "passphraseLabel": "Passphrase",
+    "passphrasePlaceholder": "Enter the passphrase",
+    "submit": "Continue to login",
+    "submitting": "Verifying...",
+    "cancel": "Cancel",
+    "invalid": "Incorrect passphrase",
+    "requestFailed": "The passphrase could not be verified. Please try again later"
+  },
   "home": {
     "songList": "Song List",
     "songCount": "{count} songs",
@@ -58,6 +70,7 @@
     "spotifyNoIdentity": "Could not retrieve Spotify user info",
     "spotifyBlocked": "Your account has been blocked",
     "spotifyInvalidProfile": "This Spotify account cannot be used with this app. Please contact the site developer for details.",
+    "spotifyPassphraseRequired": "Enter the login passphrase first",
     "importTitleRequired": "Please enter a song title",
     "importLyricsNotFound": "Lyrics not found — please paste manually",
     "importLoginRequired": "Login required",
