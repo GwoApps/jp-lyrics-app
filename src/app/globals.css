@@ -236,8 +236,8 @@ textarea {
   opacity: var(--lyric-ambient-breath-opacity);
   border: 1px solid color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 74%, transparent);
   border-radius: var(--radius);
-  box-shadow: 0 0 14px 2px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 68%, transparent), 0 0 32px 8px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 34%, transparent);
-  transform: translate(-50%, -50%) scale(0.99);
+  box-shadow: 0 0 16px 3px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 70%, transparent), 0 0 36px 10px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 36%, transparent);
+  transform: translate(-50%, -50%) scale(1);
   animation: lyricsAmbientEdgeBreath 12s ease-in-out infinite;
 }
 /* The broad key light lives behind (not inside) the clipped lyrics panel. */
@@ -296,8 +296,16 @@ textarea {
   100% { transform: translate(-82%, -64%) scale(0.98); }
 }
 @keyframes lyricsAmbientEdgeBreath {
-  0%, 100% { opacity: var(--lyric-ambient-breath-min-opacity); transform: translate(-50%, -50%) scale(0.99); }
-  50% { opacity: var(--lyric-ambient-breath-opacity); transform: translate(-50%, -50%) scale(1.045); }
+  0%, 100% {
+    opacity: var(--lyric-ambient-breath-min-opacity);
+    box-shadow: 0 0 16px 3px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 70%, transparent), 0 0 36px 10px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 36%, transparent);
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: var(--lyric-ambient-breath-opacity);
+    box-shadow: 0 0 22px 5px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 82%, transparent), 0 0 48px 16px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 48%, transparent);
+    transform: translate(-50%, -50%) scale(1);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .lyrics-ambient-orbit,

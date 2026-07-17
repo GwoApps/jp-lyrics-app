@@ -244,10 +244,10 @@ export default function SongViewPage() {
     : 0;
   const sideLightPresence = Math.max(0, Math.min(1, (paletteSeparation - 36) / 112));
   const ambientProfile = coverSaturation >= 0.68
-    ? { opacity: 0.62, core: '64%', mid: '40%', edge: '14%', blur: '38px', shadow: '24%', staticShadow: '48%', sideOpacity: 0.30 + sideLightPresence * 0.28, breathOpacity: 0.50, breathMinOpacity: 0.32 }
+    ? { opacity: 0.62, core: '64%', mid: '40%', edge: '14%', blur: '38px', shadow: '24%', staticShadow: '48%', sideOpacity: 0.30 + sideLightPresence * 0.28, breathOpacity: 0.62, breathMinOpacity: 0.36 }
     : coverSaturation >= 0.42
-      ? { opacity: 0.68, core: '66%', mid: '44%', edge: '16%', blur: '33px', shadow: '26%', staticShadow: '52%', sideOpacity: 0.32 + sideLightPresence * 0.30, breathOpacity: 0.56, breathMinOpacity: 0.36 }
-      : { opacity: 0.78, core: '72%', mid: '50%', edge: '18%', blur: '28px', shadow: '30%', staticShadow: '56%', sideOpacity: 0.34 + sideLightPresence * 0.32, breathOpacity: 0.62, breathMinOpacity: 0.40 };
+      ? { opacity: 0.68, core: '66%', mid: '44%', edge: '16%', blur: '33px', shadow: '26%', staticShadow: '52%', sideOpacity: 0.32 + sideLightPresence * 0.30, breathOpacity: 0.68, breathMinOpacity: 0.40 }
+      : { opacity: 0.78, core: '72%', mid: '50%', edge: '18%', blur: '28px', shadow: '30%', staticShadow: '56%', sideOpacity: 0.34 + sideLightPresence * 0.32, breathOpacity: 0.74, breathMinOpacity: 0.44 };
   const lyricPanelStyle = coverColor
     ? {
         ['--lyric-accent' as string]: `rgb(${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b})`,
