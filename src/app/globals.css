@@ -240,6 +240,10 @@ textarea {
   transform: translate(-50%, -50%) scale(1);
   animation: lyricsAmbientEdgeBreath 12s ease-in-out infinite;
 }
+/* Bright canvases make cover colors appear stronger; halve only this decorative layer's chroma. */
+[data-theme="light"] .lyrics-ambient-breath {
+  filter: saturate(0.5);
+}
 /* The broad key light lives behind (not inside) the clipped lyrics panel. */
 .lyrics-ambient-orbit {
   position: absolute;
