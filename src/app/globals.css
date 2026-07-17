@@ -47,8 +47,10 @@
   --warning-muted: rgba(217,119,6,0.12);
 }
 
-/* Tailwind preflight handles reset — no manual * reset needed */
-
+/* Ambient decoration may extend outside a card, but must never create a horizontal document scrollbar. */
+html {
+  overflow-x: clip;
+}
 body {
   background: var(--background);
   color: var(--foreground);
@@ -303,8 +305,6 @@ textarea {
 }
 .song-view {
   --song-accent: var(--border);
-  /* Decorative orbits are visual-only and must not create horizontal page overflow. */
-  overflow-x: clip;
 }
 .song-accent-button {
   color: color-mix(in srgb, var(--foreground) 90%, var(--song-accent));
