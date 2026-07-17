@@ -211,6 +211,8 @@ textarea {
   --lyric-ambient-blur: 30px;
   --lyric-shadow-strength: 34%;
   --lyric-ambient-secondary-opacity: 0;
+  --lyric-ambient-breath-opacity: 0;
+  --lyric-ambient-breath-min-opacity: 0;
 }
 .lyrics-panel {
   z-index: 1;
@@ -218,6 +220,22 @@ textarea {
   border: 1px solid color-mix(in srgb, var(--border) 76%, var(--lyric-accent));
   /* Keep the original, always-visible external glow as the base layer. */
   box-shadow: 0 0 52px -18px color-mix(in srgb, var(--lyric-accent) 62%, transparent);
+}
+/* Fixed edge layer uses the exact card-border mix, so the panel appears to breathe in place. */
+.lyrics-ambient-breath {
+  position: absolute;
+  z-index: 0;
+  top: 50%;
+  left: 50%;
+  width: 106%;
+  height: 114%;
+  pointer-events: none;
+  opacity: var(--lyric-ambient-breath-opacity);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 0%, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 38%, color-mix(in srgb, var(--border) 88%, var(--lyric-accent)) 61%, transparent 79%);
+  filter: blur(24px);
+  transform: translate(-50%, -50%) scale(0.98);
+  animation: lyricsAmbientEdgeBreath 12s ease-in-out infinite;
 }
 /* The broad key light lives behind (not inside) the clipped lyrics panel. */
 .lyrics-ambient-orbit {
@@ -237,11 +255,11 @@ textarea {
 }
 /* A smaller counter-moving rim light appears only for distinct cover-palette colours. */
 .lyrics-ambient-orbit--secondary {
-  width: 46%;
-  height: 62%;
+  width: 52%;
+  height: 70%;
   opacity: var(--lyric-ambient-secondary-opacity);
-  background: radial-gradient(ellipse at 58% 46%, color-mix(in srgb, var(--lyric-orbit-accent-2) 58%, transparent) 0%, color-mix(in srgb, var(--lyric-orbit-accent-2) 30%, transparent) 36%, color-mix(in srgb, var(--lyric-orbit-accent-2) 10%, transparent) 62%, transparent 78%);
-  filter: blur(26px);
+  background: radial-gradient(ellipse at 58% 46%, color-mix(in srgb, var(--lyric-orbit-accent-2) 66%, transparent) 0%, color-mix(in srgb, var(--lyric-orbit-accent-2) 36%, transparent) 38%, color-mix(in srgb, var(--lyric-orbit-accent-2) 12%, transparent) 64%, transparent 80%);
+  filter: blur(28px);
   animation: lyricsAmbientCounterOrbit 29s linear -8s infinite;
 }
 @media (min-width: 640px) {
@@ -255,9 +273,9 @@ textarea {
     background: radial-gradient(ellipse at 38% 42%, color-mix(in srgb, var(--lyric-orbit-accent) var(--lyric-ambient-core), transparent) 0%, color-mix(in srgb, var(--lyric-orbit-accent) var(--lyric-ambient-mid), transparent) 40%, color-mix(in srgb, var(--lyric-orbit-accent) var(--lyric-ambient-edge), transparent) 66%, transparent 82%);
   }
   .lyrics-ambient-orbit--secondary {
-    width: 48%;
-    height: 64%;
-    filter: blur(28px);
+    width: 56%;
+    height: 72%;
+    filter: blur(30px);
   }
 }
 @keyframes lyricsAmbientOrbit {
@@ -268,14 +286,19 @@ textarea {
   100% { transform: translate(-50%, -60%) scale(1.04); }
 }
 @keyframes lyricsAmbientCounterOrbit {
-  0% { transform: translate(-68%, -66%) scale(0.98); }
-  25% { transform: translate(-22%, -42%) scale(1.04); }
-  50% { transform: translate(-76%, -34%) scale(0.96); }
-  75% { transform: translate(-34%, -72%) scale(1.02); }
-  100% { transform: translate(-68%, -66%) scale(0.98); }
+  0% { transform: translate(-82%, -64%) scale(0.98); }
+  25% { transform: translate(-6%, -40%) scale(1.05); }
+  50% { transform: translate(-94%, -30%) scale(0.96); }
+  75% { transform: translate(-18%, -74%) scale(1.03); }
+  100% { transform: translate(-82%, -64%) scale(0.98); }
+}
+@keyframes lyricsAmbientEdgeBreath {
+  0%, 100% { opacity: var(--lyric-ambient-breath-min-opacity); transform: translate(-50%, -50%) scale(0.98); }
+  50% { opacity: var(--lyric-ambient-breath-opacity); transform: translate(-50%, -50%) scale(1.035); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .lyrics-ambient-orbit { animation: none; }
+  .lyrics-ambient-orbit,
+  .lyrics-ambient-breath { animation: none; }
 }
 .song-view {
   --song-accent: var(--border);
