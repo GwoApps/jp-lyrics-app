@@ -207,6 +207,9 @@ textarea {
   --lyric-orbit-accent: var(--lyric-accent);
   --lyric-orbit-accent-2: var(--lyric-orbit-accent);
   --lyric-ambient-opacity: 0.68;
+  --lyric-ambient-main-brightness: 1;
+  --lyric-ambient-side-brightness: 1;
+  --lyric-ambient-edge-brightness: 1;
   --lyric-ambient-core: 64%;
   --lyric-ambient-mid: 43%;
   --lyric-ambient-edge: 15%;
@@ -238,11 +241,12 @@ textarea {
   border-radius: var(--radius);
   box-shadow: 0 0 16px 3px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 70%, transparent), 0 0 36px 10px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 36%, transparent);
   transform: translate(-50%, -50%) scale(1);
+  filter: brightness(var(--lyric-ambient-edge-brightness));
   animation: lyricsAmbientEdgeBreath 12s ease-in-out infinite;
 }
 /* Bright canvases make cover colors appear stronger; halve only this decorative layer's chroma. */
 [data-theme="light"] .lyrics-ambient-breath {
-  filter: saturate(0.5);
+  filter: brightness(var(--lyric-ambient-edge-brightness)) saturate(0.5);
 }
 /* The broad key light lives behind (not inside) the clipped lyrics panel. */
 .lyrics-ambient-orbit {
@@ -256,7 +260,7 @@ textarea {
   opacity: var(--lyric-ambient-opacity);
   border-radius: 50%;
   background: radial-gradient(ellipse at 38% 42%, color-mix(in srgb, var(--lyric-orbit-accent) 76%, transparent) 0%, color-mix(in srgb, var(--lyric-orbit-accent) 48%, transparent) 38%, color-mix(in srgb, var(--lyric-orbit-accent) 16%, transparent) 62%, transparent 78%);
-  filter: blur(var(--lyric-ambient-blur));
+  filter: blur(var(--lyric-ambient-blur)) brightness(var(--lyric-ambient-main-brightness));
   transform: translate(-50%, -50%);
   animation: lyricsAmbientOrbit 20s linear infinite;
 }
@@ -266,7 +270,7 @@ textarea {
   height: 70%;
   opacity: var(--lyric-ambient-secondary-opacity);
   background: radial-gradient(ellipse at 58% 46%, color-mix(in srgb, var(--lyric-orbit-accent-2) 66%, transparent) 0%, color-mix(in srgb, var(--lyric-orbit-accent-2) 36%, transparent) 38%, color-mix(in srgb, var(--lyric-orbit-accent-2) 12%, transparent) 64%, transparent 80%);
-  filter: blur(28px);
+  filter: blur(28px) brightness(var(--lyric-ambient-side-brightness));
   animation: lyricsAmbientCounterOrbit 29s linear -8s infinite;
 }
 @media (min-width: 640px) {
@@ -282,7 +286,7 @@ textarea {
   .lyrics-ambient-orbit--secondary {
     width: 56%;
     height: 72%;
-    filter: blur(30px);
+    filter: blur(30px) brightness(var(--lyric-ambient-side-brightness));
   }
 }
 @keyframes lyricsAmbientOrbit {

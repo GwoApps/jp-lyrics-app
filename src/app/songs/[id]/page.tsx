@@ -50,6 +50,24 @@ function colorSaturation({ r, g, b }: CoverColor) {
   return (max - min) / (1 - Math.abs(2 * lightness - 1));
 }
 
+/** Relative luminance lets ambient light remain visible across dark covers without letting bright art bloom. */
+function colorLuminance({ r, g, b }: CoverColor) {
+  const linear = (channel: number) => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+/** Normalizes source output to a restrained range: dim art gets a modest lift, bright art is capped. */
+function ambientBrightness(color: CoverColor) {
+  return clamp(1.14 - colorLuminance(color) * 0.46, 0.82, 1.12);
+}
+
 /** RGB separation determines whether a second palette colour can read as a distinct light. */
 function colorDistance(a: CoverColor, b: CoverColor) {
   return Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
@@ -248,21 +266,35 @@ export default function SongViewPage() {
     : coverSaturation >= 0.42
       ? { opacity: 0.68, core: '66%', mid: '44%', edge: '16%', blur: '33px', shadow: '26%', staticShadow: '52%', sideOpacity: 0.32 + sideLightPresence * 0.30, breathOpacity: 0.68, breathMinOpacity: 0.40 }
       : { opacity: 0.78, core: '72%', mid: '50%', edge: '18%', blur: '28px', shadow: '30%', staticShadow: '56%', sideOpacity: 0.34 + sideLightPresence * 0.32, breathOpacity: 0.74, breathMinOpacity: 0.44 };
+  // Clamp alpha separately from color luminance: the minimum keeps muted covers readable,
+  // while maximums prevent saturated/light covers from overpowering the lyric card.
+  const mainOpacity = clamp(ambientProfile.opacity, 0.62, 0.70);
+  const sideOpacity = clamp(ambientProfile.sideOpacity, 0.32, 0.52);
+  const breathOpacity = clamp(ambientProfile.breathOpacity, 0.58, 0.68);
+  const breathMinOpacity = clamp(ambientProfile.breathMinOpacity, 0.34, 0.42);
+  const mainBrightness = coverColor ? ambientBrightness(coverColor.secondary) : 1;
+  const sideBrightness = coverColor ? ambientBrightness(coverColor.tertiary) : 1;
+  const edgeBrightness = coverColor ? ambientBrightness(coverColor.primary) : 1;
+  const staticShadow = `${clamp(Number.parseFloat(ambientProfile.staticShadow) * edgeBrightness, 44, 54)}%`;
+  const shadow = `${clamp(Number.parseFloat(ambientProfile.shadow) * edgeBrightness, 22, 28)}%`;
   const lyricPanelStyle = coverColor
     ? {
         ['--lyric-accent' as string]: `rgb(${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b})`,
         ['--lyric-orbit-accent' as string]: `rgb(${coverColor.secondary.r} ${coverColor.secondary.g} ${coverColor.secondary.b})`,
         ['--lyric-orbit-accent-2' as string]: `rgb(${coverColor.tertiary.r} ${coverColor.tertiary.g} ${coverColor.tertiary.b})`,
-        ['--lyric-ambient-opacity' as string]: String(ambientProfile.opacity),
+        ['--lyric-ambient-opacity' as string]: String(mainOpacity),
+        ['--lyric-ambient-main-brightness' as string]: String(mainBrightness),
+        ['--lyric-ambient-side-brightness' as string]: String(sideBrightness),
+        ['--lyric-ambient-edge-brightness' as string]: String(edgeBrightness),
         ['--lyric-ambient-core' as string]: ambientProfile.core,
         ['--lyric-ambient-mid' as string]: ambientProfile.mid,
         ['--lyric-ambient-edge' as string]: ambientProfile.edge,
         ['--lyric-ambient-blur' as string]: ambientProfile.blur,
-        ['--lyric-shadow-strength' as string]: ambientProfile.shadow,
-        ['--lyric-static-shadow-strength' as string]: ambientProfile.staticShadow,
-        ['--lyric-ambient-secondary-opacity' as string]: String(ambientProfile.sideOpacity),
-        ['--lyric-ambient-breath-opacity' as string]: String(ambientProfile.breathOpacity),
-        ['--lyric-ambient-breath-min-opacity' as string]: String(ambientProfile.breathMinOpacity),
+        ['--lyric-shadow-strength' as string]: shadow,
+        ['--lyric-static-shadow-strength' as string]: staticShadow,
+        ['--lyric-ambient-secondary-opacity' as string]: String(sideOpacity),
+        ['--lyric-ambient-breath-opacity' as string]: String(breathOpacity),
+        ['--lyric-ambient-breath-min-opacity' as string]: String(breathMinOpacity),
       }
     : undefined;
 
