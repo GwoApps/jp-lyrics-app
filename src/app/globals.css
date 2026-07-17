@@ -296,14 +296,15 @@ textarea {
   100% { transform: translate(-82%, -64%) scale(0.98); }
 }
 @keyframes lyricsAmbientEdgeBreath {
+  /* The glow starts broad, then contracts toward the fixed card edge without moving the outline itself. */
   0%, 100% {
-    opacity: var(--lyric-ambient-breath-min-opacity);
-    box-shadow: 0 0 16px 3px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 70%, transparent), 0 0 36px 10px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 36%, transparent);
+    opacity: var(--lyric-ambient-breath-opacity);
+    box-shadow: 0 0 22px 5px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 82%, transparent), 0 0 48px 16px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 48%, transparent);
     transform: translate(-50%, -50%) scale(1);
   }
   50% {
-    opacity: var(--lyric-ambient-breath-opacity);
-    box-shadow: 0 0 22px 5px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 82%, transparent), 0 0 48px 16px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 48%, transparent);
+    opacity: var(--lyric-ambient-breath-min-opacity);
+    box-shadow: 0 0 16px 3px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 70%, transparent), 0 0 36px 10px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 36%, transparent);
     transform: translate(-50%, -50%) scale(1);
   }
 }
