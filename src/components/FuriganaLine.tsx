@@ -1,16 +1,40 @@
 'use client';
 
 import { useRef, useEffect, useState } from 'react';
+import { Copy, Languages, Share2 } from 'lucide-react';
 import type { FuriganaLine } from '@/lib/types';
 import { fmtMs } from '@/lib/lrc';
+import { useI18n } from '@/lib/i18n';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 
-export default function FuriganaLineView({ line, isActive, debugTs, timestamp, onSeek }: {
+export default function FuriganaLineView({
+  line,
+  isActive,
+  debugTs,
+  timestamp,
+  onSeek,
+  onCopyLine,
+  onShareLine,
+  onCorrectFurigana,
+  canCorrectFurigana = true,
+}: {
   line: FuriganaLine;
   isActive: boolean;
   debugTs?: number | null;
   timestamp?: number | null;
   onSeek?: (positionMs: number) => void;
+  onCopyLine?: () => void;
+  onShareLine?: () => void;
+  onCorrectFurigana?: () => void;
+  canCorrectFurigana?: boolean;
 }) {
+  const { t } = useI18n();
   const [animKey, setAnimKey] = useState(0);
   const wasActiveRef = useRef(false);
 
@@ -22,8 +46,10 @@ export default function FuriganaLineView({ line, isActive, debugTs, timestamp, o
   }, [isActive]);
 
   if (line.segments.length === 0) return <div className="h-5 sm:h-6" />;
-  return (
-    <div className={`flex items-baseline gap-2 sm:gap-3 ${onSeek && timestamp != null ? 'cursor-pointer' : ''}`}
+
+  const lineContent = (
+    <div
+      className={`flex items-baseline gap-2 sm:gap-3 ${onSeek && timestamp != null ? 'cursor-pointer' : ''}`}
       onClick={onSeek && timestamp != null ? () => onSeek(timestamp) : undefined}
     >
       {debugTs != null && (
@@ -48,5 +74,28 @@ export default function FuriganaLineView({ line, isActive, debugTs, timestamp, o
         })}
       </div>
     </div>
+  );
+
+  if (!onCopyLine || !onShareLine || !onCorrectFurigana) return lineContent;
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{lineContent}</ContextMenuTrigger>
+      <ContextMenuContent aria-label={t('song.more')}>
+        <ContextMenuItem onSelect={onCopyLine}>
+          <Copy className="h-3.5 w-3.5" />
+          {t('song.copy')}
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={onShareLine}>
+          <Share2 className="h-3.5 w-3.5" />
+          {t('song.share')}
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={onCorrectFurigana} disabled={!canCorrectFurigana}>
+          <Languages className="h-3.5 w-3.5" />
+          {t('furigana.title')}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }

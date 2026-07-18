@@ -16,6 +16,7 @@ import { isTitleMatch, findBestMatch } from '@/lib/match';
 import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
 import { extractMaterialCoverPalette, type CoverColor, type CoverPalette } from '@/lib/cover-color';
+import type { FuriganaLine } from '@/lib/types';
 import { useAuthSession } from '@/lib/auth-session';
 import type { SyncRefs } from '@/hooks/useSpotifySync';
 
@@ -297,6 +298,29 @@ export default function SongViewPage() {
         ['--lyric-ambient-breath-min-opacity' as string]: String(breathMinOpacity),
       }
     : undefined;
+
+  const copyLyricLine = async (line: FuriganaLine) => {
+    const text = line.segments.map((segment) => segment.text).join('');
+    if (!text) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand('copy');
+        textarea.remove();
+        if (!copied) throw new Error('copy_failed');
+      }
+      data.showToast('success', t('share.copied'));
+    } catch {
+      data.showToast('error', t('song.copyFailed'));
+    }
+  };
 
   return (
     <div className={`song-view fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-visible sm:block sm:h-auto sm:pb-0${coverColor ? ' song-view--accented' : ''}`} style={songThemeStyle}>
@@ -620,6 +644,10 @@ export default function SongViewPage() {
                     debugTs={data.debug && lineTimestamps[i] != null ? lineTimestamps[i] : undefined}
                     timestamp={hasSyncData && lineTimestamps[i] != null ? lineTimestamps[i] : undefined}
                     onSeek={hasSyncData && spotify?.connected ? handleSeek : undefined}
+                    onCopyLine={() => copyLyricLine(line)}
+                    onShareLine={() => router.push(`/songs/${id}/share?line=${i}`)}
+                    onCorrectFurigana={() => router.push(`/songs/${id}/furigana/edit`)}
+                    canCorrectFurigana={spotifyConnected === true}
                   />
                 </div>
               ))
