@@ -49,7 +49,7 @@ export default function FuriganaLineView({
 
   const lineContent = (
     <div
-      className={`flex items-baseline gap-2 sm:gap-3 ${onSeek && timestamp != null ? 'cursor-pointer' : ''}`}
+      className={`lyric-line-context-trigger flex items-baseline gap-2 sm:gap-3 ${onSeek && timestamp != null ? 'cursor-pointer' : ''}`}
       onClick={onSeek && timestamp != null ? () => onSeek(timestamp) : undefined}
     >
       {debugTs != null && (
