@@ -197,7 +197,14 @@ textarea {
   color: var(--foreground);
 }
 @media (min-width: 640px) {
-  .toast { bottom: 1.5rem; right: 1.5rem; }
+  .toast {
+    top: 1.5rem;
+    right: auto;
+    bottom: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    animation: toastDrop 0.3s ease-out;
+  }
 }
 
 /* Safe area for iOS bottom bar */
@@ -513,4 +520,8 @@ textarea {
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
+}
+@keyframes toastDrop {
+  from { opacity: 0; transform: translate(-50%, -12px); }
+  to { opacity: 1; transform: translateX(-50%); }
 }
