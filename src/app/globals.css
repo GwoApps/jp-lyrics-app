@@ -210,6 +210,7 @@ textarea {
   --lyric-ambient-main-brightness: 1;
   --lyric-ambient-side-brightness: 1;
   --lyric-ambient-edge-brightness: 1;
+  --lyric-ambient-breath-saturation: 1;
   --lyric-ambient-core: 64%;
   --lyric-ambient-mid: 43%;
   --lyric-ambient-edge: 15%;
@@ -241,12 +242,12 @@ textarea {
   border-radius: var(--radius);
   box-shadow: 0 0 16px 3px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 70%, transparent), 0 0 36px 10px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 36%, transparent);
   transform: translate(-50%, -50%) scale(1);
-  filter: brightness(var(--lyric-ambient-edge-brightness));
-  animation: lyricsAmbientEdgeBreath 12s ease-in-out infinite;
+  filter: brightness(var(--lyric-ambient-edge-brightness)) saturate(var(--lyric-ambient-breath-saturation)) hue-rotate(0deg);
+  animation: lyricsAmbientEdgeBreath 12s ease-in-out infinite, lyricsAmbientBreathHue 54s ease-in-out infinite;
 }
 /* Bright canvases make cover colors appear stronger; halve only this decorative layer's chroma. */
 [data-theme="light"] .lyrics-ambient-breath {
-  filter: brightness(var(--lyric-ambient-edge-brightness)) saturate(0.5);
+  --lyric-ambient-breath-saturation: 0.5;
 }
 /* The broad key light lives behind (not inside) the clipped lyrics panel. */
 .lyrics-ambient-orbit {
@@ -315,6 +316,12 @@ textarea {
     box-shadow: 0 0 16px 3px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 70%, transparent), 0 0 36px 10px color-mix(in srgb, color-mix(in srgb, var(--border) 76%, var(--lyric-accent)) 36%, transparent);
     transform: translate(-50%, -50%) scale(1);
   }
+}
+@keyframes lyricsAmbientBreathHue {
+  0%, 100% { filter: brightness(var(--lyric-ambient-edge-brightness)) saturate(var(--lyric-ambient-breath-saturation)) hue-rotate(0deg); }
+  28% { filter: brightness(var(--lyric-ambient-edge-brightness)) saturate(var(--lyric-ambient-breath-saturation)) hue-rotate(14deg); }
+  56% { filter: brightness(var(--lyric-ambient-edge-brightness)) saturate(var(--lyric-ambient-breath-saturation)) hue-rotate(-12deg); }
+  78% { filter: brightness(var(--lyric-ambient-edge-brightness)) saturate(var(--lyric-ambient-breath-saturation)) hue-rotate(8deg); }
 }
 @media (prefers-reduced-motion: reduce) {
   .lyrics-ambient-orbit,
