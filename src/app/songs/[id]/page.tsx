@@ -643,7 +643,7 @@ export default function SongViewPage() {
                     isActive={i === activeLine && !!isSynced}
                     debugTs={data.debug && lineTimestamps[i] != null ? lineTimestamps[i] : undefined}
                     timestamp={hasSyncData && lineTimestamps[i] != null ? lineTimestamps[i] : undefined}
-                    onSeek={hasSyncData && spotify?.connected ? handleSeek : undefined}
+                    onSeek={hasSyncData && isSameSong && spotify?.connected ? handleSeek : undefined}
                     onCopyLine={() => copyLyricLine(line)}
                     onShareLine={() => router.push(`/songs/${id}/share?line=${i}`)}
                     onCorrectFurigana={() => router.push(`/songs/${id}/furigana/edit`)}
