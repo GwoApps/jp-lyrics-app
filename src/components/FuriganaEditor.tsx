@@ -16,6 +16,8 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
   const { t } = useI18n();
   const [active, setActive] = useState<EditTarget>(null);
   const [draft, setDraft] = useState('');
+  const [readingCandidates, setReadingCandidates] = useState<string[]>([]);
+  const [readingCandidatesLoading, setReadingCandidatesLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -29,6 +31,40 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
     if (!active) return null;
     return lines[active.lineIndex]?.segments[active.segIndex] ?? null;
   }, [active, lines]);
+
+  const activeText = activeSeg?.text ?? '';
+  const hasActiveKanji = /[\u3400-\u4DBF\u4E00-\u9FFF]/.test(activeText);
+
+  useEffect(() => {
+    if (!hasActiveKanji) return;
+
+    const controller = new AbortController();
+
+    void fetch(`/api/furigana/readings?text=${encodeURIComponent(activeText)}`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) return [];
+        const payload = await response.json() as { candidates?: unknown };
+        return Array.isArray(payload.candidates)
+          ? payload.candidates.filter((candidate): candidate is string => typeof candidate === 'string')
+          : [];
+      })
+      .then((candidates) => {
+        if (!controller.signal.aborted) setReadingCandidates(candidates);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setReadingCandidates([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setReadingCandidatesLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [activeText, hasActiveKanji]);
+
+  const selectableReadings = useMemo(() => {
+    if (!activeSeg || !hasActiveKanji) return [];
+    return [...new Set([activeSeg.reading, ...readingCandidates].filter(Boolean))];
+  }, [activeSeg, hasActiveKanji, readingCandidates]);
 
   const updateSegment = useCallback((lineIndex: number, segIndex: number, nextSeg: FuriganaSegment) => {
     const next = lines.map((line, li) =>
@@ -45,8 +81,11 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
   }, [lines, onChange]);
 
   const startEdit = (li: number, si: number) => {
+    const segment = lines[li].segments[si];
     setActive({ lineIndex: li, segIndex: si });
-    setDraft(lines[li].segments[si].reading);
+    setDraft(segment.reading);
+    setReadingCandidates([]);
+    setReadingCandidatesLoading(/[\u3400-\u4DBF\u4E00-\u9FFF]/.test(segment.text));
   };
 
   const commitReading = useCallback(() => {
@@ -55,6 +94,15 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
     updateSegment(active.lineIndex, active.segIndex, { ...lines[active.lineIndex].segments[active.segIndex], reading });
     setActive(null);
   }, [active, draft, lines, updateSegment]);
+
+  const selectReading = useCallback((reading: string) => {
+    if (!active) return;
+    updateSegment(active.lineIndex, active.segIndex, {
+      ...lines[active.lineIndex].segments[active.segIndex],
+      reading,
+    });
+    setActive(null);
+  }, [active, lines, updateSegment]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -86,6 +134,8 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
     updateLineSegments(active.lineIndex, nextSegments);
     setActive({ lineIndex: active.lineIndex, segIndex: active.segIndex });
     setDraft('');
+    setReadingCandidates([]);
+    setReadingCandidatesLoading(/[\u3400-\u4DBF\u4E00-\u9FFF]/.test(chars[0].text));
   }, [active, lines, updateLineSegments]);
 
   const mergeNext = useCallback(() => {
@@ -108,6 +158,8 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
     updateLineSegments(active.lineIndex, nextSegments);
     setActive({ lineIndex: active.lineIndex, segIndex: active.segIndex });
     setDraft(merged.reading);
+    setReadingCandidates([]);
+    setReadingCandidatesLoading(/[\u3400-\u4DBF\u4E00-\u9FFF]/.test(merged.text));
   }, [active, lines, updateLineSegments]);
 
   const applyAll = useCallback(() => {
@@ -195,6 +247,28 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
             {isActiveLine && activeSeg && (
               <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--muted)] p-2 sm:p-3">
                 <span className="text-xs text-[var(--muted-foreground)]">{activeSeg.text}</span>
+                {hasActiveKanji && (readingCandidatesLoading || selectableReadings.length > 1) && (
+                  <div className="flex w-full flex-wrap items-center gap-1.5">
+                    <span className="mr-1 text-[11px] text-[var(--muted-foreground)]">{t('furigana.suggestions')}</span>
+                    {readingCandidatesLoading ? (
+                      <span className="text-[11px] text-[var(--muted-foreground)]">{t('furigana.suggestionsLoading')}</span>
+                    ) : selectableReadings.map((reading) => (
+                      <button
+                        key={reading}
+                        type="button"
+                        onClick={() => selectReading(reading)}
+                        className={`rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
+                          reading === activeSeg.reading
+                            ? 'border-[var(--primary)]/50 bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20'
+                            : 'border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] hover:border-[var(--primary)]/40 hover:bg-[var(--accent)]'
+                        }`}
+                      >
+                        {reading}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <span className="text-[11px] text-[var(--muted-foreground)]">{t('furigana.manualReading')}</span>
                 <input
                   ref={inputRef}
                   type="text"
