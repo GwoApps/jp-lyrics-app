@@ -12,6 +12,9 @@ interface FuriganaEditorProps {
 
 type EditTarget = { lineIndex: number; segIndex: number } | null;
 
+const NON_EDITABLE_SEGMENT_RE = /^[\s\p{P}\p{S}]+$/u;
+const isNonEditableDisplaySegment = (text: string) => NON_EDITABLE_SEGMENT_RE.test(text);
+
 export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEditorProps) {
   const { t } = useI18n();
   const [active, setActive] = useState<EditTarget>(null);
@@ -144,6 +147,7 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
     if (active.segIndex >= line.segments.length - 1) return;
     const current = line.segments[active.segIndex];
     const next = line.segments[active.segIndex + 1];
+    if (isNonEditableDisplaySegment(next.text)) return;
     const merged: FuriganaSegment = {
       text: current.text + next.text,
       reading: current.reading && next.reading
@@ -197,6 +201,9 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
         <p className="text-sm text-[var(--muted-foreground)]">{t('furigana.empty')}</p>
       )}
       {lines.map((line, li) => {
+        // The converter preserves blank lyric rows as empty segments; do not render editor chrome for them.
+        if (line.segments.length === 0) return null;
+
         const raw = rawLines?.[li];
         const isActiveLine = active?.lineIndex === li;
         return (
@@ -215,34 +222,43 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
               )}
             </div>
 
-            {line.segments.length === 0 ? (
-              <p className="text-xs text-[var(--muted-foreground)]">{t('furigana.noKanji')}</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {line.segments.map((seg, si) => {
-                  const isActive = isActiveLine && active?.segIndex === si;
+            <div className="flex flex-wrap items-baseline gap-2">
+              {line.segments.map((seg, si) => {
+                const isNonEditable = isNonEditableDisplaySegment(seg.text);
+                const isActive = !isNonEditable && isActiveLine && active?.segIndex === si;
+
+                if (isNonEditable) {
                   return (
-                    <button
+                    <span
                       key={si}
-                      type="button"
-                      onClick={() => startEdit(li, si)}
-                      className={`rounded-md border px-2 py-1 text-left text-sm transition-all ${
-                        isActive
-                          ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)]'
-                          : seg.reading
-                            ? 'border-[var(--primary)]/30 bg-[var(--primary)]/10 text-[var(--foreground)] hover:bg-[var(--primary)]/15'
-                            : 'border-transparent bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
-                      }`}
+                      className="whitespace-pre-wrap text-sm leading-7 text-[var(--muted-foreground)]"
                     >
-                      <span className="block">{seg.text}</span>
-                      {seg.reading && (
-                        <span className="block text-[10px] text-[var(--primary)]/80">{seg.reading}</span>
-                      )}
-                    </button>
+                      {seg.text}
+                    </span>
                   );
-                })}
-              </div>
-            )}
+                }
+
+                return (
+                  <button
+                    key={si}
+                    type="button"
+                    onClick={() => startEdit(li, si)}
+                    className={`rounded-md border px-2 py-1 text-left text-sm transition-all ${
+                      isActive
+                        ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)]'
+                        : seg.reading
+                          ? 'border-[var(--primary)]/30 bg-[var(--primary)]/10 text-[var(--foreground)] hover:bg-[var(--primary)]/15'
+                          : 'border-transparent bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                    }`}
+                  >
+                    <span className="block">{seg.text}</span>
+                    {seg.reading && (
+                      <span className="block text-[10px] text-[var(--primary)]/80">{seg.reading}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
             {isActiveLine && activeSeg && (
               <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--muted)] p-2 sm:p-3">
@@ -310,7 +326,8 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
                     {t('furigana.split')}
                   </button>
                 )}
-                {active.segIndex < lines[active.lineIndex].segments.length - 1 && (
+                {active.segIndex < lines[active.lineIndex].segments.length - 1 &&
+                  !isNonEditableDisplaySegment(lines[active.lineIndex].segments[active.segIndex + 1].text) && (
                   <button
                     type="button"
                     onClick={mergeNext}
