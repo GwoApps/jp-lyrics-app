@@ -267,7 +267,7 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
                     key={part.key}
                     type="button"
                     onClick={() => startEdit(li, si)}
-                    className={`flex min-h-11 flex-col justify-center rounded-md border px-2 py-1 text-left text-sm transition-all ${
+                    className={`rounded-md border px-2 py-1 text-left text-sm transition-all ${
                       isActive
                         ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)]'
                         : seg.reading
@@ -276,8 +276,12 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
                     }`}
                   >
                     <span className="block">{seg.text}</span>
-                    {seg.reading && (
-                      <span className="block text-[10px] text-[var(--primary)]/80">{seg.reading}</span>
+                    {seg.reading ? (
+                      <span className="block text-[10px] leading-normal text-[var(--primary)]/80">{seg.reading}</span>
+                    ) : (
+                      <span aria-hidden="true" className="block select-none text-[10px] leading-normal text-transparent">
+                        &nbsp;
+                      </span>
                     )}
                   </button>
                 );
