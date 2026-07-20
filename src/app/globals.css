@@ -341,6 +341,74 @@ textarea {
   -webkit-touch-callout: none;
   touch-action: manipulation;
 }
+.song-item-card {
+  --song-card-pointer-x: 50%;
+  --song-card-pointer-y: 50%;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: var(--card);
+  border-color: var(--border);
+  transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+.song-item-card:hover {
+  background: color-mix(in srgb, var(--card) 88%, var(--song-card-accent));
+  border-color: color-mix(in srgb, var(--border) 52%, var(--song-card-accent));
+}
+.song-item-card__pointer-glow {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    circle 180px at var(--song-card-pointer-x) var(--song-card-pointer-y),
+    color-mix(in srgb, var(--song-card-accent) 34%, transparent) 0%,
+    color-mix(in srgb, var(--song-card-accent) 16%, transparent) 38%,
+    transparent 74%
+  );
+  transition: opacity 180ms ease;
+}
+.song-item-card::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  border: 1px solid transparent;
+  border-radius: inherit;
+  background: radial-gradient(
+      circle 150px at var(--song-card-pointer-x) var(--song-card-pointer-y),
+      color-mix(in srgb, var(--song-card-accent) 82%, transparent),
+      transparent 72%
+    ) border-box;
+  mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.song-item-card:hover .song-item-card__pointer-glow,
+.song-item-card:hover::after {
+  opacity: 1;
+}
+.song-item-card--playing {
+  border-color: color-mix(in srgb, var(--success) 50%, var(--border));
+  background: var(--success-muted);
+}
+.song-item-card--playing:hover {
+  border-color: color-mix(in srgb, var(--success) 50%, var(--song-card-accent));
+  background: color-mix(in srgb, var(--success-muted) 82%, var(--song-card-accent));
+}
+@media (prefers-reduced-motion: reduce) {
+  .song-item-card,
+  .song-item-card__pointer-glow,
+  .song-item-card::after {
+    transition: none;
+  }
+}
+
 .song-view {
   --song-accent: var(--border);
 }

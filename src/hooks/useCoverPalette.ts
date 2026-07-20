@@ -13,14 +13,8 @@ function rgb(color: CoverColor) {
   return `rgb(${color.r} ${color.g} ${color.b})`;
 }
 
-/**
- * Shared cover-theme pipeline for detail and editor pages.
- *
- * It owns image loading, palette extraction, page tinting, and the complete
- * palette CSS-variable contract. Consumers only need to spread `style` on
- * their page root and add `song-view--accented` when `isThemed` is true.
- */
-export function useCoverTheme(coverUrl: string | null | undefined): CoverTheme {
+/** Load a cover and extract its Material-ranked palette without side effects. */
+export function useCoverPalette(coverUrl: string | null | undefined): CoverPalette | null {
   const [paletteState, setPaletteState] = useState<{
     url: string | null | undefined;
     palette: CoverPalette | null;
@@ -47,6 +41,15 @@ export function useCoverTheme(coverUrl: string | null | undefined): CoverTheme {
     };
   }, [coverUrl]);
 
+  return palette;
+}
+
+/**
+ * Shared page-level cover theme pipeline. It adds the body tint and returns
+ * the complete CSS-variable contract for a song surface root.
+ */
+export function useCoverTheme(coverUrl: string | null | undefined): CoverTheme {
+  const palette = useCoverPalette(coverUrl);
   const style = useMemo<React.CSSProperties | undefined>(() => {
     if (!palette) return undefined;
     return {
@@ -70,9 +73,4 @@ export function useCoverTheme(coverUrl: string | null | undefined): CoverTheme {
   }, [palette]);
 
   return { palette, isThemed: palette !== null, style };
-}
-
-/** Backward-compatible palette-only adapter for non-themed consumers. */
-export function useCoverPalette(coverUrl: string | null | undefined): CoverPalette | null {
-  return useCoverTheme(coverUrl).palette;
 }
