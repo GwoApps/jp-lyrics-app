@@ -393,7 +393,7 @@ textarea {
   pointer-events: none;
   opacity: 0;
   background: radial-gradient(
-    circle var(--song-card-glow-radius) at var(--song-card-pointer-x) var(--song-card-pointer-y),
+    ellipse var(--song-card-glow-radius) var(--song-card-glow-radius) at var(--song-card-pointer-x) var(--song-card-pointer-y),
     color-mix(in srgb, var(--song-card-accent) 18%, transparent) 0%,
     color-mix(in srgb, var(--song-card-accent) 8%, transparent) 42%,
     transparent 76%
@@ -408,7 +408,7 @@ textarea {
   border: 1px solid transparent;
   border-radius: inherit;
   background: radial-gradient(
-      circle var(--song-card-border-radius) at var(--song-card-pointer-x) var(--song-card-pointer-y),
+      ellipse var(--song-card-border-radius) var(--song-card-border-radius) at var(--song-card-pointer-x) var(--song-card-pointer-y),
       color-mix(in srgb, var(--song-card-accent) 42%, transparent),
       transparent 74%
     ) border-box;
