@@ -12,7 +12,7 @@ interface FuriganaEditorProps {
 
 type EditTarget = { lineIndex: number; segIndex: number } | null;
 
-const NON_EDITABLE_SEGMENT_RE = /^[\s\p{P}\p{S}]+$/u;
+const NON_EDITABLE_SEGMENT_RE = /^[\s\p{P}\p{S}\p{N}\p{Script=Latin}]+$/u;
 const isNonEditableDisplaySegment = (text: string) => NON_EDITABLE_SEGMENT_RE.test(text);
 
 export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEditorProps) {
