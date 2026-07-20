@@ -368,7 +368,7 @@ textarea {
   }
   to {
     --song-card-border-radius: 140px;
-    opacity: 0.62;
+    opacity: 0.29;
   }
 }
 .song-item-card {
@@ -409,7 +409,7 @@ textarea {
   border-radius: inherit;
   background: radial-gradient(
       circle var(--song-card-border-radius) at var(--song-card-pointer-x) var(--song-card-pointer-y),
-      rgb(255 255 255 / 78%),
+      color-mix(in srgb, var(--song-card-accent) 21%, transparent),
       transparent 74%
     ) border-box;
   mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
@@ -445,7 +445,7 @@ textarea {
   .song-item-card:hover .song-item-card__pointer-glow,
 .song-item-card[data-touching="true"] .song-item-card__pointer-glow { opacity: 0.5; }
   .song-item-card:hover::after,
-.song-item-card[data-touching="true"]::after { opacity: 0.55; }
+.song-item-card[data-touching="true"]::after { opacity: 0.42; }
 }
 .song-view {
   --song-accent: var(--border);
