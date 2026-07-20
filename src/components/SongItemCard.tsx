@@ -113,7 +113,7 @@ export default function SongItemCard({
             <button onClick={(event) => { event.stopPropagation(); onToggleFavorite(); }} className={`rounded p-1.5 sm:p-2 transition-colors ${isFavorite ? 'text-[var(--warning)]' : 'text-[var(--muted-foreground)] hover:text-[var(--warning)]'}`}>
               <Star className={`h-3.5 w-3.5 ${isFavorite ? 'fill-current' : ''}`} />
             </button>
-            <button onClick={(event) => { event.stopPropagation(); onShare(); }} title={shareLabel} aria-label={shareLabel} className="rounded p-1.5 sm:p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors">
+            <button onClick={(event) => { event.stopPropagation(); onShare(); }} title={shareLabel} aria-label={shareLabel} className="rounded p-1.5 sm:p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)]/10 transition-colors">
               <Share2 className="h-3.5 w-3.5" />
             </button>
             <button onClick={(event) => { event.stopPropagation(); onDelete(); }} className="rounded p-1.5 sm:p-2 text-[var(--destructive)] hover:bg-[var(--destructive)]/10 transition-colors">
