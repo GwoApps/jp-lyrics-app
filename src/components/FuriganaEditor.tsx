@@ -267,7 +267,7 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
                     key={part.key}
                     type="button"
                     onClick={() => startEdit(li, si)}
-                    className={`rounded-md border px-2 py-1 text-left text-sm transition-all ${
+                    className={`flex min-h-11 flex-col justify-center rounded-md border px-2 py-1 text-left text-sm transition-all ${
                       isActive
                         ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)]'
                         : seg.reading
