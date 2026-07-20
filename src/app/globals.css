@@ -358,7 +358,7 @@ textarea {
   }
   to {
     --song-card-glow-radius: 180px;
-    opacity: 0.72;
+    opacity: 0.36;
   }
 }
 @keyframes songCardBorderReveal {
@@ -368,7 +368,7 @@ textarea {
   }
   to {
     --song-card-border-radius: 140px;
-    opacity: 0.58;
+    opacity: 0.29;
   }
 }
 .song-item-card {
@@ -394,8 +394,8 @@ textarea {
   opacity: 0;
   background: radial-gradient(
     circle var(--song-card-glow-radius) at var(--song-card-pointer-x) var(--song-card-pointer-y),
-    color-mix(in srgb, var(--song-card-accent) 18%, transparent) 0%,
-    color-mix(in srgb, var(--song-card-accent) 8%, transparent) 42%,
+    color-mix(in srgb, var(--song-card-accent) 9%, transparent) 0%,
+    color-mix(in srgb, var(--song-card-accent) 4%, transparent) 42%,
     transparent 76%
   );
 }
@@ -409,7 +409,7 @@ textarea {
   border-radius: inherit;
   background: radial-gradient(
       circle var(--song-card-border-radius) at var(--song-card-pointer-x) var(--song-card-pointer-y),
-      color-mix(in srgb, var(--song-card-accent) 42%, transparent),
+      color-mix(in srgb, var(--song-card-accent) 21%, transparent),
       transparent 74%
     ) border-box;
   mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
