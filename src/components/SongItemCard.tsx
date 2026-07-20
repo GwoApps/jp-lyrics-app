@@ -59,6 +59,24 @@ export default function SongItemCard({
     card.style.setProperty('--song-card-pointer-y', `${event.clientY - rect.top}px`);
   };
 
+  const setTouching = (touching: boolean) => {
+    const card = cardRef.current;
+    if (!card) return;
+    if (touching) card.dataset.touching = 'true';
+    else delete card.dataset.touching;
+  };
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    updatePointer(event);
+    if (event.pointerType === 'touch') setTouching(true);
+  };
+
+  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'touch') setTouching(false);
+  };
+
+  const handlePointerCancel = () => setTouching(false);
+
   return (
     <div
       ref={cardRef}
@@ -67,6 +85,10 @@ export default function SongItemCard({
       onClick={onOpen}
       onPointerEnter={(event) => { updatePointer(event); onPrefetch(); }}
       onPointerMove={updatePointer}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      onPointerLeave={handlePointerCancel}
     >
       <div className="song-item-card__pointer-glow" aria-hidden="true" />
       <CoverImage src={song.cover_url} alt={song.title} size="sm" className="z-10" viewTransitionName={`song-cover-${song.id}`} />

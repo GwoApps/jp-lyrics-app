@@ -381,7 +381,8 @@ textarea {
   border-color: var(--border);
   transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
 }
-.song-item-card:hover {
+.song-item-card:hover,
+.song-item-card[data-touching="true"] {
   background: color-mix(in srgb, var(--card) 94%, var(--song-card-accent));
   border-color: color-mix(in srgb, var(--border) 70%, var(--song-card-accent));
 }
@@ -417,17 +418,20 @@ textarea {
   -webkit-mask-composite: xor;
   opacity: 0;
 }
-.song-item-card:hover .song-item-card__pointer-glow {
+.song-item-card:hover .song-item-card__pointer-glow,
+.song-item-card[data-touching="true"] .song-item-card__pointer-glow {
   animation: songCardGlowReveal 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
-.song-item-card:hover::after {
+.song-item-card:hover::after,
+.song-item-card[data-touching="true"]::after {
   animation: songCardBorderReveal 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 .song-item-card--playing {
   border-color: color-mix(in srgb, var(--success) 50%, var(--border));
   background: var(--success-muted);
 }
-.song-item-card--playing:hover {
+.song-item-card--playing:hover,
+.song-item-card--playing[data-touching="true"] {
   border-color: color-mix(in srgb, var(--success) 50%, var(--song-card-accent));
   background: color-mix(in srgb, var(--success-muted) 90%, var(--song-card-accent));
 }
@@ -438,8 +442,10 @@ textarea {
     transition: none;
     animation: none !important;
   }
-  .song-item-card:hover .song-item-card__pointer-glow { opacity: 0.5; }
-  .song-item-card:hover::after { opacity: 0.42; }
+  .song-item-card:hover .song-item-card__pointer-glow,
+.song-item-card[data-touching="true"] .song-item-card__pointer-glow { opacity: 0.5; }
+  .song-item-card:hover::after,
+.song-item-card[data-touching="true"]::after { opacity: 0.42; }
 }
 .song-view {
   --song-accent: var(--border);
