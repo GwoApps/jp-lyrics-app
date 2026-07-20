@@ -80,6 +80,7 @@ export default function SongItemCard({
   return (
     <div
       ref={cardRef}
+      data-song-card-id={song.id}
       className={`song-item-card group flex items-center gap-3 sm:gap-4 rounded-lg border px-4 sm:px-5 py-3 sm:py-4 cursor-pointer${isPlaying ? ' song-item-card--playing' : ''}`}
       style={{ ['--song-card-accent' as string]: accent }}
       onClick={onOpen}

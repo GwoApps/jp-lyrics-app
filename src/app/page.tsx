@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
 import { Music, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User, Star, FolderPlus, Trash } from 'lucide-react';
@@ -299,6 +299,48 @@ export default function HomePage() {
     }
     return true;
   });
+  const visibleSongIds = filteredSongs.map((song) => song.id).join(',');
+  const songListRef = useRef<HTMLDivElement>(null);
+  const previousSongRectsRef = useRef<Map<string, DOMRect>>(new Map());
+
+  useLayoutEffect(() => {
+    const list = songListRef.current;
+    if (!list) return;
+
+    const currentRects = new Map<string, DOMRect>();
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    list.querySelectorAll<HTMLElement>('[data-song-card-id]').forEach((element) => {
+      const id = element.dataset.songCardId;
+      if (!id) return;
+      const nextRect = element.getBoundingClientRect();
+      currentRects.set(id, nextRect);
+
+      const previousRect = previousSongRectsRef.current.get(id);
+      if (!reduceMotion && previousRect) {
+        const deltaX = previousRect.left - nextRect.left;
+        const deltaY = previousRect.top - nextRect.top;
+        if (deltaX || deltaY) {
+          element.animate(
+            [
+              { transform: `translate(${deltaX}px, ${deltaY}px)` },
+              { transform: 'translate(0, 0)' },
+            ],
+            { duration: 360, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+          );
+        }
+      } else if (!reduceMotion && previousSongRectsRef.current.size > 0) {
+        element.animate(
+          [
+            { opacity: 0, transform: 'translateY(8px) scale(0.985)' },
+            { opacity: 1, transform: 'translateY(0) scale(1)' },
+          ],
+          { duration: 280, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+        );
+      }
+    });
+
+    previousSongRectsRef.current = currentRects;
+  }, [visibleSongIds]);
 
   return (
     <div className="fade-in">
@@ -552,7 +594,7 @@ export default function HomePage() {
           <p className="text-sm text-[var(--muted-foreground)]">{t('home.noResults')}</p>
         </div>
       ) : (
-        <div className="space-y-1.5 sm:space-y-2">
+        <div ref={songListRef} className="space-y-1.5 sm:space-y-2">
           {filteredSongs.map((song) => {
             const isPlaying = nowPlaying?.is_playing && isSongPlaying(song, nowPlaying.track, currentUser?.email);
             return (
