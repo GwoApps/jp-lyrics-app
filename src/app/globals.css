@@ -342,32 +342,32 @@ textarea {
   touch-action: manipulation;
 }
 @property --song-card-glow-radius {
-  syntax: '<length-percentage>';
+  syntax: '<length>';
   inherits: false;
-  initial-value: 42%;
+  initial-value: 150px;
 }
 @property --song-card-border-radius {
-  syntax: '<length-percentage>';
+  syntax: '<length>';
   inherits: false;
-  initial-value: 36%;
+  initial-value: 110px;
 }
 @keyframes songCardGlowReveal {
   from {
-    --song-card-glow-radius: 40%;
+    --song-card-glow-radius: 120px;
     opacity: 0;
   }
   to {
-    --song-card-glow-radius: 50%;
+    --song-card-glow-radius: 180px;
     opacity: 0.72;
   }
 }
 @keyframes songCardBorderReveal {
   from {
-    --song-card-border-radius: 34%;
+    --song-card-border-radius: 90px;
     opacity: 0;
   }
   to {
-    --song-card-border-radius: 46%;
+    --song-card-border-radius: 140px;
     opacity: 0.58;
   }
 }
@@ -393,7 +393,7 @@ textarea {
   pointer-events: none;
   opacity: 0;
   background: radial-gradient(
-    ellipse var(--song-card-glow-radius) var(--song-card-glow-radius) at var(--song-card-pointer-x) var(--song-card-pointer-y),
+    circle var(--song-card-glow-radius) at var(--song-card-pointer-x) var(--song-card-pointer-y),
     color-mix(in srgb, var(--song-card-accent) 18%, transparent) 0%,
     color-mix(in srgb, var(--song-card-accent) 8%, transparent) 42%,
     transparent 76%
@@ -408,7 +408,7 @@ textarea {
   border: 1px solid transparent;
   border-radius: inherit;
   background: radial-gradient(
-      ellipse var(--song-card-border-radius) var(--song-card-border-radius) at var(--song-card-pointer-x) var(--song-card-pointer-y),
+      circle var(--song-card-border-radius) at var(--song-card-pointer-x) var(--song-card-pointer-y),
       color-mix(in srgb, var(--song-card-accent) 42%, transparent),
       transparent 74%
     ) border-box;
