@@ -1,13 +1,26 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { extractMaterialCoverPalette, type CoverPalette } from '@/lib/cover-color';
+import { useEffect, useMemo, useState } from 'react';
+import { extractMaterialCoverPalette, type CoverColor, type CoverPalette } from '@/lib/cover-color';
+
+export interface CoverTheme {
+  palette: CoverPalette | null;
+  isThemed: boolean;
+  style: React.CSSProperties | undefined;
+}
+
+function rgb(color: CoverColor) {
+  return `rgb(${color.r} ${color.g} ${color.b})`;
+}
 
 /**
- * Extracts the Material-ranked palette from a cover and applies the same
- * restrained page tint used by the song detail view.
+ * Shared cover-theme pipeline for detail and editor pages.
+ *
+ * It owns image loading, palette extraction, page tinting, and the complete
+ * palette CSS-variable contract. Consumers only need to spread `style` on
+ * their page root and add `song-view--accented` when `isThemed` is true.
  */
-export function useCoverPalette(coverUrl: string | null | undefined): CoverPalette | null {
+export function useCoverTheme(coverUrl: string | null | undefined): CoverTheme {
   const [paletteState, setPaletteState] = useState<{
     url: string | null | undefined;
     palette: CoverPalette | null;
@@ -34,11 +47,20 @@ export function useCoverPalette(coverUrl: string | null | undefined): CoverPalet
     };
   }, [coverUrl]);
 
+  const style = useMemo<React.CSSProperties | undefined>(() => {
+    if (!palette) return undefined;
+    return {
+      '--song-accent': rgb(palette.primary),
+      '--song-accent-primary': rgb(palette.primary),
+      '--song-accent-secondary': rgb(palette.secondary),
+      '--song-accent-tertiary': rgb(palette.tertiary),
+    } as React.CSSProperties;
+  }, [palette]);
+
   useEffect(() => {
     if (!palette) return;
 
-    const accent = `rgb(${palette.primary.r} ${palette.primary.g} ${palette.primary.b})`;
-    document.body.style.setProperty('--song-page-accent', accent);
+    document.body.style.setProperty('--song-page-accent', rgb(palette.primary));
     document.body.classList.add('song-page-themed');
 
     return () => {
@@ -47,5 +69,10 @@ export function useCoverPalette(coverUrl: string | null | undefined): CoverPalet
     };
   }, [palette]);
 
-  return palette;
+  return { palette, isThemed: palette !== null, style };
+}
+
+/** Backward-compatible palette-only adapter for non-themed consumers. */
+export function useCoverPalette(coverUrl: string | null | undefined): CoverPalette | null {
+  return useCoverTheme(coverUrl).palette;
 }

@@ -7,6 +7,7 @@ import QRCode from 'qrcode';
 import { ArrowLeft, Download, Link2, Loader2, Check, Smartphone, Monitor } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { extractMaterialCoverPalette, type CoverColor, type CoverPalette } from '@/lib/cover-color';
+import { useCoverTheme } from '@/hooks/useCoverPalette';
 
 interface Song {
   id: string;
@@ -383,9 +384,9 @@ export default function SharePage() {
   const [copied, setCopied] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [orientation, setOrientation] = useState<Orientation>('landscape');
-  const [coverColor, setCoverColor] = useState<CoverPalette | null>(null);
 
   const pageUrl = typeof window !== 'undefined' ? `${window.location.origin}/songs/${id}` : '';
+  const coverTheme = useCoverTheme(song?.cover_url);
 
   const lyricsLines = useMemo(() => (song ? getLyricsLines(song) : []), [song]);
 
@@ -404,36 +405,6 @@ export default function SharePage() {
       .catch(() => setError(t('share.error')))
       .finally(() => setLoading(false));
   }, [id, t]);
-
-  // Reuse the exact detail-page palette pipeline for the surrounding share-page background.
-  useEffect(() => {
-    if (!song?.cover_url) {
-      setCoverColor(null);
-      return;
-    }
-    let cancelled = false;
-    const image = new Image();
-    image.crossOrigin = 'anonymous';
-    image.onload = () => {
-      const color = extractMaterialCoverPalette(image);
-      if (!cancelled) setCoverColor(color);
-    };
-    image.onerror = () => { if (!cancelled) setCoverColor(null); };
-    image.src = song.cover_url;
-    return () => { cancelled = true; };
-  }, [song?.cover_url]);
-
-  // Match the detail page's restrained viewport tint (96% theme background + 4% cover accent).
-  useEffect(() => {
-    if (!coverColor) return;
-    const accent = `rgb(${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b})`;
-    document.body.style.setProperty('--song-page-accent', accent);
-    document.body.classList.add('song-page-themed');
-    return () => {
-      document.body.classList.remove('song-page-themed');
-      document.body.style.removeProperty('--song-page-accent');
-    };
-  }, [coverColor]);
 
   useEffect(() => {
     if (defaultLine !== null && lyricsLines.length > 0) {
@@ -528,7 +499,7 @@ export default function SharePage() {
         <p className="text-[var(--muted-foreground)]">{error || t('share.notFound')}</p>
         <button
           onClick={() => router.push('/')}
-          className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2 text-[var(--primary-foreground)]"
+          className="song-editor-primary-button inline-flex items-center gap-2 rounded-lg px-4 py-2"
         >
           <ArrowLeft className="h-4 w-4" />
           {t('share.back')}
@@ -543,7 +514,7 @@ export default function SharePage() {
     : 'max-w-3xl';
 
   return (
-    <div className="min-h-screen text-[var(--foreground)]">
+    <div className={`song-view song-editor-page min-h-screen text-[var(--foreground)]${coverTheme.isThemed ? ' song-view--accented' : ''}`} style={coverTheme.style}>
       <div className={`mx-auto px-3 py-3 sm:px-4 sm:py-6 ${cardAspectClass}`}>
         {/* Align navigation and heading scale with the song-detail page. */}
         <div className="mb-3 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] sm:mb-8">
@@ -563,7 +534,7 @@ export default function SharePage() {
               onClick={() => setOrientation('landscape')}
               className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 orientation === 'landscape'
-                  ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                  ? 'song-editor-primary-button'
                   : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
               }`}
               title={t('share.landscape')}
@@ -575,7 +546,7 @@ export default function SharePage() {
               onClick={() => setOrientation('portrait')}
               className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 orientation === 'portrait'
-                  ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                  ? 'song-editor-primary-button'
                   : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
               }`}
               title={t('share.portrait')}
@@ -608,7 +579,7 @@ export default function SharePage() {
           <button
             onClick={handleDownload}
             disabled={!ready}
-            className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-5 py-2.5 font-medium text-[var(--primary-foreground)] disabled:opacity-50"
+            className="song-editor-primary-button inline-flex items-center gap-2 rounded-xl px-5 py-2.5 font-medium disabled:opacity-50"
           >
             <Download className="h-4 w-4" />
             {t('share.download')}
@@ -644,14 +615,14 @@ export default function SharePage() {
                   onClick={() => toggleLine(idx)}
                   className={`flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left transition-colors ${
                     selected.has(idx)
-                      ? 'bg-[var(--primary)]/10 text-[var(--foreground)]'
+                      ? 'song-editor-choice--active'
                       : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
                   }`}
                 >
                   <span
                     className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
                       selected.has(idx)
-                        ? 'border-[var(--primary)] bg-[var(--primary)] text-[var(--primary-foreground)]'
+                        ? 'border-[var(--song-accent)] song-editor-primary-button'
                         : 'border-[var(--border)] bg-[var(--background)]'
                     }`}
                   >

@@ -234,7 +234,7 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
           <div
             key={li}
             className={`rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 sm:p-4 transition-colors ${
-              isActiveLine ? 'ring-1 ring-[var(--primary)]/30' : ''
+              isActiveLine ? 'ring-1 ring-[var(--song-accent)]/30' : ''
             }`}
           >
             <div className="mb-2 flex items-center justify-between gap-3">
@@ -269,15 +269,15 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
                     onClick={() => startEdit(li, si)}
                     className={`rounded-md border px-2 py-1 text-left text-sm transition-all ${
                       isActive
-                        ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)]'
+                        ? 'song-editor-token--active'
                         : seg.reading
-                          ? 'border-[var(--primary)]/30 bg-[var(--primary)]/10 text-[var(--foreground)] hover:bg-[var(--primary)]/15'
+                          ? 'song-editor-token--reading text-[var(--foreground)]'
                           : 'border-transparent bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
                     }`}
                   >
                     <span className="block">{seg.text}</span>
                     {seg.reading ? (
-                      <span className="block text-[10px] leading-normal text-[var(--primary)]/80">{seg.reading}</span>
+                      <span className="song-editor-reading block text-[10px] leading-normal">{seg.reading}</span>
                     ) : (
                       <span aria-hidden="true" className="block select-none text-[10px] leading-normal text-transparent">
                         &nbsp;
@@ -303,8 +303,8 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
                         onClick={() => selectReading(reading)}
                         className={`rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
                           reading === activeSeg.reading
-                            ? 'border-[var(--primary)]/50 bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20'
-                            : 'border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] hover:border-[var(--primary)]/40 hover:bg-[var(--accent)]'
+                            ? 'song-editor-choice--active'
+                            : 'border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] hover:border-[var(--song-accent)]/40 hover:bg-[var(--accent)]'
                         }`}
                       >
                         {reading}
@@ -320,12 +320,12 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder={t('furigana.readingPlaceholder')}
-                  className="min-w-[120px] flex-1 rounded-md border border-[var(--border)] bg-[var(--input)] px-2 py-1.5 text-sm outline-none focus:border-[var(--primary)]"
+                  className="min-w-[120px] flex-1 rounded-md border border-[var(--border)] bg-[var(--input)] px-2 py-1.5 text-sm outline-none song-editor-input"
                 />
                 <button
                   type="button"
                   onClick={commitReading}
-                  className="rounded-md bg-[var(--primary)] px-3 py-1.5 text-xs font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90"
+                  className="song-editor-primary-button rounded-md px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-90"
                 >
                   {t('common.save')}
                 </button>
@@ -368,7 +368,7 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
                   <button
                     type="button"
                     onClick={applyAll}
-                    className="rounded-md px-3 py-1.5 text-xs font-medium text-[var(--primary)] bg-[var(--primary)]/10 hover:bg-[var(--primary)]/20 transition-colors"
+                    className="rounded-md px-3 py-1.5 text-xs font-medium text-[var(--song-accent)] bg-[var(--song-accent)]/10 hover:bg-[var(--song-accent)]/20 transition-colors"
                   >
                     {t('furigana.applyAll', { count: String(sameWordCount) })}
                   </button>

@@ -354,7 +354,40 @@ textarea {
 }
 .song-editor-page.song-view--accented input:focus,
 .song-editor-page.song-view--accented textarea:focus {
-  border-color: color-mix(in srgb, var(--primary) 72%, var(--song-accent));
+  border-color: color-mix(in srgb, var(--song-accent) 72%, var(--border));
+}
+.song-editor-primary-button {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.song-editor-primary-button:hover { opacity: 0.9; }
+.song-editor-choice--active,
+.song-editor-token--active {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 30%, transparent);
+}
+.song-editor-token--reading {
+  border-color: color-mix(in srgb, var(--primary) 30%, transparent);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+.song-editor-reading { color: color-mix(in srgb, var(--primary) 80%, var(--foreground)); }
+.song-view.song-view--accented .song-editor-primary-button {
+  background: color-mix(in srgb, var(--song-accent) 82%, var(--background));
+  color: color-mix(in srgb, var(--foreground) 88%, var(--song-accent));
+}
+.song-editor-page.song-view--accented .song-editor-choice--active,
+.song-editor-page.song-view--accented .song-editor-token--active {
+  color: color-mix(in srgb, var(--foreground) 82%, var(--song-accent));
+  background: color-mix(in srgb, var(--song-accent) 18%, transparent);
+  border-color: color-mix(in srgb, var(--song-accent) 52%, var(--border));
+}
+.song-editor-page.song-view--accented .song-editor-token--reading {
+  border-color: color-mix(in srgb, var(--song-accent) 42%, var(--border));
+  background: color-mix(in srgb, var(--song-accent) 14%, transparent);
+}
+.song-editor-page.song-view--accented .song-editor-reading {
+  color: color-mix(in srgb, var(--foreground) 70%, var(--song-accent));
 }
 .song-accent-button {
   color: color-mix(in srgb, var(--foreground) 90%, var(--song-accent));
@@ -400,6 +433,7 @@ textarea {
   background: color-mix(in srgb, var(--border) 80%, var(--song-accent));
 }
 .song-playing-action--primary {
+  color: var(--primary-foreground);
   background: color-mix(in srgb, var(--primary) 88%, var(--song-accent));
 }
 .song-follow-button {
@@ -410,6 +444,15 @@ textarea {
   color: var(--primary-foreground);
   background: color-mix(in srgb, var(--primary) 88%, var(--song-accent));
   border-color: color-mix(in srgb, var(--primary) 80%, var(--song-accent));
+}
+.song-view.song-view--accented .song-playing-action--primary {
+  color: color-mix(in srgb, var(--foreground) 88%, var(--song-accent));
+  background: color-mix(in srgb, var(--song-accent) 82%, var(--background));
+}
+.song-view.song-view--accented .song-follow-button--active {
+  color: color-mix(in srgb, var(--foreground) 88%, var(--song-accent));
+  background: color-mix(in srgb, var(--song-accent) 82%, var(--background));
+  border-color: color-mix(in srgb, var(--song-accent) 68%, var(--border));
 }
 /* Light mode keeps desktop controls close to white even with a very dark cover. */
 [data-theme="light"] .song-accent-button {

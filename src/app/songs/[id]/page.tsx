@@ -16,7 +16,7 @@ import { isTitleMatch, findBestMatch } from '@/lib/match';
 import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
 import type { CoverColor } from '@/lib/cover-color';
-import { useCoverPalette } from '@/hooks/useCoverPalette';
+import { useCoverTheme } from '@/hooks/useCoverPalette';
 import type { FuriganaLine } from '@/lib/types';
 import { useAuthSession } from '@/lib/auth-session';
 import type { SyncRefs } from '@/hooks/useSpotifySync';
@@ -146,7 +146,8 @@ export default function SongViewPage() {
 
   // Album cover
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
-  const coverColor = useCoverPalette(coverUrl);
+  const coverTheme = useCoverTheme(coverUrl);
+  const coverColor = coverTheme.palette;
   useEffect(() => {
     if (data.song?.cover_url) setCoverUrl(data.song.cover_url);
   }, [data.song?.cover_url]);
@@ -194,7 +195,7 @@ export default function SongViewPage() {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
         <p className="text-sm text-[var(--muted-foreground)]">{t('song.notFound')}</p>
-        <button onClick={() => transitionRouter.push('/')} className="mt-4 text-xs text-[var(--primary)] hover:underline inline-flex items-center gap-1">
+        <button onClick={() => transitionRouter.push('/')} className="mt-4 text-xs text-[var(--song-accent)] hover:underline inline-flex items-center gap-1">
           <ArrowLeft className="h-3 w-3" /> {t('song.backToList')}
         </button>
       </div>
@@ -220,9 +221,7 @@ export default function SongViewPage() {
   const playingMatch = spotify?.track && !isSameSong
     ? findBestMatch(data.allSongs.filter((s) => s.id !== id), spotify.track, currentUserEmail)
     : null;
-  const songThemeStyle = coverColor
-    ? { ['--song-accent' as string]: `rgb(${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b})` }
-    : undefined;
+  const songThemeStyle = coverTheme.style;
   const coverSaturation = coverColor ? Math.max(colorSaturation(coverColor.primary), colorSaturation(coverColor.secondary), colorSaturation(coverColor.tertiary)) : 0;
   // Near-monochrome covers retain the main halo without manufacturing a second,
   // muddy source. A clearly separated tertiary colour earns a visible rim light.
@@ -334,7 +333,7 @@ export default function SongViewPage() {
                           }
                         } catch {}
                       }}
-                      className="text-[var(--primary)] hover:text-[var(--primary)]/80 underline transition-colors"
+                      className="text-[var(--song-accent)] hover:text-[var(--song-accent)]/80 underline transition-colors"
                     >
                       {t('admin.setPublic')}
                     </button>
@@ -349,7 +348,7 @@ export default function SongViewPage() {
                           }
                         } catch {}
                       }}
-                      className="text-[var(--primary)] hover:text-[var(--primary)]/80 underline transition-colors"
+                      className="text-[var(--song-accent)] hover:text-[var(--song-accent)]/80 underline transition-colors"
                     >
                       {t('song.requestPublic')}
                     </button>
@@ -386,7 +385,7 @@ export default function SongViewPage() {
                         }
                       } catch {}
                     }}
-                    className="text-[10px] text-[var(--primary)] hover:text-[var(--primary)]/80 underline transition-colors"
+                    className="text-[10px] text-[var(--song-accent)] hover:text-[var(--song-accent)]/80 underline transition-colors"
                   >
                     {t('song.requestPublic')}
                   </button>
@@ -541,7 +540,7 @@ export default function SongViewPage() {
                     <ExternalLink className="h-3 w-3" /><span>{t('song.show')}</span>
                   </button>
                 ) : spotifyConnected ? (
-                  <button onClick={() => data.handleImportPlaying(spotify)} disabled={data.importing} className="song-playing-action--primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0">
+                  <button onClick={() => data.handleImportPlaying(spotify)} disabled={data.importing} className="song-playing-action--primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0">
                     {data.importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}<span>{data.importing ? t('home.importing') : t('song.importBtn')}</span>
                   </button>
                 ) : null}
@@ -562,7 +561,7 @@ export default function SongViewPage() {
         {/* Debug panel */}
         {data.debug && (
           <div className="mt-3 rounded-md bg-[var(--muted)] border border-[var(--border)] p-2 sm:p-3 text-[10px] sm:text-[11px] font-mono space-y-1 overflow-x-auto">
-            <div className="text-[var(--primary)] font-medium mb-1.5">Debug Info</div>
+            <div className="text-[var(--song-accent)] font-medium mb-1.5">Debug Info</div>
             <div>Spotify: {spotify?.connected ? '✓ connected' : '✗ disconnected'} | playing: {String(!!spotify?.is_playing)} | same: {String(isSameSong)} | synced: {String(isSynced)}</div>
             <div>progress: {spotify ? `${spotify.progress_ms}ms (${fmtTime(spotify.progress_ms)})` : '—'} / {spotify ? `${spotify.duration_ms}ms (${fmtTime(spotify.duration_ms)})` : '—'}</div>
             <div>sync: {syncLines.length} | furigana: {furiganaLines.length} | active: #{activeLine} ({activeLine >= 0 && lineTimestamps[activeLine] != null ? fmtMs(lineTimestamps[activeLine]!) : '—'}) | sync: #{debugSyncActive}</div>
@@ -587,9 +586,9 @@ export default function SongViewPage() {
               <span className="text-xs font-medium text-[var(--foreground)]">{t('song.pasteLrcTitle')}</span>
               {data.syncError && <span className="text-[10px] text-[var(--destructive)]">{data.syncError}</span>}
             </div>
-            <textarea value={data.pasteLrcText} onChange={(e) => data.setPasteLrcText(e.target.value)} placeholder={t('song.pasteLrcPlaceholder')} rows={6} className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs font-mono outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/40 resize-y" />
+            <textarea value={data.pasteLrcText} onChange={(e) => data.setPasteLrcText(e.target.value)} placeholder={t('song.pasteLrcPlaceholder')} rows={6} className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs font-mono outline-none focus:border-[var(--song-accent)] transition-colors placeholder:text-[var(--muted-foreground)]/40 resize-y" />
             <div className="flex items-center gap-2 mt-2">
-              <button onClick={data.handlePasteLrc} disabled={!data.pasteLrcText.trim()} className="rounded-md px-3 py-1.5 text-xs font-medium bg-[var(--primary)] text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50">{t('common.save')}</button>
+              <button onClick={data.handlePasteLrc} disabled={!data.pasteLrcText.trim()} className="song-editor-primary-button rounded-md px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-90 disabled:opacity-50">{t('common.save')}</button>
               <button onClick={() => { data.setShowPasteLrc(false); data.setPasteLrcText(''); }} className="rounded-md px-3 py-1.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">{t('common.cancel')}</button>
             </div>
           </div>
@@ -762,7 +761,7 @@ function ToolbarMenu({ label, items }: { label: ReactNode; items: ToolbarMenuIte
             const cls = item.danger
               ? `${base} text-[var(--destructive)] hover:bg-[var(--destructive)]/10`
               : item.active
-                ? `${base} text-[var(--primary)] bg-[var(--primary)]/10`
+                ? `${base} text-[var(--song-accent)] bg-[var(--song-accent)]/10`
                 : `${base} text-[var(--foreground)] hover:bg-[var(--accent)]`;
             if (item.href) {
               return (
@@ -885,7 +884,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
                     'danger' in item && item.danger
                       ? 'text-[var(--destructive)] hover:bg-[var(--destructive)]/10'
                       : 'active' in item && item.active
-                        ? 'text-[var(--primary)] bg-[var(--primary)]/10'
+                        ? 'text-[var(--song-accent)] bg-[var(--song-accent)]/10'
                         : 'text-[var(--foreground)] hover:bg-[var(--accent)]'
                   }`}
                 >

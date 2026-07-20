@@ -13,7 +13,7 @@ import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { convertToFuriganaClient } from '@/lib/kuroshiro-client';
 import type { FuriganaLine } from '@/lib/types';
 import { useAuthSession } from '@/lib/auth-session';
-import { useCoverPalette } from '@/hooks/useCoverPalette';
+import { useCoverTheme } from '@/hooks/useCoverPalette';
 
 interface SongData {
   id: string;
@@ -40,7 +40,8 @@ export default function FuriganaEditPage() {
   const [original, setOriginal] = useState<FuriganaLine[]>([]);
   const [loading, setLoading] = useState(true);
   const { session } = useAuthSession();
-  const coverColor = useCoverPalette(song?.cover_url);
+  const coverTheme = useCoverTheme(song?.cover_url);
+  const coverColor = coverTheme.palette;
   const auth: AuthState | null = session === null ? null : {
     authenticated: session.user !== null,
     isAdmin: session.user?.isAdmin === true,
@@ -189,7 +190,7 @@ export default function FuriganaEditPage() {
         <p className="text-sm text-[var(--muted-foreground)]">{t('song.notFound')}</p>
         <button
           onClick={() => router.push('/')}
-          className="mt-4 inline-flex items-center gap-1 text-xs text-[var(--primary)] hover:underline"
+          className="mt-4 inline-flex items-center gap-1 text-xs text-[var(--song-accent)] hover:underline"
         >
           <ArrowLeft className="h-3 w-3" /> {t('song.backToList')}
         </button>
@@ -210,7 +211,7 @@ export default function FuriganaEditPage() {
         <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] p-6 text-center">
           <p className="text-sm text-[var(--muted-foreground)]">{t('furigana.loginRequired')}</p>
           <SpotifyLoginButton
-            className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90"
+            className="song-editor-primary-button mt-4 inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
           >
             {t('song.spotify')}
           </SpotifyLoginButton>
@@ -219,9 +220,7 @@ export default function FuriganaEditPage() {
     );
   }
 
-  const songThemeStyle = coverColor
-    ? { ['--song-accent' as string]: `rgb(${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b})` }
-    : undefined;
+  const songThemeStyle = coverTheme.style;
 
   return (
     <div className={`song-view song-editor-page fade-in max-w-3xl${coverColor ? ' song-view--accented' : ''}`} style={songThemeStyle}>
@@ -245,7 +244,7 @@ export default function FuriganaEditPage() {
           <button
             onClick={handleSave}
             disabled={saving || !isDirty}
-            className="inline-flex items-center gap-1.5 rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="song-editor-primary-button inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {saving ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : null}
             {saving ? t('common.loading') : t('common.save')}
