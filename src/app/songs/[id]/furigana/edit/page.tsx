@@ -73,6 +73,18 @@ export default function FuriganaEditPage() {
       if (!res.ok) throw new Error();
       const data = (await res.json()) as SongData;
       setSong(data);
+      if (!data.cover_url) {
+        fetch(`/api/songs/${id}/cover`)
+          .then(async (coverResponse) => {
+            if (!coverResponse.ok) return null;
+            const coverData = await coverResponse.json() as { cover_url?: string | null };
+            return coverData.cover_url ?? null;
+          })
+          .then((url) => {
+            if (url) setSong((current) => current ? { ...current, cover_url: url } : current);
+          })
+          .catch(() => {});
+      }
       const parsed = parseFurigana(data.lyrics_furigana);
       setOriginal(parsed);
       setDraft(parsed);

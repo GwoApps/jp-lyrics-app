@@ -55,6 +55,16 @@ export default function EditSongPage() {
         setPlainLyrics(data.lyrics_raw || '');
         setSyncedLyrics(data.lyrics_synced || '');
         setCoverUrl(data.cover_url ?? null);
+        if (!data.cover_url) {
+          fetch(`/api/songs/${id}/cover`)
+            .then(async (coverResponse) => {
+              if (!coverResponse.ok) return null;
+              const coverData = await coverResponse.json() as { cover_url?: string | null };
+              return coverData.cover_url ?? null;
+            })
+            .then((url) => { if (url) setCoverUrl(url); })
+            .catch(() => {});
+        }
         setLyricsMode(data.lyrics_synced ? 'lrc' : 'text');
         setLoading(false);
       })
