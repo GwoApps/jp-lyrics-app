@@ -15,6 +15,30 @@ type EditTarget = { lineIndex: number; segIndex: number } | null;
 const NON_EDITABLE_SEGMENT_RE = /^[\s\p{P}\p{S}\p{N}\p{Script=Latin}]+$/u;
 const isNonEditableDisplaySegment = (text: string) => NON_EDITABLE_SEGMENT_RE.test(text);
 
+type EditorDisplayPart =
+  | { kind: 'plain'; key: number; text: string }
+  | { kind: 'editable'; key: number; segment: FuriganaSegment; segmentIndex: number };
+
+function groupEditorDisplaySegments(segments: FuriganaSegment[]): EditorDisplayPart[] {
+  const parts: EditorDisplayPart[] = [];
+
+  segments.forEach((segment, segmentIndex) => {
+    if (isNonEditableDisplaySegment(segment.text)) {
+      const previous = parts[parts.length - 1];
+      if (previous?.kind === 'plain') {
+        previous.text += segment.text;
+      } else {
+        parts.push({ kind: 'plain', key: segmentIndex, text: segment.text });
+      }
+      return;
+    }
+
+    parts.push({ kind: 'editable', key: segmentIndex, segment, segmentIndex });
+  });
+
+  return parts;
+}
+
 export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEditorProps) {
   const { t } = useI18n();
   const [active, setActive] = useState<EditTarget>(null);
@@ -223,24 +247,24 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
             </div>
 
             <div className="flex flex-wrap items-baseline gap-2">
-              {line.segments.map((seg, si) => {
-                const isNonEditable = isNonEditableDisplaySegment(seg.text);
-                const isActive = !isNonEditable && isActiveLine && active?.segIndex === si;
-
-                if (isNonEditable) {
+              {groupEditorDisplaySegments(line.segments).map((part) => {
+                if (part.kind === 'plain') {
                   return (
                     <span
-                      key={si}
+                      key={part.key}
                       className="whitespace-pre-wrap text-sm leading-7 text-[var(--muted-foreground)]"
                     >
-                      {seg.text}
+                      {part.text}
                     </span>
                   );
                 }
 
+                const { segment: seg, segmentIndex: si } = part;
+                const isActive = isActiveLine && active?.segIndex === si;
+
                 return (
                   <button
-                    key={si}
+                    key={part.key}
                     type="button"
                     onClick={() => startEdit(li, si)}
                     className={`rounded-md border px-2 py-1 text-left text-sm transition-all ${
