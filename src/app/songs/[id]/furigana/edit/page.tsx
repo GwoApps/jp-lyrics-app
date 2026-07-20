@@ -13,6 +13,7 @@ import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { convertToFuriganaClient } from '@/lib/kuroshiro-client';
 import type { FuriganaLine } from '@/lib/types';
 import { useAuthSession } from '@/lib/auth-session';
+import { useCoverPalette } from '@/hooks/useCoverPalette';
 
 interface SongData {
   id: string;
@@ -20,6 +21,7 @@ interface SongData {
   artist: string;
   lyrics_raw: string;
   lyrics_furigana: string;
+  cover_url?: string | null;
 }
 
 interface AuthState {
@@ -38,6 +40,7 @@ export default function FuriganaEditPage() {
   const [original, setOriginal] = useState<FuriganaLine[]>([]);
   const [loading, setLoading] = useState(true);
   const { session } = useAuthSession();
+  useCoverPalette(song?.cover_url);
   const auth: AuthState | null = session === null ? null : {
     authenticated: session.user !== null,
     isAdmin: session.user?.isAdmin === true,

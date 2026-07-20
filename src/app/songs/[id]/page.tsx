@@ -15,7 +15,8 @@ import { fmtMs, fmtTime, findActiveLine } from '@/lib/lrc';
 import { isTitleMatch, findBestMatch } from '@/lib/match';
 import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
-import { extractMaterialCoverPalette, type CoverColor, type CoverPalette } from '@/lib/cover-color';
+import type { CoverColor } from '@/lib/cover-color';
+import { useCoverPalette } from '@/hooks/useCoverPalette';
 import type { FuriganaLine } from '@/lib/types';
 import { useAuthSession } from '@/lib/auth-session';
 import type { SyncRefs } from '@/hooks/useSpotifySync';
@@ -145,27 +146,10 @@ export default function SongViewPage() {
 
   // Album cover
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
-  const [coverColor, setCoverColor] = useState<CoverPalette | null>(null);
+  const coverColor = useCoverPalette(coverUrl);
   useEffect(() => {
     if (data.song?.cover_url) setCoverUrl(data.song.cover_url);
   }, [data.song?.cover_url]);
-  useEffect(() => {
-    if (!coverUrl) {
-      setCoverColor(null);
-      return;
-    }
-
-    let cancelled = false;
-    const image = new Image();
-    image.crossOrigin = 'anonymous';
-    image.onload = () => {
-      const color = extractMaterialCoverPalette(image);
-      if (!cancelled) setCoverColor(color);
-    };
-    image.onerror = () => { if (!cancelled) setCoverColor(null); };
-    image.src = coverUrl;
-    return () => { cancelled = true; };
-  }, [coverUrl]);
   useEffect(() => {
     if (!id || !currentUserEmail || !spotifyConnected || coverUrl) return;
     fetch(`/api/songs/${id}/cover`)
@@ -177,19 +161,6 @@ export default function SongViewPage() {
       .then((url) => { if (url) setCoverUrl(url); })
       .catch(() => {});
   }, [id, currentUserEmail, spotifyConnected, coverUrl]);
-  // Tint the viewport itself, not only the content column. The 4% mix keeps the
-  // current light/dark theme dominant while giving the page a cover-derived cast.
-  useEffect(() => {
-    if (!coverColor) return;
-    const accent = `rgb(${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b})`;
-    document.body.style.setProperty('--song-page-accent', accent);
-    document.body.classList.add('song-page-themed');
-    return () => {
-      document.body.classList.remove('song-page-themed');
-      document.body.style.removeProperty('--song-page-accent');
-    };
-  }, [coverColor]);
-
   if (data.loading) {
     return (
       <div className="fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-hidden sm:block sm:h-auto sm:pb-0">

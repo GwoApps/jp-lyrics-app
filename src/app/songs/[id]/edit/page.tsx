@@ -6,6 +6,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { Upload } from 'lucide-react';
 import Toast from '@/components/Toast';
 import { useI18n } from '@/lib/i18n';
+import { useCoverPalette } from '@/hooks/useCoverPalette';
 
 type LyricsMode = 'text' | 'lrc';
 
@@ -15,6 +16,7 @@ interface SongData {
   artist: string;
   lyrics_raw: string;
   lyrics_synced: string;
+  cover_url?: string | null;
 }
 
 export default function EditSongPage() {
@@ -26,12 +28,14 @@ export default function EditSongPage() {
   const [artist, setArtist] = useState('');
   const [plainLyrics, setPlainLyrics] = useState('');
   const [syncedLyrics, setSyncedLyrics] = useState('');
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [lyricsMode, setLyricsMode] = useState<LyricsMode>('text');
   const [lyricsChanged, setLyricsChanged] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  useCoverPalette(coverUrl);
 
   const showToast = (type: 'success' | 'error', msg: string) => {
     setToast({ type, msg });
@@ -50,6 +54,7 @@ export default function EditSongPage() {
         setArtist(data.artist);
         setPlainLyrics(data.lyrics_raw || '');
         setSyncedLyrics(data.lyrics_synced || '');
+        setCoverUrl(data.cover_url ?? null);
         setLyricsMode(data.lyrics_synced ? 'lrc' : 'text');
         setLoading(false);
       })
