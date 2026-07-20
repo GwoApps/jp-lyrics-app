@@ -344,6 +344,18 @@ textarea {
 .song-view {
   --song-accent: var(--border);
 }
+.song-editor-page.song-view--accented {
+  background: color-mix(in srgb, var(--background) 94%, var(--song-accent));
+  border-radius: 1rem;
+}
+.song-editor-page.song-view--accented input,
+.song-editor-page.song-view--accented textarea {
+  border-color: color-mix(in srgb, var(--border) 72%, var(--song-accent));
+}
+.song-editor-page.song-view--accented input:focus,
+.song-editor-page.song-view--accented textarea:focus {
+  border-color: color-mix(in srgb, var(--primary) 72%, var(--song-accent));
+}
 .song-accent-button {
   color: color-mix(in srgb, var(--foreground) 90%, var(--song-accent));
   background: color-mix(in srgb, var(--accent) 90%, var(--song-accent));

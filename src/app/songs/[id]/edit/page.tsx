@@ -35,7 +35,10 @@ export default function EditSongPage() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  useCoverPalette(coverUrl);
+  const coverColor = useCoverPalette(coverUrl);
+  const songThemeStyle = coverColor
+    ? { ['--song-accent' as string]: `rgb(${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b})` }
+    : undefined;
 
   const showToast = (type: 'success' | 'error', msg: string) => {
     setToast({ type, msg });
@@ -149,7 +152,7 @@ export default function EditSongPage() {
   const lyrics = lyricsMode === 'lrc' ? syncedLyrics : plainLyrics;
 
   return (
-    <div className="fade-in max-w-2xl">
+    <div className={`song-view song-editor-page fade-in max-w-2xl${coverColor ? ' song-view--accented' : ''}`} style={songThemeStyle}>
       <div className="mb-6 sm:mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
         <Link href="/" className="hover:text-[var(--foreground)] transition-colors">{t('common.list')}</Link>
         <span className="opacity-40">/</span>

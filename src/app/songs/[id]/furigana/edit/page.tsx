@@ -40,7 +40,7 @@ export default function FuriganaEditPage() {
   const [original, setOriginal] = useState<FuriganaLine[]>([]);
   const [loading, setLoading] = useState(true);
   const { session } = useAuthSession();
-  useCoverPalette(song?.cover_url);
+  const coverColor = useCoverPalette(song?.cover_url);
   const auth: AuthState | null = session === null ? null : {
     authenticated: session.user !== null,
     isAdmin: session.user?.isAdmin === true,
@@ -219,8 +219,12 @@ export default function FuriganaEditPage() {
     );
   }
 
+  const songThemeStyle = coverColor
+    ? { ['--song-accent' as string]: `rgb(${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b})` }
+    : undefined;
+
   return (
-    <div className="fade-in max-w-3xl">
+    <div className={`song-view song-editor-page fade-in max-w-3xl${coverColor ? ' song-view--accented' : ''}`} style={songThemeStyle}>
       {/* Breadcrumb */}
       <div className="mb-6 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
         <Link href="/" className="hover:text-[var(--foreground)] transition-colors">{t('common.list')}</Link>
