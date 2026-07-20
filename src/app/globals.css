@@ -341,6 +341,36 @@ textarea {
   -webkit-touch-callout: none;
   touch-action: manipulation;
 }
+@property --song-card-glow-radius {
+  syntax: '<length-percentage>';
+  inherits: false;
+  initial-value: 42%;
+}
+@property --song-card-border-radius {
+  syntax: '<length-percentage>';
+  inherits: false;
+  initial-value: 36%;
+}
+@keyframes songCardGlowReveal {
+  from {
+    --song-card-glow-radius: 40%;
+    opacity: 0;
+  }
+  to {
+    --song-card-glow-radius: 50%;
+    opacity: 0.72;
+  }
+}
+@keyframes songCardBorderReveal {
+  from {
+    --song-card-border-radius: 34%;
+    opacity: 0;
+  }
+  to {
+    --song-card-border-radius: 46%;
+    opacity: 0.58;
+  }
+}
 .song-item-card {
   --song-card-pointer-x: 50%;
   --song-card-pointer-y: 50%;
@@ -352,8 +382,8 @@ textarea {
   transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
 }
 .song-item-card:hover {
-  background: color-mix(in srgb, var(--card) 88%, var(--song-card-accent));
-  border-color: color-mix(in srgb, var(--border) 52%, var(--song-card-accent));
+  background: color-mix(in srgb, var(--card) 94%, var(--song-card-accent));
+  border-color: color-mix(in srgb, var(--border) 70%, var(--song-card-accent));
 }
 .song-item-card__pointer-glow {
   position: absolute;
@@ -362,12 +392,11 @@ textarea {
   pointer-events: none;
   opacity: 0;
   background: radial-gradient(
-    circle 180px at var(--song-card-pointer-x) var(--song-card-pointer-y),
-    color-mix(in srgb, var(--song-card-accent) 34%, transparent) 0%,
-    color-mix(in srgb, var(--song-card-accent) 16%, transparent) 38%,
-    transparent 74%
+    circle var(--song-card-glow-radius) at var(--song-card-pointer-x) var(--song-card-pointer-y),
+    color-mix(in srgb, var(--song-card-accent) 18%, transparent) 0%,
+    color-mix(in srgb, var(--song-card-accent) 8%, transparent) 42%,
+    transparent 76%
   );
-  transition: opacity 180ms ease;
 }
 .song-item-card::after {
   content: '';
@@ -378,20 +407,21 @@ textarea {
   border: 1px solid transparent;
   border-radius: inherit;
   background: radial-gradient(
-      circle 150px at var(--song-card-pointer-x) var(--song-card-pointer-y),
-      color-mix(in srgb, var(--song-card-accent) 82%, transparent),
-      transparent 72%
+      circle var(--song-card-border-radius) at var(--song-card-pointer-x) var(--song-card-pointer-y),
+      color-mix(in srgb, var(--song-card-accent) 42%, transparent),
+      transparent 74%
     ) border-box;
   mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
   -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   opacity: 0;
-  transition: opacity 180ms ease;
 }
-.song-item-card:hover .song-item-card__pointer-glow,
+.song-item-card:hover .song-item-card__pointer-glow {
+  animation: songCardGlowReveal 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
 .song-item-card:hover::after {
-  opacity: 1;
+  animation: songCardBorderReveal 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 .song-item-card--playing {
   border-color: color-mix(in srgb, var(--success) 50%, var(--border));
@@ -399,16 +429,18 @@ textarea {
 }
 .song-item-card--playing:hover {
   border-color: color-mix(in srgb, var(--success) 50%, var(--song-card-accent));
-  background: color-mix(in srgb, var(--success-muted) 82%, var(--song-card-accent));
+  background: color-mix(in srgb, var(--success-muted) 90%, var(--song-card-accent));
 }
 @media (prefers-reduced-motion: reduce) {
   .song-item-card,
   .song-item-card__pointer-glow,
   .song-item-card::after {
     transition: none;
+    animation: none !important;
   }
+  .song-item-card:hover .song-item-card__pointer-glow { opacity: 0.5; }
+  .song-item-card:hover::after { opacity: 0.42; }
 }
-
 .song-view {
   --song-accent: var(--border);
 }
