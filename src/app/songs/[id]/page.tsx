@@ -422,7 +422,7 @@ export default function SongViewPage() {
             </div>
           </div>
           {/* Desktop toolbar */}
-          <div className="hidden w-full sm:flex flex-col items-end gap-2">
+          <div className="hidden w-full sm:flex flex-col items-end gap-3">
             <div className="flex w-full flex-wrap items-center justify-end gap-2 [&>*]:shrink-0">
             <button
               onClick={data.handleCopy}
@@ -538,7 +538,7 @@ export default function SongViewPage() {
             </div>
             <div className="song-accent-surface inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2" title={t('song.fontSize')}>
               <button onClick={() => data.setFontSize(s => Math.max(14, s - 2))} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Minus className="h-3.5 w-3.5" /></button>
-              <span className="text-xs w-5 text-center text-[var(--muted-foreground)] tabular-nums">{data.fontSize}</span>
+              <span className="w-5 text-center text-xs font-medium text-[var(--song-accent)] tabular-nums">{data.fontSize}</span>
               <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Plus className="h-3.5 w-3.5" /></button>
             </div>
           </div>
