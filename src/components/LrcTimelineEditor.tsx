@@ -1,9 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Clock3, LocateFixed, Minus, Plus, X } from 'lucide-react';
 import { fmtMs, offsetLrcLines, parseLrcTimestamp, serializeLrc, type SyncLine } from '@/lib/lrc';
 import { useI18n } from '@/lib/i18n';
+import ConfirmDialog from '@/components/ConfirmDialog';
 
 interface LrcTimelineEditorProps {
   initialLines: SyncLine[];
@@ -24,10 +25,26 @@ export default function LrcTimelineEditor({
   const [lines, setLines] = useState<SyncLine[]>(() => initialLines.map((line) => ({ ...line })));
   const [timeDrafts, setTimeDrafts] = useState<string[]>(() => initialLines.map((line) => fmtMs(line.timeMs)));
   const [offsetDraft, setOffsetDraft] = useState('0');
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const initialSerialized = useMemo(() => serializeLrc(initialLines), [initialLines]);
 
   const invalidRows = useMemo(() => new Set(
     timeDrafts.flatMap((value, index) => parseLrcTimestamp(value) == null ? [index] : []),
   ), [timeDrafts]);
+  const dirty = serializeLrc(lines) !== initialSerialized
+    || timeDrafts.some((draft, index) => draft !== fmtMs(lines[index]?.timeMs ?? 0));
+
+  useEffect(() => {
+    if (!dirty) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [dirty]);
+
+  const requestClose = () => {
+    if (dirty) setConfirmDiscard(true);
+    else onClose();
+  };
 
 
   const applyOffset = (offsetMs: number) => {
@@ -70,7 +87,7 @@ export default function LrcTimelineEditor({
           </div>
           <p className="mt-1 text-[11px] text-[var(--muted-foreground)]">{t('timeline.description')}</p>
         </div>
-        <button type="button" onClick={onClose} className="rounded-md p-1.5 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]" aria-label={t('common.close')} title={t('common.close')}>
+        <button type="button" onClick={requestClose} className="rounded-md p-1.5 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]" aria-label={t('common.close')} title={t('common.close')}>
           <X className="h-4 w-4" />
         </button>
       </div>
@@ -114,12 +131,22 @@ export default function LrcTimelineEditor({
       <div className="mt-3 flex items-center justify-between gap-3">
         <span className="text-[10px] text-[var(--muted-foreground)]">{t('timeline.lineCount', { count: String(lines.length) })}</span>
         <div className="flex gap-2">
-          <button type="button" onClick={onClose} className="rounded-md px-3 py-1.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]">{t('common.cancel')}</button>
+          <button type="button" onClick={requestClose} className="rounded-md px-3 py-1.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]">{t('common.cancel')}</button>
           <button type="button" onClick={() => onSave(serializeLrc(lines))} disabled={saving || lines.length === 0 || invalidRows.size > 0} className="song-editor-primary-button rounded-md px-3 py-1.5 text-xs font-medium disabled:opacity-50">
             {saving ? t('timeline.saving') : t('common.save')}
           </button>
         </div>
       </div>
+      <ConfirmDialog
+        open={confirmDiscard}
+        title={t('timeline.unsavedTitle')}
+        body={t('timeline.unsavedBody')}
+        confirmLabel={t('timeline.discard')}
+        cancelLabel={t('common.cancel')}
+        variant="danger"
+        onConfirm={onClose}
+        onCancel={() => setConfirmDiscard(false)}
+      />
     </section>
   );
 }

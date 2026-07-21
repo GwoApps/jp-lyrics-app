@@ -153,7 +153,25 @@
     "useCurrent": "使用当前 Spotify 播放时间",
     "lineCount": "共 {count} 行",
     "saving": "保存中...",
-    "saved": "时间轴已保存"
+    "saved": "时间轴已保存",
+    "unsavedTitle": "放弃时间轴修改？",
+    "unsavedBody": "尚未保存的时间和歌词修改将会丢失。",
+    "discard": "放弃修改"
+  },
+  "lyricsSources": {
+    "manual": "手动录入",
+    "none": "未找到来源",
+    "lrclibExact": "LRCLIB 精确匹配",
+    "lrclibCanonical": "LRCLIB 规范元数据匹配",
+    "lrclibSearch": "LRCLIB 搜索匹配",
+    "petitlyrics": "PetitLyrics",
+    "utanet": "Uta-Net",
+    "ytmusic": "YouTube Music"
+  },
+  "apiErrors": {
+    "lyricsNotFound": "未找到歌词",
+    "forbidden": "你没有权限编辑这首歌曲",
+    "loginRequired": "请先登录再继续"
   },
   "edit": {
     "title": "编辑歌曲",

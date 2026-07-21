@@ -10,6 +10,17 @@ import { useI18n } from '@/lib/i18n';
 import { convertToFuriganaClient } from '@/lib/kuroshiro-client';
 import { romanizeJapanese } from '@/lib/romaji';
 
+const LYRICS_SOURCE_KEYS: Record<string, string> = {
+  manual: 'lyricsSources.manual',
+  none: 'lyricsSources.none',
+  'lrclib-exact': 'lyricsSources.lrclibExact',
+  'lrclib-canonical': 'lyricsSources.lrclibCanonical',
+  'lrclib-search': 'lyricsSources.lrclibSearch',
+  petitlyrics: 'lyricsSources.petitlyrics',
+  utanet: 'lyricsSources.utanet',
+  ytmusic: 'lyricsSources.ytmusic',
+};
+
 interface SongData {
   id: string;
   title: string;
@@ -233,7 +244,7 @@ export function useSongData(id: string): UseSongDataReturn {
         setSong(data);
         setLoading(false);
         if (data.lyrics_synced) setSyncLines(parseLrc(data.lyrics_synced));
-        if (!data.spotify_track_id) {
+        if (!data.spotify_track_id && data.permissions?.can_edit) {
           fetch(`/api/songs/${id}/cover`)
             .then(async (metadataResponse) => {
               if (!metadataResponse.ok) return null;
@@ -266,10 +277,22 @@ export function useSongData(id: string): UseSongDataReturn {
           setSong(updated);
           setSyncLines(parseLrc(data.lrc));
         }
-        showToast('success', t('song.synced', { source: data.source, lines: String(data.lines) }));
+        const sourceKey = LYRICS_SOURCE_KEYS[data.source];
+        showToast('success', t('song.synced', {
+          source: sourceKey ? t(sourceKey) : data.source,
+          lines: String(data.lines),
+        }));
       } else {
-        setSyncError(data.error || t('song.syncNotFound'));
-        setImportAlert(data.error || t('song.syncNotFoundManual'));
+        const errorKey: Record<string, string> = {
+          lyrics_not_found: 'apiErrors.lyricsNotFound',
+          forbidden: 'apiErrors.forbidden',
+          login_required: 'apiErrors.loginRequired',
+        };
+        const message = data.error && errorKey[data.error]
+          ? t(errorKey[data.error])
+          : t('song.syncNotFound');
+        setSyncError(message);
+        setImportAlert(message);
       }
     } catch {
       setSyncError(t('song.networkError'));
@@ -307,15 +330,10 @@ export function useSongData(id: string): UseSongDataReturn {
   const saveTimeline = useCallback(async (lrc: string) => {
     setTimelineSaving(true);
     try {
-      const editedLines = parseLrc(lrc);
-      const originalTexts = syncLines.map((line) => line.text).sort();
-      const editedTexts = editedLines.map((line) => line.text).sort();
-      const preservesLyrics = editedTexts.length === originalTexts.length
-        && editedTexts.every((text, index) => text === originalTexts[index]);
       const res = await fetch(`/api/songs/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lyrics_synced: lrc, preserve_lyrics_metadata: preservesLyrics }),
+        body: JSON.stringify({ lyrics_synced: lrc }),
       });
       if (!res.ok) throw new Error('timeline_save_failed');
       const updated = await res.json() as SongData;
@@ -328,7 +346,7 @@ export function useSongData(id: string): UseSongDataReturn {
     } finally {
       setTimelineSaving(false);
     }
-  }, [id, showToast, syncLines, t]);
+  }, [id, showToast, t]);
 
   const handleDelete = useCallback(() => {
     if (!song) return;

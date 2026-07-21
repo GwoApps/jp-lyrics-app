@@ -34,6 +34,10 @@ const COMBOS: Record<string, string> = {
   てぃ: 'ti', でぃ: 'di', とぅ: 'tu', どぅ: 'du',
   うぃ: 'wi', うぇ: 'we', うぉ: 'wo',
   しぇ: 'she', じぇ: 'je', ちぇ: 'che',
+  つぁ: 'tsa', つぃ: 'tsi', つぇ: 'tse', つぉ: 'tso',
+  くぁ: 'kwa', くぃ: 'kwi', くぇ: 'kwe', くぉ: 'kwo',
+  ぐぁ: 'gwa', ぐぃ: 'gwi', ぐぇ: 'gwe', ぐぉ: 'gwo',
+  すぃ: 'si', ずぃ: 'zi', てゅ: 'tyu', でゅ: 'dyu', いぇ: 'ye',
   ゔぁ: 'va', ゔぃ: 'vi', ゔぇ: 've', ゔぉ: 'vo', ゔゅ: 'vyu',
 };
 
@@ -81,7 +85,9 @@ export function romanizeJapanese(value: string): string {
     }
 
     if (geminate) {
-      const consonant = syllable.match(/^[bcdfghjklmnpqrstvwxyz]/)?.[0];
+      const consonant = syllable.startsWith('ch')
+        ? 't'
+        : syllable.match(/^[bcdfghjklmnpqrstvwxyz]/)?.[0];
       if (consonant) output += consonant;
       geminate = false;
     }

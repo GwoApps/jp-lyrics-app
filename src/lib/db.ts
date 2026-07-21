@@ -171,10 +171,8 @@ async function runMigrations() {
   console.log('[db] Migrations applied');
 }
 
-// Run migrations (fire-and-forget with error logging)
-runMigrations().catch((e) => {
-  console.error('[db] Migration failed:', e.message);
-});
+// Block module initialisation until schema is ready; route handlers must never race migrations.
+await runMigrations();
 
 // Re-export Drizzle query helpers for convenience
 export { schema, sql, eq, and, or, like, inArray, desc, asc, isNull, isNotNull };

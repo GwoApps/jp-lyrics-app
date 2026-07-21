@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { getDB, schema, sql } from '@/lib/db';
+import { and, eq, or } from 'drizzle-orm';
 import { getAuthUser } from '@/lib/auth';
 import { getSpotifyTokenForUser } from '@/lib/spotify';
 import { fetchLyrics } from '@/lib/lyrics-fetcher';
@@ -103,9 +104,16 @@ export async function POST(request: NextRequest) {
 
   for (const track of tracks) {
     // Skip duplicates
+    const duplicate = or(
+      eq(schema.songs.spotifyTrackId, track.id),
+      and(eq(schema.songs.title, track.title), eq(schema.songs.artist, track.artist)),
+    );
+    const visibleToUser = user.isAdmin
+      ? undefined
+      : or(eq(schema.songs.createdBy, user.email), eq(schema.songs.isPublic, 1));
     const existing = await db.select({ id: schema.songs.id })
       .from(schema.songs)
-      .where(sql`spotify_track_id = ${track.id} OR (title = ${track.title} AND artist = ${track.artist})`)
+      .where(visibleToUser ? and(duplicate, visibleToUser) : duplicate)
       .get();
 
     if (existing) {

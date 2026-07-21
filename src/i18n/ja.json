@@ -153,7 +153,25 @@
     "useCurrent": "現在の Spotify 再生時刻を使用",
     "lineCount": "全 {count} 行",
     "saving": "保存中...",
-    "saved": "タイムラインを保存しました"
+    "saved": "タイムラインを保存しました",
+    "unsavedTitle": "タイムラインの変更を破棄しますか？",
+    "unsavedBody": "保存していない時刻と歌詞の変更は失われます。",
+    "discard": "変更を破棄"
+  },
+  "lyricsSources": {
+    "manual": "手動入力",
+    "none": "ソースなし",
+    "lrclibExact": "LRCLIB 完全一致",
+    "lrclibCanonical": "LRCLIB 正規メタデータ一致",
+    "lrclibSearch": "LRCLIB 検索一致",
+    "petitlyrics": "PetitLyrics",
+    "utanet": "Uta-Net",
+    "ytmusic": "YouTube Music"
+  },
+  "apiErrors": {
+    "lyricsNotFound": "歌詞が見つかりませんでした",
+    "forbidden": "この曲を編集する権限がありません",
+    "loginRequired": "続行する前にログインしてください"
   },
   "edit": {
     "title": "曲を編集",

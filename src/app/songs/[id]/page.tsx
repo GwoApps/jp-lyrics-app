@@ -45,6 +45,17 @@ function btnTextCls(active?: boolean, variant?: 'danger') {
   return `${base} ${colors}`;
 }
 
+const LYRICS_SOURCE_KEYS: Record<string, string> = {
+  manual: 'lyricsSources.manual',
+  none: 'lyricsSources.none',
+  'lrclib-exact': 'lyricsSources.lrclibExact',
+  'lrclib-canonical': 'lyricsSources.lrclibCanonical',
+  'lrclib-search': 'lyricsSources.lrclibSearch',
+  petitlyrics: 'lyricsSources.petitlyrics',
+  utanet: 'lyricsSources.utanet',
+  ytmusic: 'lyricsSources.ytmusic',
+};
+
 /** HSL saturation gives vibrant cover art a gentler ambient-light profile. */
 function colorSaturation({ r, g, b }: CoverColor) {
   const max = Math.max(r, g, b) / 255;
@@ -157,7 +168,7 @@ export default function SongViewPage() {
     }
   }, [data.song?.cover_url, id]);
   useEffect(() => {
-    if (!id || !currentUserEmail || !spotifyConnected || coverUrl) return;
+    if (!id || !currentUserEmail || !spotifyConnected || coverUrl || !data.song?.permissions?.can_edit) return;
     fetch(`/api/songs/${id}/cover`)
       .then(async (r) => {
         if (!r.ok) return null;
@@ -171,7 +182,7 @@ export default function SongViewPage() {
         }
       })
       .catch(() => {});
-  }, [id, currentUserEmail, spotifyConnected, coverUrl]);
+  }, [id, currentUserEmail, spotifyConnected, coverUrl, data.song?.permissions?.can_edit]);
   if (data.loading) {
     return (
       <div className="fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-hidden sm:block sm:h-auto sm:pb-0">
@@ -224,6 +235,8 @@ export default function SongViewPage() {
   // Derived state
   const { song, furiganaLines, syncLines, lineTimestamps } = data;
   const canEdit = song?.permissions?.can_edit === true;
+  const lyricsSourceKey = song ? LYRICS_SOURCE_KEYS[song.lyrics_source] : undefined;
+  const lyricsSourceLabel = song ? (lyricsSourceKey ? t(lyricsSourceKey) : song.lyrics_source) : '';
   const { spotify, activeLine, followPlaying, setFollowPlaying, pipWindowRef, highlightRef } = sync;
   const isSameSong = !!(spotify?.is_playing && spotify.track && song && (
     song.spotify_track_id && spotify.track.id
@@ -681,7 +694,7 @@ export default function SongViewPage() {
           <span>{t('common.created')}{new Date(song.created_at).toLocaleString('ja-JP')}</span>
           <span>{t('common.updated')}{new Date(song.updated_at).toLocaleString('ja-JP')}</span>
           {hasSyncData && <span className="text-green-500/60">{t('common.linesSynced', { count: String(syncLines.length) })}</span>}
-          <span>{t('song.lyricsSource', { source: song.lyrics_source || 'manual' })}</span>
+          <span>{t('song.lyricsSource', { source: lyricsSourceLabel })}</span>
           <span className={(song.lyrics_confidence ?? 100) >= 90 ? 'text-[var(--success)]/70' : (song.lyrics_confidence ?? 100) >= 75 ? 'text-[var(--warning)]/80' : 'text-[var(--destructive)]/80'}>{t('song.lyricsConfidence', { confidence: String(song.lyrics_confidence ?? 100) })}</span>
           {song.spotify_track_id && <span title={t('song.spotifyTrackId', { id: song.spotify_track_id })}>Spotify · {song.spotify_track_id.slice(0, 8)}…</span>}
           {song.spotify_album && <span>{t('song.spotifyAlbum', { album: song.spotify_album })}</span>}

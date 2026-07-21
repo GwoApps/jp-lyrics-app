@@ -58,16 +58,19 @@ export async function GET(
     return NextResponse.json({ error: 'cover_not_found' }, { status: 404 });
   }
 
-  await db.update(schema.songs).set({
-    coverUrl: track.coverUrl || existing.coverUrl,
-    spotifyTrackId: track.id,
-    spotifyUri: track.uri,
-    spotifyAlbum: track.album,
-    spotifyDurationMs: track.durationMs,
-    spotifyCanonicalTitle: track.title,
-    spotifyCanonicalArtist: track.artist,
-    updatedAt: new Date().toISOString(),
-  }).where(eq(schema.songs.id, id));
+  // Public readers may resolve a cover for display, but only owner/admin can mutate metadata.
+  if (user.isAdmin || existing.createdBy === user.id) {
+    await db.update(schema.songs).set({
+      coverUrl: track.coverUrl || existing.coverUrl,
+      spotifyTrackId: track.id,
+      spotifyUri: track.uri,
+      spotifyAlbum: track.album,
+      spotifyDurationMs: track.durationMs,
+      spotifyCanonicalTitle: track.title,
+      spotifyCanonicalArtist: track.artist,
+      updatedAt: new Date().toISOString(),
+    }).where(eq(schema.songs.id, id));
+  }
 
   return NextResponse.json({ cover_url: track.coverUrl || existing.coverUrl, spotify_track_id: track.id });
 }

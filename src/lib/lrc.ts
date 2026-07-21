@@ -43,6 +43,23 @@ export function serializeLrc(syncLines: SyncLine[]): string {
     .join('\n');
 }
 
+/** Compare only the ordered lyric text, ignoring all timestamp changes. */
+export function hasSameLrcText(left: string, right: string): boolean {
+  const leftText = parseLrc(left).map((line) => line.text);
+  const rightText = parseLrc(right).map((line) => line.text);
+  return leftText.length === rightText.length
+    && leftText.every((text, index) => text === rightText[index]);
+}
+
+/** Resolve a submitted LRC without touching plain lyrics for timestamp-only edits. */
+export function resolveLrcTextUpdate(existingRaw: string, existingSynced: string, submittedSynced: string) {
+  if (hasSameLrcText(existingSynced, submittedSynced)) {
+    return { lyricsRaw: existingRaw, contentChanged: false };
+  }
+  const lyricsRaw = parseLrc(submittedSynced).map((line) => line.text).join('\n');
+  return { lyricsRaw, contentChanged: lyricsRaw !== existingRaw };
+}
+
 /** Parse an editor timestamp in M:SS, M:SS.d, M:SS.dd or M:SS.ddd form. */
 export function parseLrcTimestamp(value: string): number | null {
   const match = value.trim().match(/^(\d+):(\d{2})(?:\.(\d{1,3}))?$/);

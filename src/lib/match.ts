@@ -130,7 +130,9 @@ export function songMatchScore(
   song: SongCandidate,
   track: PlayingTrack,
 ): number {
-  if (song.spotify_track_id && track.id && song.spotify_track_id === track.id) return 1;
+  if (song.spotify_track_id && track.id) {
+    return song.spotify_track_id === track.id ? 1 : 0;
+  }
   const tScore = titleScore(song.title, track.name);
   if (tScore < 0.55) return 0; // Title must pass threshold
 

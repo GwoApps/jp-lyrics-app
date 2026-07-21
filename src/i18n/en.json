@@ -153,7 +153,25 @@
     "useCurrent": "Use current Spotify playback time",
     "lineCount": "{count} lines",
     "saving": "Saving...",
-    "saved": "Timeline saved"
+    "saved": "Timeline saved",
+    "unsavedTitle": "Discard timeline changes?",
+    "unsavedBody": "Your unsaved timing and lyric edits will be lost.",
+    "discard": "Discard changes"
+  },
+  "lyricsSources": {
+    "manual": "Manual",
+    "none": "No source found",
+    "lrclibExact": "LRCLIB exact match",
+    "lrclibCanonical": "LRCLIB canonical match",
+    "lrclibSearch": "LRCLIB search",
+    "petitlyrics": "PetitLyrics",
+    "utanet": "Uta-Net",
+    "ytmusic": "YouTube Music"
+  },
+  "apiErrors": {
+    "lyricsNotFound": "No lyrics were found",
+    "forbidden": "You do not have permission to edit this song",
+    "loginRequired": "Please sign in before continuing"
   },
   "edit": {
     "title": "Edit Song",

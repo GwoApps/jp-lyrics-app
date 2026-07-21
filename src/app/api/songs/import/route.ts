@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import { getDB, schema } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { fetchLyrics } from '@/lib/lyrics-fetcher';
@@ -22,15 +22,22 @@ export async function POST(request: NextRequest) {
   }
 
   const db = getDB();
+  const visibleToUser = user.isAdmin
+    ? undefined
+    : or(eq(schema.songs.createdBy, user.email), eq(schema.songs.isPublic, 1));
   const spotifyTrack = (spotifyTrackId ? await getSpotifyTrack(user.email, spotifyTrackId) : null)
     || await searchSpotifyTrack(user.email, title, artist);
   const existingBySpotify = spotifyTrack
     ? await db.select({ id: schema.songs.id }).from(schema.songs)
-      .where(eq(schema.songs.spotifyTrackId, spotifyTrack.id)).get()
+      .where(visibleToUser
+        ? and(eq(schema.songs.spotifyTrackId, spotifyTrack.id), visibleToUser)
+        : eq(schema.songs.spotifyTrackId, spotifyTrack.id)).get()
     : null;
   const existing = existingBySpotify || await db.select({ id: schema.songs.id })
     .from(schema.songs)
-    .where(and(eq(schema.songs.title, title), eq(schema.songs.artist, artist)))
+    .where(visibleToUser
+      ? and(eq(schema.songs.title, title), eq(schema.songs.artist, artist), visibleToUser)
+      : and(eq(schema.songs.title, title), eq(schema.songs.artist, artist)))
     .get();
 
   if (existing) {

@@ -181,6 +181,10 @@ npx @opennextjs/cloudflare build
 # Verify output exists
 ls .open-next/worker.js  # must exist before deploy
 
+# Apply release migrations before sending traffic to the new Worker.
+# D1 intentionally does not run the Node/local startup migrator.
+wrangler d1 execute jplrc-db --remote --file=./drizzle/0004_lovely_doctor_faustus.sql
+
 # Deploy
 wrangler deploy
 ```
@@ -189,6 +193,7 @@ wrangler deploy
 
 - **`SPOTIFY_POLL_MODE=client` is mandatory** — Workers have no persistent process for the server-side poller
 - **D1 binding (`DB`)** is automatically available via `process.env.DB` in the OpenNext adapter
+- **Run every new `drizzle/NNNN_*.sql` against D1 before `wrangler deploy`**; D1 skips the local startup migrator by design
 - **`getDB(env.DB)`** in route handlers receives the D1 binding — no TURSO_URL needed
 - Furigana is computed client-side via CDN-loaded kuromoji-es (no server dependency)
 - The SSE stream endpoint returns `501` in client mode (by design)

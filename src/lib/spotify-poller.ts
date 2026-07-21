@@ -12,6 +12,7 @@ export interface NowPlayingData {
 
 /** Diff message sent over SSE */
 export interface DiffMessage {
+  v?: number;
   seq: number;
   c: number;  // checksum of full data
   d: Partial<NowPlayingData>; // changed fields only (empty = no change)

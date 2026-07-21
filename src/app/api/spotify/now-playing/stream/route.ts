@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
+import { buildSsePayload } from '@/lib/sse-protocol';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -32,9 +33,7 @@ export async function GET(request: NextRequest) {
       const send = (msg: Record<string, unknown>) => {
         if (!alive) return;
         try {
-          // Always send full data on first message or when ?full=true requested
-          const payload = wantFull ? { ...msg, d: undefined, _full: true } : msg;
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(msg)}\n\n`));
         } catch {
           cleanup();
         }
@@ -50,8 +49,9 @@ export async function GET(request: NextRequest) {
       request.signal.addEventListener('abort', cleanup);
 
       // Subscribe to shared poller (first message is always full data)
-      unsub = subscribe(user.email, (_fullData, diffMsg) => {
-        send(diffMsg as unknown as Record<string, unknown>);
+      unsub = subscribe(user.email, (fullData, diffMsg) => {
+        const payload = buildSsePayload(fullData, diffMsg, wantFull);
+        send(payload as unknown as Record<string, unknown>);
       });
 
       // Heartbeat every 30s
