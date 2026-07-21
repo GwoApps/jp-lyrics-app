@@ -98,6 +98,28 @@ export default function HomePage() {
   const [collectionSongs, setCollectionSongs] = useState<Set<string>>(new Set());
   const router = useRouter();
   const transitionRouter = useTransitionRouter();
+  const nowPlayingCardRef = useRef<HTMLDivElement>(null);
+  const updateNowPlayingPointer = (event: React.PointerEvent<HTMLDivElement>) => {
+    const card = nowPlayingCardRef.current;
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    card.style.setProperty('--now-playing-pointer-x', `${event.clientX - rect.left}px`);
+    card.style.setProperty('--now-playing-pointer-y', `${event.clientY - rect.top}px`);
+  };
+  const setNowPlayingTouching = (touching: boolean) => {
+    const card = nowPlayingCardRef.current;
+    if (!card) return;
+    if (touching) card.dataset.touching = 'true';
+    else delete card.dataset.touching;
+  };
+  const handleNowPlayingPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    updateNowPlayingPointer(event);
+    if (event.pointerType === 'touch') setNowPlayingTouching(true);
+  };
+  const handleNowPlayingPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'touch') setNowPlayingTouching(false);
+  };
+  const handleNowPlayingPointerCancel = () => setNowPlayingTouching(false);
   const searchParams = useSearchParams();
 
   const showToast = (type: 'success' | 'error', msg: string) => {
@@ -546,7 +568,16 @@ export default function HomePage() {
       <div className={`now-playing-slot ${nowPlaying?.is_playing && nowPlaying.track ? 'now-playing-slot--visible' : ''}`}>
         <div className="now-playing-reveal">
           {nowPlaying?.is_playing && nowPlaying.track && (
-            <div className="now-playing-card rounded-lg bg-[var(--card)] border border-[var(--border)] p-3 sm:p-4 flex items-center gap-3">
+            <div
+              ref={nowPlayingCardRef}
+              className="now-playing-card rounded-lg bg-[var(--card)] border border-[var(--border)] p-3 sm:p-4 flex items-center gap-3"
+              onPointerEnter={updateNowPlayingPointer}
+              onPointerMove={updateNowPlayingPointer}
+              onPointerDown={handleNowPlayingPointerDown}
+              onPointerUp={handleNowPlayingPointerUp}
+              onPointerCancel={handleNowPlayingPointerCancel}
+              onPointerLeave={handleNowPlayingPointerCancel}
+            >
               <div className="relative shrink-0">
                 <Music className="h-5 w-5 text-[var(--success)]" />
                 <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-[var(--success)] animate-pulse" />

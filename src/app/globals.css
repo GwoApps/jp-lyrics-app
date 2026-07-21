@@ -130,12 +130,85 @@ textarea {
   from { opacity: 0; transform: translateY(-8px) scale(0.985); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
+@property --now-playing-glow-radius {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 150px;
+}
+@keyframes nowPlayingGlowReveal {
+  from {
+    --now-playing-glow-radius: 120px;
+    opacity: 0;
+  }
+  to {
+    --now-playing-glow-radius: 180px;
+    opacity: 0.56;
+  }
+}
+@keyframes nowPlayingBorderReveal {
+  from { opacity: 0; }
+  to { opacity: 0.42; }
+}
+.now-playing-card {
+  --now-playing-pointer-x: 50%;
+  --now-playing-pointer-y: 50%;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--border) 70%, var(--success));
+}
+.now-playing-card::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    circle var(--now-playing-glow-radius) at var(--now-playing-pointer-x) var(--now-playing-pointer-y),
+    color-mix(in srgb, var(--success) 16%, transparent) 0%,
+    color-mix(in srgb, var(--success) 7%, transparent) 44%,
+    transparent 76%
+  );
+}
+.now-playing-card::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
+  border: 1px solid transparent;
+  border-radius: inherit;
+  background: radial-gradient(
+      circle 140px at var(--now-playing-pointer-x) var(--now-playing-pointer-y),
+      color-mix(in srgb, var(--success) 48%, transparent),
+      transparent 74%
+    ) border-box;
+  mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  opacity: 0;
+}
+.now-playing-card > * { position: relative; z-index: 2; }
+.now-playing-card:hover::before,
+.now-playing-card[data-touching="true"]::before {
+  animation: nowPlayingGlowReveal 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.now-playing-card:hover::after,
+.now-playing-card[data-touching="true"]::after {
+  animation: nowPlayingBorderReveal 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
 @media (min-width: 640px) {
   .now-playing-slot--visible { padding-bottom: 1.5rem; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .now-playing-slot, .now-playing-card { transition: none; }
-  .now-playing-card { animation: none !important; }
+  .now-playing-slot, .now-playing-card, .now-playing-card::before, .now-playing-card::after { transition: none; }
+  .now-playing-card, .now-playing-card::before, .now-playing-card::after { animation: none !important; }
+  .now-playing-card:hover::before,
+  .now-playing-card[data-touching="true"]::before { opacity: 0.42; }
+  .now-playing-card:hover::after,
+  .now-playing-card[data-touching="true"]::after { opacity: 0.32; }
 }
 
 /* Confirm Dialog */
