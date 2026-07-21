@@ -428,24 +428,31 @@ export default function SongViewPage() {
               <span className="text-xs w-5 text-center text-[var(--muted-foreground)] tabular-nums">{data.fontSize}</span>
               <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Plus className="h-3.5 w-3.5" /></button>
             </div>
-            <button onClick={data.handleCopy} className={btnTextCls(data.copied)}>
-              {data.copied ? <Check className="h-3.5 w-3.5 text-[var(--success)]" /> : <Copy className="h-3.5 w-3.5" />}
-              {t('song.copy')}
+            <button
+              onClick={data.handleCopy}
+              className={btnCls(data.copied)}
+              aria-label={t('song.copy')}
+              title={t('song.copy')}
+            >
+              {data.copied ? <Check className="h-4 w-4 text-[var(--success)]" /> : <Copy className="h-4 w-4" />}
             </button>
             {furiganaLines.length > 0 && pipSupported && (
               <button
                 onClick={() => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef, lineTimestamps)}
-                className={btnTextCls()}
+                className={btnCls()}
+                aria-label={t('song.pipBtn')}
+                title={t('song.pipBtn')}
               >
-                <PictureInPicture className="h-3.5 w-3.5" /> {t('song.pipBtn')}
+                <PictureInPicture className="h-4 w-4" />
               </button>
             )}
             <Link
               href={isSynced && activeLine >= 0 ? `/songs/${id}/share?line=${activeLine}` : `/songs/${id}/share`}
-              className={btnTextCls()}
+              className={btnCls()}
+              aria-label={t('song.share')}
               title={t('song.share')}
             >
-              <Share2 className="h-3.5 w-3.5" /> {t('song.share')}
+              <Share2 className="h-4 w-4" />
             </Link>
 
             <ToolbarMenu
