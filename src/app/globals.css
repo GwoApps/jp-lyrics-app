@@ -142,7 +142,7 @@ textarea {
   }
   to {
     --now-playing-glow-radius: 180px;
-    opacity: 0.56;
+    opacity: 0.34;
   }
 }
 @keyframes nowPlayingBorderReveal {
@@ -156,6 +156,12 @@ textarea {
   isolation: isolate;
   overflow: hidden;
   border-color: color-mix(in srgb, var(--border) 70%, var(--success));
+  transition: background-color 180ms ease, border-color 180ms ease;
+}
+.now-playing-card:hover,
+.now-playing-card[data-touching="true"] {
+  background: var(--success-muted);
+  border-color: var(--success);
 }
 .now-playing-card::before {
   content: '';
@@ -166,8 +172,8 @@ textarea {
   opacity: 0;
   background: radial-gradient(
     circle var(--now-playing-glow-radius) at var(--now-playing-pointer-x) var(--now-playing-pointer-y),
-    color-mix(in srgb, var(--success) 16%, transparent) 0%,
-    color-mix(in srgb, var(--success) 7%, transparent) 44%,
+    color-mix(in srgb, var(--success) 8%, transparent) 0%,
+    color-mix(in srgb, var(--success) 3%, transparent) 44%,
     transparent 76%
   );
 }
