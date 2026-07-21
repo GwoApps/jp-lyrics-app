@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { getSpotifyTokenForUser } from '@/lib/spotify';
+import { normalizeSpotifyTrack } from '@/lib/spotify';
 
 export async function GET(request: NextRequest) {
   const user = await getAuthUser(request);
@@ -30,21 +31,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ connected: true, is_playing: false });
   }
 
-  const images = data.item.album?.images || [];
-  const coverUrl = images.length > 0
-    ? (images.reduce((big: { width: number; url: string }, img: { width: number; url: string }) => img.width > big.width ? img : big, images[0]).url as string)
-    : null;
+  const track = normalizeSpotifyTrack(data.item);
 
   return NextResponse.json({
     connected: true,
     is_playing: data.is_playing,
     progress_ms: data.progress_ms,
     duration_ms: data.item.duration_ms,
-    track: {
-      name: data.item.name,
-      artist: data.item.artists?.map((a: { name: string }) => a.name).join(', ') || '',
-      album: data.item.album?.name || '',
-      cover_url: coverUrl,
-    },
+    track: track ? {
+      id: track.id,
+      uri: track.uri,
+      name: track.title,
+      artist: track.artist,
+      album: track.album,
+      cover_url: track.coverUrl,
+    } : null,
   });
 }

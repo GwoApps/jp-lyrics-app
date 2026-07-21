@@ -107,6 +107,10 @@
     "paste": "Paste",
     "furigana": "Furigana",
     "raw": "Raw",
+    "readingMode": "Reading display",
+    "readingOriginal": "Original",
+    "readingFurigana": "Furigana",
+    "readingRomaji": "Romaji",
     "spotify": "Spotify",
     "spotifyLoading": "Loading Spotify playback status…",
     "spotifyDisconnected": "Spotify is not connected",
@@ -130,7 +134,26 @@
     "requestPublicSuccess": "Public request submitted",
     "requestPublicCancel": "Cancel request",
     "requestPublicCancelled": "Request cancelled",
-    "requestPublicPending": "Public request pending"
+    "requestPublicPending": "Public request pending",
+    "timelineEdit": "Edit timeline",
+    "lyricsSource": "Lyrics source: {source}",
+    "lyricsConfidence": "Confidence {confidence}%",
+    "spotifyMetadata": "Canonical Spotify metadata",
+    "spotifyTrackId": "Track ID: {id}",
+    "spotifyAlbum": "Album: {album}"
+  },
+  "timeline": {
+    "title": "LRC Timeline Editor",
+    "description": "Shift every timestamp or edit individual timestamps and lyric lines, then save the calibrated timeline.",
+    "offset": "Global offset",
+    "customOffset": "Custom offset in milliseconds",
+    "apply": "Apply",
+    "timestamp": "Timestamp for line {line}",
+    "lyricLine": "Lyrics for line {line}",
+    "useCurrent": "Use current Spotify playback time",
+    "lineCount": "{count} lines",
+    "saving": "Saving...",
+    "saved": "Timeline saved"
   },
   "edit": {
     "title": "Edit Song",

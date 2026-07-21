@@ -5,11 +5,11 @@ import type { Song } from '@/lib/types';
 import { getAuthUser } from '@/lib/auth';
 import { parseLrc } from '@/lib/lrc';
 
-/** Strip internal email from song response */
-function sanitizeSong(song: Song) {
+/** Strip internal email while exposing server-authoritative capabilities. */
+function sanitizeSong(song: Song, canEdit: boolean) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { created_by, ...rest } = song;
-  return rest;
+  return { ...rest, permissions: { can_edit: canEdit } };
 }
 
 const songFields = {
@@ -20,6 +20,15 @@ const songFields = {
   lyrics_furigana: schema.songs.lyricsFurigana,
   lyrics_synced: schema.songs.lyricsSynced,
   cover_url: schema.songs.coverUrl,
+  spotify_track_id: schema.songs.spotifyTrackId,
+  spotify_uri: schema.songs.spotifyUri,
+  spotify_album: schema.songs.spotifyAlbum,
+  spotify_duration_ms: schema.songs.spotifyDurationMs,
+  spotify_canonical_title: schema.songs.spotifyCanonicalTitle,
+  spotify_canonical_artist: schema.songs.spotifyCanonicalArtist,
+  lyrics_source: schema.songs.lyricsSource,
+  lyrics_confidence: schema.songs.lyricsConfidence,
+  lyrics_fetched_at: schema.songs.lyricsFetchedAt,
   created_by: schema.songs.createdBy,
   created_by_name: schema.songs.createdByName,
   is_public: schema.songs.isPublic,
@@ -43,7 +52,8 @@ export async function GET(
   if (!song || (song.is_public !== 1 && !user?.isAdmin && song.created_by !== user?.id)) {
     return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
   }
-  return NextResponse.json(sanitizeSong(song));
+  const canEdit = !!user && (user.isAdmin || song.created_by === user.id);
+  return NextResponse.json(sanitizeSong(song, canEdit));
 }
 
 // PUT /api/songs/[id] - update song
@@ -59,7 +69,7 @@ export async function PUT(
   const db = getDB();
   const { id } = await params;
   const body = await request.json();
-  const { title, artist, lyrics_raw, lyrics_synced } = body;
+  const { title, artist, lyrics_raw, lyrics_synced, preserve_lyrics_metadata } = body;
 
   const existing = await findSong(id);
   if (!existing) {
@@ -81,12 +91,18 @@ export async function PUT(
     lyricsFurigana = '[]';
   }
 
+  const lyricsChanged = lyrics_raw !== undefined || lyrics_synced !== undefined;
   await db.update(schema.songs).set({
     title: title !== undefined ? title : existing.title,
     artist: artist !== undefined ? artist : existing.artist,
     lyricsRaw: newRaw,
     lyricsFurigana,
     lyricsSynced: newSynced,
+    ...(lyricsChanged && preserve_lyrics_metadata !== true ? {
+      lyricsSource: 'manual',
+      lyricsConfidence: 100,
+      lyricsFetchedAt: null,
+    } : {}),
     updatedAt: sql`(datetime('now', 'localtime'))`,
   }).where(eq(schema.songs.id, id));
 
@@ -94,7 +110,7 @@ export async function PUT(
   if (!updated) {
     return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
   }
-  return NextResponse.json(sanitizeSong(updated));
+  return NextResponse.json(sanitizeSong(updated, true));
 }
 
 // DELETE /api/songs/[id] - delete song

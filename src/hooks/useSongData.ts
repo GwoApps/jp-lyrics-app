@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import type { FuriganaLine } from '@/lib/types';
+import type { FuriganaLine, ReadingMode } from '@/lib/types';
 import { parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
 import { findBestMatch, lineFuzzyMatch } from '@/lib/match';
 import { useI18n } from '@/lib/i18n';
 import { convertToFuriganaClient } from '@/lib/kuroshiro-client';
+import { romanizeJapanese } from '@/lib/romaji';
 
 interface SongData {
   id: string;
@@ -17,7 +18,16 @@ interface SongData {
   lyrics_furigana: string;
   lyrics_synced: string;
   cover_url?: string | null;
-  created_by: string;
+  spotify_track_id?: string | null;
+  spotify_uri?: string | null;
+  spotify_album?: string | null;
+  spotify_duration_ms?: number | null;
+  spotify_canonical_title?: string | null;
+  spotify_canonical_artist?: string | null;
+  lyrics_source: string;
+  lyrics_confidence: number;
+  lyrics_fetched_at: string | null;
+  permissions?: { can_edit: boolean };
   is_public: number;
   public_requested: number;
   created_at: string;
@@ -42,14 +52,18 @@ export interface UseSongDataReturn {
   syncError: string;
   importing: boolean;
   copied: boolean;
-  showRaw: boolean;
-  setShowRaw: React.Dispatch<React.SetStateAction<boolean>>;
+  readingMode: ReadingMode;
+  setReadingMode: React.Dispatch<React.SetStateAction<ReadingMode>>;
   debug: boolean;
   setDebug: React.Dispatch<React.SetStateAction<boolean>>;
   showPasteLrc: boolean;
   setShowPasteLrc: React.Dispatch<React.SetStateAction<boolean>>;
   pasteLrcText: string;
   setPasteLrcText: React.Dispatch<React.SetStateAction<string>>;
+  showTimelineEditor: boolean;
+  setShowTimelineEditor: React.Dispatch<React.SetStateAction<boolean>>;
+  timelineSaving: boolean;
+  saveTimeline: (lrc: string) => Promise<void>;
   showExport: boolean;
   setShowExport: React.Dispatch<React.SetStateAction<boolean>>;
   deleteConfirm: boolean;
@@ -59,7 +73,7 @@ export interface UseSongDataReturn {
   fontSize: number;
   setFontSize: React.Dispatch<React.SetStateAction<number>>;
   toast: ToastState | null;
-  allSongs: { id: string; title: string; artist: string; created_by: string; is_public: number }[];
+  allSongs: { id: string; title: string; artist: string; spotify_track_id?: string | null; created_by: string; is_public: number }[];
   lyricsRef: React.RefObject<HTMLDivElement | null>;
   lineRefs: React.RefObject<(HTMLDivElement | null)[]>;
   handleSync: () => Promise<void>;
@@ -84,7 +98,11 @@ export function useSongData(id: string): UseSongDataReturn {
 
   const [song, setSong] = useState<SongData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showRaw, setShowRaw] = useState(false);
+  const [readingMode, setReadingMode] = useState<ReadingMode>(() => {
+    if (typeof window === 'undefined') return 'furigana';
+    const saved = localStorage.getItem('jplrc-reading-mode');
+    return saved === 'original' || saved === 'romaji' || saved === 'furigana' ? saved : 'furigana';
+  });
   const [debug, setDebug] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -93,9 +111,11 @@ export function useSongData(id: string): UseSongDataReturn {
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState('');
   const [importing, setImporting] = useState(false);
-  const [allSongs, setAllSongs] = useState<{ id: string; title: string; artist: string; created_by: string; is_public: number }[]>([]);
+  const [allSongs, setAllSongs] = useState<{ id: string; title: string; artist: string; spotify_track_id?: string | null; created_by: string; is_public: number }[]>([]);
   const [showPasteLrc, setShowPasteLrc] = useState(false);
   const [pasteLrcText, setPasteLrcText] = useState('');
+  const [showTimelineEditor, setShowTimelineEditor] = useState(false);
+  const [timelineSaving, setTimelineSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [fontSize, setFontSize] = useState(() => {
@@ -111,6 +131,7 @@ export function useSongData(id: string): UseSongDataReturn {
 
   // Persist font size
   useEffect(() => { localStorage.setItem('jplrc-font-size', String(fontSize)); }, [fontSize]);
+  useEffect(() => { localStorage.setItem('jplrc-reading-mode', readingMode); }, [readingMode]);
 
   // Derived
   const serverFurigana = useMemo<FuriganaLine[]>(() => {
@@ -212,12 +233,22 @@ export function useSongData(id: string): UseSongDataReturn {
         setSong(data);
         setLoading(false);
         if (data.lyrics_synced) setSyncLines(parseLrc(data.lyrics_synced));
+        if (!data.spotify_track_id) {
+          fetch(`/api/songs/${id}/cover`)
+            .then(async (metadataResponse) => {
+              if (!metadataResponse.ok) return null;
+              const refreshed = await fetch(`/api/songs/${id}`, { cache: 'no-store' });
+              return refreshed.ok ? refreshed.json() : null;
+            })
+            .then((enriched) => { if (enriched) setSong(enriched); })
+            .catch(() => {});
+        }
       })
       .catch(() => setLoading(false));
 
     fetch('/api/songs')
       .then((r) => r.json())
-      .then((data) => setAllSongs(data.map((s: { id: string; title: string; artist: string }) => ({ id: s.id, title: s.title, artist: s.artist }))))
+      .then((data) => setAllSongs(data.map((s: { id: string; title: string; artist: string; spotify_track_id?: string | null; created_by?: string; is_public?: number }) => ({ id: s.id, title: s.title, artist: s.artist, spotify_track_id: s.spotify_track_id, created_by: s.created_by || '', is_public: s.is_public || 0 }))))
       .catch(() => {});
   }, [id]);
 
@@ -273,6 +304,32 @@ export function useSongData(id: string): UseSongDataReturn {
     }
   }, [id, pasteLrcText, t, showToast]);
 
+  const saveTimeline = useCallback(async (lrc: string) => {
+    setTimelineSaving(true);
+    try {
+      const editedLines = parseLrc(lrc);
+      const originalTexts = syncLines.map((line) => line.text).sort();
+      const editedTexts = editedLines.map((line) => line.text).sort();
+      const preservesLyrics = editedTexts.length === originalTexts.length
+        && editedTexts.every((text, index) => text === originalTexts[index]);
+      const res = await fetch(`/api/songs/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lyrics_synced: lrc, preserve_lyrics_metadata: preservesLyrics }),
+      });
+      if (!res.ok) throw new Error('timeline_save_failed');
+      const updated = await res.json() as SongData;
+      setSong(updated);
+      setSyncLines(parseLrc(updated.lyrics_synced));
+      setShowTimelineEditor(false);
+      showToast('success', t('timeline.saved'));
+    } catch {
+      showToast('error', t('song.saveFailed'));
+    } finally {
+      setTimelineSaving(false);
+    }
+  }, [id, showToast, syncLines, t]);
+
   const handleDelete = useCallback(() => {
     if (!song) return;
     setDeleteConfirm(true);
@@ -304,7 +361,7 @@ export function useSongData(id: string): UseSongDataReturn {
       const res = await fetch('/api/songs/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: spotify.track.name, artist: spotify.track.artist }),
+        body: JSON.stringify({ title: spotify.track.name, artist: spotify.track.artist, spotify_track_id: spotify.track.id }),
       });
       const data = await res.json();
       if (!res.ok || data.error) {
@@ -381,8 +438,11 @@ export function useSongData(id: string): UseSongDataReturn {
             ${furiganaLinesArg.map((line, i) => {
               if (line.segments.length === 0) return `<div class="line empty" data-line="${i}"></div>`;
               const html = line.segments.map(seg => {
-                if (!seg.reading) return seg.text;
-                return `<ruby>${seg.text}<rp>(</rp><rt>${seg.reading}</rt><rp>)</rp></ruby>`;
+                if (readingMode === 'original') return seg.text;
+                if (readingMode === 'furigana' && !seg.reading) return seg.text;
+                const reading = readingMode === 'romaji' ? romanizeJapanese(seg.reading || seg.text) : seg.reading;
+                if (!reading || reading === seg.text) return seg.text;
+                return `<ruby>${seg.text}<rp>(</rp><rt>${reading}</rt><rp>)</rp></ruby>`;
               }).join('');
               const ts = timestamps?.[i];
               const tsAttr = ts != null ? ` data-ts="${ts}"` : '';
@@ -443,7 +503,7 @@ export function useSongData(id: string): UseSongDataReturn {
       console.error('PiP failed:', e);
       showToast('error', t('song.pipFailed'));
     }
-  }, [fontSize, t, showToast]);
+  }, [fontSize, readingMode, t, showToast]);
 
   // Re-center when debug mode toggled off
   useEffect(() => {
@@ -463,14 +523,18 @@ export function useSongData(id: string): UseSongDataReturn {
     syncError,
     importing,
     copied,
-    showRaw,
-    setShowRaw,
+    readingMode,
+    setReadingMode,
     debug,
     setDebug,
     showPasteLrc,
     setShowPasteLrc,
     pasteLrcText,
     setPasteLrcText,
+    showTimelineEditor,
+    setShowTimelineEditor,
+    timelineSaving,
+    saveTimeline,
     showExport,
     setShowExport,
     deleteConfirm,

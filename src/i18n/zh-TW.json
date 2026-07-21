@@ -107,6 +107,10 @@
     "paste": "貼上",
     "furigana": "注音",
     "raw": "原文",
+    "readingMode": "顯示方式",
+    "readingOriginal": "原文",
+    "readingFurigana": "假名",
+    "readingRomaji": "羅馬音",
     "spotify": "Spotify",
     "spotifyLoading": "正在載入 Spotify 播放狀態…",
     "spotifyDisconnected": "Spotify 未連線",
@@ -130,7 +134,26 @@
     "requestPublicSuccess": "已提交公開申請",
     "requestPublicCancel": "取消申請",
     "requestPublicCancelled": "已取消申請",
-    "requestPublicPending": "公開申請審核中"
+    "requestPublicPending": "公開申請審核中",
+    "timelineEdit": "編輯時間軸",
+    "lyricsSource": "歌詞來源：{source}",
+    "lyricsConfidence": "可信度 {confidence}%",
+    "spotifyMetadata": "Spotify 規範化資訊",
+    "spotifyTrackId": "Track ID：{id}",
+    "spotifyAlbum": "專輯：{album}"
+  },
+  "timeline": {
+    "title": "LRC 時間軸編輯",
+    "description": "整體偏移時間，或逐行修改時間戳與歌詞，並儲存校準後的時間軸。",
+    "offset": "整體偏移",
+    "customOffset": "自訂偏移（毫秒）",
+    "apply": "套用",
+    "timestamp": "第 {line} 行時間戳",
+    "lyricLine": "第 {line} 行歌詞",
+    "useCurrent": "使用目前 Spotify 播放時間",
+    "lineCount": "共 {count} 行",
+    "saving": "儲存中...",
+    "saved": "時間軸已儲存"
   },
   "edit": {
     "title": "編輯歌曲",

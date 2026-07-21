@@ -14,6 +14,13 @@ export interface LyricsResult {
   plain: string;
 }
 
+export interface LyricsFetchResult {
+  result: LyricsResult | null;
+  source: string;
+  /** Heuristic 0–100 confidence based on source and match strategy. */
+  confidence: number;
+}
+
 function stripTimestamps(lrc: string): string {
   return lrc.replace(/^\[\d{2}:\d{2}\.\d{2,3}\]\s*/gm, '').trim();
 }
@@ -201,36 +208,36 @@ export async function fetchLyrics(
   title: string,
   artist: string,
   opts?: FetchLyricsOptions,
-): Promise<{ result: LyricsResult | null; source: string }> {
+): Promise<LyricsFetchResult> {
   // 1. LRCLIB exact
   let result = await fetchFromLrclib(title, artist);
-  if (result) return { result, source: 'lrclib' };
+  if (result) return { result, source: 'lrclib', confidence: 98 };
 
   // 2. LRCLIB with Spotify canonical name
   if (opts?.spotifyCanonical) {
     result = await fetchFromLrclib(opts.spotifyCanonical.name, opts.spotifyCanonical.artist);
-    if (result) return { result, source: 'lrclib' };
+    if (result) return { result, source: 'lrclib', confidence: 96 };
     result = await searchLrclib(`${opts.spotifyCanonical.name} ${opts.spotifyCanonical.artist}`);
-    if (result) return { result, source: 'lrclib-search' };
+    if (result) return { result, source: 'lrclib-search', confidence: 82 };
   }
 
   // 3. LRCLIB fuzzy search
   result = await searchLrclib(`${title} ${artist}`);
-  if (result) return { result, source: 'lrclib-search' };
+  if (result) return { result, source: 'lrclib-search', confidence: 78 };
 
   // 4. PetitLyrics
   const pl = await fetchFromPetitLyrics(title, artist);
   if (pl && (pl.synced || pl.plain)) {
-    return { result: pl, source: 'petitlyrics' };
+    return { result: pl, source: 'petitlyrics', confidence: pl.synced ? 90 : 82 };
   }
 
   // 5. Uta-Net
   const un = await fetchFromUtaNet(title, artist);
-  if (un) return { result: un, source: 'uta-net' };
+  if (un) return { result: un, source: 'uta-net', confidence: 76 };
 
   // 6. ytmusicapi
   const yt = await fetchFromYtMusic(title, artist);
-  if (yt) return { result: yt, source: 'ytmusic' };
+  if (yt) return { result: yt, source: 'ytmusic', confidence: yt.synced ? 74 : 68 };
 
-  return { result: null, source: '' };
+  return { result: null, source: '', confidence: 0 };
 }

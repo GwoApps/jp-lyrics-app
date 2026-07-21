@@ -107,6 +107,10 @@
     "paste": "貼付",
     "furigana": "ふりがな",
     "raw": "原文",
+    "readingMode": "表示方式",
+    "readingOriginal": "原文",
+    "readingFurigana": "ふりがな",
+    "readingRomaji": "ローマ字",
     "spotify": "Spotify連携",
     "spotifyLoading": "Spotifyの再生状態を読み込み中…",
     "spotifyDisconnected": "Spotifyは未接続です",
@@ -130,7 +134,26 @@
     "requestPublicSuccess": "公開申請を送信しました",
     "requestPublicCancel": "申請を取り消し",
     "requestPublicCancelled": "申請を取り消しました",
-    "requestPublicPending": "公開申請中"
+    "requestPublicPending": "公開申請中",
+    "timelineEdit": "タイムラインを編集",
+    "lyricsSource": "歌詞ソース：{source}",
+    "lyricsConfidence": "信頼度 {confidence}%",
+    "spotifyMetadata": "Spotify 正規化情報",
+    "spotifyTrackId": "Track ID：{id}",
+    "spotifyAlbum": "アルバム：{album}"
+  },
+  "timeline": {
+    "title": "LRC タイムライン編集",
+    "description": "全体の時刻をずらすか、行ごとにタイムスタンプと歌詞を編集し、調整後のタイムラインを保存します。",
+    "offset": "全体オフセット",
+    "customOffset": "カスタムオフセット（ミリ秒）",
+    "apply": "適用",
+    "timestamp": "{line} 行目のタイムスタンプ",
+    "lyricLine": "{line} 行目の歌詞",
+    "useCurrent": "現在の Spotify 再生時刻を使用",
+    "lineCount": "全 {count} 行",
+    "saving": "保存中...",
+    "saved": "タイムラインを保存しました"
   },
   "edit": {
     "title": "曲を編集",

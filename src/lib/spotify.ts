@@ -54,8 +54,60 @@ export function pickLargestImage(images: { width?: number; url: string }[]): str
   return images.reduce((big, img) => (img.width || 0) > (big.width || 0) ? img : big, images[0]).url || null;
 }
 
-/** Search Spotify for a track and return the largest album cover URL */
-export async function searchSpotifyCover(userEmail: string, title: string, artist: string): Promise<string | null> {
+export interface SpotifyTrackMetadata {
+  id: string;
+  uri: string;
+  title: string;
+  artist: string;
+  album: string;
+  durationMs: number;
+  coverUrl: string | null;
+}
+
+interface SpotifyTrackPayload {
+  id?: string;
+  uri?: string;
+  name?: string;
+  duration_ms?: number;
+  artists?: { name?: string }[];
+  album?: { name?: string; images?: { width?: number; url: string }[] };
+  images?: { width?: number; url: string }[];
+}
+
+export function normalizeSpotifyTrack(track: SpotifyTrackPayload | null | undefined): SpotifyTrackMetadata | null {
+  if (!track?.id || !track.name) return null;
+  return {
+    id: track.id,
+    uri: track.uri || `spotify:track:${track.id}`,
+    title: track.name,
+    artist: track.artists?.map((artist) => artist.name || '').filter(Boolean).join(', ') || '',
+    album: track.album?.name || '',
+    durationMs: Number.isFinite(track.duration_ms) ? Math.max(0, Math.round(track.duration_ms!)) : 0,
+    coverUrl: pickLargestImage(track.album?.images || []) || pickLargestImage(track.images || []) || null,
+  };
+}
+
+/** Fetch canonical metadata for a known Spotify track ID. */
+export async function getSpotifyTrack(
+  userEmail: string,
+  trackId: string,
+): Promise<SpotifyTrackMetadata | null> {
+  if (!/^[A-Za-z0-9]+$/.test(trackId)) return null;
+  const accessToken = await getSpotifyTokenForUser(userEmail);
+  if (!accessToken) return null;
+  const res = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+    headers: { Authorization: 'Bearer ' + accessToken },
+  });
+  if (!res.ok) return null;
+  return normalizeSpotifyTrack(await res.json());
+}
+
+/** Search Spotify for the canonical track metadata used for stable matching and deduplication. */
+export async function searchSpotifyTrack(
+  userEmail: string,
+  title: string,
+  artist: string,
+): Promise<SpotifyTrackMetadata | null> {
   const accessToken = await getSpotifyTokenForUser(userEmail);
   if (!accessToken) return null;
 
@@ -63,10 +115,14 @@ export async function searchSpotifyCover(userEmail: string, title: string, artis
     ? `track:${title.trim()} artist:${artist.trim()}`
     : title.trim();
   const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=1`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: { Authorization: 'Bearer ' + accessToken },
   });
   if (!res.ok) return null;
   const data = await res.json();
-  const track = data?.tracks?.items?.[0];
-  return pickLargestImage(track?.album?.images || []) || pickLargestImage(track?.images || []) || null;
+  return normalizeSpotifyTrack(data?.tracks?.items?.[0]);
+}
+
+/** Search Spotify for a track and return the largest album cover URL */
+export async function searchSpotifyCover(userEmail: string, title: string, artist: string): Promise<string | null> {
+  return (await searchSpotifyTrack(userEmail, title, artist))?.coverUrl || null;
 }

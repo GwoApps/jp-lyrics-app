@@ -18,6 +18,43 @@ export function parseLrc(lrc: string): SyncLine[] {
   return lines.sort((a, b) => a.timeMs - b.timeMs);
 }
 
+/** Shift all timestamps by an offset, clamping negative values to zero. */
+export function offsetLrcLines(syncLines: SyncLine[], offsetMs: number): SyncLine[] {
+  return syncLines.map((line) => ({
+    ...line,
+    timeMs: Math.max(0, Math.round(line.timeMs + offsetMs)),
+  }));
+}
+
+/** Update one line timestamp and return a chronologically sorted copy. */
+export function updateLrcLineTime(syncLines: SyncLine[], index: number, timeMs: number): SyncLine[] {
+  return syncLines
+    .map((line, lineIndex) => lineIndex === index
+      ? { ...line, timeMs: Math.max(0, Math.round(timeMs)) }
+      : { ...line })
+    .sort((a, b) => a.timeMs - b.timeMs);
+}
+
+/** Serialize sync lines using millisecond-precision LRC timestamps. */
+export function serializeLrc(syncLines: SyncLine[]): string {
+  return [...syncLines]
+    .sort((a, b) => a.timeMs - b.timeMs)
+    .map((line) => `[${fmtMs(line.timeMs)}]${line.text}`)
+    .join('\n');
+}
+
+/** Parse an editor timestamp in M:SS, M:SS.d, M:SS.dd or M:SS.ddd form. */
+export function parseLrcTimestamp(value: string): number | null {
+  const match = value.trim().match(/^(\d+):(\d{2})(?:\.(\d{1,3}))?$/);
+  if (!match) return null;
+  const seconds = Number.parseInt(match[2], 10);
+  if (seconds >= 60) return null;
+  const fraction = (match[3] || '').padEnd(3, '0');
+  return Number.parseInt(match[1], 10) * 60000
+    + seconds * 1000
+    + (fraction ? Number.parseInt(fraction, 10) : 0);
+}
+
 /** Find the active sync line index for a given progress position */
 export function findActiveLine(syncLines: SyncLine[], progressMs: number): number {
   for (let i = syncLines.length - 1; i >= 0; i--) {

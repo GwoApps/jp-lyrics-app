@@ -19,6 +19,7 @@ interface SongItem {
   title: string;
   artist: string;
   cover_url?: string | null;
+  spotify_track_id?: string | null;
   created_by: string;
   created_by_name: string;
   is_public: number;
@@ -228,7 +229,7 @@ export default function HomePage() {
       const res = await fetch('/api/songs/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: nowPlaying.track.name, artist: nowPlaying.track.artist }),
+        body: JSON.stringify({ title: nowPlaying.track.name, artist: nowPlaying.track.artist, spotify_track_id: nowPlaying.track.id }),
       });
       const data = await res.json();
       if (!res.ok || data.error) {

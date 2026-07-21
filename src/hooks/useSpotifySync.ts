@@ -12,7 +12,7 @@ export interface SpotifyState {
   is_playing: boolean;
   progress_ms: number;
   duration_ms: number;
-  track: { name: string; artist: string; album: string; cover_url?: string | null } | null;
+  track: { id: string; uri: string; name: string; artist: string; album: string; cover_url?: string | null } | null;
   error?: number;
 }
 

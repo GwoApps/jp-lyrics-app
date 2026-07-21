@@ -4,10 +4,11 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
 import Link from 'next/link';
-import { RefreshCw, Bug, FileText, BookOpen, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2 } from 'lucide-react';
+import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2 } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import FuriganaLineView from '@/components/FuriganaLine';
+import LrcTimelineEditor from '@/components/LrcTimelineEditor';
 import Toast from '@/components/Toast';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useI18n } from '@/lib/i18n';
@@ -222,8 +223,13 @@ export default function SongViewPage() {
 
   // Derived state
   const { song, furiganaLines, syncLines, lineTimestamps } = data;
+  const canEdit = song?.permissions?.can_edit === true;
   const { spotify, activeLine, followPlaying, setFollowPlaying, pipWindowRef, highlightRef } = sync;
-  const isSameSong = !!(spotify?.is_playing && spotify.track && song && isTitleMatch(spotify.track.name, song.title));
+  const isSameSong = !!(spotify?.is_playing && spotify.track && song && (
+    song.spotify_track_id && spotify.track.id
+      ? song.spotify_track_id === spotify.track.id
+      : isTitleMatch(spotify.track.name, song.title)
+  ));
   const isSynced = isSameSong && activeLine >= 0;
   const hasSyncData = syncLines.length > 0;
   const debugSyncActive = spotify?.is_playing && syncLines.length > 0 ? findActiveLine(syncLines, spotify.progress_ms) : -1;
@@ -346,7 +352,7 @@ export default function SongViewPage() {
                     >
                       {t('admin.setPublic')}
                     </button>
-                  ) : currentUserEmail && song.created_by === currentUserEmail && song.public_requested !== 1 ? (
+                  ) : canEdit && song.public_requested !== 1 ? (
                     <button
                       onClick={async () => {
                         try {
@@ -367,7 +373,7 @@ export default function SongViewPage() {
               {song.is_public === 0 && song.public_requested === 1 && (
                 <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--warning)]/20 text-[var(--warning)]">{t('song.requestPublicPending')}</span>
               )}
-              {currentUserEmail && song.created_by === currentUserEmail && song.is_public === 0 && (
+              {canEdit && !isAdmin && song.is_public === 0 && (
                 song.public_requested === 1 ? (
                   <button
                     onClick={async () => {
@@ -430,19 +436,33 @@ export default function SongViewPage() {
             </Link>
 
             <ToolbarMenu
+              label={<span className="inline-flex items-center gap-1"><Languages className="h-3.5 w-3.5" /> {t(data.readingMode === 'original' ? 'song.readingOriginal' : data.readingMode === 'romaji' ? 'song.readingRomaji' : 'song.readingFurigana')} <ChevronDown className="h-3 w-3 opacity-60" /></span>}
+              items={([
+                ['original', 'song.readingOriginal'],
+                ['furigana', 'song.readingFurigana'],
+                ['romaji', 'song.readingRomaji'],
+              ] as const).map(([mode, label]) => ({
+                icon: <Languages className="h-3.5 w-3.5" />,
+                label: t(label),
+                active: data.readingMode === mode,
+                onClick: () => data.setReadingMode(mode),
+              }))}
+            />
+
+            <ToolbarMenu
               label={<span className="inline-flex items-center gap-1">{t('common.edit')} <ChevronDown className="h-3 w-3 opacity-60" /></span>}
               items={[
                 {
                   icon: <Pencil className="h-3.5 w-3.5" />,
                   label: t('common.edit'),
                   onClick: () => router.push(`/songs/${id}/edit`),
-                  disabled: !spotifyConnected,
+                  disabled: !canEdit,
                 },
                 {
                   icon: <Languages className="h-3.5 w-3.5" />,
                   label: t('furigana.title'),
                   onClick: () => router.push(`/songs/${id}/furigana/edit`),
-                  disabled: !spotifyConnected,
+                  disabled: !canEdit,
                 },
               ]}
             />
@@ -450,12 +470,6 @@ export default function SongViewPage() {
             <ToolbarMenu
               label={<span className="inline-flex items-center gap-1">{t('song.more')} <ChevronDown className="h-3 w-3 opacity-60" /></span>}
               items={[
-                {
-                  icon: data.showRaw ? <BookOpen className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />,
-                  label: data.showRaw ? t('song.furigana') : t('song.raw'),
-                  active: data.showRaw,
-                  onClick: () => data.setShowRaw(!data.showRaw),
-                },
                 {
                   icon: <Bug className="h-3.5 w-3.5" />,
                   label: t('song.debug'),
@@ -466,13 +480,20 @@ export default function SongViewPage() {
                   icon: <RefreshCw className={`h-3.5 w-3.5 ${data.syncing ? 'animate-spin' : ''}`} />,
                   label: data.syncing ? t('song.syncing') : t('song.sync'),
                   onClick: data.handleSync,
-                  disabled: data.syncing || !spotifyConnected,
+                  disabled: data.syncing || !canEdit,
                 },
+                ...(hasSyncData ? [{
+                  icon: <Clock3 className="h-3.5 w-3.5" />,
+                  label: t('song.timelineEdit'),
+                  active: data.showTimelineEditor,
+                  onClick: () => data.setShowTimelineEditor(!data.showTimelineEditor),
+                  disabled: !canEdit,
+                } as const] : []),
                 ...(!hasSyncData ? [{
                   icon: <ClipboardPaste className="h-3.5 w-3.5" />,
                   label: t('song.paste'),
                   onClick: () => data.setShowPasteLrc(!data.showPasteLrc),
-                  disabled: !spotifyConnected,
+                  disabled: !canEdit,
                 } as const] : []),
                 {
                   icon: <Download className="h-3.5 w-3.5" />,
@@ -494,7 +515,7 @@ export default function SongViewPage() {
                   label: t('common.delete'),
                   danger: true,
                   onClick: data.handleDelete,
-                  disabled: !spotifyConnected,
+                  disabled: !canEdit,
                 },
               ]}
             />
@@ -602,17 +623,21 @@ export default function SongViewPage() {
             </div>
           </div>
         )}
+        {data.showTimelineEditor && hasSyncData && (
+          <LrcTimelineEditor
+            initialLines={syncLines}
+            currentPositionMs={isSameSong && spotify?.connected ? spotify.progress_ms : null}
+            saving={data.timelineSaving}
+            onSave={data.saveTimeline}
+            onClose={() => data.setShowTimelineEditor(false)}
+          />
+        )}
       </div>
-
-      {/* Lyrics */}
       <div className="lyrics-panel-shell relative isolate flex-1 min-h-0" style={lyricPanelStyle}>
         <div className="lyrics-ambient-breath" aria-hidden="true" />
         <div className="lyrics-ambient-orbit" aria-hidden="true" />
         <div className="lyrics-ambient-orbit lyrics-ambient-orbit--secondary" aria-hidden="true" />
         <div className="lyrics-panel relative isolate h-full rounded-lg overflow-hidden">
-          {data.showRaw ? (
-          <pre className="relative z-10 p-4 sm:p-6 whitespace-pre-wrap font-sans leading-relaxed h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden" style={{ fontSize: `${data.fontSize}px` }}>{song.lyrics_raw || t('song.noLyricsParen')}</pre>
-        ) : (
           <div ref={data.lyricsRef} className="relative z-10 p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden scroll-smooth" style={{ fontSize: `${data.fontSize}px` }}>
             {furiganaLines.length > 0 ? (
               furiganaLines.map((line, i) => (
@@ -626,7 +651,8 @@ export default function SongViewPage() {
                     onCopyLine={() => copyLyricLine(line)}
                     onShareLine={() => router.push(`/songs/${id}/share?line=${i}`)}
                     onCorrectFurigana={() => router.push(`/songs/${id}/furigana/edit`)}
-                    canCorrectFurigana={spotifyConnected === true}
+                    canCorrectFurigana={canEdit}
+                    readingMode={data.readingMode}
                   />
                 </div>
               ))
@@ -646,7 +672,6 @@ export default function SongViewPage() {
               <p className="text-sm text-[var(--muted-foreground)]">{t('song.noLyricsSimple')}</p>
             )}
           </div>
-          )}
         </div>
       </div>
 
@@ -656,6 +681,10 @@ export default function SongViewPage() {
           <span>{t('common.created')}{new Date(song.created_at).toLocaleString('ja-JP')}</span>
           <span>{t('common.updated')}{new Date(song.updated_at).toLocaleString('ja-JP')}</span>
           {hasSyncData && <span className="text-green-500/60">{t('common.linesSynced', { count: String(syncLines.length) })}</span>}
+          <span>{t('song.lyricsSource', { source: song.lyrics_source || 'manual' })}</span>
+          <span className={(song.lyrics_confidence ?? 100) >= 90 ? 'text-[var(--success)]/70' : (song.lyrics_confidence ?? 100) >= 75 ? 'text-[var(--warning)]/80' : 'text-[var(--destructive)]/80'}>{t('song.lyricsConfidence', { confidence: String(song.lyrics_confidence ?? 100) })}</span>
+          {song.spotify_track_id && <span title={t('song.spotifyTrackId', { id: song.spotify_track_id })}>Spotify · {song.spotify_track_id.slice(0, 8)}…</span>}
+          {song.spotify_album && <span>{t('song.spotifyAlbum', { album: song.spotify_album })}</span>}
         </div>
         {!spotify?.connected && (
           <SpotifyLoginButton className="text-[11px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors disabled:opacity-60">{t('song.spotify')}</SpotifyLoginButton>
@@ -666,7 +695,7 @@ export default function SongViewPage() {
       <MobileMenu
         data={data} sync={sync} song={song} id={id} router={router}
         furiganaLines={furiganaLines} hasSyncData={hasSyncData} pipSupported={pipSupported}
-        highlightRef={highlightRef} pipWindowRef={pipWindowRef} spotifyConnected={spotifyConnected === true}
+        highlightRef={highlightRef} pipWindowRef={pipWindowRef} canEdit={canEdit}
         lineTimestamps={lineTimestamps}
       />
 
@@ -799,7 +828,7 @@ function ToolbarMenu({ label, items }: { label: ReactNode; items: ToolbarMenuIte
 }
 
 /** Mobile bottom toolbar — A-/A+, Sync, Copy visible; rest in 3-dot menu */
-function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, pipSupported, highlightRef, pipWindowRef, spotifyConnected, lineTimestamps }: {
+function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, pipSupported, highlightRef, pipWindowRef, canEdit, lineTimestamps }: {
   data: ReturnType<typeof useSongData>;
   sync: ReturnType<typeof useSpotifySync>;
   song: NonNullable<ReturnType<typeof useSongData>['song']>;
@@ -810,7 +839,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
   pipSupported: boolean;
   highlightRef: React.MutableRefObject<number>;
   pipWindowRef: React.MutableRefObject<Window | null>;
-  spotifyConnected: boolean;
+  canEdit: boolean;
   lineTimestamps: (number | null)[];
 }) {
   const { t } = useI18n();
@@ -829,13 +858,14 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
   }, [showMenu]);
 
   const menuItems = [
-    { icon: <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />, label: data.syncing ? t('song.syncing') : t('song.sync'), onClick: data.handleSync, disabled: data.syncing },
+    { icon: <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />, label: data.syncing ? t('song.syncing') : t('song.sync'), onClick: data.handleSync, disabled: data.syncing || !canEdit },
+    ...(hasSyncData && canEdit ? [{ icon: <Clock3 className="h-4 w-4" />, label: t('song.timelineEdit'), onClick: () => data.setShowTimelineEditor(!data.showTimelineEditor), active: data.showTimelineEditor }] : []),
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: t('song.pipBtn'), onClick: () => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef, lineTimestamps) }] : []),
     { icon: <Bug className="h-4 w-4" />, label: t('song.debug'), onClick: () => data.setDebug(!data.debug), active: data.debug },
     { icon: <Download className="h-4 w-4" />, label: '.txt', onClick: () => { window.location.href = `/api/songs/${id}/export?format=text`; } },
     { icon: <Download className="h-4 w-4" />, label: '.lrc', onClick: () => { window.location.href = `/api/songs/${id}/export?format=lrc`; } },
     { icon: <Download className="h-4 w-4" />, label: `.html ${t('song.exportFurigana')}`, onClick: () => { window.location.href = `/api/songs/${id}/export?format=html`; } },
-    ...(spotifyConnected ? [
+    ...(canEdit ? [
       { icon: <Pencil className="h-4 w-4" />, label: t('common.edit'), onClick: () => router.push(`/songs/${id}/edit`) },
       { icon: <Languages className="h-4 w-4" />, label: t('furigana.title'), onClick: () => router.push(`/songs/${id}/furigana/edit`) },
       { icon: <Trash2 className="h-4 w-4" />, label: t('common.delete'), onClick: data.handleDelete, danger: true },
@@ -858,15 +888,19 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
         </MobileIconButton>
 
         {/* Paste */}
-        {!hasSyncData && (
+        {!hasSyncData && canEdit && (
           <MobileIconButton label={t('song.paste')} onClick={() => data.setShowPasteLrc(!data.showPasteLrc)} className={data.showPasteLrc ? 'song-mobile-button--active' : ''}>
             <ClipboardPaste className="h-5 w-5" />
           </MobileIconButton>
         )}
 
-        {/* Raw / Furigana */}
-        <MobileIconButton label={data.showRaw ? t('song.furigana') : t('song.raw')} onClick={() => data.setShowRaw(!data.showRaw)} className={data.showRaw ? 'song-mobile-button--active' : ''}>
-          {data.showRaw ? <BookOpen className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
+        {/* Original / Furigana / Romaji */}
+        <MobileIconButton
+          label={t(data.readingMode === 'original' ? 'song.readingOriginal' : data.readingMode === 'romaji' ? 'song.readingRomaji' : 'song.readingFurigana')}
+          onClick={() => data.setReadingMode(data.readingMode === 'original' ? 'furigana' : data.readingMode === 'furigana' ? 'romaji' : 'original')}
+          className={data.readingMode !== 'furigana' ? 'song-mobile-button--active' : ''}
+        >
+          <Languages className="h-5 w-5" />
         </MobileIconButton>
 
         {/* Share */}

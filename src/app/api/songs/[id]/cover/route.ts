@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB, schema, eq } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { getSpotifyTokenForUser, searchSpotifyCover } from '@/lib/spotify';
+import { getSpotifyTokenForUser, searchSpotifyTrack } from '@/lib/spotify';
 
 // GET /api/songs/[id]/cover — return cached cover URL or search Spotify
 export async function GET(
@@ -21,6 +21,7 @@ export async function GET(
     title: schema.songs.title,
     artist: schema.songs.artist,
     coverUrl: schema.songs.coverUrl,
+    spotifyTrackId: schema.songs.spotifyTrackId,
     createdBy: schema.songs.createdBy,
     isPublic: schema.songs.isPublic,
   }).from(schema.songs).where(eq(schema.songs.id, id)).get() as {
@@ -28,6 +29,7 @@ export async function GET(
     title: string;
     artist: string;
     coverUrl: string | null;
+    spotifyTrackId: string | null;
     createdBy: string;
     isPublic: number;
   } | undefined;
@@ -41,8 +43,8 @@ export async function GET(
   }
 
   // Return cached URL if available
-  if (existing.coverUrl) {
-    return NextResponse.json({ cover_url: existing.coverUrl });
+  if (existing.coverUrl && existing.spotifyTrackId) {
+    return NextResponse.json({ cover_url: existing.coverUrl, spotify_track_id: existing.spotifyTrackId });
   }
 
   // Require a valid Spotify token to search
@@ -51,15 +53,21 @@ export async function GET(
     return NextResponse.json({ error: 'spotify_not_connected' }, { status: 400 });
   }
 
-  const coverUrl = await searchSpotifyCover(user.id, existing.title, existing.artist);
-  if (!coverUrl) {
+  const track = await searchSpotifyTrack(user.id, existing.title, existing.artist);
+  if (!track) {
     return NextResponse.json({ error: 'cover_not_found' }, { status: 404 });
   }
 
   await db.update(schema.songs).set({
-    coverUrl,
+    coverUrl: track.coverUrl || existing.coverUrl,
+    spotifyTrackId: track.id,
+    spotifyUri: track.uri,
+    spotifyAlbum: track.album,
+    spotifyDurationMs: track.durationMs,
+    spotifyCanonicalTitle: track.title,
+    spotifyCanonicalArtist: track.artist,
     updatedAt: new Date().toISOString(),
   }).where(eq(schema.songs.id, id));
 
-  return NextResponse.json({ cover_url: coverUrl });
+  return NextResponse.json({ cover_url: track.coverUrl || existing.coverUrl, spotify_track_id: track.id });
 }

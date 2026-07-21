@@ -6,8 +6,12 @@ import { getSpotifyTokenForUser } from '@/lib/spotify';
 import { fetchLyrics } from '@/lib/lyrics-fetcher';
 
 interface SpotifyTrack {
+  id: string;
+  uri: string;
   name: string;
+  duration_ms: number;
   artists: { name: string }[];
+  album?: { name?: string; images?: { width?: number; url: string }[] };
 }
 
 interface PlaylistResponse {
@@ -52,8 +56,8 @@ export async function POST(request: NextRequest) {
   }
 
   // Fetch playlist tracks from Spotify
-  const tracks: { title: string; artist: string }[] = [];
-  let nextUrl: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=items(track(name,artists(name))),next`;
+  const tracks: { id: string; uri: string; title: string; artist: string; album: string; durationMs: number; coverUrl: string | null }[] = [];
+  let nextUrl: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=items(track(id,uri,name,duration_ms,artists(name),album(name,images(url,width)))),next`;
 
   while (nextUrl) {
     const spotifyRes = await fetch(nextUrl, {
@@ -64,10 +68,18 @@ export async function POST(request: NextRequest) {
     }
     const data: PlaylistResponse = await spotifyRes.json();
     for (const item of data.items || []) {
-      if (item.track?.name) {
+      if (item.track?.id && item.track.name) {
         tracks.push({
+          id: item.track.id,
+          uri: item.track.uri,
           title: item.track.name,
           artist: item.track.artists?.map((a) => a.name).join(', ') || '',
+          album: item.track.album?.name || '',
+          durationMs: item.track.duration_ms || 0,
+          coverUrl: item.track.album?.images?.reduce((best, image) =>
+            (image.width || 0) > (best.width || 0) ? image : best,
+            item.track.album.images[0],
+          )?.url || null,
         });
       }
     }
@@ -93,7 +105,7 @@ export async function POST(request: NextRequest) {
     // Skip duplicates
     const existing = await db.select({ id: schema.songs.id })
       .from(schema.songs)
-      .where(sql`title = ${track.title} AND artist = ${track.artist}`)
+      .where(sql`spotify_track_id = ${track.id} OR (title = ${track.title} AND artist = ${track.artist})`)
       .get();
 
     if (existing) {
@@ -105,10 +117,12 @@ export async function POST(request: NextRequest) {
     // Fetch lyrics from all sources — failure is non-fatal
     let lyrics: { synced: string; plain: string } | null = null;
     let source = '';
+    let confidence = 0;
     try {
       const r = await fetchLyrics(track.title, track.artist);
       lyrics = r.result;
       source = r.source;
+      confidence = r.confidence;
     } catch {
       // Individual track failure — continue to next
     }
@@ -122,6 +136,16 @@ export async function POST(request: NextRequest) {
         lyricsRaw: lyrics?.plain || '',
         lyricsFurigana: '[]',
         lyricsSynced: lyrics?.synced || '',
+        coverUrl: track.coverUrl,
+        spotifyTrackId: track.id,
+        spotifyUri: track.uri,
+        spotifyAlbum: track.album,
+        spotifyDurationMs: track.durationMs,
+        spotifyCanonicalTitle: track.title,
+        spotifyCanonicalArtist: track.artist,
+        lyricsSource: lyrics ? source : 'none',
+        lyricsConfidence: lyrics ? confidence : 0,
+        lyricsFetchedAt: lyrics ? new Date().toISOString() : null,
         createdBy: user.email,
         createdByName,
       });

@@ -110,11 +110,13 @@ export interface SongCandidate {
   id: string;
   title: string;
   artist: string;
+  spotify_track_id?: string | null;
   created_by?: string;
   is_public?: number;
 }
 
 export interface PlayingTrack {
+  id?: string;
   name: string;
   artist: string;
 }
@@ -128,6 +130,7 @@ export function songMatchScore(
   song: SongCandidate,
   track: PlayingTrack,
 ): number {
+  if (song.spotify_track_id && track.id && song.spotify_track_id === track.id) return 1;
   const tScore = titleScore(song.title, track.name);
   if (tScore < 0.55) return 0; // Title must pass threshold
 

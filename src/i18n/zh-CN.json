@@ -107,6 +107,10 @@
     "paste": "粘贴",
     "furigana": "注音",
     "raw": "原文",
+    "readingMode": "显示方式",
+    "readingOriginal": "原文",
+    "readingFurigana": "假名",
+    "readingRomaji": "罗马音",
     "spotify": "Spotify",
     "spotifyLoading": "正在加载 Spotify 播放状态…",
     "spotifyDisconnected": "Spotify 未连接",
@@ -130,7 +134,26 @@
     "requestPublicSuccess": "已提交公开申请",
     "requestPublicCancel": "取消申请",
     "requestPublicCancelled": "已取消申请",
-    "requestPublicPending": "公开申请审核中"
+    "requestPublicPending": "公开申请审核中",
+    "timelineEdit": "编辑时间轴",
+    "lyricsSource": "歌词来源：{source}",
+    "lyricsConfidence": "可信度 {confidence}%",
+    "spotifyMetadata": "Spotify 规范化信息",
+    "spotifyTrackId": "Track ID：{id}",
+    "spotifyAlbum": "专辑：{album}"
+  },
+  "timeline": {
+    "title": "LRC 时间轴编辑",
+    "description": "整体偏移时间，或逐行修改时间戳和歌词，并保存校准后的时间轴。",
+    "offset": "整体偏移",
+    "customOffset": "自定义偏移（毫秒）",
+    "apply": "应用",
+    "timestamp": "第 {line} 行时间戳",
+    "lyricLine": "第 {line} 行歌词",
+    "useCurrent": "使用当前 Spotify 播放时间",
+    "lineCount": "共 {count} 行",
+    "saving": "保存中...",
+    "saved": "时间轴已保存"
   },
   "edit": {
     "title": "编辑歌曲",
