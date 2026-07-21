@@ -17,6 +17,7 @@ import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
 import type { CoverColor } from '@/lib/cover-color';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
+import { getCachedSongCover, cacheSongCover } from '@/lib/song-cover-cache';
 import type { FuriganaLine } from '@/lib/types';
 import { useAuthSession } from '@/lib/auth-session';
 import type { SyncRefs } from '@/hooks/useSpotifySync';
@@ -144,13 +145,16 @@ export default function SongViewPage() {
     } catch { setPipSupported(false); }
   }, []);
 
-  // Album cover
-  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  // Start with the list's cached cover so the shared element has real visual content on its first render.
+  const [coverUrl, setCoverUrl] = useState<string | null>(() => getCachedSongCover(id));
   const coverTheme = useCoverTheme(coverUrl);
   const coverColor = coverTheme.palette;
   useEffect(() => {
-    if (data.song?.cover_url) setCoverUrl(data.song.cover_url);
-  }, [data.song?.cover_url]);
+    if (data.song?.cover_url) {
+      cacheSongCover(id, data.song.cover_url);
+      setCoverUrl(data.song.cover_url);
+    }
+  }, [data.song?.cover_url, id]);
   useEffect(() => {
     if (!id || !currentUserEmail || !spotifyConnected || coverUrl) return;
     fetch(`/api/songs/${id}/cover`)
@@ -159,7 +163,12 @@ export default function SongViewPage() {
         const d = await r.json();
         return d.cover_url as string | null;
       })
-      .then((url) => { if (url) setCoverUrl(url); })
+      .then((url) => {
+        if (url) {
+          cacheSongCover(id, url);
+          setCoverUrl(url);
+        }
+      })
       .catch(() => {});
   }, [id, currentUserEmail, spotifyConnected, coverUrl]);
   if (data.loading) {
@@ -175,7 +184,7 @@ export default function SongViewPage() {
         <div className="shrink-0 mb-4 sm:mb-6">
           <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
             <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
-              <CoverImage src={null} alt="" size="md" viewTransitionName={`song-cover-${id}`} />
+              <CoverImage src={coverUrl} alt="" size="md" viewTransitionName={`song-cover-${id}`} />
               <div className="space-y-0.5 sm:space-y-1 min-w-0 flex-1 py-0.5">
                 <div className="h-6 w-48 bg-[var(--muted)] rounded animate-pulse cover-transition" style={{ ['--vt-name' as string]: `song-title-${id}` }} />
                 <div className="h-4 w-32 bg-[var(--muted)] rounded animate-pulse cover-transition" style={{ ['--vt-name' as string]: `song-artist-${id}` }} />

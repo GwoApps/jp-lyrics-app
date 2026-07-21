@@ -12,6 +12,7 @@ import { useI18n } from '@/lib/i18n';
 import { findBestMatch, isSongPlaying } from '@/lib/match';
 import { useNowPlaying } from '@/hooks/useNowPlaying';
 import { useAuthSession } from '@/lib/auth-session';
+import { cacheSongCovers } from '@/lib/song-cover-cache';
 
 interface SongItem {
   id: string;
@@ -136,12 +137,13 @@ export default function HomePage() {
     const cached = getCachedSongs();
     if (cached) {
       setSongs(cached);
+      cacheSongCovers(cached);
       setLoading(false);
     }
 
     fetch('/api/songs')
       .then((r) => r.json())
-      .then((data) => { setSongs(data); setCachedSongs(data); setLoading(false); })
+      .then((data) => { setSongs(data); cacheSongCovers(data); setCachedSongs(data); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
 
@@ -163,7 +165,7 @@ export default function HomePage() {
     const params = mySongsOnly ? '?mine=1' : '';
     fetch(`/api/songs${params}`)
       .then((r) => r.json())
-      .then((data) => setSongs(data))
+      .then((data) => { setSongs(data); cacheSongCovers(data); })
       .catch(() => {});
   }, [mySongsOnly]);
 
@@ -240,6 +242,7 @@ export default function HomePage() {
       if (songsRes.ok) {
         const data = await songsRes.json();
         setSongs(data);
+        cacheSongCovers(data);
         setCachedSongs(data);
       }
     } catch {
