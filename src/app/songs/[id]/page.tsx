@@ -336,7 +336,7 @@ export default function SongViewPage() {
         <div className="flex flex-col items-start gap-3 sm:gap-4">
           <div className="flex items-start gap-3 sm:gap-4 min-w-0 w-full">
             <CoverImage src={coverUrl} alt={song.title} size="md" viewTransitionName={`song-cover-${id}`} />
-            <div className="min-w-0 flex-1 space-y-0.5 sm:space-y-1">
+            <div className="w-fit max-w-full min-w-0 space-y-0.5 sm:space-y-1">
               <h1 className="text-base sm:text-xl font-semibold tracking-tight break-words cover-transition" style={{ ['--vt-name' as string]: `song-title-${id}` }}>{song.title}</h1>
               {song.artist && <p className="text-xs sm:text-sm text-[var(--muted-foreground)] cover-transition" style={{ ['--vt-name' as string]: `song-artist-${id}` }}>{song.artist}</p>}
               {/* Visibility badge + request public */}
