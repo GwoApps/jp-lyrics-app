@@ -96,6 +96,13 @@ textarea {
   from { opacity: 0; transform: translateY(3px); }
   to { opacity: 1; transform: translateY(0); }
 }
+@supports (view-transition-name: none) {
+  /* Let native shared-element transitions own route changes without a competing parent transform/opacity animation. */
+  .fade-in {
+    animation: none;
+  }
+}
+
 
 /* The now-playing row reserves and releases space gradually, so the song list moves with it. */
 .now-playing-slot {
