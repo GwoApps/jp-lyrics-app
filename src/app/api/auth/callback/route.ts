@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDB, schema, sql } from '@/lib/db';
+import { getDB, sql } from '@/lib/db';
 import { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI, base64Encode } from '@/lib/spotify';
 import { signSession } from '@/lib/auth';
 

@@ -15,7 +15,7 @@ export async function PUT(
   const db = getDB();
   const { id } = await params;
   const body = await request.json();
-  const { is_public, public_requested } = body;
+  const { is_public } = body;
 
   const existing = await db.get(sql`SELECT id FROM songs WHERE id = ${id}`);
   if (!existing) {

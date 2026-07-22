@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useSyncExternalStore } from 'react';
 
 type Theme = 'dark' | 'light';
 
@@ -23,24 +23,19 @@ function applyThemeColor(theme: Theme) {
   if (meta) meta.setAttribute('content', THEME_COLORS[theme]);
 }
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('dark');
+function detectTheme(): Theme {
+  if (typeof window === 'undefined') return 'dark';
+  const saved = localStorage.getItem('jplrc-theme');
+  if (saved === 'light' || saved === 'dark') return saved;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
 
-  useEffect(() => {
-    const saved = localStorage.getItem('jplrc-theme') as Theme | null;
-    if (saved === 'light' || saved === 'dark') {
-      setTheme(saved);
-      document.documentElement.setAttribute('data-theme', saved);
-      applyThemeColor(saved);
-    } else {
-      // No saved preference — detect system and apply
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const detected: Theme = prefersDark ? 'dark' : 'light';
-      setTheme(detected);
-      document.documentElement.setAttribute('data-theme', detected);
-      applyThemeColor(detected);
-    }
-  }, []);
+const subscribeHydration = () => () => {};
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [clientTheme, setTheme] = useState<Theme>(detectTheme);
+  const hydrated = useSyncExternalStore(subscribeHydration, () => true, () => false);
+  const theme = hydrated ? clientTheme : 'dark';
 
   const toggleTheme = useCallback(() => {
     setTheme((prev) => {

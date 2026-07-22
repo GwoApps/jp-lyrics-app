@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
 import Link from 'next/link';
@@ -77,6 +77,15 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
+const subscribeStaticCapability = () => () => {};
+function getDocumentPiPSupport() {
+  if (typeof window === 'undefined') return false;
+  const pipWindow = window as Window & {
+    documentPictureInPicture?: { requestWindow?: unknown };
+  };
+  return typeof pipWindow.documentPictureInPicture?.requestWindow === 'function';
+}
+
 /** Normalizes source output to a restrained range: dim art gets a modest lift, bright art is capped. */
 function ambientBrightness(color: CoverColor) {
   return clamp(1.14 - colorLuminance(color) * 0.46, 0.82, 1.12);
@@ -96,6 +105,8 @@ export default function SongViewPage() {
 
   // Data + handlers hook
   const data = useSongData(id);
+  const lyricsRef = useRef<HTMLDivElement>(null);
+  const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   // Mutable ref bag for the rAF sync loop (avoids stale closures)
   const syncRefs = useRef<SyncRefs>({
@@ -107,9 +118,6 @@ export default function SongViewPage() {
     allSongs: [],
     currentSongId: id,
     currentUserEmail: '',
-    pipWindow: null,
-    lineRefs: { current: [] },
-    lyricsRef: { current: null },
   });
 
   // Cached login state renders immediately; useAuthSession revalidates it on every entry.
@@ -119,7 +127,7 @@ export default function SongViewPage() {
   const spotifyConnected = session ? session.spotify.connected : null;
 
   // Spotify sync hook (polling + rAF + follow-playing)
-  const sync = useSpotifySync(syncRefs, spotifyConnected === true);
+  const sync = useSpotifySync(syncRefs, lineRefs, lyricsRef, spotifyConnected === true);
 
   // Keep syncRefs in sync with state
   useEffect(() => { syncRefs.current.songTitle = data.song?.title || ''; }, [data.song?.title]);
@@ -130,15 +138,12 @@ export default function SongViewPage() {
   useEffect(() => { syncRefs.current.allSongs = data.allSongs; }, [data.allSongs]);
   useEffect(() => { syncRefs.current.currentSongId = id; }, [id]);
   useEffect(() => { syncRefs.current.currentUserEmail = currentUserEmail; }, [currentUserEmail]);
-  useEffect(() => { syncRefs.current.pipWindow = sync.pipWindowRef.current; }, [sync.pipWindowRef]);
-  useEffect(() => { syncRefs.current.lineRefs = data.lineRefs; }, [data.lineRefs]);
-  useEffect(() => { syncRefs.current.lyricsRef = data.lyricsRef; }, [data.lyricsRef]);
 
   // Re-center on active line when debug toggled off
   useEffect(() => {
-    if (!data.debug && sync.activeLine >= 0 && data.lineRefs.current?.[sync.activeLine]) {
-      const lineEl = data.lineRefs.current[sync.activeLine];
-      const container = data.lyricsRef.current;
+    if (!data.debug && sync.activeLine >= 0 && lineRefs.current?.[sync.activeLine]) {
+      const lineEl = lineRefs.current[sync.activeLine];
+      const container = lyricsRef.current;
       if (lineEl && container) {
         const lineTop = lineEl.offsetTop - container.offsetTop;
         container.scrollTo({ top: lineTop - container.clientHeight / 2 + lineEl.offsetHeight / 2, behavior: 'smooth' });
@@ -147,23 +152,16 @@ export default function SongViewPage() {
   }, [data.debug]);
 
   // PiP detection
-  const [pipSupported, setPipSupported] = useState(false);
-  useEffect(() => {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const api = (window as any).documentPictureInPicture;
-      setPipSupported(typeof api?.requestWindow === 'function');
-    } catch { setPipSupported(false); }
-  }, []);
+  const pipSupported = useSyncExternalStore(subscribeStaticCapability, getDocumentPiPSupport, () => false);
 
   // Start with the list's cached cover so the shared element has real visual content on its first render.
-  const [coverUrl, setCoverUrl] = useState<string | null>(() => getCachedSongCover(id));
+  const [fallbackCoverUrl, setFallbackCoverUrl] = useState<string | null>(() => getCachedSongCover(id));
+  const coverUrl = data.song?.cover_url ?? fallbackCoverUrl;
   const coverTheme = useCoverTheme(coverUrl);
   const coverColor = coverTheme.palette;
   useEffect(() => {
     if (data.song?.cover_url) {
       cacheSongCover(id, data.song.cover_url);
-      setCoverUrl(data.song.cover_url);
     }
   }, [data.song?.cover_url, id]);
   useEffect(() => {
@@ -177,7 +175,7 @@ export default function SongViewPage() {
       .then((url) => {
         if (url) {
           cacheSongCover(id, url);
-          setCoverUrl(url);
+          setFallbackCoverUrl(url);
         }
       })
       .catch(() => {});
@@ -236,7 +234,8 @@ export default function SongViewPage() {
   const canEdit = song?.permissions?.can_edit === true;
   const lyricsSourceKey = song ? LYRICS_SOURCE_KEYS[song.lyrics_source] : undefined;
   const lyricsSourceLabel = song ? (lyricsSourceKey ? t(lyricsSourceKey) : song.lyrics_source) : '';
-  const { spotify, activeLine, followPlaying, setFollowPlaying, pipWindowRef, highlightRef } = sync;
+  const { spotify, activeLine, followPlaying, setFollowPlaying, pipWindowRef } = sync;
+  const handleOpenPiP = () => data.openPiP(furiganaLines, song, activeLine, pipWindowRef, lineTimestamps);
   const isSameSong = !!(spotify?.is_playing && spotify.track && song && (
     song.spotify_track_id && spotify.track.id
       ? song.spotify_track_id === spotify.track.id
@@ -433,7 +432,7 @@ export default function SongViewPage() {
             </button>
             {furiganaLines.length > 0 && pipSupported && (
               <button
-                onClick={() => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef, lineTimestamps)}
+                onClick={handleOpenPiP}
                 className={btnCls()}
                 aria-label={t('song.pipBtn')}
                 title={t('song.pipBtn')}
@@ -649,10 +648,10 @@ export default function SongViewPage() {
         <div className="lyrics-ambient-orbit" aria-hidden="true" />
         <div className="lyrics-ambient-orbit lyrics-ambient-orbit--secondary" aria-hidden="true" />
         <div className="lyrics-panel relative isolate h-full rounded-lg overflow-hidden">
-          <div ref={data.lyricsRef} className="relative z-10 p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden scroll-smooth" style={{ fontSize: `${data.fontSize}px` }}>
+          <div ref={lyricsRef} className="relative z-10 p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden scroll-smooth" style={{ fontSize: `${data.fontSize}px` }}>
             {furiganaLines.length > 0 ? (
               furiganaLines.map((line, i) => (
-                <div key={i} ref={(el) => { data.lineRefs.current[i] = el; }}>
+                <div key={i} ref={(el) => { lineRefs.current[i] = el; }}>
                   <FuriganaLineView
                     line={line}
                     isActive={i === activeLine && !!isSynced}
@@ -706,8 +705,7 @@ export default function SongViewPage() {
       <MobileMenu
         data={data} sync={sync} song={song} id={id} router={router}
         furiganaLines={furiganaLines} hasSyncData={hasSyncData} pipSupported={pipSupported}
-        highlightRef={highlightRef} pipWindowRef={pipWindowRef} canEdit={canEdit}
-        lineTimestamps={lineTimestamps}
+        onOpenPiP={handleOpenPiP} canEdit={canEdit}
       />
 
       {data.toast && <Toast type={data.toast.type} message={data.toast.msg} />}
@@ -839,7 +837,7 @@ function ToolbarMenu({ label, items }: { label: ReactNode; items: ToolbarMenuIte
 }
 
 /** Mobile bottom toolbar — A-/A+, Sync, Copy visible; rest in 3-dot menu */
-function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, pipSupported, highlightRef, pipWindowRef, canEdit, lineTimestamps }: {
+function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, pipSupported, onOpenPiP, canEdit }: {
   data: ReturnType<typeof useSongData>;
   sync: ReturnType<typeof useSpotifySync>;
   song: NonNullable<ReturnType<typeof useSongData>['song']>;
@@ -848,10 +846,8 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
   furiganaLines: ReturnType<typeof useSongData>['furiganaLines'];
   hasSyncData: boolean;
   pipSupported: boolean;
-  highlightRef: React.MutableRefObject<number>;
-  pipWindowRef: React.MutableRefObject<Window | null>;
+  onOpenPiP: () => void;
   canEdit: boolean;
-  lineTimestamps: (number | null)[];
 }) {
   const { t } = useI18n();
   const [showMenu, setShowMenu] = useState(false);
@@ -871,7 +867,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
   const menuItems = [
     { icon: <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />, label: data.syncing ? t('song.syncing') : t('song.sync'), onClick: data.handleSync, disabled: data.syncing || !canEdit },
     ...(song.lyrics_raw && canEdit ? [{ icon: <Clock3 className="h-4 w-4" />, label: t('song.timelineEdit'), onClick: () => router.push(`/songs/${id}/timeline/edit`) }] : []),
-    ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: t('song.pipBtn'), onClick: () => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef, lineTimestamps) }] : []),
+    ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: t('song.pipBtn'), onClick: onOpenPiP }] : []),
     { icon: <Bug className="h-4 w-4" />, label: t('song.debug'), onClick: () => data.setDebug(!data.debug), active: data.debug },
     { icon: <Download className="h-4 w-4" />, label: '.txt', onClick: () => { window.location.href = `/api/songs/${id}/export?format=text`; } },
     { icon: <Download className="h-4 w-4" />, label: '.lrc', onClick: () => { window.location.href = `/api/songs/${id}/export?format=lrc`; } },

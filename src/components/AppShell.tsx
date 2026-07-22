@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { I18nProvider, useI18n } from '@/lib/i18n';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useAuthSession } from '@/lib/auth-session';
@@ -17,20 +18,20 @@ function Nav() {
   return (
     <nav className="sticky top-0 z-50 border-b border-[var(--border)] bg-[var(--background)]/80 backdrop-blur-sm">
       <div className="mx-auto flex h-11 max-w-[860px] items-center px-4 sm:px-6">
-        <a href="/" className="whitespace-nowrap text-sm font-bold tracking-tight text-[var(--primary)]">
+        <Link href="/" className="whitespace-nowrap text-sm font-bold tracking-tight text-[var(--primary)]">
           {t('common.appName')}
-        </a>
+        </Link>
         <span className="ml-2.5 text-xs text-[var(--muted-foreground)] hidden sm:inline">
           {t('common.appDesc')}
         </span>
         <div className="flex-1" />
         <div className="flex items-center gap-1 sm:gap-2">
-          <a
+          <Link
             href="/"
             className="rounded-md px-2.5 sm:px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)]"
           >
             {t('common.list')}
-          </a>
+          </Link>
           {spotifyConnected && isAdmin && (
             <a
               href="/admin"

@@ -82,8 +82,6 @@ export function useNowPlaying(enabled = true) {
       esRef.current?.close();
       esRef.current = null;
       stopClientPolling();
-      setData(null);
-      setPollMode(null);
       return;
     }
     mountedRef.current = true;
@@ -115,10 +113,6 @@ export function useNowPlaying(enabled = true) {
   }, []);
 
   // ─── Server mode: SSE with diff protocol ───
-  const clearFallback = useCallback(() => {
-    // In server mode, fallback = retry SSE; no client polling fallback
-  }, []);
-
   const startFallback = useCallback((reason: string) => {
     // In server mode, fall back to REST polling if SSE fails
     if (pollRef.current) return;
@@ -257,7 +251,7 @@ export function useNowPlaying(enabled = true) {
 
   // ─── Start appropriate mode once config is loaded ───
   useEffect(() => {
-    if (pollMode === null) return; // still loading config
+    if (!enabled || pollMode === null) return; // disabled or still loading config
 
     if (pollMode === 'client') {
       startClientPolling();
@@ -271,11 +265,11 @@ export function useNowPlaying(enabled = true) {
       esRef.current = null;
       stopClientPolling();
     };
-  }, [pollMode, connectSSE, startClientPolling, stopClientPolling]);
+  }, [enabled, pollMode, connectSSE, startClientPolling, stopClientPolling]);
 
   // ─── Reconnect on visibility restore (both modes) ───
   useEffect(() => {
-    if (pollMode === null) return;
+    if (!enabled || pollMode === null) return;
     const STALE_THRESHOLD_MS = 10_000;
 
     const handleVisibility = () => {
@@ -311,7 +305,7 @@ export function useNowPlaying(enabled = true) {
 
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [pollMode, connectSSE, startClientPolling, stopClientPolling]);
+  }, [enabled, pollMode, connectSSE, startClientPolling, stopClientPolling]);
 
-  return data;
+  return enabled ? data : null;
 }

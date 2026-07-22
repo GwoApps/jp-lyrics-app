@@ -1,11 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { FuriganaLine } from '@/lib/types';
-import type { SyncLine } from '@/lib/lrc';
 import { isTitleMatch, findBestMatch } from '@/lib/match';
 import { useNowPlaying } from './useNowPlaying';
-import type { NowPlayingData } from './useNowPlaying';
 
 export interface SpotifyState {
   connected: boolean;
@@ -37,9 +35,6 @@ export interface SyncRefs {
   allSongs: { id: string; title: string; artist: string; created_by: string; is_public: number }[];
   currentSongId: string;
   currentUserEmail: string;
-  pipWindow: Window | null;
-  lineRefs: React.RefObject<(HTMLDivElement | null)[]>;
-  lyricsRef: React.RefObject<HTMLDivElement | null>;
 }
 
 export interface UseSpotifySyncReturn {
@@ -48,12 +43,16 @@ export interface UseSpotifySyncReturn {
   followPlaying: boolean;
   setFollowPlaying: React.Dispatch<React.SetStateAction<boolean>>;
   pipWindowRef: React.MutableRefObject<Window | null>;
-  highlightRef: React.MutableRefObject<number>;
 }
 
-export function useSpotifySync(syncRefs: React.MutableRefObject<SyncRefs>, enabled = true): UseSpotifySyncReturn {
+export function useSpotifySync(
+  syncRefs: React.MutableRefObject<SyncRefs>,
+  lineRefs: React.RefObject<(HTMLDivElement | null)[]>,
+  lyricsRef: React.RefObject<HTMLDivElement | null>,
+  enabled = true,
+): UseSpotifySyncReturn {
   const nowPlayingData = useNowPlaying(enabled);
-  const [spotify, setSpotify] = useState<SpotifyState | null>(null);
+  const spotify = nowPlayingData as SpotifyState | null;
   const [activeLine, setActiveLine] = useState(-1);
   const [followPlaying, setFollowPlaying] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem('jplrc-follow-playing') !== 'false';
@@ -80,8 +79,6 @@ export function useSpotifySync(syncRefs: React.MutableRefObject<SyncRefs>, enabl
   // React to SSE/polling data from useNowPlaying
   useEffect(() => {
     if (!nowPlayingData) return;
-
-    setSpotify(nowPlayingData as SpotifyState);
 
     const refs = syncRefs.current;
 
@@ -120,7 +117,7 @@ export function useSpotifySync(syncRefs: React.MutableRefObject<SyncRefs>, enabl
   // Reads from refs to avoid stale closures; no React re-render per frame
   useEffect(() => {
     const tick = () => {
-      const { progressMs, pollTime, isPlaying, trackName, durationMs } = interpRef.current;
+      const { progressMs, pollTime, isPlaying, trackName } = interpRef.current;
       const refs = syncRefs.current;
       const songTitle = refs.songTitle;
 
@@ -140,7 +137,6 @@ export function useSpotifySync(syncRefs: React.MutableRefObject<SyncRefs>, enabl
 
       // Find active line
       const lts = refs.lineTimestamps;
-      const fls = refs.furiganaLines;
       let newActive = -1;
 
       if (lts.length > 0) {
@@ -158,9 +154,9 @@ export function useSpotifySync(syncRefs: React.MutableRefObject<SyncRefs>, enabl
       if (newActive !== highlightRef.current) {
         highlightRef.current = newActive;
         setActiveLine(newActive);
-        if (!refs.debug && refs.lineRefs.current?.[newActive]) {
-          const lineEl = refs.lineRefs.current[newActive];
-          const container = refs.lyricsRef.current;
+        if (!refs.debug && lineRefs.current?.[newActive]) {
+          const lineEl = lineRefs.current[newActive];
+          const container = lyricsRef.current;
           if (lineEl && container) {
             const lineTop = lineEl.offsetTop - container.offsetTop;
             container.scrollTo({ top: lineTop - container.clientHeight / 2 + lineEl.offsetHeight / 2, behavior: 'smooth' });
@@ -188,7 +184,7 @@ export function useSpotifySync(syncRefs: React.MutableRefObject<SyncRefs>, enabl
 
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, []); // Run once — reads from refs that stay in sync via page effects
+  }, [lineRefs, lyricsRef, syncRefs]);
 
   return {
     spotify,
@@ -196,6 +192,5 @@ export function useSpotifySync(syncRefs: React.MutableRefObject<SyncRefs>, enabl
     followPlaying,
     setFollowPlaying,
     pipWindowRef,
-    highlightRef,
   };
 }

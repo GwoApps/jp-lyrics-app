@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Upload } from 'lucide-react';
 import Toast from '@/components/Toast';
 import { useI18n } from '@/lib/i18n';
@@ -82,7 +83,7 @@ export default function NewSongPage() {
     <div className="fade-in max-w-2xl">
       {/* Breadcrumb */}
       <div className="mb-6 sm:mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
-        <a href="/" className="hover:text-[var(--foreground)] transition-colors">{t('common.list')}</a>
+        <Link href="/" className="hover:text-[var(--foreground)] transition-colors">{t('common.list')}</Link>
         <span className="opacity-40">/</span>
         <span className="text-[var(--foreground)]">{t('new.newBreadcrumb')}</span>
       </div>

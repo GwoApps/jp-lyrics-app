@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Users, Music, Shield, ShieldOff, Ban, Trash2, ArrowLeft, Eye, EyeOff, Loader2, Clock, Check, X } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import Toast from '@/components/Toast';
@@ -217,10 +218,10 @@ export default function AdminPage() {
     <div className="fade-in">
       {/* Header */}
       <div className="mb-6">
-        <a href="/" className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors mb-3">
+        <Link href="/" className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors mb-3">
           <ArrowLeft className="h-3.5 w-3.5" />
           {t('admin.backToHome')}
-        </a>
+        </Link>
         <h1 className="text-lg font-semibold tracking-tight">{t('admin.title')}</h1>
       </div>
 

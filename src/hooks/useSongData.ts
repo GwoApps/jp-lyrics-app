@@ -80,8 +80,6 @@ export interface UseSongDataReturn {
   setFontSize: React.Dispatch<React.SetStateAction<number>>;
   toast: ToastState | null;
   allSongs: { id: string; title: string; artist: string; spotify_track_id?: string | null; created_by: string; is_public: number }[];
-  lyricsRef: React.RefObject<HTMLDivElement | null>;
-  lineRefs: React.RefObject<(HTMLDivElement | null)[]>;
   handleSync: () => Promise<void>;
   handlePasteLrc: () => Promise<void>;
   handleDelete: () => void;
@@ -130,8 +128,6 @@ export function useSongData(id: string): UseSongDataReturn {
     return 20;
   });
 
-  const lyricsRef = useRef<HTMLDivElement>(null);
-  const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   // Persist font size
   useEffect(() => { localStorage.setItem('jplrc-font-size', String(fontSize)); }, [fontSize]);
@@ -144,30 +140,47 @@ export function useSongData(id: string): UseSongDataReturn {
   }, [song?.lyrics_furigana]);
 
   // Client-side furigana (lazy-loaded from kuromoji-es CDN when needed)
-  const [clientFurigana, setClientFurigana] = useState<FuriganaLine[]>([]);
-  const [furiganaLoading, setFuriganaLoading] = useState(false);
-  const [furiganaError, setFuriganaError] = useState('');
+  const requestedLyricsRef = useRef('');
+  const [clientFuriganaState, setClientFuriganaState] = useState<{
+    source: string;
+    lines: FuriganaLine[];
+    loading: boolean;
+    error: string;
+  }>({ source: '', lines: [], loading: false, error: '' });
+  const lyricsRaw = song?.lyrics_raw ?? '';
+  const isCurrentClientResult = clientFuriganaState.source === lyricsRaw;
+  const furiganaLoading = isCurrentClientResult && clientFuriganaState.loading;
+  const furiganaError = isCurrentClientResult ? clientFuriganaState.error : '';
 
   const furiganaLines = useMemo<FuriganaLine[]>(() => {
     // Prefer server-side pre-computed data (existing songs)
     if (serverFurigana.length > 0) return serverFurigana;
-    // Fall back to client-side computed data
-    if (clientFurigana.length > 0) return clientFurigana;
+    // Fall back to client-side computed data for this exact lyrics value.
+    if (clientFuriganaState.source === lyricsRaw && clientFuriganaState.lines.length > 0) {
+      return clientFuriganaState.lines;
+    }
     return [];
-  }, [serverFurigana, clientFurigana]);
+  }, [serverFurigana, clientFuriganaState, lyricsRaw]);
 
-  // Client-side furigana conversion: only when server has no furigana but raw lyrics exist
+  // Client-side furigana conversion: only once per lyrics value when server data is absent.
   useEffect(() => {
-    if (!song?.lyrics_raw?.trim()) return;
-    if (serverFurigana.length > 0) return; // server already has it
-    if (clientFurigana.length > 0) return; // already computed
-    if (furiganaLoading) return;
+    if (!lyricsRaw.trim() || serverFurigana.length > 0) return;
+    const requestKey = `${id}\u0000${lyricsRaw}`;
+    if (requestedLyricsRef.current === requestKey) return;
+    requestedLyricsRef.current = requestKey;
+    let cancelled = false;
+    let settled = false;
 
-    setFuriganaLoading(true);
-    setFuriganaError('');
-    convertToFuriganaClient(song.lyrics_raw)
-      .then((lines) => {
-        setClientFurigana(lines);
+    const convert = async () => {
+      // Cross an async boundary so this state transition belongs to the conversion request.
+      await Promise.resolve();
+      if (cancelled) return;
+      setClientFuriganaState({ source: lyricsRaw, lines: [], loading: true, error: '' });
+      try {
+        const lines = await convertToFuriganaClient(lyricsRaw);
+        if (cancelled) return;
+        settled = true;
+        setClientFuriganaState({ source: lyricsRaw, lines, loading: false, error: '' });
         // Persist to server so next load skips kuromoji entirely
         if (lines.length > 0 && id) {
           fetch(`/api/songs/${id}/furigana`, {
@@ -176,13 +189,20 @@ export function useSongData(id: string): UseSongDataReturn {
             body: JSON.stringify({ lyrics_furigana: lines }),
           }).catch(() => {}); // fire-and-forget
         }
-      })
-      .catch((e) => {
-        console.error('Client furigana conversion failed:', e);
-        setFuriganaError(t('song.furiganaLoadFailed'));
-      })
-      .finally(() => setFuriganaLoading(false));
-  }, [song?.lyrics_raw, serverFurigana.length, clientFurigana.length, furiganaLoading, id, t]);
+      } catch (error) {
+        if (cancelled) return;
+        settled = true;
+        console.error('Client furigana conversion failed:', error);
+        setClientFuriganaState({ source: lyricsRaw, lines: [], loading: false, error: t('song.furiganaLoadFailed') });
+      }
+    };
+
+    void convert();
+    return () => {
+      cancelled = true;
+      if (!settled && requestedLyricsRef.current === requestKey) requestedLyricsRef.current = '';
+    };
+  }, [lyricsRaw, serverFurigana.length, id, t]);
 
   const lineTimestamps = useMemo(() => {
     if (!song || !furiganaLines.length) return [] as (number | null)[];
@@ -513,8 +533,6 @@ export function useSongData(id: string): UseSongDataReturn {
     setFontSize,
     toast,
     allSongs,
-    lyricsRef,
-    lineRefs,
     handleSync,
     handlePasteLrc,
     handleDelete,

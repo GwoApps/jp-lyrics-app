@@ -27,6 +27,9 @@ interface SongItem {
   updated_at: string;
 }
 
+type ToastState = { type: 'success' | 'error'; msg: string } | null;
+const EMPTY_SONG_IDS = new Set<string>();
+
 function localeToBCP47(locale: string): string {
   const map: Record<string, string> = { ja: 'ja-JP', en: 'en-US', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW' };
   return map[locale] ?? 'ja-JP';
@@ -73,15 +76,32 @@ function setCachedSongs(data: SongItem[]) {
 
 export default function HomePage() {
   const { t, locale } = useI18n();
-  const [songs, setSongs] = useState<SongItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const searchParams = useSearchParams();
+  const [initialSongs] = useState(getCachedSongs);
+  const [songs, setSongs] = useState<SongItem[]>(() => initialSongs ?? []);
+  const [loading, setLoading] = useState(() => initialSongs === null);
   const { session, updateSession } = useAuthSession();
   // A cached session renders immediately; the hook revalidates it on every page entry.
   const spotify = session?.spotify ?? null;
   const currentUser = session?.user ?? null;
   const nowPlaying = useNowPlaying(!!spotify?.connected);
   const [importing, setImporting] = useState(false);
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [toast, setToast] = useState<ToastState>(() => {
+    const error = searchParams.get('spotify_error');
+    const success = searchParams.get('spotify');
+    if (error) {
+      const keyMap: Record<string, string> = {
+        denied: 'home.spotifyDenied',
+        token_failed: 'home.spotifyTokenFailed',
+        no_identity: 'home.spotifyNoIdentity',
+        blocked: 'home.spotifyBlocked',
+        invalid_profile: 'home.spotifyInvalidProfile',
+        passphrase_required: 'home.spotifyPassphraseRequired',
+      };
+      return { type: 'error', msg: t(keyMap[error] || 'home.spotifyTokenFailed') };
+    }
+    return success === 'connected' ? { type: 'success', msg: t('home.spotifyConnected') } : null;
+  });
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [importAlert, setImportAlert] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -121,12 +141,16 @@ export default function HomePage() {
     if (event.pointerType === 'touch') setNowPlayingTouching(false);
   };
   const handleNowPlayingPointerCancel = () => setNowPlayingTouching(false);
-  const searchParams = useSearchParams();
 
   const showToast = (type: 'success' | 'error', msg: string) => {
     setToast({ type, msg });
-    setTimeout(() => setToast(null), 3000);
   };
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   // ─── Handle Spotify OAuth redirect params ───
   useEffect(() => {
@@ -134,48 +158,25 @@ export default function HomePage() {
     const success = searchParams.get('spotify');
 
     if (error || success) {
-      // Clean URL params immediately
+      // The initial toast was derived during state initialization; only clean the URL here.
       const url = new URL(window.location.href);
       url.searchParams.delete('spotify_error');
       url.searchParams.delete('spotify');
       window.history.replaceState({}, '', url.pathname + url.search);
-
-      if (error) {
-        const keyMap: Record<string, string> = {
-          denied: 'home.spotifyDenied',
-          token_failed: 'home.spotifyTokenFailed',
-          no_identity: 'home.spotifyNoIdentity',
-          blocked: 'home.spotifyBlocked',
-          invalid_profile: 'home.spotifyInvalidProfile',
-          passphrase_required: 'home.spotifyPassphraseRequired',
-        };
-        showToast('error', t(keyMap[error] || 'home.spotifyTokenFailed'));
-      } else if (success === 'connected') {
-        showToast('success', t('home.spotifyConnected'));
-      }
     }
-  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   useEffect(() => {
-    const cached = getCachedSongs();
-    if (cached) {
-      setSongs(cached);
-      cacheSongCovers(cached);
-      setLoading(false);
-    }
+    if (initialSongs) cacheSongCovers(initialSongs);
 
     fetch('/api/songs')
       .then((r) => r.json())
       .then((data) => { setSongs(data); cacheSongCovers(data); setCachedSongs(data); setLoading(false); })
       .catch(() => setLoading(false));
-  }, []);
+  }, [initialSongs]);
 
   useEffect(() => {
-    if (!currentUser) {
-      setFavorites(new Set());
-      setCollections([]);
-      return;
-    }
+    if (!currentUser?.email) return;
     // Cached identity may be shown first; refresh-backed state re-runs this only when it changed.
     fetch('/api/songs?favorites=1').then(r => r.json()).then(favs => {
       setFavorites(new Set(favs.map((f: { id: string }) => f.id)));
@@ -193,10 +194,7 @@ export default function HomePage() {
   }, [mySongsOnly]);
 
   useEffect(() => {
-    if (!filterCollection) {
-      setCollectionSongs(new Set());
-      return;
-    }
+    if (!filterCollection) return;
     fetch(`/api/collections/${filterCollection}/songs`)
       .then((r) => r.json())
       .then((data) => setCollectionSongs(new Set(data.map((s: { id: string }) => s.id))))
@@ -314,11 +312,14 @@ export default function HomePage() {
 
   // Find matching song in DB for currently playing track (uses title + artist scoring)
   const matchedSong = findBestMatch(songs, nowPlaying?.track, currentUser?.email);
+  const visibleFavorites = currentUser ? favorites : EMPTY_SONG_IDS;
+  const visibleCollection = currentUser ? filterCollection : null;
+  const visibleCollectionSongs = visibleCollection ? collectionSongs : EMPTY_SONG_IDS;
 
   // Filter songs by search query (mySongsOnly is handled server-side via ?mine=1)
   const filteredSongs = songs.filter((s) => {
-    if (favoritesOnly && !favorites.has(s.id)) return false;
-    if (filterCollection && !collectionSongs.has(s.id)) return false;
+    if (currentUser && favoritesOnly && !visibleFavorites.has(s.id)) return false;
+    if (visibleCollection && !visibleCollectionSongs.has(s.id)) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       return s.title.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q);
@@ -638,7 +639,7 @@ export default function HomePage() {
                 song={song}
                 isPlaying={isPlaying}
                 spotifyConnected={!!spotify?.connected}
-                isFavorite={favorites.has(song.id)}
+                isFavorite={visibleFavorites.has(song.id)}
                 locale={localeToBCP47(locale)}
                 unknownArtistLabel={t('common.unknownArtist')}
                 createdByLabel={t('home.createdBy')}

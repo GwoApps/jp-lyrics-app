@@ -120,6 +120,7 @@ export async function POST(request: NextRequest) {
   // Re-fetch to get all fields with defaults populated; use raw SQL for snake_case response
   const song = await db.get(sql`SELECT * FROM songs WHERE id = ${id}`) as Record<string, unknown>;
   // Strip internal email from response
-  const { created_by, ...rest } = song as { created_by?: string; [k: string]: unknown };
+  const rest = { ...song } as { created_by?: string; [k: string]: unknown };
+  delete rest.created_by;
   return NextResponse.json(rest, { status: 201 });
 }

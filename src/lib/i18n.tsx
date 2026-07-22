@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useSyncExternalStore, ReactNode } from 'react';
 import ja from '@/i18n/ja.json';
 import en from '@/i18n/en.json';
 import zhCN from '@/i18n/zh-CN.json';
@@ -37,15 +37,11 @@ type I18nContextValue = {
 };
 
 const I18nContext = createContext<I18nContextValue>({ locale: 'ja', setLocale: () => {}, t: (k) => k });
+const subscribeHydration = () => () => {};
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>('ja');
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    setLocaleState(detectLocale());
-    setReady(true);
-  }, []);
+  const [locale, setLocaleState] = useState<Locale>(detectLocale);
+  const ready = useSyncExternalStore(subscribeHydration, () => true, () => false);
 
   const setLocale = useCallback((l: Locale) => {
     setLocaleState(l);

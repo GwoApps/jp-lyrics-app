@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDB, schema, sql, eq, and } from '@/lib/db';
+import { getDB, schema, eq, and } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 
 // POST /api/songs/[id]/favorite — toggle favorite

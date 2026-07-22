@@ -154,7 +154,6 @@ function stopPolling(userEmail: string) {
 export function subscribe(
   userEmail: string,
   callback: Subscriber,
-  opts?: { fullRefresh?: boolean },
 ): () => void {
   let poller = pollers.get(userEmail);
   if (!poller) {
