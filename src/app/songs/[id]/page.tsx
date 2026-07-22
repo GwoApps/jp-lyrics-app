@@ -8,7 +8,6 @@ import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, 
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import FuriganaLineView from '@/components/FuriganaLine';
-import LrcTimelineEditor from '@/components/LrcTimelineEditor';
 import Toast from '@/components/Toast';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useI18n } from '@/lib/i18n';
@@ -498,11 +497,10 @@ export default function SongViewPage() {
                   onClick: data.handleSync,
                   disabled: data.syncing || !canEdit,
                 },
-                ...(hasSyncData ? [{
+                ...(song.lyrics_raw ? [{
                   icon: <Clock3 className="h-3.5 w-3.5" />,
                   label: t('song.timelineEdit'),
-                  active: data.showTimelineEditor,
-                  onClick: () => data.setShowTimelineEditor(!data.showTimelineEditor),
+                  onClick: () => router.push(`/songs/${id}/timeline/edit`),
                   disabled: !canEdit,
                 } as const] : []),
                 ...(!hasSyncData ? [{
@@ -644,15 +642,6 @@ export default function SongViewPage() {
               <button onClick={() => { data.setShowPasteLrc(false); data.setPasteLrcText(''); }} className="rounded-md px-3 py-1.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">{t('common.cancel')}</button>
             </div>
           </div>
-        )}
-        {data.showTimelineEditor && hasSyncData && (
-          <LrcTimelineEditor
-            initialLines={syncLines}
-            currentPositionMs={isSameSong && spotify?.connected ? spotify.progress_ms : null}
-            saving={data.timelineSaving}
-            onSave={data.saveTimeline}
-            onClose={() => data.setShowTimelineEditor(false)}
-          />
         )}
       </div>
       <div className="lyrics-panel-shell relative isolate flex-1 min-h-0" style={lyricPanelStyle}>
@@ -881,7 +870,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
 
   const menuItems = [
     { icon: <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />, label: data.syncing ? t('song.syncing') : t('song.sync'), onClick: data.handleSync, disabled: data.syncing || !canEdit },
-    ...(hasSyncData && canEdit ? [{ icon: <Clock3 className="h-4 w-4" />, label: t('song.timelineEdit'), onClick: () => data.setShowTimelineEditor(!data.showTimelineEditor), active: data.showTimelineEditor }] : []),
+    ...(song.lyrics_raw && canEdit ? [{ icon: <Clock3 className="h-4 w-4" />, label: t('song.timelineEdit'), onClick: () => router.push(`/songs/${id}/timeline/edit`) }] : []),
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: t('song.pipBtn'), onClick: () => data.openPiP(furiganaLines, song, highlightRef.current, pipWindowRef, lineTimestamps) }] : []),
     { icon: <Bug className="h-4 w-4" />, label: t('song.debug'), onClick: () => data.setDebug(!data.debug), active: data.debug },
     { icon: <Download className="h-4 w-4" />, label: '.txt', onClick: () => { window.location.href = `/api/songs/${id}/export?format=text`; } },

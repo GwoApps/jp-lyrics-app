@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { hasSameLrcText, offsetLrcLines, parseLrc, resolveLrcTextUpdate, serializeLrc, updateLrcLineTime } from './lrc.ts';
+import { createTimelineDraft, hasSameLrcText, offsetLrcLines, parseLrc, resolveLrcTextUpdate, serializeLrc, serializeTimelineDraft, updateLrcLineTime } from './lrc.ts';
 
 test('offsetLrcLines shifts timestamps and clamps at zero', () => {
   const lines = parseLrc('[00:00.250]first\n[01:02.345]second');
@@ -47,5 +47,34 @@ test('resolveLrcTextUpdate preserves original formatting for timestamp-only edit
   assert.deepEqual(
     resolveLrcTextUpdate(existingRaw, '[00:01.000]a\n[00:02.000]b', '[00:03.000]a\n[00:04.000]c'),
     { lyricsRaw: 'a\nc', contentChanged: true },
+  );
+});
+
+test('timeline draft keeps unmarked plain lyric lines while preserving marked progress', () => {
+  const draft = createTimelineDraft('first\nsecond\nthird', '[00:01.000]first\nsecond\n[00:05.250]third');
+  assert.deepEqual(draft, [
+    { text: 'first', timeMs: 1000 },
+    { text: 'second', timeMs: null },
+    { text: 'third', timeMs: 5250 },
+  ]);
+  assert.equal(serializeTimelineDraft(draft), '[00:01.000]first\nsecond\n[00:05.250]third');
+  assert.equal(hasSameLrcText('[00:01.000]first\n[00:02.000]second\n[00:05.250]third', serializeTimelineDraft(draft)), true);
+});
+
+test('timeline draft maps existing timestamps back to plain lyrics by text', () => {
+  assert.deepEqual(
+    createTimelineDraft('intro\nchorus\noutro', '[00:10.000]chorus'),
+    [
+      { text: 'intro', timeMs: null },
+      { text: 'chorus', timeMs: 10000 },
+      { text: 'outro', timeMs: null },
+    ],
+  );
+});
+
+test('first partial annotation preserves the original plain lyric formatting', () => {
+  assert.deepEqual(
+    resolveLrcTextUpdate('first\n\nsecond\nthird', '', '[00:01.000]first\nsecond\nthird'),
+    { lyricsRaw: 'first\n\nsecond\nthird', contentChanged: false },
   );
 });

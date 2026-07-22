@@ -8,7 +8,7 @@ A Japanese lyrics management web app with furigana annotation, Spotify real-time
 
 - **Furigana Lyrics** — Paste Japanese lyrics; client-side kuromoji-es auto-converts kanji to hiragana furigana via `<ruby>` annotations (lazy-loaded on first use)
 - **Spotify Real-Time Sync** — OAuth-connected playback tracking with SSE streaming (server mode) or direct polling (client mode), line-by-line auto-scroll
-- **LRC Timeline Editor** — Apply global millisecond offsets, edit individual timestamps and lyric lines, or capture the current Spotify position
+- **Timeline Annotation Workspace** — Mark previously untimed lyrics line by line against live Spotify progress, save partial work, replay marked positions, undo, and apply global offsets
 - **Reading Modes** — Switch between original lyrics, furigana, and Hepburn-style romaji; preference is remembered locally
 - **Canonical Spotify Metadata** — Persist stable Track IDs, URI, album, duration, cover, and canonical title/artist for exact matching
 - **Lyrics Provenance** — Track the selected provider, heuristic match confidence, and fetch timestamp

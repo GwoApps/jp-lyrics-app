@@ -4,6 +4,64 @@ export interface SyncLine {
   text: string;
 }
 
+/** Editable timeline row. A null timestamp means the lyric line has not been marked yet. */
+export interface TimelineDraftLine {
+  timeMs: number | null;
+  text: string;
+}
+
+/** Return lyric text from standard or partially annotated LRC, preserving row order. */
+export function getLrcTextLines(value: string): string[] {
+  return value.split('\n').flatMap((raw) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    const timestamped = trimmed.match(/^\[\d{2}:\d{2}\.\d{2,3}\]\s*(.*)$/);
+    const text = (timestamped?.[1] ?? trimmed).trim();
+    return text ? [text] : [];
+  });
+}
+
+/** Build an editor draft from plain lyrics and any existing full or partial LRC. */
+export function createTimelineDraft(plainLyrics: string, syncedLyrics: string): TimelineDraftLine[] {
+  const plain = plainLyrics.split('\n').map((line) => line.trim()).filter(Boolean);
+  const syncedRows = syncedLyrics.split('\n').flatMap<TimelineDraftLine>((raw) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    const match = trimmed.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\]\s*(.*)$/);
+    if (!match) return [{ timeMs: null, text: trimmed }];
+    const text = match[4].trim();
+    if (!text) return [];
+    return [{
+      timeMs: Number.parseInt(match[1], 10) * 60000
+        + Number.parseInt(match[2], 10) * 1000
+        + Number.parseInt(match[3].padEnd(3, '0'), 10),
+      text,
+    }];
+  });
+
+  if (plain.length === 0) return syncedRows;
+  if (syncedRows.length === plain.length && syncedRows.every((row, index) => row.text === plain[index])) {
+    return syncedRows;
+  }
+
+  const timestampQueues = new Map<string, number[]>();
+  for (const row of syncedRows) {
+    if (row.timeMs == null) continue;
+    const queue = timestampQueues.get(row.text) ?? [];
+    queue.push(row.timeMs);
+    timestampQueues.set(row.text, queue);
+  }
+  return plain.map((text) => ({ text, timeMs: timestampQueues.get(text)?.shift() ?? null }));
+}
+
+/** Serialize a full or partial draft. Untimed rows remain plain so draft progress is not lost. */
+export function serializeTimelineDraft(lines: TimelineDraftLine[]): string {
+  return lines.map((line) => line.timeMs == null
+    ? line.text
+    : `[${fmtMs(line.timeMs)}]${line.text}`
+  ).join('\n');
+}
+
 /** Parse LRC timestamp text into sorted SyncLine array */
 export function parseLrc(lrc: string): SyncLine[] {
   const lines: SyncLine[] = [];
@@ -45,8 +103,8 @@ export function serializeLrc(syncLines: SyncLine[]): string {
 
 /** Compare only the ordered lyric text, ignoring all timestamp changes. */
 export function hasSameLrcText(left: string, right: string): boolean {
-  const leftText = parseLrc(left).map((line) => line.text);
-  const rightText = parseLrc(right).map((line) => line.text);
+  const leftText = getLrcTextLines(left);
+  const rightText = getLrcTextLines(right);
   return leftText.length === rightText.length
     && leftText.every((text, index) => text === rightText[index]);
 }
@@ -56,7 +114,13 @@ export function resolveLrcTextUpdate(existingRaw: string, existingSynced: string
   if (hasSameLrcText(existingSynced, submittedSynced)) {
     return { lyricsRaw: existingRaw, contentChanged: false };
   }
-  const lyricsRaw = parseLrc(submittedSynced).map((line) => line.text).join('\n');
+  const submittedText = getLrcTextLines(submittedSynced);
+  const existingText = getLrcTextLines(existingRaw);
+  if (submittedText.length === existingText.length
+    && submittedText.every((text, index) => text === existingText[index])) {
+    return { lyricsRaw: existingRaw, contentChanged: false };
+  }
+  const lyricsRaw = submittedText.join('\n');
   return { lyricsRaw, contentChanged: lyricsRaw !== existingRaw };
 }
 

@@ -3,9 +3,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import type { FuriganaLine, ReadingMode } from '@/lib/types';
-import { parseLrc } from '@/lib/lrc';
+import { createTimelineDraft, parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
-import { findBestMatch, lineFuzzyMatch } from '@/lib/match';
 import { useI18n } from '@/lib/i18n';
 import { convertToFuriganaClient } from '@/lib/kuroshiro-client';
 import { romanizeJapanese } from '@/lib/romaji';
@@ -71,10 +70,6 @@ export interface UseSongDataReturn {
   setShowPasteLrc: React.Dispatch<React.SetStateAction<boolean>>;
   pasteLrcText: string;
   setPasteLrcText: React.Dispatch<React.SetStateAction<string>>;
-  showTimelineEditor: boolean;
-  setShowTimelineEditor: React.Dispatch<React.SetStateAction<boolean>>;
-  timelineSaving: boolean;
-  saveTimeline: (lrc: string) => Promise<void>;
   showExport: boolean;
   setShowExport: React.Dispatch<React.SetStateAction<boolean>>;
   deleteConfirm: boolean;
@@ -125,8 +120,6 @@ export function useSongData(id: string): UseSongDataReturn {
   const [allSongs, setAllSongs] = useState<{ id: string; title: string; artist: string; spotify_track_id?: string | null; created_by: string; is_public: number }[]>([]);
   const [showPasteLrc, setShowPasteLrc] = useState(false);
   const [pasteLrcText, setPasteLrcText] = useState('');
-  const [showTimelineEditor, setShowTimelineEditor] = useState(false);
-  const [timelineSaving, setTimelineSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [fontSize, setFontSize] = useState(() => {
@@ -192,31 +185,12 @@ export function useSongData(id: string): UseSongDataReturn {
   }, [song?.lyrics_raw, serverFurigana.length, clientFurigana.length, furiganaLoading, id, t]);
 
   const lineTimestamps = useMemo(() => {
-    if (!syncLines.length || !furiganaLines.length) return [] as (number | null)[];
-    const ts: (number | null)[] = [];
-    let si = 0;
-    for (let fi = 0; fi < furiganaLines.length; fi++) {
-      const fl = furiganaLines[fi];
-      if (fl.segments.length === 0) { ts.push(null); continue; }
-      const flText = fl.segments.map((s: { text: string }) => s.text).join('').replace(/\s+/g, '');
-      let bestJ = -1;
-      for (let j = si; j < Math.min(syncLines.length, si + 10); j++) {
-        if (lineFuzzyMatch(flText, syncLines[j].text.replace(/\s+/g, ''))) {
-          bestJ = j; break;
-        }
-      }
-      if (bestJ >= 0) {
-        ts.push(syncLines[bestJ].timeMs);
-        si = bestJ + 1;
-      } else if (si < syncLines.length) {
-        ts.push(syncLines[si].timeMs);
-        si++;
-      } else {
-        ts.push(null);
-      }
-    }
-    return ts;
-  }, [syncLines, furiganaLines]);
+    if (!song || !furiganaLines.length) return [] as (number | null)[];
+    const draft = createTimelineDraft(song.lyrics_raw || '', song.lyrics_synced || '');
+    return furiganaLines.map((line, index) => line.segments.length === 0
+      ? null
+      : draft[index]?.timeMs ?? null);
+  }, [song, furiganaLines]);
 
   const showToast = useCallback((type: 'success' | 'error', msg: string) => {
     setToast({ type, msg });
@@ -327,26 +301,6 @@ export function useSongData(id: string): UseSongDataReturn {
     }
   }, [id, pasteLrcText, t, showToast]);
 
-  const saveTimeline = useCallback(async (lrc: string) => {
-    setTimelineSaving(true);
-    try {
-      const res = await fetch(`/api/songs/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lyrics_synced: lrc }),
-      });
-      if (!res.ok) throw new Error('timeline_save_failed');
-      const updated = await res.json() as SongData;
-      setSong(updated);
-      setSyncLines(parseLrc(updated.lyrics_synced));
-      setShowTimelineEditor(false);
-      showToast('success', t('timeline.saved'));
-    } catch {
-      showToast('error', t('song.saveFailed'));
-    } finally {
-      setTimelineSaving(false);
-    }
-  }, [id, showToast, t]);
 
   const handleDelete = useCallback(() => {
     if (!song) return;
@@ -549,10 +503,6 @@ export function useSongData(id: string): UseSongDataReturn {
     setShowPasteLrc,
     pasteLrcText,
     setPasteLrcText,
-    showTimelineEditor,
-    setShowTimelineEditor,
-    timelineSaving,
-    saveTimeline,
     showExport,
     setShowExport,
     deleteConfirm,
