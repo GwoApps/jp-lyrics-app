@@ -54,6 +54,25 @@ export function createTimelineDraft(plainLyrics: string, syncedLyrics: string): 
   return plain.map((text) => ({ text, timeMs: timestampQueues.get(text)?.shift() ?? null }));
 }
 
+/**
+ * Align a non-blank timeline draft to rendered lyric rows that may preserve blank separators.
+ * Blank rendered rows do not consume a timeline entry.
+ */
+export function mapTimelineTimestamps(
+  renderedRows: string[],
+  plainLyrics: string,
+  syncedLyrics: string,
+): (number | null)[] {
+  const draft = createTimelineDraft(plainLyrics, syncedLyrics);
+  let draftIndex = 0;
+  return renderedRows.map((text) => {
+    if (!text.trim()) return null;
+    const timestamp = draft[draftIndex]?.timeMs ?? null;
+    draftIndex += 1;
+    return timestamp;
+  });
+}
+
 /** Serialize a full or partial draft. Untimed rows remain plain so draft progress is not lost. */
 export function serializeTimelineDraft(lines: TimelineDraftLine[]): string {
   return lines.map((line) => line.timeMs == null

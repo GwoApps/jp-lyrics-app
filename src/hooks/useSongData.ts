@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import type { FuriganaLine, ReadingMode } from '@/lib/types';
-import { createTimelineDraft, parseLrc } from '@/lib/lrc';
+import { mapTimelineTimestamps, parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
 import { useI18n } from '@/lib/i18n';
 import { convertToFuriganaClient } from '@/lib/kuroshiro-client';
@@ -206,10 +206,8 @@ export function useSongData(id: string): UseSongDataReturn {
 
   const lineTimestamps = useMemo(() => {
     if (!song || !furiganaLines.length) return [] as (number | null)[];
-    const draft = createTimelineDraft(song.lyrics_raw || '', song.lyrics_synced || '');
-    return furiganaLines.map((line, index) => line.segments.length === 0
-      ? null
-      : draft[index]?.timeMs ?? null);
+    const renderedRows = furiganaLines.map((line) => line.segments.map((segment) => segment.text).join(''));
+    return mapTimelineTimestamps(renderedRows, song.lyrics_raw || '', song.lyrics_synced || '');
   }, [song, furiganaLines]);
 
   const showToast = useCallback((type: 'success' | 'error', msg: string) => {

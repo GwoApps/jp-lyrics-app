@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createTimelineDraft, hasSameLrcText, offsetLrcLines, parseLrc, resolveLrcTextUpdate, serializeLrc, serializeTimelineDraft, updateLrcLineTime } from './lrc.ts';
+import { createTimelineDraft, hasSameLrcText, mapTimelineTimestamps, offsetLrcLines, parseLrc, resolveLrcTextUpdate, serializeLrc, serializeTimelineDraft, updateLrcLineTime } from './lrc.ts';
 
 test('offsetLrcLines shifts timestamps and clamps at zero', () => {
   const lines = parseLrc('[00:00.250]first\n[01:02.345]second');
@@ -77,4 +77,12 @@ test('first partial annotation preserves the original plain lyric formatting', (
     resolveLrcTextUpdate('first\n\nsecond\nthird', '', '[00:01.000]first\nsecond\nthird'),
     { lyricsRaw: 'first\n\nsecond\nthird', contentChanged: false },
   );
+});
+
+test('timeline timestamps stay aligned when rendered lyrics preserve blank separator rows', () => {
+  const plain = 'first\r\nsecond\r\n\r\nthird\r\n\r\nfourth';
+  const synced = '[00:01.000]first\n[00:02.000]second\n[00:03.000]third\n[00:04.000]fourth';
+  const rendered = ['first\r', 'second\r', '', 'third\r', '', 'fourth'];
+
+  assert.deepEqual(mapTimelineTimestamps(rendered, plain, synced), [1000, 2000, null, 3000, null, 4000]);
 });
