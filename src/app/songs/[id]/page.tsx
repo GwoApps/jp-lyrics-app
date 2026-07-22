@@ -478,6 +478,12 @@ export default function SongViewPage() {
                   onClick: () => router.push(`/songs/${id}/furigana/edit`),
                   disabled: !canEdit,
                 },
+                ...(song.lyrics_raw ? [{
+                  icon: <Clock3 className="h-3.5 w-3.5" />,
+                  label: t('song.timelineEdit'),
+                  onClick: () => router.push(`/songs/${id}/timeline/edit`),
+                  disabled: !canEdit,
+                } as const] : []),
               ]}
             />
 
@@ -496,12 +502,6 @@ export default function SongViewPage() {
                   onClick: data.handleSync,
                   disabled: data.syncing || !canEdit,
                 },
-                ...(song.lyrics_raw ? [{
-                  icon: <Clock3 className="h-3.5 w-3.5" />,
-                  label: t('song.timelineEdit'),
-                  onClick: () => router.push(`/songs/${id}/timeline/edit`),
-                  disabled: !canEdit,
-                } as const] : []),
                 ...(!hasSyncData ? [{
                   icon: <ClipboardPaste className="h-3.5 w-3.5" />,
                   label: t('song.paste'),
