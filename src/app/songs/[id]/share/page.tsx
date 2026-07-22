@@ -179,14 +179,22 @@ function drawCaption(
   siteText: string,
   centerX: number,
   startY: number,
+  showQrCode: boolean,
+  showSourceText: boolean,
 ) {
-  ctx.fillStyle = '#cbd5e1';
-  ctx.font = '22px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(scanText, centerX, startY);
-  ctx.fillStyle = '#94a3b8';
-  ctx.font = '18px sans-serif';
-  ctx.fillText(siteText, centerX, startY + 32);
+  let textY = startY;
+  if (showQrCode) {
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '22px sans-serif';
+    ctx.fillText(scanText, centerX, textY);
+    textY += 32;
+  }
+  if (showSourceText) {
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '18px sans-serif';
+    ctx.fillText(siteText, centerX, textY);
+  }
 }
 
 async function drawLandscape(
@@ -198,6 +206,8 @@ async function drawLandscape(
   selectedLyrics: string[],
   coverImg: HTMLImageElement | null,
   palette: CoverPalette | null,
+  showQrCode: boolean,
+  showSourceText: boolean,
 ) {
   drawCardBackground(ctx, LANDSCAPE_W, LANDSCAPE_H, palette);
 
@@ -252,15 +262,15 @@ async function drawLandscape(
   const qrSize = 180;
   const qrX = 940;
   const qrY = 270;
-  const qrImg = await loadImage(qrDataUrl);
-  if (qrImg) {
+  const qrImg = showQrCode ? await loadImage(qrDataUrl) : null;
+  if (showQrCode && qrImg) {
     ctx.save();
     roundRect(ctx, qrX, qrY, qrSize, qrSize, 16);
     ctx.clip();
     ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
     ctx.restore();
   }
-  drawCaption(ctx, scanText, siteText, qrX + qrSize / 2, qrY + qrSize + 52);
+  drawCaption(ctx, scanText, siteText, qrX + qrSize / 2, qrY + qrSize + 52, showQrCode, showSourceText);
 }
 
 async function drawPortrait(
@@ -272,6 +282,8 @@ async function drawPortrait(
   selectedLyrics: string[],
   coverImg: HTMLImageElement | null,
   palette: CoverPalette | null,
+  showQrCode: boolean,
+  showSourceText: boolean,
 ) {
   drawCardBackground(ctx, PORTRAIT_W, PORTRAIT_H, palette);
 
@@ -326,15 +338,15 @@ async function drawPortrait(
   const qrSize = 180;
   const qrX = (PORTRAIT_W - qrSize) / 2;
   const qrY = PORTRAIT_H - qrSize - 120;
-  const qrImg = await loadImage(qrDataUrl);
-  if (qrImg) {
+  const qrImg = showQrCode ? await loadImage(qrDataUrl) : null;
+  if (showQrCode && qrImg) {
     ctx.save();
     roundRect(ctx, qrX, qrY, qrSize, qrSize, 16);
     ctx.clip();
     ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
     ctx.restore();
   }
-  drawCaption(ctx, scanText, siteText, centerX, qrY + qrSize + 52);
+  drawCaption(ctx, scanText, siteText, centerX, qrY + qrSize + 52, showQrCode, showSourceText);
 }
 
 async function drawCard(
@@ -345,6 +357,8 @@ async function drawCard(
   siteText: string,
   selectedLyrics: string[],
   orientation: Orientation,
+  showQrCode: boolean,
+  showSourceText: boolean,
 ) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -359,11 +373,11 @@ async function drawCard(
   if (orientation === 'portrait') {
     canvas.width = PORTRAIT_W;
     canvas.height = PORTRAIT_H;
-    await drawPortrait(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics, coverImg, palette);
+    await drawPortrait(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics, coverImg, palette, showQrCode, showSourceText);
   } else {
     canvas.width = LANDSCAPE_W;
     canvas.height = LANDSCAPE_H;
-    await drawLandscape(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics, coverImg, palette);
+    await drawLandscape(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics, coverImg, palette, showQrCode, showSourceText);
   }
 }
 
@@ -384,6 +398,8 @@ export default function SharePage() {
   const [copied, setCopied] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [orientation, setOrientation] = useState<Orientation>('landscape');
+  const [showQrCode, setShowQrCode] = useState(true);
+  const [showSourceText, setShowSourceText] = useState(true);
 
   const pageUrl = typeof window !== 'undefined' ? `${window.location.origin}/songs/${id}` : '';
   const coverTheme = useCoverTheme(song?.cover_url);
@@ -427,23 +443,29 @@ export default function SharePage() {
   }, [pageUrl]);
 
   useEffect(() => {
-    if (!song || !qrDataUrl || !canvasRef.current) return;
+    if (!song || !canvasRef.current) return;
+    if (showQrCode && !qrDataUrl) {
+      setReady(false);
+      return;
+    }
     setReady(false);
     let cancelled = false;
     const selectedLines = lyricsLines.filter((_, i) => selected.has(i));
     drawCard(
       canvasRef.current,
       song,
-      qrDataUrl,
+      qrDataUrl || '',
       t('share.scan'),
       t('share.site', { site: window.location.host }),
       selectedLines,
       orientation,
+      showQrCode,
+      showSourceText,
     ).then(() => {
       if (!cancelled) setReady(true);
     });
     return () => { cancelled = true; };
-  }, [song, qrDataUrl, pageUrl, t, selected, lyricsLines, orientation]);
+  }, [song, qrDataUrl, pageUrl, t, selected, lyricsLines, orientation, showQrCode, showSourceText]);
 
   const toggleLine = (idx: number) => {
     setSelected((prev) => {
@@ -555,6 +577,27 @@ export default function SharePage() {
               <span className="hidden sm:inline">{t('share.portrait')}</span>
             </button>
           </div>
+        </div>
+
+        <div className="mb-3 flex flex-wrap items-center gap-2 sm:mb-4">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-xs text-[var(--foreground)] transition-colors hover:bg-[var(--accent)]">
+            <input
+              type="checkbox"
+              checked={showQrCode}
+              onChange={(event) => setShowQrCode(event.target.checked)}
+              className="h-4 w-4 accent-[var(--song-accent)]"
+            />
+            {t('share.showQrCode')}
+          </label>
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-xs text-[var(--foreground)] transition-colors hover:bg-[var(--accent)]">
+            <input
+              type="checkbox"
+              checked={showSourceText}
+              onChange={(event) => setShowSourceText(event.target.checked)}
+              className="h-4 w-4 accent-[var(--song-accent)]"
+            />
+            {t('share.showSourceText')}
+          </label>
         </div>
 
         <div className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-sm">

@@ -289,7 +289,9 @@
     "noLyrics": "暂无歌词",
     "clear": "清空",
     "landscape": "横向",
-    "portrait": "竖向"
+    "portrait": "竖向",
+    "showQrCode": "显示二维码",
+    "showSourceText": "显示分享来源文本"
   },
   "admin": {
     "title": "管理",

@@ -289,7 +289,9 @@
     "noLyrics": "歌詞がありません",
     "clear": "クリア",
     "landscape": "横向き",
-    "portrait": "縦向き"
+    "portrait": "縦向き",
+    "showQrCode": "QRコードを表示",
+    "showSourceText": "共有元テキストを表示"
   },
   "admin": {
     "title": "管理画面",

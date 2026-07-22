@@ -289,7 +289,9 @@
     "noLyrics": "暫無歌詞",
     "clear": "清空",
     "landscape": "橫向",
-    "portrait": "竖向"
+    "portrait": "直向",
+    "showQrCode": "顯示 QR Code",
+    "showSourceText": "顯示分享來源文字"
   },
   "admin": {
     "title": "管理後台",

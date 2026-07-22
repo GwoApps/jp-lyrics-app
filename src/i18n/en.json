@@ -289,7 +289,9 @@
     "noLyrics": "No lyrics available",
     "clear": "Clear",
     "landscape": "Landscape",
-    "portrait": "Portrait"
+    "portrait": "Portrait",
+    "showQrCode": "Show QR code",
+    "showSourceText": "Show source text"
   },
   "admin": {
     "title": "Admin",
