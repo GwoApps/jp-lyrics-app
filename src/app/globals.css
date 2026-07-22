@@ -537,7 +537,8 @@ textarea {
   --song-accent: var(--border);
 }
 .song-editor-page.song-view--accented {
-  background: color-mix(in srgb, var(--background) 94%, var(--song-accent));
+  /* Match the themed body so editor workspaces do not render as a second page-sized tint. */
+  background: color-mix(in srgb, var(--background) 96%, var(--song-accent));
   border-radius: 1rem;
 }
 .song-editor-page.song-view--accented input,
