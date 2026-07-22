@@ -74,6 +74,13 @@ export async function searchLrclib(query: string): Promise<LyricsResult | null> 
 
 // ─── PetitLyrics ──
 
+/** PetitLyrics wraps UTF-8 lyric bytes in Base64; atob alone only returns a binary string. */
+export function decodeBase64Utf8(encoded: string): string {
+  const binary = atob(encoded.trim());
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+}
+
 async function fetchFromPetitLyrics(title: string, artist: string): Promise<LyricsResult | null> {
   const url = 'https://p0.petitlyrics.com/api/GetPetitLyricsData.php';
   const headers = {
@@ -100,7 +107,7 @@ async function fetchFromPetitLyrics(title: string, artist: string): Promise<Lyri
       const dataMatch = xml.match(/<lyricsData>([\s\S]*?)<\/lyricsData>/);
       const typeMatch = xml.match(/<lyricsType>(\d+)<\/lyricsType>/);
       if (!dataMatch?.[1]) return null;
-      const decoded = atob(dataMatch[1].trim());
+      const decoded = decodeBase64Utf8(dataMatch[1]);
       return { type: typeMatch ? parseInt(typeMatch[1]) : lyricsType, data: decoded };
     } catch { return null; }
   }
