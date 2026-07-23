@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } fro
 import { useRouter, useParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
 import Link from 'next/link';
-import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2 } from 'lucide-react';
+import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2, Info, X } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import FuriganaLineView from '@/components/FuriganaLine';
@@ -156,6 +156,7 @@ export default function SongViewPage() {
 
   // Start with the list's cached cover so the shared element has real visual content on its first render.
   const [fallbackCoverUrl, setFallbackCoverUrl] = useState<string | null>(() => getCachedSongCover(id));
+  const [showSongInfo, setShowSongInfo] = useState(false);
   const coverUrl = data.song?.cover_url ?? fallbackCoverUrl;
   const coverTheme = useCoverTheme(coverUrl);
   const coverColor = coverTheme.palette;
@@ -164,6 +165,14 @@ export default function SongViewPage() {
       cacheSongCover(id, data.song.cover_url);
     }
   }, [data.song?.cover_url, id]);
+  useEffect(() => {
+    if (!showSongInfo) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowSongInfo(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showSongInfo]);
   useEffect(() => {
     if (!id || !currentUserEmail || !spotifyConnected || coverUrl || !data.song?.permissions?.can_edit) return;
     fetch(`/api/songs/${id}/cover`)
@@ -685,17 +694,17 @@ export default function SongViewPage() {
         </div>
       </div>
 
-      {/* Meta */}
-      <div className="shrink-0 mt-2 sm:mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1 sm:gap-2">
-        <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-6 gap-y-1 text-[10px] sm:text-[11px] text-[var(--muted-foreground)]">
-          <span>{t('common.created')}{new Date(song.created_at).toLocaleString('ja-JP')}</span>
-          <span>{t('common.updated')}{new Date(song.updated_at).toLocaleString('ja-JP')}</span>
-          {hasSyncData && <span className="text-green-500/60">{t('common.linesSynced', { count: String(syncLines.length) })}</span>}
-          <span>{t('song.lyricsSource', { source: lyricsSourceLabel })}</span>
-          <span className={(song.lyrics_confidence ?? 100) >= 90 ? 'text-[var(--success)]/70' : (song.lyrics_confidence ?? 100) >= 75 ? 'text-[var(--warning)]/80' : 'text-[var(--destructive)]/80'}>{t('song.lyricsConfidence', { confidence: String(song.lyrics_confidence ?? 100) })}</span>
-          {song.spotify_track_id && <span title={t('song.spotifyTrackId', { id: song.spotify_track_id })}>Spotify · {song.spotify_track_id.slice(0, 8)}…</span>}
-          {song.spotify_album && <span>{t('song.spotifyAlbum', { album: song.spotify_album })}</span>}
-        </div>
+      {/* Compact metadata footer */}
+      <div className="shrink-0 mt-2 sm:mt-4 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setShowSongInfo(true)}
+          className="song-accent-button inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-medium"
+          aria-haspopup="dialog"
+        >
+          <Info className="h-3.5 w-3.5" />
+          {t('song.info')}
+        </button>
         {!spotify?.connected && (
           <SpotifyLoginButton className="text-[11px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors disabled:opacity-60">{t('song.spotify')}</SpotifyLoginButton>
         )}
@@ -709,6 +718,81 @@ export default function SongViewPage() {
       />
 
       {data.toast && <Toast type={data.toast.type} message={data.toast.msg} />}
+
+      {showSongInfo && (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          onMouseDown={() => setShowSongInfo(false)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="song-info-title"
+            className="w-full max-w-md overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header className="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3 sm:px-5 sm:py-4">
+              <span className="song-accent-surface inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
+                <Info className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 id="song-info-title" className="truncate text-sm font-semibold sm:text-base">{t('song.info')}</h2>
+                <p className="truncate text-xs text-[var(--muted-foreground)]">{song.title}{song.artist ? ` / ${song.artist}` : ''}</p>
+              </div>
+              <button
+                type="button"
+                autoFocus
+                onClick={() => setShowSongInfo(false)}
+                className="rounded-md p-2 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+                aria-label={t('common.close')}
+                title={t('common.close')}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+
+            <div className="grid gap-2 p-4 text-xs sm:p-5">
+              <div className="rounded-lg bg-[var(--accent)] px-3 py-2.5 text-[var(--muted-foreground)]">
+                {t('common.created')}{new Date(song.created_at).toLocaleString('ja-JP')}
+              </div>
+              <div className="rounded-lg bg-[var(--accent)] px-3 py-2.5 text-[var(--muted-foreground)]">
+                {t('common.updated')}{new Date(song.updated_at).toLocaleString('ja-JP')}
+              </div>
+              {hasSyncData && (
+                <div className="rounded-lg bg-[var(--accent)] px-3 py-2.5 text-[var(--success)]">
+                  {t('common.linesSynced', { count: String(syncLines.length) })}
+                </div>
+              )}
+              <div className="rounded-lg bg-[var(--accent)] px-3 py-2.5 text-[var(--muted-foreground)]">
+                {t('song.lyricsSource', { source: lyricsSourceLabel })}
+              </div>
+              <div className={`rounded-lg bg-[var(--accent)] px-3 py-2.5 ${(song.lyrics_confidence ?? 100) >= 90 ? 'text-[var(--success)]' : (song.lyrics_confidence ?? 100) >= 75 ? 'text-[var(--warning)]' : 'text-[var(--destructive)]'}`}>
+                {t('song.lyricsConfidence', { confidence: String(song.lyrics_confidence ?? 100) })}
+              </div>
+              {song.spotify_track_id && (
+                <div className="break-all rounded-lg bg-[var(--accent)] px-3 py-2.5 text-[var(--muted-foreground)]">
+                  {t('song.spotifyTrackId', { id: song.spotify_track_id })}
+                </div>
+              )}
+              {song.spotify_album && (
+                <div className="rounded-lg bg-[var(--accent)] px-3 py-2.5 text-[var(--muted-foreground)]">
+                  {t('song.spotifyAlbum', { album: song.spotify_album })}
+                </div>
+              )}
+            </div>
+
+            <footer className="flex justify-end border-t border-[var(--border)] px-4 py-3 sm:px-5">
+              <button
+                type="button"
+                onClick={() => setShowSongInfo(false)}
+                className="song-editor-primary-button rounded-md px-4 py-2 text-xs font-medium"
+              >
+                {t('common.close')}
+              </button>
+            </footer>
+          </section>
+        </div>
+      )}
 
       <ConfirmDialog open={data.deleteConfirm} title={t('dialog.deleteConfirmTitle', { title: song?.title || '' })} body={t('dialog.deleteConfirmBody')} confirmLabel={t('common.delete')} cancelLabel={t('common.cancel')} variant="danger" onConfirm={data.confirmDelete} onCancel={() => data.setDeleteConfirm(false)} />
       <ConfirmDialog open={!!data.importAlert} title={t('dialog.importErrorTitle')} body={data.importAlert || undefined} confirmLabel={t('common.confirm')} alert onConfirm={() => data.setImportAlert(null)} />

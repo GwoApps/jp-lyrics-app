@@ -136,6 +136,7 @@
     "requestPublicCancelled": "已取消申请",
     "requestPublicPending": "公开申请审核中",
     "timelineEdit": "编辑时间轴",
+    "info": "歌曲信息",
     "lyricsSource": "歌词来源：{source}",
     "lyricsConfidence": "可信度 {confidence}%",
     "spotifyMetadata": "Spotify 规范化信息",

@@ -136,6 +136,7 @@
     "requestPublicCancelled": "Request cancelled",
     "requestPublicPending": "Public request pending",
     "timelineEdit": "Edit timeline",
+    "info": "Song information",
     "lyricsSource": "Lyrics source: {source}",
     "lyricsConfidence": "Confidence {confidence}%",
     "spotifyMetadata": "Canonical Spotify metadata",

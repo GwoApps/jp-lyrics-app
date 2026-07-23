@@ -136,6 +136,7 @@
     "requestPublicCancelled": "申請を取り消しました",
     "requestPublicPending": "公開申請中",
     "timelineEdit": "タイムラインを編集",
+    "info": "曲の情報",
     "lyricsSource": "歌詞ソース：{source}",
     "lyricsConfidence": "信頼度 {confidence}%",
     "spotifyMetadata": "Spotify 正規化情報",
