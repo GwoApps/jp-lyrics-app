@@ -4,7 +4,7 @@ import { useRef, useEffect, useState } from 'react';
 import { Copy, Languages, Share2 } from 'lucide-react';
 import type { FuriganaLine, ReadingMode } from '@/lib/types';
 import { fmtMs } from '@/lib/lrc';
-import { resolveFuriganaReading } from '@/lib/romaji';
+import { resolveFuriganaReadings } from '@/lib/romaji';
 import { useI18n } from '@/lib/i18n';
 import {
   ContextMenu,
@@ -26,6 +26,7 @@ export default function FuriganaLineView({
   canCorrectFurigana = true,
   readingMode = 'furigana',
   romanizeFurigana = false,
+  hangulFurigana = false,
 }: {
   line: FuriganaLine;
   isActive: boolean;
@@ -38,6 +39,7 @@ export default function FuriganaLineView({
   canCorrectFurigana?: boolean;
   readingMode?: ReadingMode;
   romanizeFurigana?: boolean;
+  hangulFurigana?: boolean;
 }) {
   const { t } = useI18n();
   const [animKey, setAnimKey] = useState(0);
@@ -73,10 +75,19 @@ export default function FuriganaLineView({
       >
         {line.segments.map((seg, i) => {
           if (readingMode === 'original') return <span key={i}>{seg.text}</span>;
-          const reading = resolveFuriganaReading(seg.text, seg.reading, romanizeFurigana);
-          if (!reading) return <span key={i}>{seg.text}</span>;
+          const readings = resolveFuriganaReadings(seg.text, seg.reading, romanizeFurigana, hangulFurigana);
+          if (readings.length === 0) return <span key={i}>{seg.text}</span>;
           return (
-            <ruby key={i}>{seg.text}<rp>(</rp><rt lang={romanizeFurigana ? 'en' : 'ja'}>{reading}</rt><rp>)</rp></ruby>
+            <ruby key={i}>
+              {seg.text}
+              <rp>(</rp>
+              <rt>
+                <span className="lyric-reading-stack">
+                  {readings.map((item) => <span key={item.lang} lang={item.lang}>{item.value}</span>)}
+                </span>
+              </rt>
+              <rp>)</rp>
+            </ruby>
           );
         })}
       </div>

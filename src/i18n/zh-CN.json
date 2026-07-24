@@ -110,6 +110,7 @@
     "readingOriginal": "原文",
     "readingFurigana": "假名",
     "romanizeFurigana": "罗马字注音",
+    "hangulFurigana": "韩文注音",
     "spotify": "Spotify",
     "spotifyLoading": "正在加载 Spotify 播放状态…",
     "spotifyDisconnected": "Spotify 未连接",

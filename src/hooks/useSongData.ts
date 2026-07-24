@@ -7,7 +7,7 @@ import { mapTimelineTimestamps, parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
 import { useI18n } from '@/lib/i18n';
 import { convertToFuriganaClient } from '@/lib/kuroshiro-client';
-import { resolveFuriganaReading } from '@/lib/romaji';
+import { resolveFuriganaReadings } from '@/lib/romaji';
 
 const LYRICS_SOURCE_KEYS: Record<string, string> = {
   manual: 'lyricsSources.manual',
@@ -65,6 +65,8 @@ export interface UseSongDataReturn {
   setReadingMode: React.Dispatch<React.SetStateAction<ReadingMode>>;
   romanizeFurigana: boolean;
   setRomanizeFurigana: React.Dispatch<React.SetStateAction<boolean>>;
+  hangulFurigana: boolean;
+  setHangulFurigana: React.Dispatch<React.SetStateAction<boolean>>;
   debug: boolean;
   setDebug: React.Dispatch<React.SetStateAction<boolean>>;
   deleteConfirm: boolean;
@@ -106,6 +108,10 @@ export function useSongData(id: string): UseSongDataReturn {
     return localStorage.getItem('jplrc-romanize-furigana') === 'true'
       || localStorage.getItem('jplrc-reading-mode') === 'romaji';
   });
+  const [hangulFurigana, setHangulFurigana] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('jplrc-hangul-furigana') === 'true';
+  });
   const [debug, setDebug] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -128,6 +134,7 @@ export function useSongData(id: string): UseSongDataReturn {
   useEffect(() => { localStorage.setItem('jplrc-font-size', String(fontSize)); }, [fontSize]);
   useEffect(() => { localStorage.setItem('jplrc-reading-mode', readingMode); }, [readingMode]);
   useEffect(() => { localStorage.setItem('jplrc-romanize-furigana', String(romanizeFurigana)); }, [romanizeFurigana]);
+  useEffect(() => { localStorage.setItem('jplrc-hangul-furigana', String(hangulFurigana)); }, [hangulFurigana]);
 
   // Derived
   const serverFurigana = useMemo<FuriganaLine[]>(() => {
@@ -387,6 +394,7 @@ export function useSongData(id: string): UseSongDataReturn {
             .line.active { color: #ffffff; transform: scale(1.03); opacity: 1; font-weight: 700; animation: lyricActivate 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
             .line.empty { height: 1.5em; }
             ruby rt { font-size: 0.5em; color: #a3a3a3; }
+            .reading-stack { display: inline-flex; flex-direction: column-reverse; align-items: center; line-height: 1.05; white-space: nowrap; }
             .line.active ruby rt { color: #d4d4d4; }
           </style>
         </head>
@@ -397,9 +405,10 @@ export function useSongData(id: string): UseSongDataReturn {
               if (line.segments.length === 0) return `<div class="line empty" data-line="${i}"></div>`;
               const html = line.segments.map(seg => {
                 if (readingMode === 'original') return seg.text;
-                const reading = resolveFuriganaReading(seg.text, seg.reading, romanizeFurigana);
-                if (!reading) return seg.text;
-                return `<ruby>${seg.text}<rp>(</rp><rt>${reading}</rt><rp>)</rp></ruby>`;
+                const readings = resolveFuriganaReadings(seg.text, seg.reading, romanizeFurigana, hangulFurigana);
+                if (readings.length === 0) return seg.text;
+                const rows = readings.map(item => `<span lang="${item.lang}">${item.value}</span>`).join('');
+                return `<ruby>${seg.text}<rp>(</rp><rt><span class="reading-stack">${rows}</span></rt><rp>)</rp></ruby>`;
               }).join('');
               const ts = timestamps?.[i];
               const tsAttr = ts != null ? ` data-ts="${ts}"` : '';
@@ -460,7 +469,7 @@ export function useSongData(id: string): UseSongDataReturn {
       console.error('PiP failed:', e);
       showToast('error', t('song.pipFailed'));
     }
-  }, [fontSize, readingMode, romanizeFurigana, t, showToast]);
+  }, [fontSize, readingMode, romanizeFurigana, hangulFurigana, t, showToast]);
 
   // Re-center when debug mode toggled off
   useEffect(() => {
@@ -483,6 +492,8 @@ export function useSongData(id: string): UseSongDataReturn {
     setReadingMode,
     romanizeFurigana,
     setRomanizeFurigana,
+    hangulFurigana,
+    setHangulFurigana,
     debug,
     setDebug,
     deleteConfirm,
