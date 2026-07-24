@@ -32,7 +32,7 @@ export interface FuriganaLine {
   segments: FuriganaSegment[];
 }
 
-export type ReadingMode = 'original' | 'furigana' | 'romaji';
+export type ReadingMode = 'original' | 'furigana';
 
 export interface SongListItem {
   id: string;

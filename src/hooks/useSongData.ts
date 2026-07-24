@@ -7,7 +7,7 @@ import { mapTimelineTimestamps, parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
 import { useI18n } from '@/lib/i18n';
 import { convertToFuriganaClient } from '@/lib/kuroshiro-client';
-import { romanizeJapanese } from '@/lib/romaji';
+import { resolveFuriganaReading } from '@/lib/romaji';
 
 const LYRICS_SOURCE_KEYS: Record<string, string> = {
   manual: 'lyricsSources.manual',
@@ -63,6 +63,8 @@ export interface UseSongDataReturn {
   copied: boolean;
   readingMode: ReadingMode;
   setReadingMode: React.Dispatch<React.SetStateAction<ReadingMode>>;
+  romanizeFurigana: boolean;
+  setRomanizeFurigana: React.Dispatch<React.SetStateAction<boolean>>;
   debug: boolean;
   setDebug: React.Dispatch<React.SetStateAction<boolean>>;
   deleteConfirm: boolean;
@@ -97,7 +99,12 @@ export function useSongData(id: string): UseSongDataReturn {
   const [readingMode, setReadingMode] = useState<ReadingMode>(() => {
     if (typeof window === 'undefined') return 'furigana';
     const saved = localStorage.getItem('jplrc-reading-mode');
-    return saved === 'original' || saved === 'romaji' || saved === 'furigana' ? saved : 'furigana';
+    return saved === 'original' ? 'original' : 'furigana';
+  });
+  const [romanizeFurigana, setRomanizeFurigana] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('jplrc-romanize-furigana') === 'true'
+      || localStorage.getItem('jplrc-reading-mode') === 'romaji';
   });
   const [debug, setDebug] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -120,6 +127,7 @@ export function useSongData(id: string): UseSongDataReturn {
   // Persist font size
   useEffect(() => { localStorage.setItem('jplrc-font-size', String(fontSize)); }, [fontSize]);
   useEffect(() => { localStorage.setItem('jplrc-reading-mode', readingMode); }, [readingMode]);
+  useEffect(() => { localStorage.setItem('jplrc-romanize-furigana', String(romanizeFurigana)); }, [romanizeFurigana]);
 
   // Derived
   const serverFurigana = useMemo<FuriganaLine[]>(() => {
@@ -389,9 +397,8 @@ export function useSongData(id: string): UseSongDataReturn {
               if (line.segments.length === 0) return `<div class="line empty" data-line="${i}"></div>`;
               const html = line.segments.map(seg => {
                 if (readingMode === 'original') return seg.text;
-                if (readingMode === 'furigana' && !seg.reading) return seg.text;
-                const reading = readingMode === 'romaji' ? romanizeJapanese(seg.reading || seg.text) : seg.reading;
-                if (!reading || reading === seg.text) return seg.text;
+                const reading = resolveFuriganaReading(seg.text, seg.reading, romanizeFurigana);
+                if (!reading) return seg.text;
                 return `<ruby>${seg.text}<rp>(</rp><rt>${reading}</rt><rp>)</rp></ruby>`;
               }).join('');
               const ts = timestamps?.[i];
@@ -453,7 +460,7 @@ export function useSongData(id: string): UseSongDataReturn {
       console.error('PiP failed:', e);
       showToast('error', t('song.pipFailed'));
     }
-  }, [fontSize, readingMode, t, showToast]);
+  }, [fontSize, readingMode, romanizeFurigana, t, showToast]);
 
   // Re-center when debug mode toggled off
   useEffect(() => {
@@ -474,6 +481,8 @@ export function useSongData(id: string): UseSongDataReturn {
     copied,
     readingMode,
     setReadingMode,
+    romanizeFurigana,
+    setRomanizeFurigana,
     debug,
     setDebug,
     deleteConfirm,

@@ -459,17 +459,24 @@ export default function SongViewPage() {
             </Link>
 
             <ToolbarMenu
-              label={<span className="inline-flex items-center gap-1"><Languages className="h-3.5 w-3.5" /> {t(data.readingMode === 'original' ? 'song.readingOriginal' : data.readingMode === 'romaji' ? 'song.readingRomaji' : 'song.readingFurigana')} <ChevronDown className="h-3 w-3 opacity-60" /></span>}
-              items={([
-                ['original', 'song.readingOriginal'],
-                ['furigana', 'song.readingFurigana'],
-                ['romaji', 'song.readingRomaji'],
-              ] as const).map(([mode, label]) => ({
-                icon: <Languages className="h-3.5 w-3.5" />,
-                label: t(label),
-                active: data.readingMode === mode,
-                onClick: () => data.setReadingMode(mode),
-              }))}
+              label={<span className="inline-flex items-center gap-1"><Languages className="h-3.5 w-3.5" /> {t(data.readingMode === 'original' ? 'song.readingOriginal' : 'song.readingFurigana')} <ChevronDown className="h-3 w-3 opacity-60" /></span>}
+              items={[
+                ...([
+                  ['original', 'song.readingOriginal'],
+                  ['furigana', 'song.readingFurigana'],
+                ] as const).map(([mode, label]) => ({
+                  icon: <Languages className="h-3.5 w-3.5" />,
+                  label: t(label),
+                  active: data.readingMode === mode,
+                  onClick: () => data.setReadingMode(mode),
+                })),
+                {
+                  icon: <Languages className="h-3.5 w-3.5" />,
+                  label: t('song.romanizeFurigana'),
+                  status: t(data.romanizeFurigana ? 'common.on' : 'common.off'),
+                  onClick: () => data.setRomanizeFurigana(!data.romanizeFurigana),
+                },
+              ]}
             />
 
             <ToolbarMenu
@@ -653,6 +660,7 @@ export default function SongViewPage() {
                     onCorrectFurigana={() => router.push(`/songs/${id}/furigana/edit`)}
                     canCorrectFurigana={canEdit}
                     readingMode={data.readingMode}
+                    romanizeFurigana={data.romanizeFurigana}
                   />
                 </div>
               ))
@@ -951,6 +959,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
     { icon: <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />, label: data.syncing ? t('song.syncing') : t('song.sync'), onClick: data.handleSync, disabled: data.syncing || !canEdit },
     ...(song.lyrics_raw && canEdit ? [{ icon: <Clock3 className="h-4 w-4" />, label: t('song.timelineEdit'), onClick: () => router.push(`/songs/${id}/timeline/edit`) }] : []),
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: t('song.pipBtn'), onClick: onOpenPiP }] : []),
+    { icon: <Languages className="h-4 w-4" />, label: t('song.romanizeFurigana'), status: t(data.romanizeFurigana ? 'common.on' : 'common.off'), onClick: () => data.setRomanizeFurigana(!data.romanizeFurigana), keepOpen: true },
     { icon: <Bug className="h-4 w-4" />, label: t('song.debug'), status: t(data.debug ? 'common.on' : 'common.off'), onClick: () => data.setDebug(!data.debug), keepOpen: true },
     { icon: <Download className="h-4 w-4" />, label: t('song.download'), status: <ChevronDown className="h-3.5 w-3.5 -rotate-90" />, onClick: () => setShowDownloadMenu(true), keepOpen: true },
     ...(canEdit ? [
@@ -981,10 +990,10 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
           {data.copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
         </MobileIconButton>
 
-        {/* Original / Furigana / Romaji */}
+        {/* Original / Furigana */}
         <MobileIconButton
-          label={t(data.readingMode === 'original' ? 'song.readingOriginal' : data.readingMode === 'romaji' ? 'song.readingRomaji' : 'song.readingFurigana')}
-          onClick={() => data.setReadingMode(data.readingMode === 'original' ? 'furigana' : data.readingMode === 'furigana' ? 'romaji' : 'original')}
+          label={t(data.readingMode === 'original' ? 'song.readingOriginal' : 'song.readingFurigana')}
+          onClick={() => data.setReadingMode(data.readingMode === 'original' ? 'furigana' : 'original')}
           className={data.readingMode !== 'furigana' ? 'song-mobile-button--active' : ''}
         >
           <Languages className="h-5 w-5" />

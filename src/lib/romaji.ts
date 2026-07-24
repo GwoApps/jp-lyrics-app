@@ -98,3 +98,11 @@ export function romanizeJapanese(value: string): string {
 
   return output;
 }
+
+/** Resolve the ruby text for one lyric segment without replacing its visible source text. */
+export function resolveFuriganaReading(text: string, reading: string, romanize: boolean): string {
+  const source = reading || (romanize ? text : '');
+  if (!source) return '';
+  const resolved = romanize ? romanizeJapanese(source) : source;
+  return resolved === text ? '' : resolved;
+}

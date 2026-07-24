@@ -109,7 +109,7 @@
     "readingMode": "Reading display",
     "readingOriginal": "Original",
     "readingFurigana": "Furigana",
-    "readingRomaji": "Romaji",
+    "romanizeFurigana": "Romanized readings",
     "spotify": "Spotify",
     "spotifyLoading": "Loading Spotify playback status…",
     "spotifyDisconnected": "Spotify is not connected",

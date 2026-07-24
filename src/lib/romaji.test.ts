@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { romanizeJapanese } from './romaji.ts';
+import { resolveFuriganaReading, romanizeJapanese } from './romaji.ts';
 
 test('romanizeJapanese converts basic hiragana and digraphs', () => {
   assert.equal(romanizeJapanese('きょう'), 'kyou');
@@ -20,4 +20,15 @@ test('romanizeJapanese preserves punctuation and separates n before vowels', () 
 test('romanizeJapanese handles extended modern combinations and Hepburn chi gemination', () => {
   assert.equal(romanizeJapanese('つぁ くぁ ぐぁ すぃ ずぃ てゅ でゅ いぇ'), 'tsa kwa gwa si zi tyu dyu ye');
   assert.equal(romanizeJapanese('まっちゃ'), 'matcha');
+});
+
+test('resolveFuriganaReading keeps romanized ruby off by default', () => {
+  assert.equal(resolveFuriganaReading('写真', 'しゃしん', false), 'しゃしん');
+  assert.equal(resolveFuriganaReading('きょう', '', false), '');
+});
+
+test('resolveFuriganaReading romanizes kanji readings plus hiragana and katakana text', () => {
+  assert.equal(resolveFuriganaReading('写真', 'しゃしん', true), 'shashin');
+  assert.equal(resolveFuriganaReading('きょう', '', true), 'kyou');
+  assert.equal(resolveFuriganaReading('スーパー', '', true), 'suupaa');
 });

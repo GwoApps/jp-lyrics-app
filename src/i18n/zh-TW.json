@@ -109,7 +109,7 @@
     "readingMode": "顯示方式",
     "readingOriginal": "原文",
     "readingFurigana": "假名",
-    "readingRomaji": "羅馬音",
+    "romanizeFurigana": "羅馬字注音",
     "spotify": "Spotify",
     "spotifyLoading": "正在載入 Spotify 播放狀態…",
     "spotifyDisconnected": "Spotify 未連線",
