@@ -59,19 +59,12 @@ export interface UseSongDataReturn {
   furiganaError: string;
   lineTimestamps: (number | null)[];
   syncing: boolean;
-  syncError: string;
   importing: boolean;
   copied: boolean;
   readingMode: ReadingMode;
   setReadingMode: React.Dispatch<React.SetStateAction<ReadingMode>>;
   debug: boolean;
   setDebug: React.Dispatch<React.SetStateAction<boolean>>;
-  showPasteLrc: boolean;
-  setShowPasteLrc: React.Dispatch<React.SetStateAction<boolean>>;
-  pasteLrcText: string;
-  setPasteLrcText: React.Dispatch<React.SetStateAction<string>>;
-  showExport: boolean;
-  setShowExport: React.Dispatch<React.SetStateAction<boolean>>;
   deleteConfirm: boolean;
   setDeleteConfirm: React.Dispatch<React.SetStateAction<boolean>>;
   importAlert: string | null;
@@ -81,7 +74,6 @@ export interface UseSongDataReturn {
   toast: ToastState | null;
   allSongs: { id: string; title: string; artist: string; spotify_track_id?: string | null; created_by: string; is_public: number }[];
   handleSync: () => Promise<void>;
-  handlePasteLrc: () => Promise<void>;
   handleDelete: () => void;
   confirmDelete: () => Promise<void>;
   handleCopy: () => Promise<void>;
@@ -113,13 +105,9 @@ export function useSongData(id: string): UseSongDataReturn {
   const [importAlert, setImportAlert] = useState<string | null>(null);
   const [syncLines, setSyncLines] = useState<ReturnType<typeof parseLrc>>([]);
   const [syncing, setSyncing] = useState(false);
-  const [syncError, setSyncError] = useState('');
   const [importing, setImporting] = useState(false);
   const [allSongs, setAllSongs] = useState<{ id: string; title: string; artist: string; spotify_track_id?: string | null; created_by: string; is_public: number }[]>([]);
-  const [showPasteLrc, setShowPasteLrc] = useState(false);
-  const [pasteLrcText, setPasteLrcText] = useState('');
   const [copied, setCopied] = useState(false);
-  const [showExport, setShowExport] = useState(false);
   const [fontSize, setFontSize] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('jplrc-font-size');
@@ -137,7 +125,7 @@ export function useSongData(id: string): UseSongDataReturn {
   const serverFurigana = useMemo<FuriganaLine[]>(() => {
     if (!song?.lyrics_furigana) return [];
     try { return JSON.parse(song.lyrics_furigana); } catch { return []; }
-  }, [song?.lyrics_furigana]);
+  }, [song]);
 
   // Client-side furigana (lazy-loaded from kuromoji-es CDN when needed)
   const requestedLyricsRef = useRef('');
@@ -258,7 +246,6 @@ export function useSongData(id: string): UseSongDataReturn {
   // Handlers
   const handleSync = useCallback(async () => {
     setSyncing(true);
-    setSyncError('');
     try {
       const res = await fetch(`/api/songs/${id}/sync`, { method: 'POST' });
       const data = await res.json();
@@ -283,41 +270,14 @@ export function useSongData(id: string): UseSongDataReturn {
         const message = data.error && errorKey[data.error]
           ? t(errorKey[data.error])
           : t('song.syncNotFound');
-        setSyncError(message);
         setImportAlert(message);
       }
     } catch {
-      setSyncError(t('song.networkError'));
       setImportAlert(t('song.networkErrorAlert'));
     } finally {
       setSyncing(false);
     }
   }, [id, t, showToast]);
-
-  const handlePasteLrc = useCallback(async () => {
-    if (!pasteLrcText.trim()) return;
-    try {
-      const res = await fetch(`/api/songs/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lyrics_synced: pasteLrcText.trim() }),
-      });
-      if (res.ok) {
-        const songRes = await fetch(`/api/songs/${id}`);
-        if (songRes.ok) {
-          const updated = await songRes.json();
-          setSong(updated);
-          setSyncLines(parseLrc(pasteLrcText.trim()));
-        }
-        setShowPasteLrc(false);
-        setPasteLrcText('');
-        setSyncError('');
-        showToast('success', t('song.lyricsSaved'));
-      }
-    } catch {
-      showToast('error', t('song.saveFailed'));
-    }
-  }, [id, pasteLrcText, t, showToast]);
 
 
   const handleDelete = useCallback(() => {
@@ -510,19 +470,12 @@ export function useSongData(id: string): UseSongDataReturn {
     furiganaError,
     lineTimestamps,
     syncing,
-    syncError,
     importing,
     copied,
     readingMode,
     setReadingMode,
     debug,
     setDebug,
-    showPasteLrc,
-    setShowPasteLrc,
-    pasteLrcText,
-    setPasteLrcText,
-    showExport,
-    setShowExport,
     deleteConfirm,
     setDeleteConfirm,
     importAlert,
@@ -532,7 +485,6 @@ export function useSongData(id: string): UseSongDataReturn {
     toast,
     allSongs,
     handleSync,
-    handlePasteLrc,
     handleDelete,
     confirmDelete,
     handleCopy,

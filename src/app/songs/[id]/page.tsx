@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } fro
 import { useRouter, useParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
 import Link from 'next/link';
-import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, ClipboardPaste, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2, Info, X } from 'lucide-react';
+import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2, Info, X } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import FuriganaLineView from '@/components/FuriganaLine';
@@ -502,7 +502,7 @@ export default function SongViewPage() {
                 {
                   icon: <Bug className="h-3.5 w-3.5" />,
                   label: t('song.debug'),
-                  active: data.debug,
+                  status: t(data.debug ? 'common.on' : 'common.off'),
                   onClick: () => data.setDebug(!data.debug),
                 },
                 {
@@ -511,12 +511,7 @@ export default function SongViewPage() {
                   onClick: data.handleSync,
                   disabled: data.syncing || !canEdit,
                 },
-                ...(!hasSyncData ? [{
-                  icon: <ClipboardPaste className="h-3.5 w-3.5" />,
-                  label: t('song.paste'),
-                  onClick: () => data.setShowPasteLrc(!data.showPasteLrc),
-                  disabled: !canEdit,
-                } as const] : []),
+
                 {
                   icon: <Download className="h-3.5 w-3.5" />,
                   label: '.txt',
@@ -637,20 +632,6 @@ export default function SongViewPage() {
           </div>
         )}
 
-        {/* Paste LRC UI */}
-        {(data.showPasteLrc || data.syncError) && !hasSyncData && (
-          <div className="mt-3 rounded-md bg-[var(--muted)] border border-[var(--border)] p-3 sm:p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-[var(--foreground)]">{t('song.pasteLrcTitle')}</span>
-              {data.syncError && <span className="text-[10px] text-[var(--destructive)]">{data.syncError}</span>}
-            </div>
-            <textarea value={data.pasteLrcText} onChange={(e) => data.setPasteLrcText(e.target.value)} placeholder={t('song.pasteLrcPlaceholder')} rows={6} className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs font-mono outline-none focus:border-[var(--song-accent)] transition-colors placeholder:text-[var(--muted-foreground)]/40 resize-y" />
-            <div className="flex items-center gap-2 mt-2">
-              <button onClick={data.handlePasteLrc} disabled={!data.pasteLrcText.trim()} className="song-editor-primary-button rounded-md px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-90 disabled:opacity-50">{t('common.save')}</button>
-              <button onClick={() => { data.setShowPasteLrc(false); data.setPasteLrcText(''); }} className="rounded-md px-3 py-1.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">{t('common.cancel')}</button>
-            </div>
-          </div>
-        )}
       </div>
       <div className="lyrics-panel-shell relative isolate flex-1 min-h-0" style={lyricPanelStyle}>
         <div className="lyrics-ambient-breath" aria-hidden="true" />
@@ -713,7 +694,7 @@ export default function SongViewPage() {
       {/* Mobile bottom toolbar */}
       <MobileMenu
         data={data} sync={sync} song={song} id={id} router={router}
-        furiganaLines={furiganaLines} hasSyncData={hasSyncData} pipSupported={pipSupported}
+        furiganaLines={furiganaLines} pipSupported={pipSupported}
         onOpenPiP={handleOpenPiP} canEdit={canEdit}
       />
 
@@ -803,6 +784,7 @@ export default function SongViewPage() {
 type ToolbarMenuItem = {
   icon?: ReactNode;
   label: ReactNode;
+  status?: ReactNode;
   active?: boolean;
   danger?: boolean;
   disabled?: boolean;
@@ -898,7 +880,8 @@ function ToolbarMenu({ label, items }: { label: ReactNode; items: ToolbarMenuIte
               return (
                 <a key={i} href={item.href} onClick={() => setOpen(false)} className={cls}>
                   {item.icon}
-                  <span>{item.label}</span>
+                  <span className="min-w-0 flex-1">{item.label}</span>
+                  {item.status && <span className="ml-auto text-[10px] text-[var(--muted-foreground)]">{item.status}</span>}
                 </a>
               );
             }
@@ -910,7 +893,8 @@ function ToolbarMenu({ label, items }: { label: ReactNode; items: ToolbarMenuIte
                 className={cls}
               >
                 {item.icon}
-                <span>{item.label}</span>
+                <span className="min-w-0 flex-1">{item.label}</span>
+                {item.status && <span className="ml-auto text-[10px] text-[var(--muted-foreground)]">{item.status}</span>}
               </button>
             );
           })}
@@ -921,27 +905,30 @@ function ToolbarMenu({ label, items }: { label: ReactNode; items: ToolbarMenuIte
 }
 
 /** Mobile bottom toolbar — A-/A+, Sync, Copy visible; rest in 3-dot menu */
-function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, pipSupported, onOpenPiP, canEdit }: {
+function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported, onOpenPiP, canEdit }: {
   data: ReturnType<typeof useSongData>;
   sync: ReturnType<typeof useSpotifySync>;
   song: NonNullable<ReturnType<typeof useSongData>['song']>;
   id: string;
   router: ReturnType<typeof useRouter>;
   furiganaLines: ReturnType<typeof useSongData>['furiganaLines'];
-  hasSyncData: boolean;
   pipSupported: boolean;
   onOpenPiP: () => void;
   canEdit: boolean;
 }) {
   const { t } = useI18n();
   const [showMenu, setShowMenu] = useState(false);
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close menu on outside tap
   useEffect(() => {
     if (!showMenu) return;
     const handler = (e: TouchEvent | MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setShowMenu(false);
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+        setShowDownloadMenu(false);
+      }
     };
     document.addEventListener('touchstart', handler);
     document.addEventListener('mousedown', handler);
@@ -952,15 +939,19 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
     { icon: <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />, label: data.syncing ? t('song.syncing') : t('song.sync'), onClick: data.handleSync, disabled: data.syncing || !canEdit },
     ...(song.lyrics_raw && canEdit ? [{ icon: <Clock3 className="h-4 w-4" />, label: t('song.timelineEdit'), onClick: () => router.push(`/songs/${id}/timeline/edit`) }] : []),
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: t('song.pipBtn'), onClick: onOpenPiP }] : []),
-    { icon: <Bug className="h-4 w-4" />, label: t('song.debug'), onClick: () => data.setDebug(!data.debug), active: data.debug },
-    { icon: <Download className="h-4 w-4" />, label: '.txt', onClick: () => { window.location.href = `/api/songs/${id}/export?format=text`; } },
-    { icon: <Download className="h-4 w-4" />, label: '.lrc', onClick: () => { window.location.href = `/api/songs/${id}/export?format=lrc`; } },
-    { icon: <Download className="h-4 w-4" />, label: `.html ${t('song.exportFurigana')}`, onClick: () => { window.location.href = `/api/songs/${id}/export?format=html`; } },
+    { icon: <Bug className="h-4 w-4" />, label: t('song.debug'), status: t(data.debug ? 'common.on' : 'common.off'), onClick: () => data.setDebug(!data.debug), keepOpen: true },
+    { icon: <Download className="h-4 w-4" />, label: t('song.download'), status: <ChevronDown className="h-3.5 w-3.5 -rotate-90" />, onClick: () => setShowDownloadMenu(true), keepOpen: true },
     ...(canEdit ? [
       { icon: <Pencil className="h-4 w-4" />, label: t('common.edit'), onClick: () => router.push(`/songs/${id}/edit`) },
       { icon: <Languages className="h-4 w-4" />, label: t('furigana.title'), onClick: () => router.push(`/songs/${id}/furigana/edit`) },
       { icon: <Trash2 className="h-4 w-4" />, label: t('common.delete'), onClick: data.handleDelete, danger: true },
     ] : []),
+  ];
+
+  const downloadItems = [
+    { label: '.txt', format: 'text' },
+    { label: '.lrc', format: 'lrc' },
+    { label: `.html ${t('song.exportFurigana')}`, format: 'html' },
   ];
 
   return (
@@ -977,13 +968,6 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
         <MobileIconButton label={data.copied ? t('share.copied') : t('song.copy')} onClick={data.handleCopy} className={data.copied ? 'text-[var(--success)]' : ''}>
           {data.copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
         </MobileIconButton>
-
-        {/* Paste */}
-        {!hasSyncData && canEdit && (
-          <MobileIconButton label={t('song.paste')} onClick={() => data.setShowPasteLrc(!data.showPasteLrc)} className={data.showPasteLrc ? 'song-mobile-button--active' : ''}>
-            <ClipboardPaste className="h-5 w-5" />
-          </MobileIconButton>
-        )}
 
         {/* Original / Furigana / Romaji */}
         <MobileIconButton
@@ -1004,28 +988,72 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, hasSyncData, 
 
         {/* 3-dot menu */}
         <div className="relative" ref={menuRef}>
-          <MobileIconButton label={t('song.more')} onClick={() => setShowMenu(!showMenu)} className={showMenu ? 'song-mobile-button--active' : ''}>
+          <MobileIconButton
+            label={t('song.more')}
+            onClick={() => {
+              const nextOpen = !showMenu;
+              setShowMenu(nextOpen);
+              if (!nextOpen) setShowDownloadMenu(false);
+            }}
+            className={showMenu ? 'song-mobile-button--active' : ''}
+          >
             <MoreVertical className="h-5 w-5" />
           </MobileIconButton>
           {showMenu && (
-            <div className="absolute right-0 bottom-full mb-2 z-50 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-xl py-1.5 min-w-[180px] fade-in">
-              {menuItems.map((item, i) => (
-                <button
-                  key={i}
-                  onClick={() => { item.onClick(); if (!('active' in item)) setShowMenu(false); }}
-                  disabled={'disabled' in item ? item.disabled : false}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors disabled:opacity-50 ${
-                    'danger' in item && item.danger
-                      ? 'text-[var(--destructive)] hover:bg-[var(--destructive)]/10'
-                      : 'active' in item && item.active
-                        ? 'text-[var(--song-accent)] bg-[var(--song-accent)]/10'
+            <div className="absolute right-0 bottom-full mb-2 z-50 min-w-[200px] rounded-xl border border-[var(--border)] bg-[var(--card)] py-1.5 shadow-xl fade-in">
+              {showDownloadMenu ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowDownloadMenu(false)}
+                    className="flex w-full items-center gap-3 border-b border-[var(--border)] px-4 py-2.5 text-left text-sm font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--accent)]"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    <span>{t('song.download')}</span>
+                  </button>
+                  {downloadItems.map((item) => (
+                    <button
+                      type="button"
+                      key={item.format}
+                      onClick={() => {
+                        setShowMenu(false);
+                        setShowDownloadMenu(false);
+                        window.location.href = `/api/songs/${id}/export?format=${item.format}`;
+                      }}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] transition-colors hover:bg-[var(--accent)]"
+                    >
+                      <Download className="h-4 w-4" />
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
+                </>
+              ) : (
+                menuItems.map((item, i) => (
+                  <button
+                    type="button"
+                    key={i}
+                    onClick={() => {
+                      item.onClick();
+                      if (!('keepOpen' in item && item.keepOpen)) {
+                        setShowMenu(false);
+                        setShowDownloadMenu(false);
+                      }
+                    }}
+                    disabled={'disabled' in item ? item.disabled : false}
+                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors disabled:opacity-50 ${
+                      'danger' in item && item.danger
+                        ? 'text-[var(--destructive)] hover:bg-[var(--destructive)]/10'
                         : 'text-[var(--foreground)] hover:bg-[var(--accent)]'
-                  }`}
-                >
-                  {item.icon}
-                  <span>{item.label}</span>
-                </button>
-              ))}
+                    }`}
+                  >
+                    {item.icon}
+                    <span className="min-w-0 flex-1">{item.label}</span>
+                    {'status' in item && item.status && (
+                      <span className="ml-auto text-[11px] text-[var(--muted-foreground)]">{item.status}</span>
+                    )}
+                  </button>
+                ))
+              )}
             </div>
           )}
         </div>
