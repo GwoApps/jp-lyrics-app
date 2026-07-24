@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { I18nProvider, useI18n } from '@/lib/i18n';
@@ -11,6 +12,7 @@ import { Sun, Moon } from 'lucide-react';
 function Nav() {
   const { t } = useI18n();
   const { theme, toggleTheme } = useTheme();
+  const [animateThemeIcon, setAnimateThemeIcon] = useState(false);
   const { session } = useAuthSession();
   const spotifyConnected = session?.spotify.connected === true;
   const isAdmin = session?.user?.isAdmin === true;
@@ -51,11 +53,20 @@ function Nav() {
           </a>
           <LanguageSwitcher />
           <button
-            onClick={toggleTheme}
-            className="rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)]"
+            type="button"
+            onClick={() => {
+              setAnimateThemeIcon(true);
+              toggleTheme();
+            }}
+            className="theme-toggle-button rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)]"
             title={theme === 'dark' ? t('common.lightMode') : t('common.darkMode')}
+            aria-label={theme === 'dark' ? t('common.lightMode') : t('common.darkMode')}
           >
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {theme === 'dark' ? (
+              <Sun className={`theme-toggle-icon h-4 w-4${animateThemeIcon ? ' theme-toggle-icon--sun' : ''}`} />
+            ) : (
+              <Moon className={`theme-toggle-icon h-4 w-4${animateThemeIcon ? ' theme-toggle-icon--moon' : ''}`} />
+            )}
           </button>
         </div>
       </div>
