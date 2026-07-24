@@ -5,6 +5,7 @@ import { Copy, Languages, Share2 } from 'lucide-react';
 import type { FuriganaLine, ReadingMode } from '@/lib/types';
 import { fmtMs } from '@/lib/lrc';
 import {
+  isKatakanaReadingSegment,
   isKoreanReadingSegment,
   normalizeFuriganaSegments,
   resolveFuriganaReading,
@@ -80,8 +81,12 @@ export default function FuriganaLineView({
           const reading = resolveFuriganaReading(seg.text, seg.reading, romanizeFurigana);
           if (!reading) return <span key={i}>{seg.text}</span>;
           const koreanWord = romanizeFurigana && isKoreanReadingSegment(seg.text);
+          const katakanaChunk = romanizeFurigana && isKatakanaReadingSegment(seg.text);
+          const rubyClass = koreanWord
+            ? 'lyric-ruby--korean'
+            : katakanaChunk ? 'lyric-ruby--katakana' : undefined;
           return (
-            <ruby key={i} className={koreanWord ? 'lyric-ruby--korean' : undefined}>
+            <ruby key={i} className={rubyClass}>
               {seg.text}<rp>(</rp><rt lang={romanizeFurigana ? 'en' : 'ja'}>{reading}</rt><rp>)</rp>
             </ruby>
           );

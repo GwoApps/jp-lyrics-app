@@ -73,6 +73,8 @@ const KOREAN_LIAISON: Record<number, { final: number; initial: number | null }> 
 };
 
 const LYRIC_SCRIPT_RUNS = /[\u3400-\u4DBF\u4E00-\u9FFF]+|[\u3040-\u30FF\uFF66-\uFF9F]+|[\uAC00-\uD7A3]+|[^\u3400-\u4DBF\u4E00-\u9FFF\u3040-\u30FF\uFF66-\uFF9F\uAC00-\uD7A3]+/g;
+const KATAKANA_PARTS = /[ァ-ヺヽヾー]+|[^ァ-ヺヽヾー]+/g;
+const KATAKANA_ATTACH_TO_PREVIOUS = /^[ァィゥェォャュョヮヵヶー]$/;
 
 /** Split mixed lyrics so Japanese, Korean and neutral text can receive independent ruby. */
 export function splitLyricScriptRuns(value: string): string[] {
@@ -89,13 +91,71 @@ export function isKoreanReadingSegment(value: string): boolean {
   return /^[\uAC00-\uD7A3]+$/.test(value.normalize('NFC'));
 }
 
+export function isKatakanaReadingSegment(value: string): boolean {
+  return /^[ァ-ヺヽヾー]+$/.test(value.normalize('NFC'));
+}
+
+function splitKatakanaMora(value: string): string[] {
+  const units: string[] = [];
+  for (const character of value) {
+    if (KATAKANA_ATTACH_TO_PREVIOUS.test(character) && units.length > 0) {
+      units[units.length - 1] += character;
+    } else {
+      units.push(character);
+    }
+  }
+  return units;
+}
+
+function splitBalancedKatakanaRun(value: string, maxRomanizedLength: number): string[] {
+  const totalLength = romanizeJapanese(value).length;
+  const chunkCount = Math.ceil(totalLength / maxRomanizedLength);
+  if (chunkCount <= 1) return [value];
+
+  const units = splitKatakanaMora(value);
+  const targetLength = totalLength / chunkCount;
+  const chunks: string[] = [];
+  let current = '';
+
+  for (let index = 0; index < units.length; index += 1) {
+    const unit = units[index];
+    current += unit;
+    const nextUnit = units[index + 1] ?? '';
+    const ambiguousNBoundary = current.endsWith('ン') && /^[アイウエオヤユヨ]/.test(nextUnit);
+    if (chunks.length < chunkCount - 1
+      && !current.endsWith('ッ')
+      && !ambiguousNBoundary
+      && romanizeJapanese(current).length >= targetLength) {
+      chunks.push(current);
+      current = '';
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+/** Split long Katakana annotations into balanced ruby units without changing visible text. */
+export function splitLongKatakanaForRuby(value: string, maxRomanizedLength = 12): string[] {
+  const normalized = value.normalize('NFC');
+  return (normalized.match(KATAKANA_PARTS) ?? [normalized]).flatMap((part) => (
+    isKatakanaReadingSegment(part)
+      ? splitBalancedKatakanaRun(part, maxRomanizedLength)
+      : [part]
+  ));
+}
+
 /** Preserve real separators while joining Korean pieces that upstream tokenizers split mid-word. */
 export function normalizeFuriganaSegments(segments: readonly LyricReadingSegment[]): LyricReadingSegment[] {
   const result: LyricReadingSegment[] = [];
   for (const segment of segments) {
-    const parts = segment.reading
+    const scriptParts = segment.reading
       ? [{ text: segment.text.normalize('NFC'), reading: segment.reading }]
       : splitLyricScriptRuns(segment.text).map((text) => ({ text, reading: '' }));
+    const parts = scriptParts.flatMap((part) => (
+      !part.reading && isKatakanaReadingSegment(part.text)
+        ? splitLongKatakanaForRuby(part.text).map((text) => ({ text, reading: '' }))
+        : [part]
+    ));
 
     for (const part of parts) {
       const previous = result.at(-1);

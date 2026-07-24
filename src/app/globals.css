@@ -85,6 +85,11 @@ rt {
 ruby.lyric-ruby--korean rt {
   padding-inline: 0.16em;
 }
+/* Long Katakana is split into ruby chunks; prevent annotation overhang between chunks. */
+ruby.lyric-ruby--katakana {
+  ruby-overhang: none;
+  white-space: nowrap;
+}
 rp { display: none; }
 
 /* Textarea */

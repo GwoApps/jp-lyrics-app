@@ -8,6 +8,7 @@ import type { SpotifyState } from './useSpotifySync';
 import { useI18n } from '@/lib/i18n';
 import { convertToFuriganaClient } from '@/lib/kuroshiro-client';
 import {
+  isKatakanaReadingSegment,
   isKoreanReadingSegment,
   normalizeFuriganaSegments,
   resolveFuriganaReading,
@@ -404,6 +405,7 @@ export function useSongData(id: string): UseSongDataReturn {
             .line.empty { height: 1.5em; }
             ruby rt { font-size: 0.5em; color: #a3a3a3; }
             ruby.korean-word rt { padding-inline: 0.16em; }
+            ruby.katakana-chunk { ruby-overhang: none; white-space: nowrap; }
             .line.active ruby rt { color: #d4d4d4; }
           </style>
         </head>
@@ -416,7 +418,10 @@ export function useSongData(id: string): UseSongDataReturn {
                 if (readingMode === 'original') return seg.text;
                 const reading = resolveFuriganaReading(seg.text, seg.reading, romanizeFurigana);
                 if (!reading) return seg.text;
-                const className = romanizeFurigana && isKoreanReadingSegment(seg.text) ? ' class="korean-word"' : '';
+                const rubyClass = romanizeFurigana && isKoreanReadingSegment(seg.text)
+                  ? 'korean-word'
+                  : romanizeFurigana && isKatakanaReadingSegment(seg.text) ? 'katakana-chunk' : '';
+                const className = rubyClass ? ` class="${rubyClass}"` : '';
                 return `<ruby${className}>${seg.text}<rp>(</rp><rt>${reading}</rt><rp>)</rp></ruby>`;
               }).join('');
               const ts = timestamps?.[i];

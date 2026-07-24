@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  isKatakanaReadingSegment,
   isKoreanReadingSegment,
   normalizeFuriganaSegments,
   resolveFuriganaReading,
   romanizeJapanese,
   romanizeKorean,
   romanizeLyricsReading,
+  splitLongKatakanaForRuby,
   splitLyricScriptRuns,
 } from './romaji.ts';
 
@@ -88,6 +90,30 @@ test('normalizeFuriganaSegments joins split Korean syllables but preserves real 
   ]);
   assert.equal(isKoreanReadingSegment('안녕'), true);
   assert.equal(isKoreanReadingSegment('안녕!'), false);
+});
+
+test('splitLongKatakanaForRuby creates balanced break opportunities without changing source text', () => {
+  assert.deepEqual(splitLongKatakanaForRuby('スーパー'), ['スーパー']);
+
+  const source = 'コンピューターサイエンス';
+  const chunks = splitLongKatakanaForRuby(source);
+  assert.deepEqual(chunks, ['コンピューター', 'サイエンス']);
+  assert.equal(chunks.join(''), source);
+  assert.equal(chunks.every((chunk) => !chunk.endsWith('ッ')), true);
+  assert.equal(isKatakanaReadingSegment(chunks[0]), true);
+
+  const sokuon = splitLongKatakanaForRuby('マッチョッチョッチョッチョ');
+  assert.equal(sokuon.join(''), 'マッチョッチョッチョッチョ');
+  assert.equal(sokuon.every((chunk) => !chunk.endsWith('ッ')), true);
+
+  const ambiguousN = splitLongKatakanaForRuby('シンアイシンアイシンアイ');
+  assert.equal(ambiguousN.some((chunk, index) => (
+    chunk.endsWith('ン') && /^[アイウエオヤユヨ]/.test(ambiguousN[index + 1] ?? '')
+  )), false);
+
+  const normalized = normalizeFuriganaSegments([{ text: source, reading: '' }]);
+  assert.equal(normalized.length, 2);
+  assert.equal(normalized.map((segment) => segment.text).join(''), source);
 });
 
 test('resolveFuriganaReading adds Latin readings above Korean source text', () => {
