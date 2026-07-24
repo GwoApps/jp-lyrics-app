@@ -63,9 +63,9 @@ function Nav() {
             aria-label={theme === 'dark' ? t('common.lightMode') : t('common.darkMode')}
           >
             {theme === 'dark' ? (
-              <Sun className={`theme-toggle-icon h-4 w-4${animateThemeIcon ? ' theme-toggle-icon--sun' : ''}`} />
-            ) : (
               <Moon className={`theme-toggle-icon h-4 w-4${animateThemeIcon ? ' theme-toggle-icon--moon' : ''}`} />
+            ) : (
+              <Sun className={`theme-toggle-icon h-4 w-4${animateThemeIcon ? ' theme-toggle-icon--sun' : ''}`} />
             )}
           </button>
         </div>
