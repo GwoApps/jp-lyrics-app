@@ -7,7 +7,12 @@ import { mapTimelineTimestamps, parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
 import { useI18n } from '@/lib/i18n';
 import { convertToFuriganaClient } from '@/lib/kuroshiro-client';
-import { resolveFuriganaReading, splitLyricScriptRuns } from '@/lib/romaji';
+import {
+  isKoreanReadingSegment,
+  normalizeFuriganaSegments,
+  resolveFuriganaReading,
+  splitLyricScriptRuns,
+} from '@/lib/romaji';
 
 const LYRICS_SOURCE_KEYS: Record<string, string> = {
   manual: 'lyricsSources.manual',
@@ -398,6 +403,7 @@ export function useSongData(id: string): UseSongDataReturn {
             .line.active { color: #ffffff; transform: scale(1.03); opacity: 1; font-weight: 700; animation: lyricActivate 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
             .line.empty { height: 1.5em; }
             ruby rt { font-size: 0.5em; color: #a3a3a3; }
+            ruby.korean-word rt { padding-inline: 0.16em; }
             .line.active ruby rt { color: #d4d4d4; }
           </style>
         </head>
@@ -406,11 +412,12 @@ export function useSongData(id: string): UseSongDataReturn {
           <div id="pip-lyrics">
             ${furiganaLinesArg.map((line, i) => {
               if (line.segments.length === 0) return `<div class="line empty" data-line="${i}"></div>`;
-              const html = line.segments.map(seg => {
+              const html = normalizeFuriganaSegments(line.segments).map(seg => {
                 if (readingMode === 'original') return seg.text;
                 const reading = resolveFuriganaReading(seg.text, seg.reading, romanizeFurigana);
                 if (!reading) return seg.text;
-                return `<ruby>${seg.text}<rp>(</rp><rt>${reading}</rt><rp>)</rp></ruby>`;
+                const className = romanizeFurigana && isKoreanReadingSegment(seg.text) ? ' class="korean-word"' : '';
+                return `<ruby${className}>${seg.text}<rp>(</rp><rt>${reading}</rt><rp>)</rp></ruby>`;
               }).join('');
               const ts = timestamps?.[i];
               const tsAttr = ts != null ? ` data-ts="${ts}"` : '';

@@ -4,7 +4,11 @@ import { useRef, useEffect, useState } from 'react';
 import { Copy, Languages, Share2 } from 'lucide-react';
 import type { FuriganaLine, ReadingMode } from '@/lib/types';
 import { fmtMs } from '@/lib/lrc';
-import { resolveFuriganaReading } from '@/lib/romaji';
+import {
+  isKoreanReadingSegment,
+  normalizeFuriganaSegments,
+  resolveFuriganaReading,
+} from '@/lib/romaji';
 import { useI18n } from '@/lib/i18n';
 import {
   ContextMenu,
@@ -71,12 +75,15 @@ export default function FuriganaLineView({
         } ${onSeek && timestamp != null ? 'hover:!opacity-100' : ''}`}
         style={{ fontWeight: isActive ? 700 : 400 }}
       >
-        {line.segments.map((seg, i) => {
+        {normalizeFuriganaSegments(line.segments).map((seg, i) => {
           if (readingMode === 'original') return <span key={i}>{seg.text}</span>;
           const reading = resolveFuriganaReading(seg.text, seg.reading, romanizeFurigana);
           if (!reading) return <span key={i}>{seg.text}</span>;
+          const koreanWord = romanizeFurigana && isKoreanReadingSegment(seg.text);
           return (
-            <ruby key={i}>{seg.text}<rp>(</rp><rt lang={romanizeFurigana ? 'en' : 'ja'}>{reading}</rt><rp>)</rp></ruby>
+            <ruby key={i} className={koreanWord ? 'lyric-ruby--korean' : undefined}>
+              {seg.text}<rp>(</rp><rt lang={romanizeFurigana ? 'en' : 'ja'}>{reading}</rt><rp>)</rp>
+            </ruby>
           );
         })}
       </div>

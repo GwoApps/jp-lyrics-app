@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  isKoreanReadingSegment,
+  normalizeFuriganaSegments,
   resolveFuriganaReading,
   romanizeJapanese,
   romanizeKorean,
@@ -43,6 +45,7 @@ test('romanizeKorean converts common Hangul lyrics to Revised Romanization', () 
   assert.equal(romanizeKorean('안녕하세요'), 'annyeonghaseyo');
   assert.equal(romanizeKorean('사랑해'), 'saranghae');
   assert.equal(romanizeKorean('서울'), 'seoul');
+  assert.equal(romanizeKorean('안녕'.normalize('NFD')), 'annyeong');
 });
 
 test('romanizeKorean handles liaison and common pronunciation changes', () => {
@@ -60,7 +63,31 @@ test('romanizeKorean handles liaison and common pronunciation changes', () => {
 
 test('romanizeLyricsReading supports Japanese and Korean in the same fragment', () => {
   assert.equal(romanizeLyricsReading('きょう 안녕 スーパー'), 'kyou annyeong suupaa');
+  assert.equal(romanizeKorean('한국 어'), 'hanguk eo');
+  assert.equal(romanizeKorean('한국, 어'), 'hanguk, eo');
   assert.deepEqual(splitLyricScriptRuns('君と 안녕 スーパー'), ['君', 'と', ' ', '안녕', ' ', 'スーパー']);
+});
+
+test('normalizeFuriganaSegments joins split Korean syllables but preserves real word spaces', () => {
+  assert.deepEqual(normalizeFuriganaSegments([
+    { text: '안', reading: '' },
+    { text: '녕', reading: '' },
+    { text: ' ', reading: '' },
+    { text: '하세', reading: '' },
+    { text: '요', reading: '' },
+  ]), [
+    { text: '안녕', reading: '' },
+    { text: ' ', reading: '' },
+    { text: '하세요', reading: '' },
+  ]);
+  assert.deepEqual(normalizeFuriganaSegments([{ text: '안녕 세상!', reading: '' }]), [
+    { text: '안녕', reading: '' },
+    { text: ' ', reading: '' },
+    { text: '세상', reading: '' },
+    { text: '!', reading: '' },
+  ]);
+  assert.equal(isKoreanReadingSegment('안녕'), true);
+  assert.equal(isKoreanReadingSegment('안녕!'), false);
 });
 
 test('resolveFuriganaReading adds Latin readings above Korean source text', () => {

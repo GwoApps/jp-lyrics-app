@@ -76,7 +76,38 @@ const LYRIC_SCRIPT_RUNS = /[\u3400-\u4DBF\u4E00-\u9FFF]+|[\u3040-\u30FF\uFF66-\u
 
 /** Split mixed lyrics so Japanese, Korean and neutral text can receive independent ruby. */
 export function splitLyricScriptRuns(value: string): string[] {
-  return value.match(LYRIC_SCRIPT_RUNS) ?? (value ? [value] : []);
+  const normalized = value.normalize('NFC');
+  return normalized.match(LYRIC_SCRIPT_RUNS) ?? (normalized ? [normalized] : []);
+}
+
+export interface LyricReadingSegment {
+  text: string;
+  reading: string;
+}
+
+export function isKoreanReadingSegment(value: string): boolean {
+  return /^[\uAC00-\uD7A3]+$/.test(value.normalize('NFC'));
+}
+
+/** Preserve real separators while joining Korean pieces that upstream tokenizers split mid-word. */
+export function normalizeFuriganaSegments(segments: readonly LyricReadingSegment[]): LyricReadingSegment[] {
+  const result: LyricReadingSegment[] = [];
+  for (const segment of segments) {
+    const parts = segment.reading
+      ? [{ text: segment.text.normalize('NFC'), reading: segment.reading }]
+      : splitLyricScriptRuns(segment.text).map((text) => ({ text, reading: '' }));
+
+    for (const part of parts) {
+      const previous = result.at(-1);
+      if (previous && !previous.reading && !part.reading
+        && isKoreanReadingSegment(previous.text) && isKoreanReadingSegment(part.text)) {
+        previous.text += part.text;
+      } else {
+        result.push(part);
+      }
+    }
+  }
+  return result;
 }
 
 function toHiragana(value: string): string {
@@ -241,7 +272,7 @@ export function romanizeKorean(value: string): string {
     run = [];
   };
 
-  for (const character of value) {
+  for (const character of value.normalize('NFC')) {
     const syllable = decomposeKoreanSyllable(character);
     if (syllable) run.push(syllable);
     else {
