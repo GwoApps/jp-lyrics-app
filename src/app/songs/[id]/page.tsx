@@ -684,18 +684,18 @@ export default function SongViewPage() {
       </div>
 
       {/* Compact metadata footer */}
-      <div className="shrink-0 mt-2 sm:mt-4 flex items-center justify-between gap-2">
+      <div className={`shrink-0 mt-2 sm:mt-4 items-center justify-between gap-2 ${spotify?.connected ? 'hidden sm:flex' : 'flex'}`}>
         <button
           type="button"
           onClick={() => setShowSongInfo(true)}
-          className="song-accent-button inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-medium"
+          className="song-accent-button hidden h-8 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-medium sm:inline-flex"
           aria-haspopup="dialog"
         >
           <Info className="h-3.5 w-3.5" />
           {t('song.info')}
         </button>
         {!spotify?.connected && (
-          <SpotifyLoginButton className="text-[11px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors disabled:opacity-60">{t('song.spotify')}</SpotifyLoginButton>
+          <SpotifyLoginButton className="ml-auto text-[11px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors disabled:opacity-60">{t('song.spotify')}</SpotifyLoginButton>
         )}
       </div>
 
@@ -703,7 +703,7 @@ export default function SongViewPage() {
       <MobileMenu
         data={data} sync={sync} song={song} id={id} router={router}
         furiganaLines={furiganaLines} pipSupported={pipSupported}
-        onOpenPiP={handleOpenPiP} canEdit={canEdit}
+        onOpenPiP={handleOpenPiP} onShowSongInfo={() => setShowSongInfo(true)} canEdit={canEdit}
       />
 
       {data.toast && <Toast type={data.toast.type} message={data.toast.msg} />}
@@ -926,7 +926,7 @@ function ToolbarMenu({ label, items }: { label: ReactNode; items: ToolbarMenuIte
 }
 
 /** Mobile bottom toolbar — A-/A+, Sync, Copy visible; rest in 3-dot menu */
-function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported, onOpenPiP, canEdit }: {
+function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported, onOpenPiP, onShowSongInfo, canEdit }: {
   data: ReturnType<typeof useSongData>;
   sync: ReturnType<typeof useSpotifySync>;
   song: NonNullable<ReturnType<typeof useSongData>['song']>;
@@ -935,6 +935,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
   furiganaLines: ReturnType<typeof useSongData>['furiganaLines'];
   pipSupported: boolean;
   onOpenPiP: () => void;
+  onShowSongInfo: () => void;
   canEdit: boolean;
 }) {
   const { t } = useI18n();
@@ -956,6 +957,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
   }, [showMenu]);
 
   const menuItems = [
+    { icon: <Info className="h-4 w-4" />, label: t('song.info'), onClick: onShowSongInfo },
     { icon: <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />, label: data.syncing ? t('song.syncing') : t('song.sync'), onClick: data.handleSync, disabled: data.syncing || !canEdit },
     ...(song.lyrics_raw && canEdit ? [{ icon: <Clock3 className="h-4 w-4" />, label: t('song.timelineEdit'), onClick: () => router.push(`/songs/${id}/timeline/edit`) }] : []),
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: t('song.pipBtn'), onClick: onOpenPiP }] : []),
