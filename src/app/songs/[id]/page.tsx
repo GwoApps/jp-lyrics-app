@@ -864,42 +864,55 @@ function ToolbarMenu({ label, items }: { label: ReactNode; items: ToolbarMenuIte
 
   return (
     <div className="relative" ref={ref}>
-      <button onClick={() => setOpen(!open)} className={btnTextCls(open)}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`${btnTextCls(open)} song-menu-trigger`}
+        data-open={open}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
         {label}
       </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 rounded-lg bg-[var(--card)] border border-[var(--border)] shadow-lg py-1 min-w-[160px]">
-          {items.map((item, i) => {
-            const base = "w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors disabled:opacity-50";
-            const cls = item.danger
-              ? `${base} text-[var(--destructive)] hover:bg-[var(--destructive)]/10`
-              : item.active
-                ? `${base} text-[var(--song-accent)] bg-[var(--song-accent)]/10`
-                : `${base} text-[var(--foreground)] hover:bg-[var(--accent)]`;
-            if (item.href) {
-              return (
-                <a key={i} href={item.href} onClick={() => setOpen(false)} className={cls}>
-                  {item.icon}
-                  <span className="min-w-0 flex-1">{item.label}</span>
-                  {item.status && <span className="ml-auto text-[10px] text-[var(--muted-foreground)]">{item.status}</span>}
-                </a>
-              );
-            }
+      <div
+        role="menu"
+        aria-hidden={!open}
+        data-open={open}
+        className="song-menu-popover song-menu-popover--desktop absolute right-0 top-full z-50 mt-1 min-w-[160px] rounded-lg border border-[var(--border)] bg-[var(--card)] py-1 shadow-lg"
+      >
+        {items.map((item, i) => {
+          const base = "song-menu-item w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left disabled:opacity-50";
+          const cls = item.danger
+            ? `${base} text-[var(--destructive)] hover:bg-[var(--destructive)]/10`
+            : item.active
+              ? `${base} text-[var(--song-accent)] bg-[var(--song-accent)]/10`
+              : `${base} text-[var(--foreground)] hover:bg-[var(--accent)]`;
+          if (item.href) {
             return (
-              <button
-                key={i}
-                onClick={() => { item.onClick?.(); setOpen(false); }}
-                disabled={item.disabled}
-                className={cls}
-              >
+              <a key={i} role="menuitem" data-menu-item href={item.href} onClick={() => setOpen(false)} className={cls}>
                 {item.icon}
                 <span className="min-w-0 flex-1">{item.label}</span>
                 {item.status && <span className="ml-auto text-[10px] text-[var(--muted-foreground)]">{item.status}</span>}
-              </button>
+              </a>
             );
-          })}
-        </div>
-      )}
+          }
+          return (
+            <button
+              type="button"
+              role="menuitem"
+              data-menu-item
+              key={i}
+              onClick={() => { item.onClick?.(); setOpen(false); }}
+              disabled={item.disabled}
+              className={cls}
+            >
+              {item.icon}
+              <span className="min-w-0 flex-1">{item.label}</span>
+              {item.status && <span className="ml-auto text-[10px] text-[var(--muted-foreground)]">{item.status}</span>}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -927,7 +940,6 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
     const handler = (e: TouchEvent | MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setShowMenu(false);
-        setShowDownloadMenu(false);
       }
     };
     document.addEventListener('touchstart', handler);
@@ -991,56 +1003,71 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
           <MobileIconButton
             label={t('song.more')}
             onClick={() => {
-              const nextOpen = !showMenu;
-              setShowMenu(nextOpen);
-              if (!nextOpen) setShowDownloadMenu(false);
+              if (showMenu) {
+                setShowMenu(false);
+              } else {
+                setShowDownloadMenu(false);
+                setShowMenu(true);
+              }
             }}
-            className={showMenu ? 'song-mobile-button--active' : ''}
+            className={`song-mobile-menu-trigger ${showMenu ? 'song-mobile-button--active' : ''}`}
+            data-open={showMenu}
+            aria-haspopup="menu"
+            aria-expanded={showMenu}
           >
             <MoreVertical className="h-5 w-5" />
           </MobileIconButton>
-          {showMenu && (
-            <div className="absolute right-0 bottom-full mb-2 z-50 min-w-[200px] rounded-xl border border-[var(--border)] bg-[var(--card)] py-1.5 shadow-xl fade-in">
-              {showDownloadMenu ? (
-                <>
+          <div
+            role="menu"
+            aria-hidden={!showMenu}
+            data-open={showMenu}
+            className="song-menu-popover song-menu-popover--mobile absolute right-0 bottom-full z-50 mb-2 min-w-[200px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)] py-1.5 shadow-xl"
+          >
+            {showDownloadMenu ? (
+              <div key="download" className="song-menu-page song-menu-page--forward">
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-menu-item
+                  onClick={() => setShowDownloadMenu(false)}
+                  className="song-menu-item flex w-full items-center gap-3 border-b border-[var(--border)] px-4 py-2.5 text-left text-sm font-medium text-[var(--foreground)] hover:bg-[var(--accent)]"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  <span>{t('song.download')}</span>
+                </button>
+                {downloadItems.map((item) => (
                   <button
                     type="button"
-                    onClick={() => setShowDownloadMenu(false)}
-                    className="flex w-full items-center gap-3 border-b border-[var(--border)] px-4 py-2.5 text-left text-sm font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--accent)]"
+                    role="menuitem"
+                    data-menu-item
+                    key={item.format}
+                    onClick={() => {
+                      setShowMenu(false);
+                      window.location.href = `/api/songs/${id}/export?format=${item.format}`;
+                    }}
+                    className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
                   >
-                    <ArrowLeft className="h-4 w-4" />
-                    <span>{t('song.download')}</span>
+                    <Download className="h-4 w-4" />
+                    <span>{item.label}</span>
                   </button>
-                  {downloadItems.map((item) => (
-                    <button
-                      type="button"
-                      key={item.format}
-                      onClick={() => {
-                        setShowMenu(false);
-                        setShowDownloadMenu(false);
-                        window.location.href = `/api/songs/${id}/export?format=${item.format}`;
-                      }}
-                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] transition-colors hover:bg-[var(--accent)]"
-                    >
-                      <Download className="h-4 w-4" />
-                      <span>{item.label}</span>
-                    </button>
-                  ))}
-                </>
-              ) : (
-                menuItems.map((item, i) => (
+                ))}
+              </div>
+            ) : (
+              <div key="main" className="song-menu-page song-menu-page--back">
+                {menuItems.map((item, i) => (
                   <button
                     type="button"
+                    role="menuitem"
+                    data-menu-item
                     key={i}
                     onClick={() => {
                       item.onClick();
                       if (!('keepOpen' in item && item.keepOpen)) {
                         setShowMenu(false);
-                        setShowDownloadMenu(false);
                       }
                     }}
                     disabled={'disabled' in item ? item.disabled : false}
-                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors disabled:opacity-50 ${
+                    className={`song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm disabled:opacity-50 ${
                       'danger' in item && item.danger
                         ? 'text-[var(--destructive)] hover:bg-[var(--destructive)]/10'
                         : 'text-[var(--foreground)] hover:bg-[var(--accent)]'
@@ -1052,10 +1079,10 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
                       <span className="ml-auto text-[11px] text-[var(--muted-foreground)]">{item.status}</span>
                     )}
                   </button>
-                ))
-              )}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
