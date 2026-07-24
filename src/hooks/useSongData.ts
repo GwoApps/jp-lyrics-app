@@ -7,7 +7,7 @@ import { mapTimelineTimestamps, parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
 import { useI18n } from '@/lib/i18n';
 import { convertToFuriganaClient } from '@/lib/kuroshiro-client';
-import { resolveFuriganaReading } from '@/lib/romaji';
+import { resolveFuriganaReading, splitLyricScriptRuns } from '@/lib/romaji';
 
 const LYRICS_SOURCE_KEYS: Record<string, string> = {
   manual: 'lyricsSources.manual',
@@ -19,6 +19,14 @@ const LYRICS_SOURCE_KEYS: Record<string, string> = {
   utanet: 'lyricsSources.utanet',
   ytmusic: 'lyricsSources.ytmusic',
 };
+
+function createPlainFuriganaLines(rawLyrics: string): FuriganaLine[] {
+  return rawLyrics.split('\n').map((line) => ({
+    segments: line.trim()
+      ? splitLyricScriptRuns(line).map((text) => ({ text, reading: '' }))
+      : [],
+  }));
+}
 
 interface SongData {
   id: string;
@@ -144,6 +152,8 @@ export function useSongData(id: string): UseSongDataReturn {
     error: string;
   }>({ source: '', lines: [], loading: false, error: '' });
   const lyricsRaw = song?.lyrics_raw ?? '';
+  const hasJapaneseKanji = /[\u3400-\u4DBF\u4E00-\u9FFF]/.test(lyricsRaw);
+  const plainFuriganaLines = useMemo(() => createPlainFuriganaLines(lyricsRaw), [lyricsRaw]);
   const isCurrentClientResult = clientFuriganaState.source === lyricsRaw;
   const furiganaLoading = isCurrentClientResult && clientFuriganaState.loading;
   const furiganaError = isCurrentClientResult ? clientFuriganaState.error : '';
@@ -155,12 +165,13 @@ export function useSongData(id: string): UseSongDataReturn {
     if (clientFuriganaState.source === lyricsRaw && clientFuriganaState.lines.length > 0) {
       return clientFuriganaState.lines;
     }
-    return [];
-  }, [serverFurigana, clientFuriganaState, lyricsRaw]);
+    // Korean and kana can be romanized immediately without loading the Japanese tokenizer.
+    return plainFuriganaLines;
+  }, [serverFurigana, clientFuriganaState, lyricsRaw, plainFuriganaLines]);
 
   // Client-side furigana conversion: only once per lyrics value when server data is absent.
   useEffect(() => {
-    if (!lyricsRaw.trim() || serverFurigana.length > 0) return;
+    if (!lyricsRaw.trim() || serverFurigana.length > 0 || !hasJapaneseKanji) return;
     const requestKey = `${id}\u0000${lyricsRaw}`;
     if (requestedLyricsRef.current === requestKey) return;
     requestedLyricsRef.current = requestKey;
@@ -198,7 +209,7 @@ export function useSongData(id: string): UseSongDataReturn {
       cancelled = true;
       if (!settled && requestedLyricsRef.current === requestKey) requestedLyricsRef.current = '';
     };
-  }, [lyricsRaw, serverFurigana.length, id, t]);
+  }, [lyricsRaw, serverFurigana.length, hasJapaneseKanji, id, t]);
 
   const lineTimestamps = useMemo(() => {
     if (!song || !furiganaLines.length) return [] as (number | null)[];
