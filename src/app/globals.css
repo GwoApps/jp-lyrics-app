@@ -81,14 +81,6 @@ rt {
   font-weight: 400;
   line-height: 1;
 }
-.lyric-reading-stack {
-  display: inline-flex;
-  flex-direction: column-reverse;
-  align-items: center;
-  line-height: 1.05;
-  white-space: nowrap;
-}
-.lyric-reading-stack > span { display: block; }
 rp { display: none; }
 
 /* Textarea */
