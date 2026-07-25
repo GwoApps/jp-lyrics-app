@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDB, sql } from '@/lib/db';
+import { getDB, schema } from '@/lib/db';
+import { eq } from 'drizzle-orm';
+
+const escapeHtml = (value: string) => value
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#39;');
 
 export async function GET(
   request: NextRequest,
@@ -9,16 +17,17 @@ export async function GET(
   const { id } = await params;
   const format = request.nextUrl.searchParams.get('format') || 'text';
 
-  const song = await db.get(sql`SELECT title, artist, lyrics_raw, lyrics_synced, lyrics_furigana FROM songs WHERE id = ${id}`) as {
-    title: string;
-    artist: string;
-    lyrics_raw: string;
-    lyrics_synced: string;
-    lyrics_furigana: string;
-  } | undefined;
+  const song = await db.select({
+    title: schema.songs.title,
+    artist: schema.songs.artist,
+    lyrics_raw: schema.songs.lyricsRaw,
+    lyrics_synced: schema.songs.lyricsSynced,
+    lyrics_furigana: schema.songs.lyricsFurigana,
+    reading_scheme: schema.songs.readingScheme,
+  }).from(schema.songs).where(eq(schema.songs.id, id)).get();
 
   if (!song) {
-    return NextResponse.json({ error: 'Song not found' }, { status: 404 });
+    return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
   }
 
   const filename = `${song.title}${song.artist ? ` - ${song.artist}` : ''}`;
@@ -42,19 +51,23 @@ export async function GET(
       ? furiganaLines.map(line => {
           if (line.segments.length === 0) return '<p class="empty">&nbsp;</p>';
           const inner = line.segments.map(seg => {
-            if (!seg.reading) return seg.text;
-            return `<ruby>${seg.text}<rp>(</rp><rt>${seg.reading}</rt><rp>)</rp></ruby>`;
+            const text = escapeHtml(seg.text);
+            if (!seg.reading) return text;
+            const language = song.reading_scheme === 'yue-jyutping' ? ' lang="yue-Latn"' : '';
+            return `<ruby>${text}<rp>(</rp><rt${language}>${escapeHtml(seg.reading)}</rt><rp>)</rp></ruby>`;
           }).join('');
           return `<p>${inner}</p>`;
         }).join('\n')
-      : (song.lyrics_raw || '').split('\n').map(l => `<p>${l || '&nbsp;'}</p>`).join('\n');
+      : (song.lyrics_raw || '').split('\n').map((l: string) => `<p>${l ? escapeHtml(l) : '&nbsp;'}</p>`).join('\n');
+
+    const documentLanguage = song.reading_scheme === 'yue-jyutping' ? 'yue-Hant' : 'ja';
 
     const html = `<!DOCTYPE html>
-<html lang="ja">
+<html lang="${documentLanguage}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${song.title}</title>
+<title>${escapeHtml(song.title)}</title>
 <style>
   body { max-width: 600px; margin: 2rem auto; padding: 0 1rem; font-family: 'Noto Sans JP', sans-serif; line-height: 2.2; color: #1a1a1a; }
   h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
@@ -62,11 +75,13 @@ export async function GET(
   p { margin: 0; }
   .empty { height: 1.2em; }
   rt { font-size: 0.5em; color: #888; }
+  ruby:has(rt[lang="yue-Latn"]) { ruby-overhang: none; white-space: nowrap; }
+  rt[lang="yue-Latn"] { padding-inline: 0.08em; }
 </style>
 </head>
 <body>
-<h1>${song.title}</h1>
-${song.artist ? `<p class="artist">${song.artist}</p>` : ''}
+<h1>${escapeHtml(song.title)}</h1>
+${song.artist ? `<p class="artist">${escapeHtml(song.artist)}</p>` : ''}
 ${htmlLines}
 </body>
 </html>`;

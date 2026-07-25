@@ -87,10 +87,13 @@ export async function POST(request: NextRequest) {
 
   const db = getDB();
   const body = await request.json();
-  const { title, artist, lyrics_raw, lyrics_synced } = body;
+  const { title, artist, lyrics_raw, lyrics_synced, reading_scheme } = body;
 
   if (!title) {
     return NextResponse.json({ error: 'title_required' }, { status: 400 });
+  }
+  if (reading_scheme !== undefined && reading_scheme !== 'ja-kana' && reading_scheme !== 'yue-jyutping') {
+    return NextResponse.json({ error: 'invalid_reading_scheme' }, { status: 400 });
   }
 
   const id = uuidv4();
@@ -112,6 +115,8 @@ export async function POST(request: NextRequest) {
     artist: artist || '',
     lyricsRaw: rawLyrics,
     lyricsFurigana: '[]',
+    readingScheme: reading_scheme ?? 'ja-kana',
+    readingSchemeConfirmed: reading_scheme ? 1 : 0,
     lyricsSynced: syncedLyrics,
     createdBy,
     createdByName,

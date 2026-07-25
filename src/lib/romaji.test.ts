@@ -43,6 +43,11 @@ test('resolveFuriganaReading romanizes kanji readings plus hiragana and katakana
   assert.equal(resolveFuriganaReading('スーパー', '', true), 'suupaa');
 });
 
+test('resolveFuriganaReading keeps Cantonese Jyutping unchanged', () => {
+  assert.equal(resolveFuriganaReading('香', 'hoeng1', true, 'yue-jyutping'), 'hoeng1');
+  assert.equal(resolveFuriganaReading('香', 'hoeng1', false, 'yue-jyutping'), 'hoeng1');
+});
+
 test('romanizeKorean converts common Hangul lyrics to Revised Romanization', () => {
   assert.equal(romanizeKorean('안녕하세요'), 'annyeonghaseyo');
   assert.equal(romanizeKorean('사랑해'), 'saranghae');

@@ -10,8 +10,8 @@ import { useI18n } from '@/lib/i18n';
 import FuriganaEditor from '@/components/FuriganaEditor';
 import Toast from '@/components/Toast';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
-import { convertToFuriganaClient } from '@/lib/kuroshiro-client';
-import type { FuriganaLine } from '@/lib/types';
+import { convertLyricsReading, normalizeReadingScheme } from '@/lib/lyrics-reading';
+import type { FuriganaLine, ReadingScheme } from '@/lib/types';
 import { useAuthSession } from '@/lib/auth-session';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
 
@@ -21,6 +21,7 @@ interface SongData {
   artist: string;
   lyrics_raw: string;
   lyrics_furigana: string;
+  reading_scheme: ReadingScheme;
   cover_url?: string | null;
 }
 
@@ -104,7 +105,7 @@ export default function FuriganaEditPage() {
     if (!song?.lyrics_raw) return;
     if (draft.length > 0 || original.length > 0) return;
     setReconverting(true);
-    convertToFuriganaClient(song.lyrics_raw)
+    convertLyricsReading(song.lyrics_raw, normalizeReadingScheme(song.reading_scheme))
       .then((lines) => {
         setDraft(lines);
         setOriginal(lines);
@@ -114,6 +115,7 @@ export default function FuriganaEditPage() {
   }, [song, draft.length, original.length, showToast, t]);
 
   const rawLines = useMemo(() => song?.lyrics_raw.split('\n') ?? [], [song?.lyrics_raw]);
+  const activeReadingScheme = normalizeReadingScheme(song?.reading_scheme);
 
   const isDirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(original), [draft, original]);
 
@@ -135,7 +137,10 @@ export default function FuriganaEditPage() {
       const res = await fetch(`/api/songs/${id}/furigana`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lyrics_furigana: draft }),
+        body: JSON.stringify({
+          lyrics_furigana: draft,
+          reading_scheme: activeReadingScheme,
+        }),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -150,7 +155,7 @@ export default function FuriganaEditPage() {
     } finally {
       setSaving(false);
     }
-  }, [id, draft, showToast, t]);
+  }, [id, draft, activeReadingScheme, showToast, t]);
 
   const handleReset = useCallback(async () => {
     if (isDirty && !window.confirm(t('furigana.unsavedConfirm'))) return;
@@ -161,7 +166,7 @@ export default function FuriganaEditPage() {
     if (!song?.lyrics_raw) return;
     setReconverting(true);
     try {
-      const lines = await convertToFuriganaClient(song.lyrics_raw);
+      const lines = await convertLyricsReading(song.lyrics_raw, normalizeReadingScheme(song.reading_scheme));
       setDraft(lines);
       showToast('success', t('edit.saved'));
     } catch {
@@ -274,7 +279,12 @@ export default function FuriganaEditPage() {
         </div>
       </div>
 
-      <FuriganaEditor lines={draft} rawLines={rawLines} onChange={setDraft} />
+      <FuriganaEditor
+        lines={draft}
+        rawLines={rawLines}
+        onChange={setDraft}
+        readingScheme={activeReadingScheme}
+      />
 
       {toast && <Toast type={toast.type} message={toast.msg} />}
     </div>

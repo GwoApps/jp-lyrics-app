@@ -20,7 +20,8 @@
     "updated": "Updated:",
     "lightMode": "Light mode",
     "darkMode": "Dark mode",
-    "language": "Language"
+    "language": "Language",
+    "notNow": "Not now"
   },
   "loginGate": {
     "title": "Spotify login is restricted",
@@ -97,8 +98,8 @@
     "networkError": "Network error",
     "networkErrorAlert": "A network error occurred",
     "noLyricsParen": "(No lyrics)",
-    "loadingFurigana": "Loading furigana...",
-    "furiganaLoadFailed": "Failed to load furigana. Check your network. Plain lyrics are still available.",
+    "loadingFurigana": "Loading annotations...",
+    "furiganaLoadFailed": "Failed to load annotations. Check your network. Plain lyrics are still available.",
     "noLyricsSimple": "No lyrics",
     "show": "View",
     "importBtn": "Import",
@@ -150,7 +151,14 @@
     "debugProgress": "Progress",
     "debugCounts": "sync lines: {sync} | furigana lines: {furigana} | active: {active} | sync index: {syncActive}",
     "debugTrack": "track: {track} | song: {song}",
-    "debugTimestamps": "Synced timestamps ({count} lines):"
+    "debugTimestamps": "Synced timestamps ({count} lines):",
+    "readingJyutping": "Jyutping annotations",
+    "cantoneseSuggestionTitle": "This may be a Cantonese song",
+    "cantoneseSuggestionDescription": "Cantonese-specific wording was detected. Switching will regenerate annotations as tone-numbered Jyutping.",
+    "useJyutping": "Use Jyutping",
+    "jyutpingEnabled": "Switched to Jyutping annotations",
+    "japaneseReadingEnabled": "Switched to Japanese kana annotations",
+    "readingSchemeUpdateFailed": "Failed to update the annotation scheme"
   },
   "timeline": {
     "title": "LRC Timeline Editor",
@@ -231,7 +239,12 @@
     "titleRequired": "Please enter a song title",
     "saved": "Saved",
     "saveFailed": "Save failed",
-    "error": "An error occurred"
+    "error": "An error occurred",
+    "readingScheme": "Annotation scheme",
+    "readingJapanese": "Japanese kana",
+    "readingCantonese": "Cantonese Jyutping",
+    "readingSchemeHint": "Changing the scheme clears existing annotations and regenerates them with the selected scheme.",
+    "cantoneseDetected": "Cantonese wording detected — use Jyutping annotations"
   },
   "new": {
     "title": "Add New Song",
@@ -251,9 +264,17 @@
     "converting": "Converting...",
     "newBreadcrumb": "New",
     "titleRequired": "Please enter a song title",
-    "saved": "Saved — furigana conversion complete",
+    "saved": "Song saved",
     "saveFailed": "Save failed",
-    "error": "An error occurred"
+    "error": "An error occurred",
+    "readingScheme": "Annotation scheme",
+    "readingJapanese": "Japanese kana",
+    "readingCantonese": "Cantonese Jyutping",
+    "readingAutoHint": "Choose manually, or leave this unset to get a suggestion after saving.",
+    "cantoneseDetected": "Cantonese wording detected — Jyutping is recommended",
+    "jyutpingHint": "Tone-numbered Jyutping annotations will be generated automatically after saving",
+    "cantoneseLyricsPlaceholder": "e.g.\n今日我哋一齊去行街\n你有冇時間呀...",
+    "cantoneseLrcPlaceholder": "e.g.\n[00:05.58] 今日我哋一齊去行街\n[00:10.23] 你有冇時間呀..."
   },
   "furigana": {
     "title": "Correct Furigana",
@@ -264,6 +285,7 @@
     "empty": "No furigana to correct",
     "line": "Line {n}",
     "readingPlaceholder": "e.g. ひらがな",
+    "jyutpingPlaceholder": "e.g. hoeng1",
     "suggestions": "Suggested readings",
     "suggestionsLoading": "Looking up dictionary…",
     "manualReading": "or enter manually",

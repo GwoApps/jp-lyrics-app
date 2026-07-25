@@ -2,11 +2,16 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import type { FuriganaLine, ReadingMode } from '@/lib/types';
+import type { FuriganaLine, ReadingMode, ReadingScheme } from '@/lib/types';
 import { mapTimelineTimestamps, parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
 import { useI18n } from '@/lib/i18n';
-import { convertToFuriganaClient } from '@/lib/kuroshiro-client';
+import {
+  convertLyricsReading,
+  detectCantoneseLyrics,
+  normalizeReadingScheme,
+  type CantoneseDetectionResult,
+} from '@/lib/lyrics-reading';
 import {
   isKatakanaReadingSegment,
   isKoreanReadingSegment,
@@ -26,6 +31,13 @@ const LYRICS_SOURCE_KEYS: Record<string, string> = {
   ytmusic: 'lyricsSources.ytmusic',
 };
 
+const escapeHtml = (value: string) => value
+  .replaceAll('&', '&amp;')
+  .replaceAll('<', '&lt;')
+  .replaceAll('>', '&gt;')
+  .replaceAll('"', '&quot;')
+  .replaceAll("'", '&#39;');
+
 function createPlainFuriganaLines(rawLyrics: string): FuriganaLine[] {
   return rawLyrics.split('\n').map((line) => ({
     segments: line.trim()
@@ -40,6 +52,8 @@ interface SongData {
   artist: string;
   lyrics_raw: string;
   lyrics_furigana: string;
+  reading_scheme: ReadingScheme;
+  reading_scheme_confirmed: number;
   lyrics_synced: string;
   cover_url?: string | null;
   spotify_track_id?: string | null;
@@ -79,6 +93,9 @@ export interface UseSongDataReturn {
   setReadingMode: React.Dispatch<React.SetStateAction<ReadingMode>>;
   romanizeFurigana: boolean;
   setRomanizeFurigana: React.Dispatch<React.SetStateAction<boolean>>;
+  cantoneseSuggestion: CantoneseDetectionResult | null;
+  setSongReadingScheme: (scheme: ReadingScheme) => Promise<void>;
+  dismissCantoneseSuggestion: () => Promise<void>;
   debug: boolean;
   setDebug: React.Dispatch<React.SetStateAction<boolean>>;
   deleteConfirm: boolean;
@@ -158,9 +175,18 @@ export function useSongData(id: string): UseSongDataReturn {
     error: string;
   }>({ source: '', lines: [], loading: false, error: '' });
   const lyricsRaw = song?.lyrics_raw ?? '';
-  const hasJapaneseKanji = /[\u3400-\u4DBF\u4E00-\u9FFF]/.test(lyricsRaw);
+  const readingScheme = normalizeReadingScheme(song?.reading_scheme);
+  const hasHanCharacters = /[\u3400-\u4DBF\u4E00-\u9FFF]/.test(lyricsRaw);
+  const detectedCantonese = useMemo(() => detectCantoneseLyrics(lyricsRaw), [lyricsRaw]);
+  const cantoneseSuggestion = song?.permissions?.can_edit
+    && readingScheme === 'ja-kana'
+    && song.reading_scheme_confirmed !== 1
+    && detectedCantonese.confidence === 'high'
+    ? detectedCantonese
+    : null;
+  const readingSourceKey = `${readingScheme}\u0000${lyricsRaw}`;
   const plainFuriganaLines = useMemo(() => createPlainFuriganaLines(lyricsRaw), [lyricsRaw]);
-  const isCurrentClientResult = clientFuriganaState.source === lyricsRaw;
+  const isCurrentClientResult = clientFuriganaState.source === readingSourceKey;
   const furiganaLoading = isCurrentClientResult && clientFuriganaState.loading;
   const furiganaError = isCurrentClientResult ? clientFuriganaState.error : '';
 
@@ -168,17 +194,17 @@ export function useSongData(id: string): UseSongDataReturn {
     // Prefer server-side pre-computed data (existing songs)
     if (serverFurigana.length > 0) return serverFurigana;
     // Fall back to client-side computed data for this exact lyrics value.
-    if (clientFuriganaState.source === lyricsRaw && clientFuriganaState.lines.length > 0) {
+    if (clientFuriganaState.source === readingSourceKey && clientFuriganaState.lines.length > 0) {
       return clientFuriganaState.lines;
     }
     // Korean and kana can be romanized immediately without loading the Japanese tokenizer.
     return plainFuriganaLines;
-  }, [serverFurigana, clientFuriganaState, lyricsRaw, plainFuriganaLines]);
+  }, [serverFurigana, clientFuriganaState, readingSourceKey, plainFuriganaLines]);
 
   // Client-side furigana conversion: only once per lyrics value when server data is absent.
   useEffect(() => {
-    if (!lyricsRaw.trim() || serverFurigana.length > 0 || !hasJapaneseKanji) return;
-    const requestKey = `${id}\u0000${lyricsRaw}`;
+    if (!lyricsRaw.trim() || serverFurigana.length > 0 || !hasHanCharacters || cantoneseSuggestion) return;
+    const requestKey = `${id}\u0000${readingSourceKey}`;
     if (requestedLyricsRef.current === requestKey) return;
     requestedLyricsRef.current = requestKey;
     let cancelled = false;
@@ -188,25 +214,25 @@ export function useSongData(id: string): UseSongDataReturn {
       // Cross an async boundary so this state transition belongs to the conversion request.
       await Promise.resolve();
       if (cancelled) return;
-      setClientFuriganaState({ source: lyricsRaw, lines: [], loading: true, error: '' });
+      setClientFuriganaState({ source: readingSourceKey, lines: [], loading: true, error: '' });
       try {
-        const lines = await convertToFuriganaClient(lyricsRaw);
+        const lines = await convertLyricsReading(lyricsRaw, readingScheme);
         if (cancelled) return;
         settled = true;
-        setClientFuriganaState({ source: lyricsRaw, lines, loading: false, error: '' });
+        setClientFuriganaState({ source: readingSourceKey, lines, loading: false, error: '' });
         // Persist to server so next load skips kuromoji entirely
-        if (lines.length > 0 && id) {
+        if (lines.length > 0 && id && song?.permissions?.can_edit) {
           fetch(`/api/songs/${id}/furigana`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lyrics_furigana: lines }),
+            body: JSON.stringify({ lyrics_furigana: lines, reading_scheme: readingScheme }),
           }).catch(() => {}); // fire-and-forget
         }
       } catch (error) {
         if (cancelled) return;
         settled = true;
         console.error('Client furigana conversion failed:', error);
-        setClientFuriganaState({ source: lyricsRaw, lines: [], loading: false, error: t('song.furiganaLoadFailed') });
+        setClientFuriganaState({ source: readingSourceKey, lines: [], loading: false, error: t('song.furiganaLoadFailed') });
       }
     };
 
@@ -215,7 +241,7 @@ export function useSongData(id: string): UseSongDataReturn {
       cancelled = true;
       if (!settled && requestedLyricsRef.current === requestKey) requestedLyricsRef.current = '';
     };
-  }, [lyricsRaw, serverFurigana.length, hasJapaneseKanji, id, t]);
+  }, [lyricsRaw, serverFurigana.length, hasHanCharacters, cantoneseSuggestion, id, readingScheme, readingSourceKey, song?.permissions?.can_edit, t]);
 
   const lineTimestamps = useMemo(() => {
     if (!song || !furiganaLines.length) return [] as (number | null)[];
@@ -227,6 +253,39 @@ export function useSongData(id: string): UseSongDataReturn {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 3000);
   }, []);
+
+  const updateReadingPreference = useCallback(async (payload: {
+    reading_scheme?: ReadingScheme;
+    reading_scheme_confirmed: boolean;
+  }) => {
+    const response = await fetch(`/api/songs/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) throw new Error('reading_scheme_update_failed');
+    const updated = await response.json() as SongData;
+    requestedLyricsRef.current = '';
+    setClientFuriganaState({ source: '', lines: [], loading: false, error: '' });
+    setSong(updated);
+  }, [id]);
+
+  const setSongReadingScheme = useCallback(async (scheme: ReadingScheme) => {
+    try {
+      await updateReadingPreference({ reading_scheme: scheme, reading_scheme_confirmed: true });
+      showToast('success', t(scheme === 'yue-jyutping' ? 'song.jyutpingEnabled' : 'song.japaneseReadingEnabled'));
+    } catch {
+      showToast('error', t('song.readingSchemeUpdateFailed'));
+    }
+  }, [showToast, t, updateReadingPreference]);
+
+  const dismissCantoneseSuggestion = useCallback(async () => {
+    try {
+      await updateReadingPreference({ reading_scheme_confirmed: true });
+    } catch {
+      showToast('error', t('song.readingSchemeUpdateFailed'));
+    }
+  }, [showToast, t, updateReadingPreference]);
 
   // Refresh song data (e.g. after request-public)
   const refreshSong = useCallback(async () => {
@@ -391,8 +450,8 @@ export function useSongData(id: string): UseSongDataReturn {
 
       pipWindowRef.current = pipWindow;
 
-      const title = songArg?.title || '';
-      const artist = songArg?.artist || '';
+      const title = escapeHtml(songArg?.title || '');
+      const artist = escapeHtml(songArg?.artist || '');
 
       pipWindow.document.documentElement.innerHTML = `
         <head>
@@ -412,6 +471,8 @@ export function useSongData(id: string): UseSongDataReturn {
             .line.empty { height: 1.5em; }
             ruby rt { font-size: 0.5em; color: #a3a3a3; }
             ruby.korean-word rt { padding-inline: 0.16em; }
+            ruby.cantonese-reading { ruby-overhang: none; white-space: nowrap; }
+            ruby.cantonese-reading rt { padding-inline: 0.08em; }
             ruby.katakana-chunk { ruby-overhang: none; white-space: nowrap; }
             .line.active ruby rt { color: #d4d4d4; }
           </style>
@@ -422,14 +483,18 @@ export function useSongData(id: string): UseSongDataReturn {
             ${furiganaLinesArg.map((line, i) => {
               if (line.segments.length === 0) return `<div class="line empty" data-line="${i}"></div>`;
               const html = normalizeFuriganaSegments(line.segments).map(seg => {
-                if (readingMode === 'original') return seg.text;
-                const reading = resolveFuriganaReading(seg.text, seg.reading, romanizeFurigana);
-                if (!reading) return seg.text;
-                const rubyClass = romanizeFurigana && isKoreanReadingSegment(seg.text)
-                  ? 'korean-word'
-                  : romanizeFurigana && isKatakanaReadingSegment(seg.text) ? 'katakana-chunk' : '';
+                if (readingMode === 'original') return escapeHtml(seg.text);
+                const scheme = normalizeReadingScheme(songArg?.reading_scheme);
+                const reading = resolveFuriganaReading(seg.text, seg.reading, romanizeFurigana, scheme);
+                if (!reading) return escapeHtml(seg.text);
+                const rubyClass = scheme === 'yue-jyutping'
+                  ? 'cantonese-reading'
+                  : romanizeFurigana && isKoreanReadingSegment(seg.text)
+                    ? 'korean-word'
+                    : romanizeFurigana && isKatakanaReadingSegment(seg.text) ? 'katakana-chunk' : '';
                 const className = rubyClass ? ` class="${rubyClass}"` : '';
-                return `<ruby${className}>${seg.text}<rp>(</rp><rt>${reading}</rt><rp>)</rp></ruby>`;
+                const language = scheme === 'yue-jyutping' ? ' lang="yue-Latn"' : '';
+                return `<ruby${className}>${escapeHtml(seg.text)}<rp>(</rp><rt${language}>${escapeHtml(reading)}</rt><rp>)</rp></ruby>`;
               }).join('');
               const ts = timestamps?.[i];
               const tsAttr = ts != null ? ` data-ts="${ts}"` : '';
@@ -513,6 +578,9 @@ export function useSongData(id: string): UseSongDataReturn {
     setReadingMode,
     romanizeFurigana,
     setRomanizeFurigana,
+    cantoneseSuggestion,
+    setSongReadingScheme,
+    dismissCantoneseSuggestion,
     debug,
     setDebug,
     deleteConfirm,

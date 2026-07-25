@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState } from 'react';
 import { Copy, Languages, Share2 } from 'lucide-react';
-import type { FuriganaLine, ReadingMode } from '@/lib/types';
+import type { FuriganaLine, ReadingMode, ReadingScheme } from '@/lib/types';
 import { fmtMs } from '@/lib/lrc';
 import {
   isKatakanaReadingSegment,
@@ -31,6 +31,7 @@ export default function FuriganaLineView({
   canCorrectFurigana = true,
   readingMode = 'furigana',
   romanizeFurigana = false,
+  readingScheme = 'ja-kana',
 }: {
   line: FuriganaLine;
   isActive: boolean;
@@ -43,6 +44,7 @@ export default function FuriganaLineView({
   canCorrectFurigana?: boolean;
   readingMode?: ReadingMode;
   romanizeFurigana?: boolean;
+  readingScheme?: ReadingScheme;
 }) {
   const { t } = useI18n();
   const [animKey, setAnimKey] = useState(0);
@@ -78,16 +80,19 @@ export default function FuriganaLineView({
       >
         {normalizeFuriganaSegments(line.segments).map((seg, i) => {
           if (readingMode === 'original') return <span key={i}>{seg.text}</span>;
-          const reading = resolveFuriganaReading(seg.text, seg.reading, romanizeFurigana);
+          const reading = resolveFuriganaReading(seg.text, seg.reading, romanizeFurigana, readingScheme);
           if (!reading) return <span key={i}>{seg.text}</span>;
+          const cantoneseReading = readingScheme === 'yue-jyutping';
           const koreanWord = romanizeFurigana && isKoreanReadingSegment(seg.text);
           const katakanaChunk = romanizeFurigana && isKatakanaReadingSegment(seg.text);
-          const rubyClass = koreanWord
-            ? 'lyric-ruby--korean'
-            : katakanaChunk ? 'lyric-ruby--katakana' : undefined;
+          const rubyClass = cantoneseReading
+            ? 'lyric-ruby--cantonese'
+            : koreanWord
+              ? 'lyric-ruby--korean'
+              : katakanaChunk ? 'lyric-ruby--katakana' : undefined;
           return (
             <ruby key={i} className={rubyClass}>
-              {seg.text}<rp>(</rp><rt lang={romanizeFurigana ? 'en' : 'ja'}>{reading}</rt><rp>)</rp>
+              {seg.text}<rp>(</rp><rt lang={cantoneseReading ? 'yue-Latn' : romanizeFurigana ? 'en' : 'ja'}>{reading}</rt><rp>)</rp>
             </ruby>
           );
         })}

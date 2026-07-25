@@ -459,23 +459,23 @@ export default function SongViewPage() {
             </Link>
 
             <ToolbarMenu
-              label={<span className="inline-flex items-center gap-1"><Languages className="h-3.5 w-3.5" /> {t(data.readingMode === 'original' ? 'song.readingOriginal' : 'song.readingFurigana')} <ChevronDown className="h-3 w-3 opacity-60" /></span>}
+              label={<span className="inline-flex items-center gap-1"><Languages className="h-3.5 w-3.5" /> {t(data.readingMode === 'original' ? 'song.readingOriginal' : song.reading_scheme === 'yue-jyutping' ? 'song.readingJyutping' : 'song.readingFurigana')} <ChevronDown className="h-3 w-3 opacity-60" /></span>}
               items={[
                 ...([
                   ['original', 'song.readingOriginal'],
-                  ['furigana', 'song.readingFurigana'],
+                  ['furigana', song.reading_scheme === 'yue-jyutping' ? 'song.readingJyutping' : 'song.readingFurigana'],
                 ] as const).map(([mode, label]) => ({
                   icon: <Languages className="h-3.5 w-3.5" />,
                   label: t(label),
                   active: data.readingMode === mode,
                   onClick: () => data.setReadingMode(mode),
                 })),
-                {
+                ...(song.reading_scheme === 'yue-jyutping' ? [] : [{
                   icon: <Languages className="h-3.5 w-3.5" />,
                   label: t('song.romanizeFurigana'),
                   status: t(data.romanizeFurigana ? 'common.on' : 'common.off'),
                   onClick: () => data.setRomanizeFurigana(!data.romanizeFurigana),
-                },
+                }]),
               ]}
             />
 
@@ -650,6 +650,30 @@ export default function SongViewPage() {
         )}
 
       </div>
+      {data.cantoneseSuggestion && (
+        <div className="mb-3 flex shrink-0 flex-col gap-3 rounded-lg border border-[var(--song-accent)]/25 bg-[var(--accent)]/60 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-[var(--foreground)]">{t('song.cantoneseSuggestionTitle')}</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted-foreground)]">{t('song.cantoneseSuggestionDescription')}</p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={() => void data.setSongReadingScheme('yue-jyutping')}
+              className="song-editor-primary-button rounded-md px-3 py-2 text-xs font-medium"
+            >
+              {t('song.useJyutping')}
+            </button>
+            <button
+              type="button"
+              onClick={() => void data.dismissCantoneseSuggestion()}
+              className="rounded-md px-3 py-2 text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
+            >
+              {t('common.notNow')}
+            </button>
+          </div>
+        </div>
+      )}
       <div className="lyrics-panel-shell relative isolate flex-1 min-h-0" style={lyricPanelStyle}>
         <div className="lyrics-ambient-breath" aria-hidden="true" />
         <div className="lyrics-ambient-orbit" aria-hidden="true" />
@@ -671,6 +695,7 @@ export default function SongViewPage() {
                     canCorrectFurigana={canEdit}
                     readingMode={data.readingMode}
                     romanizeFurigana={data.romanizeFurigana}
+                    readingScheme={song.reading_scheme}
                   />
                 </div>
               ))
@@ -971,7 +996,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
     { icon: <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />, label: data.syncing ? t('song.syncing') : t('song.sync'), onClick: data.handleSync, disabled: data.syncing || !canEdit },
     ...(song.lyrics_raw && canEdit ? [{ icon: <Clock3 className="h-4 w-4" />, label: t('song.timelineEdit'), onClick: () => router.push(`/songs/${id}/timeline/edit`) }] : []),
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: t('song.pipBtn'), onClick: onOpenPiP }] : []),
-    { icon: <Languages className="h-4 w-4" />, label: t('song.romanizeFurigana'), status: t(data.romanizeFurigana ? 'common.on' : 'common.off'), onClick: () => data.setRomanizeFurigana(!data.romanizeFurigana), keepOpen: true },
+    ...(song.reading_scheme === 'yue-jyutping' ? [] : [{ icon: <Languages className="h-4 w-4" />, label: t('song.romanizeFurigana'), status: t(data.romanizeFurigana ? 'common.on' : 'common.off'), onClick: () => data.setRomanizeFurigana(!data.romanizeFurigana), keepOpen: true }]),
     { icon: <Bug className="h-4 w-4" />, label: t('song.debug'), status: t(data.debug ? 'common.on' : 'common.off'), onClick: () => data.setDebug(!data.debug), keepOpen: true },
     { icon: <Download className="h-4 w-4" />, label: t('song.download'), status: <ChevronDown className="h-3.5 w-3.5 -rotate-90" />, onClick: () => setShowDownloadMenu(true), keepOpen: true },
     ...(canEdit ? [

@@ -20,7 +20,8 @@
     "updated": "更新:",
     "lightMode": "ライトモード",
     "darkMode": "ダークモード",
-    "language": "言語"
+    "language": "言語",
+    "notNow": "今は変換しない"
   },
   "loginGate": {
     "title": "Spotify ログインは制限されています",
@@ -97,8 +98,8 @@
     "networkError": "通信エラー",
     "networkErrorAlert": "通信エラーが発生しました",
     "noLyricsParen": "（歌詞なし）",
-    "loadingFurigana": "歌詞データを読み込み中...",
-    "furiganaLoadFailed": "ふりがなの読み込みに失敗しました。ネットワークを確認してください。歌詞テキストは表示できます。",
+    "loadingFurigana": "注音を読み込み中...",
+    "furiganaLoadFailed": "注音の読み込みに失敗しました。ネットワークを確認してください。歌詞テキストは表示できます。",
     "noLyricsSimple": "歌詞がありません",
     "show": "表示",
     "importBtn": "取込",
@@ -150,7 +151,14 @@
     "debugProgress": "再生位置",
     "debugCounts": "同期行：{sync} | ふりがな行：{furigana} | 現在行：{active} | 同期インデックス：{syncActive}",
     "debugTrack": "再生曲：{track} | 現在の曲：{song}",
-    "debugTimestamps": "同期済みタイムスタンプ（{count} 行）："
+    "debugTimestamps": "同期済みタイムスタンプ（{count} 行）：",
+    "readingJyutping": "粤拼注音",
+    "cantoneseSuggestionTitle": "この曲は広東語の可能性があります",
+    "cantoneseSuggestionDescription": "広東語特有の表現を検出しました。切り替えると、声調番号付きの粤拼で注音を再生成します。",
+    "useJyutping": "粤拼を使用",
+    "jyutpingEnabled": "粤拼注音に切り替えました",
+    "japaneseReadingEnabled": "日本語のかな注音に切り替えました",
+    "readingSchemeUpdateFailed": "注音方式を更新できませんでした"
   },
   "timeline": {
     "title": "LRC タイムライン編集",
@@ -231,7 +239,12 @@
     "titleRequired": "曲名を入力してください",
     "saved": "保存しました",
     "saveFailed": "保存に失敗しました",
-    "error": "エラーが発生しました"
+    "error": "エラーが発生しました",
+    "readingScheme": "注音方式",
+    "readingJapanese": "日本語かな",
+    "readingCantonese": "広東語粤拼",
+    "readingSchemeHint": "注音方式を切り替えると、既存の注音は消去され、新しい方式で再生成されます。",
+    "cantoneseDetected": "広東語表現を検出しました。粤拼注音に切り替える"
   },
   "new": {
     "title": "新しい曲を追加",
@@ -251,9 +264,17 @@
     "converting": "変換中...",
     "newBreadcrumb": "新規追加",
     "titleRequired": "曲名を入力してください",
-    "saved": "保存しました — ふりがな変換完了",
+    "saved": "曲を保存しました",
     "saveFailed": "保存に失敗しました",
-    "error": "エラーが発生しました"
+    "error": "エラーが発生しました",
+    "readingScheme": "注音方式",
+    "readingJapanese": "日本語かな",
+    "readingCantonese": "広東語粤拼",
+    "readingAutoHint": "手動で選択できます。未選択の場合、保存後に歌詞から候補を提示します。",
+    "cantoneseDetected": "広東語表現を検出しました。粤拼注音を推奨します",
+    "jyutpingHint": "保存後、声調番号付きの粤拼注音を自動生成します",
+    "cantoneseLyricsPlaceholder": "例：\n今日我哋一齊去行街\n你有冇時間呀...",
+    "cantoneseLrcPlaceholder": "例：\n[00:05.58] 今日我哋一齊去行街\n[00:10.23] 你有冇時間呀..."
   },
   "furigana": {
     "title": "ふりがな修正",
@@ -264,6 +285,7 @@
     "empty": "修正するふりがながありません",
     "line": "{n}行目",
     "readingPlaceholder": "例：ひらがな",
+    "jyutpingPlaceholder": "例：hoeng1",
     "suggestions": "候補の読み",
     "suggestionsLoading": "辞書を検索中…",
     "manualReading": "または手入力",

@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import type { FuriganaLine, FuriganaSegment } from '@/lib/types';
+import type { FuriganaLine, FuriganaSegment, ReadingScheme } from '@/lib/types';
 import { useI18n } from '@/lib/i18n';
+import { getCantoneseReadingCandidates } from '@/lib/lyrics-reading';
 
 interface FuriganaEditorProps {
   lines: FuriganaLine[];
   rawLines?: string[];
   onChange: (lines: FuriganaLine[]) => void;
+  readingScheme?: ReadingScheme;
 }
 
 type EditTarget = { lineIndex: number; segIndex: number } | null;
@@ -39,7 +41,7 @@ function groupEditorDisplaySegments(segments: FuriganaSegment[]): EditorDisplayP
   return parts;
 }
 
-export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEditorProps) {
+export default function FuriganaEditor({ lines, rawLines, onChange, readingScheme = 'ja-kana' }: FuriganaEditorProps) {
   const { t } = useI18n();
   const [active, setActive] = useState<EditTarget>(null);
   const [draft, setDraft] = useState('');
@@ -66,15 +68,18 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
     if (!hasActiveKanji) return;
 
     const controller = new AbortController();
+    const loadCandidates = readingScheme === 'yue-jyutping'
+      ? getCantoneseReadingCandidates(activeText)
+      : fetch(`/api/furigana/readings?text=${encodeURIComponent(activeText)}`, { signal: controller.signal })
+        .then(async (response) => {
+          if (!response.ok) return [];
+          const payload = await response.json() as { candidates?: unknown };
+          return Array.isArray(payload.candidates)
+            ? payload.candidates.filter((candidate): candidate is string => typeof candidate === 'string')
+            : [];
+        });
 
-    void fetch(`/api/furigana/readings?text=${encodeURIComponent(activeText)}`, { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok) return [];
-        const payload = await response.json() as { candidates?: unknown };
-        return Array.isArray(payload.candidates)
-          ? payload.candidates.filter((candidate): candidate is string => typeof candidate === 'string')
-          : [];
-      })
+    void loadCandidates
       .then((candidates) => {
         if (!controller.signal.aborted) setReadingCandidates(candidates);
       })
@@ -86,7 +91,7 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
       });
 
     return () => controller.abort();
-  }, [activeText, hasActiveKanji]);
+  }, [activeText, hasActiveKanji, readingScheme]);
 
   const selectableReadings = useMemo(() => {
     if (!activeSeg || !hasActiveKanji) return [];
@@ -319,7 +324,7 @@ export default function FuriganaEditor({ lines, rawLines, onChange }: FuriganaEd
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder={t('furigana.readingPlaceholder')}
+                  placeholder={t(readingScheme === 'yue-jyutping' ? 'furigana.jyutpingPlaceholder' : 'furigana.readingPlaceholder')}
                   className="min-w-[120px] flex-1 rounded-md border border-[var(--border)] bg-[var(--input)] px-2 py-1.5 text-sm outline-none song-editor-input"
                 />
                 <button

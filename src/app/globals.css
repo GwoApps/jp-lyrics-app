@@ -85,6 +85,14 @@ rt {
 ruby.lyric-ruby--korean rt {
   padding-inline: 0.16em;
 }
+/* Jyutping is character-aligned: keep each ruby unit intact and prevent adjacent tone readings from colliding. */
+ruby.lyric-ruby--cantonese {
+  ruby-overhang: none;
+  white-space: nowrap;
+}
+ruby.lyric-ruby--cantonese rt {
+  padding-inline: 0.08em;
+}
 /* Long Katakana is split into ruby chunks; prevent annotation overhang between chunks. */
 ruby.lyric-ruby--katakana {
   ruby-overhang: none;

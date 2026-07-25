@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import type { Song } from '@/lib/types';
 import { getAuthUser } from '@/lib/auth';
 import { resolveLrcTextUpdate } from '@/lib/lrc';
+import type { ReadingScheme } from '@/lib/types';
 
 /** Strip internal email while exposing server-authoritative capabilities. */
 function sanitizeSong(song: Song, canEdit: boolean) {
@@ -18,6 +19,8 @@ const songFields = {
   artist: schema.songs.artist,
   lyrics_raw: schema.songs.lyricsRaw,
   lyrics_furigana: schema.songs.lyricsFurigana,
+  reading_scheme: schema.songs.readingScheme,
+  reading_scheme_confirmed: schema.songs.readingSchemeConfirmed,
   lyrics_synced: schema.songs.lyricsSynced,
   cover_url: schema.songs.coverUrl,
   spotify_track_id: schema.songs.spotifyTrackId,
@@ -69,7 +72,14 @@ export async function PUT(
   const db = getDB();
   const { id } = await params;
   const body = await request.json();
-  const { title, artist, lyrics_raw, lyrics_synced } = body;
+  const { title, artist, lyrics_raw, lyrics_synced, reading_scheme, reading_scheme_confirmed } = body;
+
+  if (reading_scheme !== undefined && reading_scheme !== 'ja-kana' && reading_scheme !== 'yue-jyutping') {
+    return NextResponse.json({ error: 'invalid_reading_scheme' }, { status: 400 });
+  }
+  if (reading_scheme_confirmed !== undefined && typeof reading_scheme_confirmed !== 'boolean') {
+    return NextResponse.json({ error: 'invalid_reading_confirmation' }, { status: 400 });
+  }
 
   const existing = await findSong(id);
   if (!existing) {
@@ -87,8 +97,10 @@ export async function PUT(
   const newRaw = lyrics_raw !== undefined ? lyrics_raw : syncedUpdate.lyricsRaw;
 
   let lyricsFurigana = existing.lyrics_furigana;
+  const nextReadingScheme = (reading_scheme ?? existing.reading_scheme) as ReadingScheme;
+  const readingSchemeChanged = nextReadingScheme !== existing.reading_scheme;
   // Clear furigana whenever the rendered plain lyrics change.
-  if (newRaw !== existing.lyrics_raw) {
+  if (newRaw !== existing.lyrics_raw || readingSchemeChanged) {
     lyricsFurigana = '[]';
   }
 
@@ -98,6 +110,12 @@ export async function PUT(
     artist: artist !== undefined ? artist : existing.artist,
     lyricsRaw: newRaw,
     lyricsFurigana,
+    readingScheme: nextReadingScheme,
+    readingSchemeConfirmed: reading_scheme_confirmed !== undefined
+      ? Number(reading_scheme_confirmed)
+      : lyricsContentChanged && nextReadingScheme === 'ja-kana'
+        ? 0
+        : existing.reading_scheme_confirmed,
     lyricsSynced: newSynced,
     ...(lyricsContentChanged ? {
       lyricsSource: 'manual',

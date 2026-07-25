@@ -20,7 +20,8 @@
     "updated": "更新:",
     "lightMode": "淺色模式",
     "darkMode": "深色模式",
-    "language": "語言"
+    "language": "語言",
+    "notNow": "暫不轉換"
   },
   "loginGate": {
     "title": "Spotify 登入受限",
@@ -97,8 +98,8 @@
     "networkError": "網路錯誤",
     "networkErrorAlert": "發生網路錯誤",
     "noLyricsParen": "（無歌詞）",
-    "loadingFurigana": "正在載入振假名...",
-    "furiganaLoadFailed": "振假名載入失敗，請檢查網路。歌詞文字仍可顯示。",
+    "loadingFurigana": "正在載入注音...",
+    "furiganaLoadFailed": "注音載入失敗，請檢查網路。歌詞文字仍可顯示。",
     "noLyricsSimple": "沒有歌詞",
     "show": "檢視",
     "importBtn": "匯入",
@@ -150,7 +151,14 @@
     "debugProgress": "播放進度",
     "debugCounts": "同步行：{sync} | 注音行：{furigana} | 目前行：{active} | 同步索引：{syncActive}",
     "debugTrack": "播放曲目：{track} | 目前歌曲：{song}",
-    "debugTimestamps": "已同步時間戳（{count} 行）："
+    "debugTimestamps": "已同步時間戳（{count} 行）：",
+    "readingJyutping": "粵拼注音",
+    "cantoneseSuggestionTitle": "這首歌可能是粵語歌",
+    "cantoneseSuggestionDescription": "偵測到粵語用詞。切換後會使用帶聲調數字的粵拼重新產生注音。",
+    "useJyutping": "使用粵拼",
+    "jyutpingEnabled": "已切換為粵拼注音",
+    "japaneseReadingEnabled": "已切換為日語假名注音",
+    "readingSchemeUpdateFailed": "更新注音方案失敗"
   },
   "timeline": {
     "title": "LRC 時間軸編輯",
@@ -231,7 +239,12 @@
     "titleRequired": "請輸入歌曲名",
     "saved": "已儲存",
     "saveFailed": "儲存失敗",
-    "error": "發生錯誤"
+    "error": "發生錯誤",
+    "readingScheme": "注音方案",
+    "readingJapanese": "日語假名",
+    "readingCantonese": "粵語粵拼",
+    "readingSchemeHint": "切換注音方案後，現有注音會被清除並按新方案重新產生。",
+    "cantoneseDetected": "偵測到粵語用詞，改用粵拼注音"
   },
   "new": {
     "title": "新增歌曲",
@@ -251,9 +264,17 @@
     "converting": "轉換中...",
     "newBreadcrumb": "新建",
     "titleRequired": "請輸入歌曲名",
-    "saved": "已儲存 — 注音轉換完成",
+    "saved": "歌曲已儲存",
     "saveFailed": "儲存失敗",
-    "error": "發生錯誤"
+    "error": "發生錯誤",
+    "readingScheme": "注音方案",
+    "readingJapanese": "日語假名",
+    "readingCantonese": "粵語粵拼",
+    "readingAutoHint": "可以手動選擇；未選擇時會在儲存後根據歌詞提示。",
+    "cantoneseDetected": "偵測到粵語用詞，建議使用粵拼注音",
+    "jyutpingHint": "儲存後會自動產生帶聲調數字的粵拼注音",
+    "cantoneseLyricsPlaceholder": "例如：\n今日我哋一齊去行街\n你有冇時間呀...",
+    "cantoneseLrcPlaceholder": "例如：\n[00:05.58] 今日我哋一齊去行街\n[00:10.23] 你有冇時間呀..."
   },
   "furigana": {
     "title": "糾正注音",
@@ -264,6 +285,7 @@
     "empty": "沒有需要糾正的注音",
     "line": "第 {n} 行",
     "readingPlaceholder": "例如：ひらがな",
+    "jyutpingPlaceholder": "例如：hoeng1",
     "suggestions": "候選讀音",
     "suggestionsLoading": "正在查詢詞典…",
     "manualReading": "或手動輸入",

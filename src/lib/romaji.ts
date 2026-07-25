@@ -1,3 +1,5 @@
+import type { ReadingScheme } from './types';
+
 const BASIC: Record<string, string> = {
   あ: 'a', い: 'i', う: 'u', え: 'e', お: 'o',
   か: 'ka', き: 'ki', く: 'ku', け: 'ke', こ: 'ko',
@@ -350,7 +352,13 @@ export function romanizeLyricsReading(value: string): string {
 }
 
 /** Resolve the ruby text for one lyric segment without replacing its visible source text. */
-export function resolveFuriganaReading(text: string, reading: string, romanize: boolean): string {
+export function resolveFuriganaReading(
+  text: string,
+  reading: string,
+  romanize: boolean,
+  scheme: ReadingScheme = 'ja-kana',
+): string {
+  if (scheme === 'yue-jyutping') return reading;
   const source = reading || (romanize ? text : '');
   if (!source) return '';
   const resolved = romanize ? romanizeLyricsReading(source) : source;

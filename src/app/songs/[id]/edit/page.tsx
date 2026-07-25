@@ -7,6 +7,8 @@ import { Upload } from 'lucide-react';
 import Toast from '@/components/Toast';
 import { useI18n } from '@/lib/i18n';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
+import type { ReadingScheme } from '@/lib/types';
+import { detectCantoneseLyrics } from '@/lib/lyrics-reading';
 
 type LyricsMode = 'text' | 'lrc';
 
@@ -17,6 +19,7 @@ interface SongData {
   lyrics_raw: string;
   lyrics_synced: string;
   cover_url?: string | null;
+  reading_scheme: ReadingScheme;
 }
 
 export default function EditSongPage() {
@@ -31,6 +34,8 @@ export default function EditSongPage() {
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [lyricsMode, setLyricsMode] = useState<LyricsMode>('text');
   const [lyricsChanged, setLyricsChanged] = useState(false);
+  const [readingScheme, setReadingScheme] = useState<ReadingScheme>('ja-kana');
+  const [readingSchemeChanged, setReadingSchemeChanged] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
@@ -57,6 +62,7 @@ export default function EditSongPage() {
         setPlainLyrics(data.lyrics_raw || '');
         setSyncedLyrics(data.lyrics_synced || '');
         setCoverUrl(data.cover_url ?? null);
+        setReadingScheme(data.reading_scheme === 'yue-jyutping' ? 'yue-jyutping' : 'ja-kana');
         if (!data.cover_url) {
           fetch(`/api/songs/${id}/cover`)
             .then(async (coverResponse) => {
@@ -106,7 +112,7 @@ export default function EditSongPage() {
     }
     setSaving(true);
     try {
-      const body: Record<string, string> = {
+      const body: Record<string, string | boolean> = {
         title: title.trim(),
         artist: artist.trim(),
       };
@@ -117,6 +123,10 @@ export default function EditSongPage() {
           body.lyrics_raw = plainLyrics;
           body.lyrics_synced = '';
         }
+      }
+      if (readingSchemeChanged) {
+        body.reading_scheme = readingScheme;
+        body.reading_scheme_confirmed = true;
       }
       const res = await fetch(`/api/songs/${id}`, {
         method: 'PUT',
@@ -149,6 +159,7 @@ export default function EditSongPage() {
   }
 
   const lyrics = lyricsMode === 'lrc' ? syncedLyrics : plainLyrics;
+  const cantoneseSuggestion = detectCantoneseLyrics(lyrics);
 
   return (
     <div className={`song-view song-editor-page fade-in max-w-2xl${coverColor ? ' song-view--accented' : ''}`} style={songThemeStyle}>
@@ -185,6 +196,42 @@ export default function EditSongPage() {
             onChange={(event) => setArtist(event.target.value)}
             className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 sm:px-4 py-2.5 text-sm outline-none song-editor-input transition-colors"
           />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-2">{t('edit.readingScheme')}</label>
+          <div className="flex flex-wrap gap-2">
+            {(['ja-kana', 'yue-jyutping'] as const).map((scheme) => (
+              <button
+                key={scheme}
+                type="button"
+                onClick={() => {
+                  setReadingScheme(scheme);
+                  setReadingSchemeChanged(true);
+                }}
+                className={`rounded-md border px-3 py-2 text-xs font-medium transition-colors ${
+                  readingScheme === scheme
+                    ? 'song-editor-choice--active'
+                    : 'border-[var(--border)] bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                }`}
+              >
+                {t(scheme === 'ja-kana' ? 'edit.readingJapanese' : 'edit.readingCantonese')}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-[var(--muted-foreground)]">{t('edit.readingSchemeHint')}</p>
+          {readingScheme === 'ja-kana' && cantoneseSuggestion.confidence === 'high' && (
+            <button
+              type="button"
+              onClick={() => {
+                setReadingScheme('yue-jyutping');
+                setReadingSchemeChanged(true);
+              }}
+              className="mt-2 text-left text-xs font-medium text-[var(--song-accent)] hover:underline"
+            >
+              {t('edit.cantoneseDetected')}
+            </button>
+          )}
         </div>
 
         <div>

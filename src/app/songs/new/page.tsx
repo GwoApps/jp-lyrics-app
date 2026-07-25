@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { Upload } from 'lucide-react';
 import Toast from '@/components/Toast';
 import { useI18n } from '@/lib/i18n';
+import type { ReadingScheme } from '@/lib/types';
+import { detectCantoneseLyrics } from '@/lib/lyrics-reading';
 
 type LyricsMode = 'text' | 'lrc';
 
@@ -16,6 +18,8 @@ export default function NewSongPage() {
   const [artist, setArtist] = useState('');
   const [lyrics, setLyrics] = useState('');
   const [lyricsMode, setLyricsMode] = useState<LyricsMode>('text');
+  const [readingScheme, setReadingScheme] = useState<ReadingScheme>('ja-kana');
+  const [readingSchemeConfirmed, setReadingSchemeConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -56,6 +60,7 @@ export default function NewSongPage() {
           body.lyrics_raw = lyrics;
         }
       }
+      if (readingSchemeConfirmed) body.reading_scheme = readingScheme;
       const res = await fetch('/api/songs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -78,6 +83,8 @@ export default function NewSongPage() {
         ? 'bg-[var(--primary)]/15 text-[var(--primary)] border border-[var(--primary)]/30'
         : 'bg-[var(--accent)] text-[var(--muted-foreground)] border border-transparent hover:text-[var(--foreground)]'
     }`;
+
+  const cantoneseSuggestion = detectCantoneseLyrics(lyrics);
 
   return (
     <div className="fade-in max-w-2xl">
@@ -117,6 +124,42 @@ export default function NewSongPage() {
             placeholder={t('new.artistPlaceholder')}
             className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 sm:px-4 py-2.5 text-sm outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/50"
           />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-2">{t('new.readingScheme')}</label>
+          <div className="flex flex-wrap gap-2">
+            {(['ja-kana', 'yue-jyutping'] as const).map((scheme) => (
+              <button
+                key={scheme}
+                type="button"
+                onClick={() => {
+                  setReadingScheme(scheme);
+                  setReadingSchemeConfirmed(true);
+                }}
+                className={`rounded-md border px-3 py-2 text-xs font-medium transition-colors ${
+                  readingSchemeConfirmed && readingScheme === scheme
+                    ? 'song-editor-choice--active'
+                    : 'border-[var(--border)] bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                }`}
+              >
+                {t(scheme === 'ja-kana' ? 'new.readingJapanese' : 'new.readingCantonese')}
+              </button>
+            ))}
+          </div>
+          {!readingSchemeConfirmed && <p className="mt-2 text-[11px] text-[var(--muted-foreground)]">{t('new.readingAutoHint')}</p>}
+          {!readingSchemeConfirmed && cantoneseSuggestion.confidence === 'high' && (
+            <button
+              type="button"
+              onClick={() => {
+                setReadingScheme('yue-jyutping');
+                setReadingSchemeConfirmed(true);
+              }}
+              className="mt-2 text-left text-xs font-medium text-[var(--primary)] hover:underline"
+            >
+              {t('new.cantoneseDetected')}
+            </button>
+          )}
         </div>
 
         {/* Lyrics */}
@@ -163,12 +206,16 @@ export default function NewSongPage() {
           <textarea
             value={lyrics}
             onChange={(e) => setLyrics(e.target.value)}
-            placeholder={lyricsMode === 'lrc' ? t('new.lrcPlaceholder') : t('new.lyricsPlaceholder')}
+            placeholder={readingSchemeConfirmed && readingScheme === 'yue-jyutping'
+              ? t(lyricsMode === 'lrc' ? 'new.cantoneseLrcPlaceholder' : 'new.cantoneseLyricsPlaceholder')
+              : t(lyricsMode === 'lrc' ? 'new.lrcPlaceholder' : 'new.lyricsPlaceholder')}
             rows={12}
             className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 sm:px-4 py-3 text-sm outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/50 resize-y leading-relaxed font-mono"
           />
           <p className="mt-2 text-[11px] text-[var(--muted-foreground)]">
-            {lyricsMode === 'lrc' ? t('new.lyricsHint') : t('new.furiganaHint')}
+            {readingSchemeConfirmed && readingScheme === 'yue-jyutping'
+              ? t('new.jyutpingHint')
+              : t(lyricsMode === 'lrc' ? 'new.lyricsHint' : 'new.furiganaHint')}
           </p>
         </div>
 
