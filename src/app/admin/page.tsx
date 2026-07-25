@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Users, Music, Shield, ShieldOff, Ban, Trash2, ArrowLeft, Eye, EyeOff, Loader2, Clock, Check, X } from 'lucide-react';
@@ -33,6 +33,15 @@ interface AdminSong {
 
 type Tab = 'users' | 'songs' | 'pending';
 
+const ADMIN_ERROR_KEYS: Record<string, string> = {
+  forbidden: 'apiErrors.forbidden',
+  cannot_block_self: 'admin.cannotBlockSelf',
+  cannot_remove_own_admin: 'admin.cannotDemoteSelf',
+  cannot_delete_self: 'admin.cannotDeleteSelf',
+  user_not_found: 'admin.userNotFound',
+  song_not_found: 'song.notFound',
+};
+
 export default function AdminPage() {
   const { t, locale } = useI18n();
   const router = useRouter();
@@ -49,10 +58,32 @@ export default function AdminPage() {
   const isAdmin = session?.user?.isAdmin === true;
   const currentUserId = session?.user?.email || '';
 
-  const showToast = (type: 'success' | 'error', msg: string) => {
+  const showToast = useCallback((type: 'success' | 'error', msg: string) => {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 3000);
-  };
+  }, []);
+
+  const adminErrorMessage = (error: unknown, fallbackKey: string) => (
+    typeof error === 'string' && ADMIN_ERROR_KEYS[error]
+      ? t(ADMIN_ERROR_KEYS[error])
+      : t(fallbackKey)
+  );
+
+  const loadData = useCallback(async () => {
+    try {
+      const [usersRes, songsRes] = await Promise.all([
+        fetch('/api/admin/users'),
+        fetch('/api/admin/songs'),
+      ]);
+      if (!usersRes.ok || !songsRes.ok) throw new Error('admin_load_failed');
+      setUsers(await usersRes.json());
+      setSongs(await songsRes.json());
+    } catch {
+      showToast('error', t('admin.loadFailed'));
+    } finally {
+      setLoading(false);
+    }
+  }, [showToast, t]);
 
   useEffect(() => {
     // Wait for the first server revalidation only when no cached state exists.
@@ -61,24 +92,11 @@ export default function AdminPage() {
       router.replace('/');
       return;
     }
-    void loadData();
-  }, [session, isAdmin, router]);
-
-  async function loadData() {
-    setLoading(true);
-    try {
-      const [usersRes, songsRes] = await Promise.all([
-        fetch('/api/admin/users'),
-        fetch('/api/admin/songs'),
-      ]);
-      if (usersRes.ok) setUsers(await usersRes.json());
-      if (songsRes.ok) setSongs(await songsRes.json());
-    } catch {
-      showToast('error', 'Failed to load data');
-    } finally {
-      setLoading(false);
-    }
-  };
+    const loadTimer = window.setTimeout(() => {
+      void loadData();
+    }, 0);
+    return () => window.clearTimeout(loadTimer);
+  }, [session, isAdmin, router, loadData]);
 
   const handleToggleAdmin = async (user: AdminUser) => {
     if (user.id === currentUserId) return; // Self-protection
@@ -93,10 +111,10 @@ export default function AdminPage() {
         setUsers(prev => prev.map(u => u.id === user.id ? updated : u));
       } else {
         const err = await res.json();
-        showToast('error', err.error || 'Failed to update user');
+        showToast('error', adminErrorMessage(err.error, 'admin.updateUserFailed'));
       }
     } catch {
-      showToast('error', 'Failed to update user');
+      showToast('error', t('admin.updateUserFailed'));
     }
   };
 
@@ -116,9 +134,12 @@ export default function AdminPage() {
         const updated = await res.json();
         setUsers(prev => prev.map(u => u.id === blockUserTarget.id ? updated : u));
         showToast('success', blockUserTarget.is_blocked === 1 ? t('admin.unblocked') : t('admin.blocked'));
+      } else {
+        const err = await res.json();
+        showToast('error', adminErrorMessage(err.error, 'admin.updateUserFailed'));
       }
     } catch {
-      showToast('error', 'Failed to update user');
+      showToast('error', t('admin.updateUserFailed'));
     }
     setBlockUserTarget(null);
     setBlockReason('');
@@ -134,9 +155,12 @@ export default function AdminPage() {
       if (res.ok) {
         setUsers(prev => prev.filter(u => u.id !== deleteUserTarget.id));
         showToast('success', t('admin.userDeleted'));
+      } else {
+        const err = await res.json();
+        showToast('error', adminErrorMessage(err.error, 'admin.deleteUserFailed'));
       }
     } catch {
-      showToast('error', 'Failed to delete user');
+      showToast('error', t('admin.deleteUserFailed'));
     }
     setDeleteUserTarget(null);
   };
@@ -151,9 +175,12 @@ export default function AdminPage() {
       if (res.ok) {
         const updated = await res.json();
         setSongs(prev => prev.map(s => s.id === song.id ? updated : s));
+      } else {
+        const err = await res.json();
+        showToast('error', adminErrorMessage(err.error, 'admin.updateSongFailed'));
       }
     } catch {
-      showToast('error', 'Failed to update song');
+      showToast('error', t('admin.updateSongFailed'));
     }
   };
 
@@ -168,9 +195,12 @@ export default function AdminPage() {
         const updated = await res.json();
         setSongs(prev => prev.map(s => s.id === song.id ? updated : s));
         showToast('success', t('admin.approved'));
+      } else {
+        const err = await res.json();
+        showToast('error', adminErrorMessage(err.error, 'admin.approveFailed'));
       }
     } catch {
-      showToast('error', 'Failed to approve');
+      showToast('error', t('admin.approveFailed'));
     }
   };
 
@@ -185,9 +215,12 @@ export default function AdminPage() {
         const updated = await res.json();
         setSongs(prev => prev.map(s => s.id === song.id ? updated : s));
         showToast('success', t('admin.rejected'));
+      } else {
+        const err = await res.json();
+        showToast('error', adminErrorMessage(err.error, 'admin.rejectFailed'));
       }
     } catch {
-      showToast('error', 'Failed to reject');
+      showToast('error', t('admin.rejectFailed'));
     }
   };
 
@@ -200,9 +233,12 @@ export default function AdminPage() {
       if (res.ok) {
         setSongs(prev => prev.filter(s => s.id !== deleteSongTarget.id));
         showToast('success', t('admin.songDeleted'));
+      } else {
+        const err = await res.json();
+        showToast('error', adminErrorMessage(err.error, 'admin.deleteSongFailed'));
       }
     } catch {
-      showToast('error', 'Failed to delete song');
+      showToast('error', t('admin.deleteSongFailed'));
     }
     setDeleteSongTarget(null);
   };
@@ -210,7 +246,7 @@ export default function AdminPage() {
   if (!isAdmin) return null;
 
   const localeMap: Record<string, string> = { ja: 'ja-JP', en: 'en-US', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW' };
-  const bcp47 = localeMap[locale] || 'ja-JP';
+  const bcp47 = localeMap[locale] || 'zh-CN';
 
   const pendingSongs = songs.filter(s => s.public_requested === 1 && s.is_public === 0);
 

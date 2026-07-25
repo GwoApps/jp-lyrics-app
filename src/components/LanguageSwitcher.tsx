@@ -5,7 +5,7 @@ import { useI18n, LOCALE_META, Locale } from '@/lib/i18n';
 import { Languages } from 'lucide-react';
 
 export default function LanguageSwitcher() {
-  const { locale, setLocale } = useI18n();
+  const { locale, setLocale, t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -22,7 +22,8 @@ export default function LanguageSwitcher() {
       <button
         onClick={() => setOpen(!open)}
         className="rounded-md p-1.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors"
-        title="Language"
+        title={t('common.language')}
+        aria-label={t('common.language')}
       >
         <Languages className="h-4 w-4" />
       </button>

@@ -19,7 +19,8 @@
     "created": "作成:",
     "updated": "更新:",
     "lightMode": "ライトモード",
-    "darkMode": "ダークモード"
+    "darkMode": "ダークモード",
+    "language": "言語"
   },
   "loginGate": {
     "title": "Spotify ログインは制限されています",
@@ -141,7 +142,15 @@
     "lyricsConfidence": "信頼度 {confidence}%",
     "spotifyMetadata": "Spotify 正規化情報",
     "spotifyTrackId": "Track ID：{id}",
-    "spotifyAlbum": "アルバム：{album}"
+    "spotifyAlbum": "アルバム：{album}",
+    "debugInfo": "デバッグ情報",
+    "debugConnected": "接続済み",
+    "debugDisconnected": "未接続",
+    "debugConnection": "Spotify：{connection} | 再生中：{playing} | 同じ曲：{same} | 同期済み：{synced}",
+    "debugProgress": "再生位置",
+    "debugCounts": "同期行：{sync} | ふりがな行：{furigana} | 現在行：{active} | 同期インデックス：{syncActive}",
+    "debugTrack": "再生曲：{track} | 現在の曲：{song}",
+    "debugTimestamps": "同期済みタイムスタンプ（{count} 行）："
   },
   "timeline": {
     "title": "LRC タイムライン編集",
@@ -330,6 +339,14 @@
     "you": "自分",
     "cannotDemoteSelf": "自分自身の管理者権限を解除できません",
     "cannotBlockSelf": "自分自身をブロックできません",
-    "cannotDeleteSelf": "自分自身を削除できません"
+    "cannotDeleteSelf": "自分自身を削除できません",
+    "userNotFound": "ユーザーが見つかりません",
+    "loadFailed": "管理データの読み込みに失敗しました",
+    "updateUserFailed": "ユーザーの更新に失敗しました",
+    "deleteUserFailed": "ユーザーの削除に失敗しました",
+    "updateSongFailed": "曲の更新に失敗しました",
+    "approveFailed": "申請の承認に失敗しました",
+    "rejectFailed": "申請の却下に失敗しました",
+    "deleteSongFailed": "曲の削除に失敗しました"
   }
 }

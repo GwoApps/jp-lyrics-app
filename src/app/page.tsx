@@ -32,7 +32,7 @@ const EMPTY_SONG_IDS = new Set<string>();
 
 function localeToBCP47(locale: string): string {
   const map: Record<string, string> = { ja: 'ja-JP', en: 'en-US', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW' };
-  return map[locale] ?? 'ja-JP';
+  return map[locale] ?? 'zh-CN';
 }
 
 const importErrorKeyMap: Record<string, string> = {
@@ -48,7 +48,7 @@ const importErrorKeyMap: Record<string, string> = {
 function importErrorMsg(t: (k: string) => string, error?: string, fallbackKey?: string): string {
   if (!error) return fallbackKey ? t(fallbackKey) : error || '';
   const key = importErrorKeyMap[error];
-  return key ? t(key) : error;
+  return key ? t(key) : t(fallbackKey || 'home.importFailed');
 }
 
 const SONGS_CACHE_KEY = 'jplrc:songs:list';

@@ -6,7 +6,7 @@ import { getAuthUser } from '@/lib/auth';
 export async function GET(request: NextRequest) {
   const user = await getAuthUser(request);
   if (!user?.isAdmin) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
   const db = getDB();

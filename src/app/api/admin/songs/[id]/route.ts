@@ -9,7 +9,7 @@ export async function PUT(
 ) {
   const user = await getAuthUser(request);
   if (!user?.isAdmin) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
   const db = getDB();
@@ -19,7 +19,7 @@ export async function PUT(
 
   const existing = await db.get(sql`SELECT id FROM songs WHERE id = ${id}`);
   if (!existing) {
-    return NextResponse.json({ error: 'Song not found' }, { status: 404 });
+    return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
   }
 
   if (is_public !== undefined) {
@@ -40,7 +40,7 @@ export async function DELETE(
 ) {
   const user = await getAuthUser(request);
   if (!user?.isAdmin) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
   const db = getDB();
@@ -48,7 +48,7 @@ export async function DELETE(
 
   const existing = await db.get(sql`SELECT id FROM songs WHERE id = ${id}`);
   if (!existing) {
-    return NextResponse.json({ error: 'Song not found' }, { status: 404 });
+    return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
   }
 
   await db.run(sql`DELETE FROM songs WHERE id = ${id}`);

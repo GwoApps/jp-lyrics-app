@@ -340,7 +340,14 @@ export function useSongData(id: string): UseSongDataReturn {
       });
       const data = await res.json();
       if (!res.ok || data.error) {
-        setImportAlert(data.error || t('song.importFailed'));
+        const errorKey: Record<string, string> = {
+          title_required: 'home.importTitleRequired',
+          lyrics_not_found: 'home.importLyricsNotFound',
+          login_required: 'home.importLoginRequired',
+        };
+        setImportAlert(data.error && errorKey[data.error]
+          ? t(errorKey[data.error])
+          : t('song.importFailed'));
         return;
       }
       router.push(`/songs/${data.id}`);

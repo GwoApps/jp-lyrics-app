@@ -621,14 +621,24 @@ export default function SongViewPage() {
         {/* Debug panel */}
         {data.debug && (
           <div className="mt-3 rounded-md bg-[var(--muted)] border border-[var(--border)] p-2 sm:p-3 text-[10px] sm:text-[11px] font-mono space-y-1 overflow-x-auto">
-            <div className="text-[var(--song-accent)] font-medium mb-1.5">Debug Info</div>
-            <div>Spotify: {spotify?.connected ? '✓ connected' : '✗ disconnected'} | playing: {String(!!spotify?.is_playing)} | same: {String(isSameSong)} | synced: {String(isSynced)}</div>
-            <div>progress: {spotify ? `${spotify.progress_ms}ms (${fmtTime(spotify.progress_ms)})` : '—'} / {spotify ? `${spotify.duration_ms}ms (${fmtTime(spotify.duration_ms)})` : '—'}</div>
-            <div>sync: {syncLines.length} | furigana: {furiganaLines.length} | active: #{activeLine} ({activeLine >= 0 && lineTimestamps[activeLine] != null ? fmtMs(lineTimestamps[activeLine]!) : '—'}) | sync: #{debugSyncActive}</div>
-            <div>track: {spotify?.track?.name || '—'} | song: {song.title}</div>
+            <div className="text-[var(--song-accent)] font-medium mb-1.5">{t('song.debugInfo')}</div>
+            <div>{t('song.debugConnection', {
+              connection: spotify?.connected ? `✓ ${t('song.debugConnected')}` : `✗ ${t('song.debugDisconnected')}`,
+              playing: String(!!spotify?.is_playing),
+              same: String(isSameSong),
+              synced: String(isSynced),
+            })}</div>
+            <div>{t('song.debugProgress')}: {spotify ? `${spotify.progress_ms}ms (${fmtTime(spotify.progress_ms)})` : '—'} / {spotify ? `${spotify.duration_ms}ms (${fmtTime(spotify.duration_ms)})` : '—'}</div>
+            <div>{t('song.debugCounts', {
+              sync: String(syncLines.length),
+              furigana: String(furiganaLines.length),
+              active: `#${activeLine} (${activeLine >= 0 && lineTimestamps[activeLine] != null ? fmtMs(lineTimestamps[activeLine]!) : '—'})`,
+              syncActive: `#${debugSyncActive}`,
+            })}</div>
+            <div>{t('song.debugTrack', { track: spotify?.track?.name || '—', song: song.title })}</div>
             {syncLines.length > 0 && (
               <div className="pt-1.5 mt-1.5 border-t border-[var(--border)]">
-                <div className="text-[var(--muted-foreground)] mb-1">Synced timestamps ({syncLines.length} lines):</div>
+                <div className="text-[var(--muted-foreground)] mb-1">{t('song.debugTimestamps', { count: String(syncLines.length) })}</div>
                 <div className="max-h-40 overflow-y-auto space-y-0.5">
                   {syncLines.map((sl, i) => (
                     <div key={i} className={i === debugSyncActive ? 'text-[var(--success)] font-medium' : 'text-[var(--muted-foreground)]'}>[{fmtMs(sl.timeMs)}] {sl.text}</div>

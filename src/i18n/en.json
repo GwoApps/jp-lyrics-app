@@ -19,7 +19,8 @@
     "created": "Created:",
     "updated": "Updated:",
     "lightMode": "Light mode",
-    "darkMode": "Dark mode"
+    "darkMode": "Dark mode",
+    "language": "Language"
   },
   "loginGate": {
     "title": "Spotify login is restricted",
@@ -141,7 +142,15 @@
     "lyricsConfidence": "Confidence {confidence}%",
     "spotifyMetadata": "Canonical Spotify metadata",
     "spotifyTrackId": "Track ID: {id}",
-    "spotifyAlbum": "Album: {album}"
+    "spotifyAlbum": "Album: {album}",
+    "debugInfo": "Debug information",
+    "debugConnected": "connected",
+    "debugDisconnected": "disconnected",
+    "debugConnection": "Spotify: {connection} | playing: {playing} | same song: {same} | synced: {synced}",
+    "debugProgress": "Progress",
+    "debugCounts": "sync lines: {sync} | furigana lines: {furigana} | active: {active} | sync index: {syncActive}",
+    "debugTrack": "track: {track} | song: {song}",
+    "debugTimestamps": "Synced timestamps ({count} lines):"
   },
   "timeline": {
     "title": "LRC Timeline Editor",
@@ -330,6 +339,14 @@
     "you": "You",
     "cannotDemoteSelf": "Cannot remove your own admin status",
     "cannotBlockSelf": "Cannot block yourself",
-    "cannotDeleteSelf": "Cannot delete yourself"
+    "cannotDeleteSelf": "Cannot delete yourself",
+    "userNotFound": "User not found",
+    "loadFailed": "Failed to load admin data",
+    "updateUserFailed": "Failed to update user",
+    "deleteUserFailed": "Failed to delete user",
+    "updateSongFailed": "Failed to update song",
+    "approveFailed": "Failed to approve request",
+    "rejectFailed": "Failed to reject request",
+    "deleteSongFailed": "Failed to delete song"
   }
 }

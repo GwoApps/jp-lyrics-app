@@ -19,7 +19,8 @@
     "created": "创建:",
     "updated": "更新:",
     "lightMode": "浅色模式",
-    "darkMode": "深色模式"
+    "darkMode": "深色模式",
+    "language": "语言"
   },
   "loginGate": {
     "title": "Spotify 登录受限",
@@ -141,7 +142,15 @@
     "lyricsConfidence": "可信度 {confidence}%",
     "spotifyMetadata": "Spotify 规范化信息",
     "spotifyTrackId": "Track ID：{id}",
-    "spotifyAlbum": "专辑：{album}"
+    "spotifyAlbum": "专辑：{album}",
+    "debugInfo": "调试信息",
+    "debugConnected": "已连接",
+    "debugDisconnected": "未连接",
+    "debugConnection": "Spotify：{connection} | 播放中：{playing} | 同一歌曲：{same} | 已同步：{synced}",
+    "debugProgress": "播放进度",
+    "debugCounts": "同步行：{sync} | 注音行：{furigana} | 当前行：{active} | 同步索引：{syncActive}",
+    "debugTrack": "播放曲目：{track} | 当前歌曲：{song}",
+    "debugTimestamps": "已同步时间戳（{count} 行）："
   },
   "timeline": {
     "title": "LRC 时间轴编辑",
@@ -330,6 +339,14 @@
     "you": "我",
     "cannotDemoteSelf": "不能取消自己的管理员身份",
     "cannotBlockSelf": "不能封禁自己",
-    "cannotDeleteSelf": "不能删除自己"
+    "cannotDeleteSelf": "不能删除自己",
+    "userNotFound": "找不到用户",
+    "loadFailed": "加载管理数据失败",
+    "updateUserFailed": "更新用户失败",
+    "deleteUserFailed": "删除用户失败",
+    "updateSongFailed": "更新歌曲失败",
+    "approveFailed": "批准申请失败",
+    "rejectFailed": "拒绝申请失败",
+    "deleteSongFailed": "删除歌曲失败"
   }
 }

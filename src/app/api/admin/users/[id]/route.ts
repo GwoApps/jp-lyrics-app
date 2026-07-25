@@ -9,7 +9,7 @@ export async function PUT(
 ) {
   const user = await getAuthUser(request);
   if (!user?.isAdmin) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
   const db = getDB();
@@ -20,16 +20,16 @@ export async function PUT(
   // Self-protection: admin can't ban or demote themselves
   if (id === user.id) {
     if (is_blocked === 1) {
-      return NextResponse.json({ error: 'Cannot block yourself' }, { status: 400 });
+      return NextResponse.json({ error: 'cannot_block_self' }, { status: 400 });
     }
     if (is_admin === 0) {
-      return NextResponse.json({ error: 'Cannot remove your own admin status' }, { status: 400 });
+      return NextResponse.json({ error: 'cannot_remove_own_admin' }, { status: 400 });
     }
   }
 
   const existing = await db.get(sql`SELECT id FROM users WHERE id = ${id}`);
   if (!existing) {
-    return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    return NextResponse.json({ error: 'user_not_found' }, { status: 404 });
   }
 
   if (is_admin !== undefined) {
@@ -52,7 +52,7 @@ export async function DELETE(
 ) {
   const user = await getAuthUser(request);
   if (!user?.isAdmin) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
   const db = getDB();
@@ -60,12 +60,12 @@ export async function DELETE(
 
   // Self-protection: admin can't delete themselves
   if (id === user.id) {
-    return NextResponse.json({ error: 'Cannot delete yourself' }, { status: 400 });
+    return NextResponse.json({ error: 'cannot_delete_self' }, { status: 400 });
   }
 
   const existing = await db.get(sql`SELECT id FROM users WHERE id = ${id}`);
   if (!existing) {
-    return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    return NextResponse.json({ error: 'user_not_found' }, { status: 404 });
   }
 
   // Delete user's related data
