@@ -225,7 +225,11 @@ export function useSongData(id: string): UseSongDataReturn {
           fetch(`/api/songs/${id}/furigana`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lyrics_furigana: lines, reading_scheme: readingScheme }),
+            body: JSON.stringify({
+              lyrics_furigana: lines,
+              reading_scheme: readingScheme,
+              source_lyrics: lyricsRaw,
+            }),
           }).catch(() => {}); // fire-and-forget
         }
       } catch (error) {

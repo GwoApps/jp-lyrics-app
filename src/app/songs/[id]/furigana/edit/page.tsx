@@ -114,7 +114,8 @@ export default function FuriganaEditPage() {
       .finally(() => setReconverting(false));
   }, [song, draft.length, original.length, showToast, t]);
 
-  const rawLines = useMemo(() => song?.lyrics_raw.split('\n') ?? [], [song?.lyrics_raw]);
+  const sourceLyrics = song?.lyrics_raw ?? '';
+  const rawLines = useMemo(() => sourceLyrics.split('\n'), [sourceLyrics]);
   const activeReadingScheme = normalizeReadingScheme(song?.reading_scheme);
 
   const isDirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(original), [draft, original]);
@@ -140,12 +141,14 @@ export default function FuriganaEditPage() {
         body: JSON.stringify({
           lyrics_furigana: draft,
           reading_scheme: activeReadingScheme,
+          source_lyrics: sourceLyrics,
         }),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         if (res.status === 401) throw new Error(t('furigana.loginRequired'));
         if (res.status === 403) throw new Error(t('furigana.forbidden'));
+        if (res.status === 409) throw new Error(t('furigana.staleSource'));
         throw new Error(data.error === 'song_not_found' ? t('song.notFound') : t('furigana.saveFailed'));
       }
       setOriginal(draft);
@@ -155,7 +158,7 @@ export default function FuriganaEditPage() {
     } finally {
       setSaving(false);
     }
-  }, [id, draft, activeReadingScheme, showToast, t]);
+  }, [id, draft, activeReadingScheme, sourceLyrics, showToast, t]);
 
   const handleReset = useCallback(async () => {
     if (isDirty && !window.confirm(t('furigana.unsavedConfirm'))) return;

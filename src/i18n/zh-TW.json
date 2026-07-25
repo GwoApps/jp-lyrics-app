@@ -296,9 +296,10 @@
     "saved": "注音已儲存",
     "saveFailed": "儲存失敗",
     "unsavedConfirm": "有未儲存的修改，確定離開？",
-    "noKanji": "這一行沒有漢字",
+    "noKanji": "這一行沒有可校正的注音",
     "loginRequired": "請先連接 Spotify 以編輯注音",
-    "forbidden": "沒有權限修改這首歌詞"
+    "forbidden": "沒有權限修改這首歌詞",
+    "staleSource": "歌詞或注音方案已在其他頁面更新，請重新整理後再校正"
   },
   "dialog": {
     "deleteConfirmTitle": "確定刪除「{title}」？",

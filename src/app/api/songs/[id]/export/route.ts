@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
+import { getAuthUser } from '@/lib/auth';
 
 const escapeHtml = (value: string) => value
   .replaceAll('&', '&amp;')
@@ -15,6 +16,7 @@ export async function GET(
 ) {
   const db = getDB();
   const { id } = await params;
+  const user = await getAuthUser(request);
   const format = request.nextUrl.searchParams.get('format') || 'text';
 
   const song = await db.select({
@@ -24,9 +26,11 @@ export async function GET(
     lyrics_synced: schema.songs.lyricsSynced,
     lyrics_furigana: schema.songs.lyricsFurigana,
     reading_scheme: schema.songs.readingScheme,
+    created_by: schema.songs.createdBy,
+    is_public: schema.songs.isPublic,
   }).from(schema.songs).where(eq(schema.songs.id, id)).get();
 
-  if (!song) {
+  if (!song || (song.is_public !== 1 && !user?.isAdmin && song.created_by !== user?.id)) {
     return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
   }
 
