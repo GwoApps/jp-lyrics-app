@@ -4,7 +4,7 @@ interface ConfirmDialogProps {
   open: boolean;
   title: string;
   body?: string;
-  confirmLabel?: string;
+  confirmLabel: string;
   cancelLabel?: string;
   variant?: 'danger' | 'default';
   alert?: boolean;
@@ -16,8 +16,8 @@ export default function ConfirmDialog({
   open,
   title,
   body,
-  confirmLabel = '確認',
-  cancelLabel = 'キャンセル',
+  confirmLabel,
+  cancelLabel,
   variant = 'default',
   alert = false,
   onConfirm,

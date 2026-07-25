@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jplrc-v4';
+const CACHE_NAME = 'jplrc-v5';
 const IMMUTABLE_CACHE = 'jplrc-immutable-v1';
 const KUROMOJI_CACHE = 'jplrc-kuromoji-v1';
 

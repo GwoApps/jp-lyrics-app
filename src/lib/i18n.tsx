@@ -18,7 +18,7 @@ export const LOCALE_META: Record<Locale, { label: string }> = {
 };
 
 function detectLocale(): Locale {
-  if (typeof window === 'undefined') return 'ja';
+  if (typeof window === 'undefined') return 'zh-CN';
   const saved = localStorage.getItem('jplrc-locale') as Locale | null;
   if (saved && LOCALES[saved]) return saved;
   const nav = navigator.language;
@@ -27,7 +27,8 @@ function detectLocale(): Locale {
     return 'zh-CN';
   }
   if (nav.startsWith('en')) return 'en';
-  return 'ja';
+  if (nav.startsWith('ja')) return 'ja';
+  return 'zh-CN';
 }
 
 type I18nContextValue = {
@@ -36,7 +37,7 @@ type I18nContextValue = {
   t: (key: string, vars?: Record<string, string | number>) => string;
 };
 
-const I18nContext = createContext<I18nContextValue>({ locale: 'ja', setLocale: () => {}, t: (k) => k });
+const I18nContext = createContext<I18nContextValue>({ locale: 'zh-CN', setLocale: () => {}, t: (k) => k });
 const subscribeHydration = () => () => {};
 
 export function I18nProvider({ children }: { children: ReactNode }) {
@@ -52,7 +53,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const t = useCallback((key: string, vars?: Record<string, string | number>): string => {
     const [ns, k] = key.split('.');
     const dict = LOCALES[locale];
-    let val = dict?.[ns]?.[k] ?? LOCALES.ja[ns]?.[k] ?? key;
+    let val = dict?.[ns]?.[k] ?? LOCALES['zh-CN'][ns]?.[k] ?? key;
     if (vars) {
       for (const [rk, rv] of Object.entries(vars)) {
         val = val.replace(`{${rk}}`, String(rv));

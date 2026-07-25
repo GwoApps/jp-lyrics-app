@@ -4,13 +4,13 @@ import { ViewTransitions } from 'next-view-transitions';
 import AppShell from '@/components/AppShell';
 
 export const metadata: Metadata = {
-  title: '歌詞ノート — Lyrics Note',
+  title: '歌词笔记 — Lyrics Note',
   description: 'Japanese lyrics management with furigana annotation and Spotify sync',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: '歌詞ノート',
+    title: '歌词笔记',
   },
   icons: {
     icon: [
@@ -36,7 +36,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ja">
+    <html lang="zh-CN">
       <head>
         <meta name="theme-color" content="#0a0a0a" id="theme-color-meta" />
         <script dangerouslySetInnerHTML={{ __html: `
@@ -86,14 +86,22 @@ export default function RootLayout({
                         icon.textContent = '↻';
                         const description = document.createElement('div');
                         description.className = 'toast-description';
-                        const locale = localStorage.getItem('jplrc-locale') || 'ja';
+                        const savedLocale = localStorage.getItem('jplrc-locale');
+                        const browserLanguage = navigator.language || '';
+                        const locale = savedLocale || (browserLanguage.startsWith('ja')
+                          ? 'ja'
+                          : browserLanguage.startsWith('en')
+                            ? 'en'
+                            : browserLanguage.includes('TW') || browserLanguage.includes('HK') || browserLanguage.includes('Hant')
+                              ? 'zh-TW'
+                              : 'zh-CN');
                         const updateMessages = {
                           ja: '新しいバージョンがあります — タップして更新',
                           en: 'New version available — tap to refresh',
                           'zh-CN': '有新版本可用 — 点击刷新',
                           'zh-TW': '有新版本可用 — 點擊重新整理',
                         };
-                        description.textContent = updateMessages[locale] || updateMessages.ja;
+                        description.textContent = updateMessages[locale] || updateMessages['zh-CN'];
                         toast.append(icon, description);
                         toast.style.cursor = 'pointer';
                         toast.style.bottom = '5.5rem';

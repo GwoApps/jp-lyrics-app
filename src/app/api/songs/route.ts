@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
   const { title, artist, lyrics_raw, lyrics_synced } = body;
 
   if (!title) {
-    return NextResponse.json({ error: '曲名は必須です' }, { status: 400 });
+    return NextResponse.json({ error: 'title_required' }, { status: 400 });
   }
 
   const id = uuidv4();
