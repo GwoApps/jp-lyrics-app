@@ -356,16 +356,29 @@ export default function TimelineEditorPage() {
         </div>
 
         <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-          <div className="flex items-end justify-between gap-3">
-            <div><div className="text-xs text-[var(--muted-foreground)]">{t('timelineWorkspace.progress')}</div><div className="mt-1 text-2xl font-semibold tabular-nums">{markedCount}<span className="text-sm font-normal text-[var(--muted-foreground)]"> / {lines.length}</span></div></div>
-            <div className="text-sm font-medium text-[var(--song-accent)]">{progressPercent}%</div>
+          <div className="text-xs font-medium text-[var(--muted-foreground)]">{t('timeline.offset')}</div>
+          <div className="mt-3 grid grid-cols-4 gap-1.5">
+            {[-500, -100, 100, 500].map((offset) => (
+              <button key={offset} type="button" onClick={() => applyOffset(offset)} className="song-accent-button inline-flex h-8 min-w-0 items-center justify-center rounded-md px-1 text-[10px] tabular-nums">
+                {offset > 0 ? <Plus className="mr-0.5 h-3 w-3 shrink-0" /> : <Minus className="mr-0.5 h-3 w-3 shrink-0" />}{Math.abs(offset)}ms
+              </button>
+            ))}
           </div>
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--muted)]"><div className="h-full rounded-full bg-[var(--song-accent)]" style={{ width: `${progressPercent}%` }} /></div>
-          <p className="mt-3 text-[11px] leading-relaxed text-[var(--muted-foreground)]">{t('timelineWorkspace.autoAdvanceHint')}</p>
+          <div className="mt-2 flex min-w-0 items-center gap-1">
+            <input type="number" step="10" value={offsetDraft} onChange={(event) => setOffsetDraft(event.target.value)} className="h-8 min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--input)] px-2 text-xs tabular-nums outline-none focus:border-[var(--song-accent)]" aria-label={t('timeline.customOffset')} />
+            <button type="button" onClick={() => applyOffset(Number(offsetDraft))} className="song-accent-button h-8 shrink-0 rounded-md px-3 text-xs">{t('timeline.apply')}</button>
+          </div>
         </div>
       </section>
 
       <section className="sticky top-14 z-40 mb-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:p-5">
+        <div className="mb-3">
+          <div className="flex items-baseline justify-between gap-3 text-xs">
+            <div className="min-w-0 text-[var(--muted-foreground)]">{t('timelineWorkspace.progress')} <span className="ml-1 font-semibold text-[var(--foreground)] tabular-nums">{markedCount} / {lines.length}</span></div>
+            <div className="text-xs font-medium text-[var(--song-accent)]">{progressPercent}%</div>
+          </div>
+          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[var(--muted)]"><div className="h-full rounded-full bg-[var(--song-accent)]" style={{ width: `${progressPercent}%` }} /></div>
+        </div>
         <div className="grid items-center gap-4 md:grid-cols-[40px_minmax(0,1fr)_40px]">
           <button type="button" onClick={() => selectLine(currentIndex - 1)} disabled={currentIndex === 0} className="hidden h-10 w-10 items-center justify-center rounded-md text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-30 md:flex" aria-label={t('timelineWorkspace.previousLine')}><ChevronUp className="h-5 w-5" /></button>
           <div className="min-w-0 text-center">
@@ -379,21 +392,8 @@ export default function TimelineEditorPage() {
           <LocateFixed className="h-5 w-5" />
           {canUseSpotifyTime ? t('timelineWorkspace.markAt', { time: fmtMs(liveProgress) }) : t('timelineWorkspace.waitingSpotify')}
         </button>
-        <div className="mt-3 flex items-center justify-center gap-4 text-[10px] text-[var(--muted-foreground)]">
+        <div className="mt-3 hidden items-center justify-center gap-4 text-[10px] text-[var(--muted-foreground)] sm:flex">
           <span>{t('timelineWorkspace.shortcutMark')}</span><span>{t('timelineWorkspace.shortcutNavigate')}</span><span>{t('timelineWorkspace.shortcutSave')}</span>
-        </div>
-      </section>
-
-      <section className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] p-3">
-        <span className="mr-1 text-xs font-medium text-[var(--muted-foreground)]">{t('timeline.offset')}</span>
-        {[-500, -100, 100, 500].map((offset) => (
-          <button key={offset} type="button" onClick={() => applyOffset(offset)} className="song-accent-button inline-flex h-8 items-center rounded-md px-2.5 text-[11px] tabular-nums">
-            {offset > 0 ? <Plus className="mr-1 h-3 w-3" /> : <Minus className="mr-1 h-3 w-3" />}{Math.abs(offset)}ms
-          </button>
-        ))}
-        <div className="ml-auto flex items-center gap-1">
-          <input type="number" step="10" value={offsetDraft} onChange={(event) => setOffsetDraft(event.target.value)} className="h-8 w-24 rounded-md border border-[var(--border)] bg-[var(--input)] px-2 text-xs tabular-nums outline-none focus:border-[var(--song-accent)]" aria-label={t('timeline.customOffset')} />
-          <button type="button" onClick={() => applyOffset(Number(offsetDraft))} className="song-accent-button h-8 rounded-md px-3 text-xs">{t('timeline.apply')}</button>
         </div>
       </section>
 
