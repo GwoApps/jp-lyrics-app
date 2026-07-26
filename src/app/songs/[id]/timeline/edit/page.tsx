@@ -372,13 +372,6 @@ export default function TimelineEditorPage() {
       </section>
 
       <section className="sticky top-14 z-40 mb-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:p-5">
-        <div className="mb-3">
-          <div className="flex items-baseline justify-between gap-3 text-xs">
-            <div className="min-w-0 text-[var(--muted-foreground)]">{t('timelineWorkspace.progress')} <span className="ml-1 font-semibold text-[var(--foreground)] tabular-nums">{markedCount} / {lines.length}</span></div>
-            <div className="text-xs font-medium text-[var(--song-accent)]">{progressPercent}%</div>
-          </div>
-          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[var(--muted)]"><div className="h-full rounded-full bg-[var(--song-accent)]" style={{ width: `${progressPercent}%` }} /></div>
-        </div>
         <div className="grid items-center gap-4 md:grid-cols-[40px_minmax(0,1fr)_40px]">
           <button type="button" onClick={() => selectLine(currentIndex - 1)} disabled={currentIndex === 0} className="hidden h-10 w-10 items-center justify-center rounded-md text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-30 md:flex" aria-label={t('timelineWorkspace.previousLine')}><ChevronUp className="h-5 w-5" /></button>
           <div className="min-w-0 text-center">
@@ -437,8 +430,12 @@ export default function TimelineEditorPage() {
       </section>
 
       <div className="sticky bottom-3 mt-4 flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--background)]/95 p-3 shadow-lg backdrop-blur">
-        <div className="min-w-0 text-xs text-[var(--muted-foreground)]">
-          {dirty ? t('timelineWorkspace.unsavedStatus') : t('timelineWorkspace.savedStatus')}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-2 text-xs">
+            <div className="truncate text-[var(--muted-foreground)]">{t('timelineWorkspace.progress')} <span className="ml-1 font-semibold text-[var(--foreground)] tabular-nums">{markedCount} / {lines.length}</span></div>
+            <div className="shrink-0 font-medium text-[var(--song-accent)]">{progressPercent}%</div>
+          </div>
+          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[var(--muted)]"><div className="h-full rounded-full bg-[var(--song-accent)]" style={{ width: `${progressPercent}%` }} /></div>
         </div>
         <button type="button" onClick={save} disabled={saving || !dirty} className="song-editor-primary-button inline-flex h-9 shrink-0 items-center gap-2 rounded-md px-4 text-xs font-medium disabled:opacity-40">
           {saving ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" /> : dirty ? <Save className="h-4 w-4" /> : <Check className="h-4 w-4" />}
