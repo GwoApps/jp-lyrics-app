@@ -365,7 +365,7 @@ export default function TimelineEditorPage() {
         </div>
       </section>
 
-      <section className="sticky top-11 z-40 mb-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:p-5">
+      <section className="sticky top-14 z-40 mb-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:p-5">
         <div className="grid items-center gap-4 md:grid-cols-[40px_minmax(0,1fr)_40px]">
           <button type="button" onClick={() => selectLine(currentIndex - 1)} disabled={currentIndex === 0} className="hidden h-10 w-10 items-center justify-center rounded-md text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-30 md:flex" aria-label={t('timelineWorkspace.previousLine')}><ChevronUp className="h-5 w-5" /></button>
           <div className="min-w-0 text-center">
