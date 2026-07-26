@@ -384,16 +384,18 @@ export default function TimelineEditorPage() {
         </div>
       </section>
 
-      <section className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] p-3">
-        <span className="mr-1 text-xs font-medium text-[var(--muted-foreground)]">{t('timeline.offset')}</span>
-        {[-500, -100, 100, 500].map((offset) => (
-          <button key={offset} type="button" onClick={() => applyOffset(offset)} className="song-accent-button inline-flex h-8 items-center rounded-md px-2.5 text-[11px] tabular-nums">
-            {offset > 0 ? <Plus className="mr-1 h-3 w-3" /> : <Minus className="mr-1 h-3 w-3" />}{Math.abs(offset)}ms
-          </button>
-        ))}
-        <div className="ml-auto flex items-center gap-1">
-          <input type="number" step="10" value={offsetDraft} onChange={(event) => setOffsetDraft(event.target.value)} className="h-8 w-24 rounded-md border border-[var(--border)] bg-[var(--input)] px-2 text-xs tabular-nums outline-none focus:border-[var(--song-accent)]" aria-label={t('timeline.customOffset')} />
-          <button type="button" onClick={() => applyOffset(Number(offsetDraft))} className="song-accent-button h-8 rounded-md px-3 text-xs">{t('timeline.apply')}</button>
+      <section className="mb-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-3 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
+        <span className="mb-2 block text-xs font-medium text-[var(--muted-foreground)] sm:mb-0 sm:mr-1">{t('timeline.offset')}</span>
+        <div className="grid min-w-0 grid-cols-4 gap-2 sm:flex sm:items-center">
+          {[-500, -100, 100, 500].map((offset) => (
+            <button key={offset} type="button" onClick={() => applyOffset(offset)} className="song-accent-button inline-flex h-8 min-w-0 items-center justify-center rounded-md px-1.5 text-[11px] tabular-nums sm:px-2.5">
+              {offset > 0 ? <Plus className="mr-1 h-3 w-3 shrink-0" /> : <Minus className="mr-1 h-3 w-3 shrink-0" />}{Math.abs(offset)}ms
+            </button>
+          ))}
+        </div>
+        <div className="mt-2 flex min-w-0 w-full items-center gap-1 sm:ml-auto sm:mt-0 sm:w-auto">
+          <input type="number" step="10" value={offsetDraft} onChange={(event) => setOffsetDraft(event.target.value)} className="h-8 min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--input)] px-2 text-xs tabular-nums outline-none focus:border-[var(--song-accent)] sm:w-24 sm:flex-none" aria-label={t('timeline.customOffset')} />
+          <button type="button" onClick={() => applyOffset(Number(offsetDraft))} className="song-accent-button h-8 shrink-0 rounded-md px-3 text-xs">{t('timeline.apply')}</button>
         </div>
       </section>
 
