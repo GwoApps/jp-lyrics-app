@@ -104,7 +104,6 @@ export default function RootLayout({
                         description.textContent = updateMessages[locale] || updateMessages['zh-CN'];
                         toast.append(icon, description);
                         toast.style.cursor = 'pointer';
-                        toast.style.bottom = '5.5rem';
                         toast.onclick = () => { toast.remove(); window.location.reload(); };
                         document.body.appendChild(toast);
                         setTimeout(() => toast.remove(), 15000);

@@ -106,17 +106,22 @@ export default function TimelineEditorPage() {
 
   useEffect(() => {
     if (!nowPlaying) return;
-    progressAnchor.current = {
+    const nextAnchor = {
       progressMs: nowPlaying.progress_ms || 0,
       receivedAt: Date.now(),
       playing: !!nowPlaying.is_playing,
     };
+    progressAnchor.current = nextAnchor;
+    const frame = window.requestAnimationFrame(() => {
+      setLiveProgress(getAccurateProgress(nextAnchor));
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [nowPlaying]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
       setLiveProgress(getAccurateProgress(progressAnchor.current));
-    }, 200);
+    }, 100);
     return () => window.clearInterval(timer);
   }, []);
 
