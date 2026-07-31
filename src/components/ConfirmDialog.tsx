@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useId, useRef } from 'react';
+
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
@@ -23,6 +25,21 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const titleId = useId();
+  const confirmRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    confirmRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (alert) onConfirm();
+      else onCancel?.();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [alert, onCancel, onConfirm, open]);
+
   if (!open) return null;
 
   const handleOverlayClick = () => {
@@ -32,9 +49,15 @@ export default function ConfirmDialog({
 
   return (
     <div className="confirm-overlay" onClick={handleOverlayClick}>
-      <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="confirm-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="confirm-dialog-icon">{variant === 'danger' ? '🗑️' : '⚠️'}</div>
-        <div className="confirm-dialog-title">{title}</div>
+        <div id={titleId} className="confirm-dialog-title">{title}</div>
         {body && (
           <div className="confirm-dialog-body">
             <p>{body}</p>
@@ -47,6 +70,7 @@ export default function ConfirmDialog({
             </button>
           )}
           <button
+            ref={confirmRef}
             className={`confirm-dialog-btn ${variant === 'danger' ? 'confirm-dialog-btn--danger' : 'confirm-dialog-btn--confirm'}`}
             onClick={onConfirm}
           >

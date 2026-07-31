@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getDB, schema, sql } from '@/lib/db';
 import { parseLrc } from '@/lib/lrc';
 import { getAuthUser } from '@/lib/auth';
+import { getSpotifyTrack } from '@/lib/spotify';
 import type { SongListItem } from '@/lib/types';
 
 /** Look up Spotify display name from spotify_auth table */
@@ -93,13 +94,7 @@ export async function POST(request: NextRequest) {
     lyrics_raw,
     lyrics_synced,
     reading_scheme,
-    cover_url,
     spotify_track_id,
-    spotify_uri,
-    spotify_album,
-    spotify_duration_ms,
-    spotify_canonical_title,
-    spotify_canonical_artist,
   } = body;
 
   if (!title) {
@@ -110,7 +105,12 @@ export async function POST(request: NextRequest) {
   }
 
   const id = uuidv4();
-  const durationMs = Number(spotify_duration_ms);
+  const requestedSpotifyTrackId = typeof spotify_track_id === 'string'
+    ? spotify_track_id.trim()
+    : '';
+  const spotifyTrack = requestedSpotifyTrackId
+    ? await getSpotifyTrack(user.email, requestedSpotifyTrackId)
+    : null;
 
   // If LRC synced lyrics provided, strip timestamps to get raw text
   let rawLyrics = lyrics_raw || '';
@@ -132,13 +132,13 @@ export async function POST(request: NextRequest) {
     readingScheme: reading_scheme ?? 'ja-kana',
     readingSchemeConfirmed: reading_scheme ? 1 : 0,
     lyricsSynced: syncedLyrics,
-    coverUrl: typeof cover_url === 'string' && cover_url.trim() ? cover_url.trim() : null,
-    spotifyTrackId: typeof spotify_track_id === 'string' && spotify_track_id.trim() ? spotify_track_id.trim() : null,
-    spotifyUri: typeof spotify_uri === 'string' && spotify_uri.trim() ? spotify_uri.trim() : null,
-    spotifyAlbum: typeof spotify_album === 'string' && spotify_album.trim() ? spotify_album.trim() : null,
-    spotifyDurationMs: Number.isFinite(durationMs) && durationMs > 0 ? Math.round(durationMs) : null,
-    spotifyCanonicalTitle: typeof spotify_canonical_title === 'string' && spotify_canonical_title.trim() ? spotify_canonical_title.trim() : null,
-    spotifyCanonicalArtist: typeof spotify_canonical_artist === 'string' && spotify_canonical_artist.trim() ? spotify_canonical_artist.trim() : null,
+    coverUrl: spotifyTrack?.coverUrl ?? null,
+    spotifyTrackId: spotifyTrack?.id ?? null,
+    spotifyUri: spotifyTrack?.uri ?? null,
+    spotifyAlbum: spotifyTrack?.album ?? null,
+    spotifyDurationMs: spotifyTrack?.durationMs ?? null,
+    spotifyCanonicalTitle: spotifyTrack?.title ?? null,
+    spotifyCanonicalArtist: spotifyTrack?.artist ?? null,
     createdBy,
     createdByName,
   });

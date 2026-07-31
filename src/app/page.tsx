@@ -13,7 +13,7 @@ import { findBestMatch, isSongPlaying } from '@/lib/match';
 import { useNowPlaying } from '@/hooks/useNowPlaying';
 import { useAuthSession } from '@/lib/auth-session';
 import { cacheSongCovers } from '@/lib/song-cover-cache';
-import { buildNewSongUrl } from '@/lib/song-prefill';
+import { buildManualCreateUrl } from '@/lib/song-prefill';
 
 interface SongItem {
   id: string;
@@ -235,17 +235,7 @@ export default function HomePage() {
       if (!res.ok || data.error) {
         setImportAlert({
           message: importErrorMsg(t, data.error, 'home.importErrorDefault'),
-          manualCreateUrl: data.error === 'lyrics_not_found'
-            ? buildNewSongUrl({
-                title: nowPlaying.track.name,
-                artist: nowPlaying.track.artist,
-                spotifyTrackId: nowPlaying.track.id,
-                spotifyUri: nowPlaying.track.uri,
-                spotifyAlbum: nowPlaying.track.album,
-                spotifyDurationMs: nowPlaying.duration_ms,
-                coverUrl: nowPlaying.track.cover_url ?? undefined,
-              })
-            : undefined,
+          manualCreateUrl: buildManualCreateUrl(data),
         });
         return;
       }

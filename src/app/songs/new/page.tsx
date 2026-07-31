@@ -65,14 +65,6 @@ export default function NewSongPage() {
       }
       if (readingSchemeConfirmed) body.reading_scheme = readingScheme;
       if (prefill.spotifyTrackId) body.spotify_track_id = prefill.spotifyTrackId;
-      if (prefill.spotifyUri) body.spotify_uri = prefill.spotifyUri;
-      if (prefill.spotifyAlbum) body.spotify_album = prefill.spotifyAlbum;
-      if (prefill.spotifyDurationMs) body.spotify_duration_ms = String(prefill.spotifyDurationMs);
-      if (prefill.coverUrl) body.cover_url = prefill.coverUrl;
-      if (prefill.spotifyTrackId) {
-        body.spotify_canonical_title = prefill.title;
-        body.spotify_canonical_artist = prefill.artist;
-      }
       const res = await fetch('/api/songs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -6,7 +6,7 @@ import type { FuriganaLine, ReadingMode, ReadingScheme } from '@/lib/types';
 import { mapTimelineTimestamps, parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
 import { useI18n } from '@/lib/i18n';
-import { buildNewSongUrl } from '@/lib/song-prefill';
+import { buildManualCreateUrl } from '@/lib/song-prefill';
 import {
   convertLyricsReading,
   detectCantoneseLyrics,
@@ -418,17 +418,7 @@ export function useSongData(id: string): UseSongDataReturn {
           message: data.error && errorKey[data.error]
             ? t(errorKey[data.error])
             : t('song.importFailed'),
-          manualCreateUrl: data.error === 'lyrics_not_found'
-            ? buildNewSongUrl({
-                title: spotify.track.name,
-                artist: spotify.track.artist,
-                spotifyTrackId: spotify.track.id,
-                spotifyUri: spotify.track.uri,
-                spotifyAlbum: spotify.track.album,
-                spotifyDurationMs: spotify.duration_ms,
-                coverUrl: spotify.track.cover_url ?? undefined,
-              })
-            : undefined,
+          manualCreateUrl: buildManualCreateUrl(data),
         });
         return;
       }

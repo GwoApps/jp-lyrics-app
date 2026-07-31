@@ -50,7 +50,19 @@ export async function POST(request: NextRequest) {
       : null,
   });
   if (!result) {
-    return NextResponse.json({ error: 'lyrics_not_found', hasLyrics: false }, { status: 404 });
+    return NextResponse.json({
+      error: 'lyrics_not_found',
+      hasLyrics: false,
+      manual_create: {
+        title: spotifyTrack?.title || title,
+        artist: spotifyTrack?.artist || artist,
+        spotify_track_id: spotifyTrack?.id ?? null,
+        spotify_uri: spotifyTrack?.uri ?? null,
+        spotify_album: spotifyTrack?.album ?? null,
+        spotify_duration_ms: spotifyTrack?.durationMs ?? null,
+        cover_url: spotifyTrack?.coverUrl ?? null,
+      },
+    }, { status: 404 });
   }
 
   const nameRow = await db.select({ displayName: schema.spotifyAuth.displayName })

@@ -8,6 +8,19 @@ export interface SongPrefill {
   coverUrl?: string;
 }
 
+interface ImportErrorPayload {
+  error?: unknown;
+  manual_create?: {
+    title?: unknown;
+    artist?: unknown;
+    spotify_track_id?: unknown;
+    spotify_uri?: unknown;
+    spotify_album?: unknown;
+    spotify_duration_ms?: unknown;
+    cover_url?: unknown;
+  };
+}
+
 function appendText(params: URLSearchParams, key: string, value?: string | null) {
   const normalized = value?.trim();
   if (normalized) params.set(key, normalized);
@@ -26,6 +39,22 @@ export function buildNewSongUrl(prefill: SongPrefill): string {
   appendText(params, 'cover_url', prefill.coverUrl);
   const query = params.toString();
   return query ? `/songs/new?${query}` : '/songs/new';
+}
+
+export function buildManualCreateUrl(payload: ImportErrorPayload): string | undefined {
+  if (payload.error !== 'lyrics_not_found' || !payload.manual_create) return undefined;
+  const data = payload.manual_create;
+  const title = typeof data.title === 'string' ? data.title.trim() : '';
+  if (!title) return undefined;
+  return buildNewSongUrl({
+    title,
+    artist: typeof data.artist === 'string' ? data.artist : '',
+    spotifyTrackId: typeof data.spotify_track_id === 'string' ? data.spotify_track_id : undefined,
+    spotifyUri: typeof data.spotify_uri === 'string' ? data.spotify_uri : undefined,
+    spotifyAlbum: typeof data.spotify_album === 'string' ? data.spotify_album : undefined,
+    spotifyDurationMs: typeof data.spotify_duration_ms === 'number' ? data.spotify_duration_ms : undefined,
+    coverUrl: typeof data.cover_url === 'string' ? data.cover_url : undefined,
+  });
 }
 
 export function readSongPrefill(params: { get(name: string): string | null }): SongPrefill {
