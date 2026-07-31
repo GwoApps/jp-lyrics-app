@@ -6,6 +6,7 @@ import type { FuriganaLine, ReadingMode, ReadingScheme } from '@/lib/types';
 import { mapTimelineTimestamps, parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
 import { useI18n } from '@/lib/i18n';
+import { buildNewSongUrl } from '@/lib/song-prefill';
 import {
   convertLyricsReading,
   detectCantoneseLyrics,
@@ -77,6 +78,11 @@ interface ToastState {
   msg: string;
 }
 
+export interface ImportAlertState {
+  message: string;
+  manualCreateUrl?: string;
+}
+
 export interface UseSongDataReturn {
   song: SongData | null;
   loading: boolean;
@@ -100,8 +106,8 @@ export interface UseSongDataReturn {
   setDebug: React.Dispatch<React.SetStateAction<boolean>>;
   deleteConfirm: boolean;
   setDeleteConfirm: React.Dispatch<React.SetStateAction<boolean>>;
-  importAlert: string | null;
-  setImportAlert: React.Dispatch<React.SetStateAction<string | null>>;
+  importAlert: ImportAlertState | null;
+  setImportAlert: React.Dispatch<React.SetStateAction<ImportAlertState | null>>;
   fontSize: number;
   setFontSize: React.Dispatch<React.SetStateAction<number>>;
   toast: ToastState | null;
@@ -140,7 +146,7 @@ export function useSongData(id: string): UseSongDataReturn {
   const [debug, setDebug] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [importAlert, setImportAlert] = useState<string | null>(null);
+  const [importAlert, setImportAlert] = useState<ImportAlertState | null>(null);
   const [syncLines, setSyncLines] = useState<ReturnType<typeof parseLrc>>([]);
   const [syncing, setSyncing] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -358,10 +364,10 @@ export function useSongData(id: string): UseSongDataReturn {
         const message = data.error && errorKey[data.error]
           ? t(errorKey[data.error])
           : t('song.syncNotFound');
-        setImportAlert(message);
+        setImportAlert({ message });
       }
     } catch {
-      setImportAlert(t('song.networkErrorAlert'));
+      setImportAlert({ message: t('song.networkErrorAlert') });
     } finally {
       setSyncing(false);
     }
@@ -408,9 +414,22 @@ export function useSongData(id: string): UseSongDataReturn {
           lyrics_not_found: 'home.importLyricsNotFound',
           login_required: 'home.importLoginRequired',
         };
-        setImportAlert(data.error && errorKey[data.error]
-          ? t(errorKey[data.error])
-          : t('song.importFailed'));
+        setImportAlert({
+          message: data.error && errorKey[data.error]
+            ? t(errorKey[data.error])
+            : t('song.importFailed'),
+          manualCreateUrl: data.error === 'lyrics_not_found'
+            ? buildNewSongUrl({
+                title: spotify.track.name,
+                artist: spotify.track.artist,
+                spotifyTrackId: spotify.track.id,
+                spotifyUri: spotify.track.uri,
+                spotifyAlbum: spotify.track.album,
+                spotifyDurationMs: spotify.duration_ms,
+                coverUrl: spotify.track.cover_url ?? undefined,
+              })
+            : undefined,
+        });
         return;
       }
       router.push(`/songs/${data.id}`);

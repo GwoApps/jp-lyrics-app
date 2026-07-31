@@ -1,21 +1,24 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Upload } from 'lucide-react';
 import Toast from '@/components/Toast';
 import { useI18n } from '@/lib/i18n';
 import type { ReadingScheme } from '@/lib/types';
 import { detectCantoneseLyrics } from '@/lib/lyrics-reading';
+import { readSongPrefill } from '@/lib/song-prefill';
 
 type LyricsMode = 'text' | 'lrc';
 
 export default function NewSongPage() {
   const { t } = useI18n();
   const router = useRouter();
-  const [title, setTitle] = useState('');
-  const [artist, setArtist] = useState('');
+  const searchParams = useSearchParams();
+  const [prefill] = useState(() => readSongPrefill(searchParams));
+  const [title, setTitle] = useState(prefill.title);
+  const [artist, setArtist] = useState(prefill.artist);
   const [lyrics, setLyrics] = useState('');
   const [lyricsMode, setLyricsMode] = useState<LyricsMode>('text');
   const [readingScheme, setReadingScheme] = useState<ReadingScheme>('ja-kana');
@@ -61,6 +64,15 @@ export default function NewSongPage() {
         }
       }
       if (readingSchemeConfirmed) body.reading_scheme = readingScheme;
+      if (prefill.spotifyTrackId) body.spotify_track_id = prefill.spotifyTrackId;
+      if (prefill.spotifyUri) body.spotify_uri = prefill.spotifyUri;
+      if (prefill.spotifyAlbum) body.spotify_album = prefill.spotifyAlbum;
+      if (prefill.spotifyDurationMs) body.spotify_duration_ms = String(prefill.spotifyDurationMs);
+      if (prefill.coverUrl) body.cover_url = prefill.coverUrl;
+      if (prefill.spotifyTrackId) {
+        body.spotify_canonical_title = prefill.title;
+        body.spotify_canonical_artist = prefill.artist;
+      }
       const res = await fetch('/api/songs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

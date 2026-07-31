@@ -87,7 +87,20 @@ export async function POST(request: NextRequest) {
 
   const db = getDB();
   const body = await request.json();
-  const { title, artist, lyrics_raw, lyrics_synced, reading_scheme } = body;
+  const {
+    title,
+    artist,
+    lyrics_raw,
+    lyrics_synced,
+    reading_scheme,
+    cover_url,
+    spotify_track_id,
+    spotify_uri,
+    spotify_album,
+    spotify_duration_ms,
+    spotify_canonical_title,
+    spotify_canonical_artist,
+  } = body;
 
   if (!title) {
     return NextResponse.json({ error: 'title_required' }, { status: 400 });
@@ -97,6 +110,7 @@ export async function POST(request: NextRequest) {
   }
 
   const id = uuidv4();
+  const durationMs = Number(spotify_duration_ms);
 
   // If LRC synced lyrics provided, strip timestamps to get raw text
   let rawLyrics = lyrics_raw || '';
@@ -118,6 +132,13 @@ export async function POST(request: NextRequest) {
     readingScheme: reading_scheme ?? 'ja-kana',
     readingSchemeConfirmed: reading_scheme ? 1 : 0,
     lyricsSynced: syncedLyrics,
+    coverUrl: typeof cover_url === 'string' && cover_url.trim() ? cover_url.trim() : null,
+    spotifyTrackId: typeof spotify_track_id === 'string' && spotify_track_id.trim() ? spotify_track_id.trim() : null,
+    spotifyUri: typeof spotify_uri === 'string' && spotify_uri.trim() ? spotify_uri.trim() : null,
+    spotifyAlbum: typeof spotify_album === 'string' && spotify_album.trim() ? spotify_album.trim() : null,
+    spotifyDurationMs: Number.isFinite(durationMs) && durationMs > 0 ? Math.round(durationMs) : null,
+    spotifyCanonicalTitle: typeof spotify_canonical_title === 'string' && spotify_canonical_title.trim() ? spotify_canonical_title.trim() : null,
+    spotifyCanonicalArtist: typeof spotify_canonical_artist === 'string' && spotify_canonical_artist.trim() ? spotify_canonical_artist.trim() : null,
     createdBy,
     createdByName,
   });

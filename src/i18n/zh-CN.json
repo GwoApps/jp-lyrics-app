@@ -77,6 +77,7 @@
     "spotifyPassphraseRequired": "请先输入登录暗号",
     "importTitleRequired": "请输入歌曲标题",
     "importLyricsNotFound": "未找到歌词 — 请手动粘贴",
+    "createManually": "前往创建歌曲",
     "importLoginRequired": "请先登录",
     "importInvalidPlaylistUrl": "请输入有效的 Spotify 播放列表链接",
     "importSpotifyNotConnected": "请先连接 Spotify",

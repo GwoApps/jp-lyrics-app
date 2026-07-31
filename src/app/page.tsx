@@ -13,6 +13,7 @@ import { findBestMatch, isSongPlaying } from '@/lib/match';
 import { useNowPlaying } from '@/hooks/useNowPlaying';
 import { useAuthSession } from '@/lib/auth-session';
 import { cacheSongCovers } from '@/lib/song-cover-cache';
+import { buildNewSongUrl } from '@/lib/song-prefill';
 
 interface SongItem {
   id: string;
@@ -28,6 +29,7 @@ interface SongItem {
 }
 
 type ToastState = { type: 'success' | 'error'; msg: string } | null;
+type ImportAlertState = { message: string; manualCreateUrl?: string } | null;
 const EMPTY_SONG_IDS = new Set<string>();
 
 function localeToBCP47(locale: string): string {
@@ -103,7 +105,7 @@ export default function HomePage() {
     return success === 'connected' ? { type: 'success', msg: t('home.spotifyConnected') } : null;
   });
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
-  const [importAlert, setImportAlert] = useState<string | null>(null);
+  const [importAlert, setImportAlert] = useState<ImportAlertState>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [mySongsOnly, setMySongsOnly] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -231,7 +233,20 @@ export default function HomePage() {
       });
       const data = await res.json();
       if (!res.ok || data.error) {
-        setImportAlert(importErrorMsg(t, data.error, 'home.importErrorDefault'));
+        setImportAlert({
+          message: importErrorMsg(t, data.error, 'home.importErrorDefault'),
+          manualCreateUrl: data.error === 'lyrics_not_found'
+            ? buildNewSongUrl({
+                title: nowPlaying.track.name,
+                artist: nowPlaying.track.artist,
+                spotifyTrackId: nowPlaying.track.id,
+                spotifyUri: nowPlaying.track.uri,
+                spotifyAlbum: nowPlaying.track.album,
+                spotifyDurationMs: nowPlaying.duration_ms,
+                coverUrl: nowPlaying.track.cover_url ?? undefined,
+              })
+            : undefined,
+        });
         return;
       }
       router.push(`/songs/${data.id}`);
@@ -254,7 +269,7 @@ export default function HomePage() {
       });
       const data = await res.json();
       if (!res.ok || data.error) {
-        setImportAlert(importErrorMsg(t, data.error, 'home.playlistImportError'));
+        setImportAlert({ message: importErrorMsg(t, data.error, 'home.playlistImportError') });
         return;
       }
       setPlaylistResult(data);
@@ -675,10 +690,16 @@ export default function HomePage() {
       <ConfirmDialog
         open={!!importAlert}
         title={t('home.importErrorTitle')}
-        body={importAlert || undefined}
-        confirmLabel={t('common.confirm')}
-        alert
-        onConfirm={() => setImportAlert(null)}
+        body={importAlert?.message}
+        confirmLabel={importAlert?.manualCreateUrl ? t('home.createManually') : t('common.confirm')}
+        cancelLabel={importAlert?.manualCreateUrl ? t('common.cancel') : undefined}
+        alert={!importAlert?.manualCreateUrl}
+        onConfirm={() => {
+          const url = importAlert?.manualCreateUrl;
+          setImportAlert(null);
+          if (url) router.push(url);
+        }}
+        onCancel={() => setImportAlert(null)}
       />
     </div>
   );

@@ -819,7 +819,20 @@ export default function SongViewPage() {
       )}
 
       <ConfirmDialog open={data.deleteConfirm} title={t('dialog.deleteConfirmTitle', { title: song?.title || '' })} body={t('dialog.deleteConfirmBody')} confirmLabel={t('common.delete')} cancelLabel={t('common.cancel')} variant="danger" onConfirm={data.confirmDelete} onCancel={() => data.setDeleteConfirm(false)} />
-      <ConfirmDialog open={!!data.importAlert} title={t('dialog.importErrorTitle')} body={data.importAlert || undefined} confirmLabel={t('common.confirm')} alert onConfirm={() => data.setImportAlert(null)} />
+      <ConfirmDialog
+        open={!!data.importAlert}
+        title={t('dialog.importErrorTitle')}
+        body={data.importAlert?.message}
+        confirmLabel={data.importAlert?.manualCreateUrl ? t('home.createManually') : t('common.confirm')}
+        cancelLabel={data.importAlert?.manualCreateUrl ? t('common.cancel') : undefined}
+        alert={!data.importAlert?.manualCreateUrl}
+        onConfirm={() => {
+          const url = data.importAlert?.manualCreateUrl;
+          data.setImportAlert(null);
+          if (url) router.push(url);
+        }}
+        onCancel={() => data.setImportAlert(null)}
+      />
     </div>
   );
 }
