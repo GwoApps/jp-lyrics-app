@@ -50,6 +50,9 @@
 /* Ambient decoration may extend outside a card, but must never create a horizontal document scrollbar. */
 html {
   overflow-x: clip;
+  /* Keep the centered app shell fixed when filtering changes whether the page scrolls. */
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
 }
 body {
   background: var(--background);
