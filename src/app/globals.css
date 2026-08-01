@@ -590,6 +590,28 @@ textarea {
 .song-item-card[data-touching="true"]::after {
   animation: songCardBorderReveal 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
+.song-item-card--grid {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+.song-item-card--grid .song-item-card__cover {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 0.625rem;
+}
+.song-item-card--grid .song-item-card__content { flex: initial; }
+.song-item-card--grid .song-item-card__date { display: none; }
+.song-item-card--grid .song-item-card__actions {
+  justify-content: flex-end;
+  min-height: 1.75rem;
+}
+@media (min-width: 640px) {
+  .song-item-card--grid { padding: 0.875rem; }
+  .song-item-card--grid .song-item-card__cover { border-radius: 0.75rem; }
+}
 .song-item-card--playing {
   border-color: color-mix(in srgb, var(--success) 50%, var(--border));
   background: var(--success-muted);

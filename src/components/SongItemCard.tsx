@@ -16,6 +16,7 @@ export interface SongItemCardSong {
 
 interface SongItemCardProps {
   song: SongItemCardSong;
+  variant?: 'list' | 'grid';
   isPlaying: boolean | undefined;
   spotifyConnected: boolean;
   isFavorite: boolean;
@@ -32,6 +33,7 @@ interface SongItemCardProps {
 
 export default function SongItemCard({
   song,
+  variant = 'list',
   isPlaying,
   spotifyConnected,
   isFavorite,
@@ -81,7 +83,7 @@ export default function SongItemCard({
     <div
       ref={cardRef}
       data-song-card-id={song.id}
-      className={`song-item-card group flex items-center gap-3 sm:gap-4 rounded-lg border px-4 sm:px-5 py-3 sm:py-4 cursor-pointer${isPlaying ? ' song-item-card--playing' : ''}`}
+      className={`song-item-card song-item-card--${variant} group flex items-center gap-3 sm:gap-4 rounded-lg border px-4 sm:px-5 py-3 sm:py-4 cursor-pointer${isPlaying ? ' song-item-card--playing' : ''}`}
       style={{ ['--song-card-accent' as string]: accent }}
       onClick={onOpen}
       onPointerEnter={(event) => { updatePointer(event); onPrefetch(); }}
@@ -92,8 +94,8 @@ export default function SongItemCard({
       onPointerLeave={handlePointerCancel}
     >
       <div className="song-item-card__pointer-glow" aria-hidden="true" />
-      <CoverImage src={song.cover_url} alt={song.title} size="sm" className="z-10" viewTransitionName={`song-cover-${song.id}`} />
-      <div className="relative z-10 flex-1 min-w-0">
+      <CoverImage src={song.cover_url} alt={song.title} size={variant === 'grid' ? 'md' : 'sm'} className="song-item-card__cover z-10" viewTransitionName={`song-cover-${song.id}`} />
+      <div className="song-item-card__content relative z-10 flex-1 min-w-0">
         <div className="text-sm font-medium truncate flex items-center gap-2">
           <span className="cover-transition truncate" style={{ ['--vt-name' as string]: `song-title-${song.id}` }}>{song.title}</span>
           {isPlaying && <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--success)] animate-pulse shrink-0" />}
@@ -105,10 +107,10 @@ export default function SongItemCard({
           <div className="text-[10px] text-[var(--muted-foreground)]/60 mt-0.5 truncate">{createdByLabel}: {song.created_by_name}</div>
         )}
       </div>
-      <div className="relative z-10 text-[10px] sm:text-[11px] text-[var(--muted-foreground)] hidden sm:block shrink-0">
+      <div className="song-item-card__date relative z-10 text-[10px] sm:text-[11px] text-[var(--muted-foreground)] hidden sm:block shrink-0">
         {new Date(song.updated_at).toLocaleDateString(locale)}
       </div>
-      <div className="relative z-10 flex items-center gap-0.5 shrink-0">
+      <div className="song-item-card__actions relative z-10 flex items-center gap-0.5 shrink-0">
         {spotifyConnected && (
           <>
             <button onClick={(event) => { event.stopPropagation(); onToggleFavorite(); }} className={`rounded p-1.5 sm:p-2 transition-colors ${isFavorite ? 'text-[var(--warning)]' : 'text-[var(--muted-foreground)] hover:text-[var(--warning)]'}`}>

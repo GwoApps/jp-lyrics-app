@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
-import { Music, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User, Star, FolderPlus, Trash } from 'lucide-react';
+import { Music, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User, Star, FolderPlus, Trash, LayoutGrid, List } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import SongItemCard from '@/components/SongItemCard';
 import Toast from '@/components/Toast';
@@ -55,6 +55,17 @@ function importErrorMsg(t: (k: string) => string, error?: string, fallbackKey?: 
 
 const SONGS_CACHE_KEY = 'jplrc:songs:list';
 const SONGS_CACHE_TTL = 5 * 60 * 1000;
+const SONG_VIEW_MODE_KEY = 'jplrc:songs:view-mode';
+type SongViewMode = 'list' | 'grid';
+
+function getSongViewMode(): SongViewMode {
+  if (typeof localStorage === 'undefined') return 'list';
+  try {
+    return localStorage.getItem(SONG_VIEW_MODE_KEY) === 'grid' ? 'grid' : 'list';
+  } catch {
+    return 'list';
+  }
+}
 
 function getCachedSongs(): SongItem[] | null {
   if (typeof sessionStorage === 'undefined') return null;
@@ -107,6 +118,7 @@ export default function HomePage() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [importAlert, setImportAlert] = useState<ImportAlertState>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [songViewMode, setSongViewMode] = useState<SongViewMode>(getSongViewMode);
   const [mySongsOnly, setMySongsOnly] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [showPlaylistImport, setShowPlaylistImport] = useState(false);
@@ -372,7 +384,14 @@ export default function HomePage() {
     });
 
     previousSongRectsRef.current = currentRects;
-  }, [visibleSongIds]);
+  }, [songViewMode, visibleSongIds]);
+
+  const changeSongViewMode = (mode: SongViewMode) => {
+    setSongViewMode(mode);
+    try {
+      localStorage.setItem(SONG_VIEW_MODE_KEY, mode);
+    } catch {}
+  };
 
   return (
     <div className="fade-in">
@@ -499,6 +518,28 @@ export default function HomePage() {
             </button>
           </div>
         )}
+        <div className="inline-flex rounded-md border border-[var(--border)] bg-[var(--accent)] p-0.5 shrink-0" role="group" aria-label={t('home.viewMode')}>
+          <button
+            type="button"
+            onClick={() => changeSongViewMode('list')}
+            className={`rounded p-1.5 transition-colors ${songViewMode === 'list' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
+            title={t('home.listView')}
+            aria-label={t('home.listView')}
+            aria-pressed={songViewMode === 'list'}
+          >
+            <List className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => changeSongViewMode('grid')}
+            className={`rounded p-1.5 transition-colors ${songViewMode === 'grid' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
+            title={t('home.gridView')}
+            aria-label={t('home.gridView')}
+            aria-pressed={songViewMode === 'grid'}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Collections */}
@@ -635,13 +676,14 @@ export default function HomePage() {
           <p className="text-sm text-[var(--muted-foreground)]">{t('home.noResults')}</p>
         </div>
       ) : (
-        <div ref={songListRef} className="space-y-1.5 sm:space-y-2">
+        <div ref={songListRef} className={songViewMode === 'grid' ? 'song-grid grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4' : 'space-y-1.5 sm:space-y-2'}>
           {filteredSongs.map((song) => {
             const isPlaying = nowPlaying?.is_playing && isSongPlaying(song, nowPlaying.track, currentUser?.email);
             return (
               <SongItemCard
                 key={song.id}
                 song={song}
+                variant={songViewMode}
                 isPlaying={isPlaying}
                 spotifyConnected={!!spotify?.connected}
                 isFavorite={visibleFavorites.has(song.id)}
