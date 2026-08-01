@@ -497,7 +497,7 @@ export default function HomePage() {
             </button>
           </div>
         )}
-        <div className="inline-flex rounded-md border border-[var(--border)] bg-[var(--accent)] p-0.5 shrink-0" role="group" aria-label={t('home.viewMode')}>
+        <div className="inline-flex self-start sm:self-auto rounded-md border border-[var(--border)] bg-[var(--accent)] p-0.5 shrink-0" role="group" aria-label={t('home.viewMode')}>
           <button
             type="button"
             onClick={() => changeSongViewMode('list')}
