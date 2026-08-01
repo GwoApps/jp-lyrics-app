@@ -14,6 +14,7 @@ import { useNowPlaying } from '@/hooks/useNowPlaying';
 import { useAuthSession } from '@/lib/auth-session';
 import { cacheSongCovers } from '@/lib/song-cover-cache';
 import { buildManualCreateUrl } from '@/lib/song-prefill';
+import { getCachedSongs, setCachedSongs } from '@/lib/song-list-cache';
 
 interface SongItem {
   id: string;
@@ -53,8 +54,6 @@ function importErrorMsg(t: (k: string) => string, error?: string, fallbackKey?: 
   return key ? t(key) : t(fallbackKey || 'home.importFailed');
 }
 
-const SONGS_CACHE_KEY = 'jplrc:songs:list';
-const SONGS_CACHE_TTL = 5 * 60 * 1000;
 const SONG_VIEW_MODE_KEY = 'jplrc:songs:view-mode';
 type SongViewMode = 'list' | 'grid';
 
@@ -67,30 +66,10 @@ function getSongViewMode(): SongViewMode {
   }
 }
 
-function getCachedSongs(): SongItem[] | null {
-  if (typeof sessionStorage === 'undefined') return null;
-  try {
-    const raw = sessionStorage.getItem(SONGS_CACHE_KEY);
-    if (!raw) return null;
-    const { data, timestamp } = JSON.parse(raw);
-    if (Date.now() - timestamp > SONGS_CACHE_TTL) return null;
-    return data;
-  } catch {
-    return null;
-  }
-}
-
-function setCachedSongs(data: SongItem[]) {
-  if (typeof sessionStorage === 'undefined') return;
-  try {
-    sessionStorage.setItem(SONGS_CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
-  } catch {}
-}
-
 export default function HomePage() {
   const { t, locale } = useI18n();
   const searchParams = useSearchParams();
-  const [initialSongs] = useState(getCachedSongs);
+  const [initialSongs] = useState(() => getCachedSongs<SongItem>());
   const [songs, setSongs] = useState<SongItem[]>(() => initialSongs ?? []);
   const [loading, setLoading] = useState(() => initialSongs === null);
   const { session, updateSession } = useAuthSession();

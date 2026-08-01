@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
 import Link from 'next/link';
@@ -18,6 +18,7 @@ import { useSpotifySync } from '@/hooks/useSpotifySync';
 import type { CoverColor } from '@/lib/cover-color';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { getCachedSongCover, cacheSongCover } from '@/lib/song-cover-cache';
+import { getCachedSong } from '@/lib/song-list-cache';
 import type { FuriganaLine } from '@/lib/types';
 import { useAuthSession } from '@/lib/auth-session';
 import type { SyncRefs } from '@/hooks/useSpotifySync';
@@ -102,6 +103,7 @@ export default function SongViewPage() {
   const params = useParams();
   const { t } = useI18n();
   const id = params?.id as string;
+  const cachedSong = useMemo(() => getCachedSong(id), [id]);
 
   // Data + handlers hook
   const data = useSongData(id);
@@ -204,8 +206,17 @@ export default function SongViewPage() {
             <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
               <CoverImage src={coverUrl} alt="" size="md" viewTransitionName={`song-cover-${id}`} />
               <div className="space-y-0.5 sm:space-y-1 min-w-0 flex-1 py-0.5">
-                <div className="h-6 w-48 bg-[var(--muted)] rounded animate-pulse cover-transition" style={{ ['--vt-name' as string]: `song-title-${id}` }} />
-                <div className="h-4 w-32 bg-[var(--muted)] rounded animate-pulse cover-transition" style={{ ['--vt-name' as string]: `song-artist-${id}` }} />
+                {cachedSong ? (
+                  <>
+                    <div className="text-lg sm:text-xl font-semibold tracking-tight truncate cover-transition" style={{ ['--vt-name' as string]: `song-title-${id}` }}>{cachedSong.title}</div>
+                    <div className="text-sm text-[var(--muted-foreground)] truncate cover-transition" style={{ ['--vt-name' as string]: `song-artist-${id}` }}>{cachedSong.artist || t('common.unknownArtist')}</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="h-6 w-48 bg-[var(--muted)] rounded animate-pulse cover-transition" style={{ ['--vt-name' as string]: `song-title-${id}` }} />
+                    <div className="h-4 w-32 bg-[var(--muted)] rounded animate-pulse cover-transition" style={{ ['--vt-name' as string]: `song-artist-${id}` }} />
+                  </>
+                )}
               </div>
             </div>
           </div>
