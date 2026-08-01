@@ -208,13 +208,13 @@ export default function SongViewPage() {
               <div className="space-y-0.5 sm:space-y-1 min-w-0 flex-1 py-0.5">
                 {cachedSong ? (
                   <>
-                    <div className="text-lg sm:text-xl font-semibold tracking-tight truncate cover-transition" style={{ ['--vt-name' as string]: `song-title-${id}` }}>{cachedSong.title}</div>
-                    <div className="text-sm text-[var(--muted-foreground)] truncate cover-transition" style={{ ['--vt-name' as string]: `song-artist-${id}` }}>{cachedSong.artist || t('common.unknownArtist')}</div>
+                    <div className="text-lg sm:text-xl font-semibold tracking-tight truncate">{cachedSong.title}</div>
+                    <div className="text-sm text-[var(--muted-foreground)] truncate">{cachedSong.artist || t('common.unknownArtist')}</div>
                   </>
                 ) : (
                   <>
-                    <div className="h-6 w-48 bg-[var(--muted)] rounded animate-pulse cover-transition" style={{ ['--vt-name' as string]: `song-title-${id}` }} />
-                    <div className="h-4 w-32 bg-[var(--muted)] rounded animate-pulse cover-transition" style={{ ['--vt-name' as string]: `song-artist-${id}` }} />
+                    <div className="h-6 w-48 bg-[var(--muted)] rounded animate-pulse" />
+                    <div className="h-4 w-32 bg-[var(--muted)] rounded animate-pulse" />
                   </>
                 )}
               </div>
@@ -355,8 +355,8 @@ export default function SongViewPage() {
           <div className="flex items-start gap-3 sm:gap-4 min-w-0 w-full">
             <CoverImage src={coverUrl} alt={song.title} size="md" viewTransitionName={`song-cover-${id}`} />
             <div className="flex-1 w-fit max-w-full min-w-0 space-y-0.5 sm:space-y-1">
-              <h1 className="text-base sm:text-xl font-semibold tracking-tight break-words cover-transition" style={{ ['--vt-name' as string]: `song-title-${id}` }}>{song.title}</h1>
-              {song.artist && <p className="text-xs sm:text-sm text-[var(--muted-foreground)] cover-transition" style={{ ['--vt-name' as string]: `song-artist-${id}` }}>{song.artist}</p>}
+              <h1 className="text-base sm:text-xl font-semibold tracking-tight break-words">{song.title}</h1>
+              {song.artist && <p className="text-xs sm:text-sm text-[var(--muted-foreground)]">{song.artist}</p>}
               {/* Visibility badge + request public */}
               <div className="flex items-center gap-2 mt-1">
               {song.is_public === 1 ? (
