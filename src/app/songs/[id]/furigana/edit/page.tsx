@@ -14,6 +14,7 @@ import { convertLyricsReading, normalizeReadingScheme } from '@/lib/lyrics-readi
 import type { FuriganaLine, ReadingScheme } from '@/lib/types';
 import { useAuthSession } from '@/lib/auth-session';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
+import { furiganaLinesMatchSource } from '@/lib/furigana-validation';
 
 interface SongData {
   id: string;
@@ -88,8 +89,15 @@ export default function FuriganaEditPage() {
           .catch(() => {});
       }
       const parsed = parseFurigana(data.lyrics_furigana);
-      setOriginal(parsed);
-      setDraft(parsed);
+      // Legacy/generated annotations can become stale after lyrics are edited. Rebuild them before
+      // presenting the editor so a one-word reading correction never submits an invalid full payload.
+      if (furiganaLinesMatchSource(parsed, data.lyrics_raw)) {
+        setOriginal(parsed);
+        setDraft(parsed);
+      } else {
+        setOriginal([]);
+        setDraft([]);
+      }
     } catch {
       showToast('error', t('song.notFound'));
     } finally {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateFuriganaPayload } from './furigana-validation.ts';
+import { furiganaLinesMatchSource, validateFuriganaPayload } from './furigana-validation.ts';
 
 const valid = [
   { segments: [{ text: '香', reading: 'hoeng1' }, { text: '港', reading: 'gong2' }] },
@@ -23,6 +23,12 @@ test('rejects malformed annotation shapes', () => {
 test('rejects annotations that do not reconstruct current source lyrics', () => {
   assert.deepEqual(validateFuriganaPayload(valid, '香港\n\n再見'), { ok: false, error: 'furigana_source_mismatch' });
   assert.deepEqual(validateFuriganaPayload(valid.slice(0, 2), '香港\n\n好呀'), { ok: false, error: 'furigana_source_mismatch' });
+});
+
+test('recognizes stored annotations that still match the current lyrics', () => {
+  assert.equal(furiganaLinesMatchSource(valid, '香港\n\n好呀'), true);
+  assert.equal(furiganaLinesMatchSource(valid, '香港\n\n再見'), false);
+  assert.equal(furiganaLinesMatchSource([{ segments: [{ text: '香港', reading: 1 }] }], '香港'), false);
 });
 
 test('rejects oversized readings', () => {

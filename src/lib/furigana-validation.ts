@@ -10,6 +10,26 @@ const MAX_TEXT_LENGTH = 4_096;
 const MAX_READING_LENGTH = 256;
 const MAX_TOTAL_CHARACTERS = 1_000_000;
 
+/** Checks whether stored annotations still reconstruct the current lyric source. */
+export function furiganaLinesMatchSource(value: unknown, sourceLyrics: string): value is FuriganaLine[] {
+  if (!Array.isArray(value)) return false;
+  const sourceLines = sourceLyrics.split('\n');
+  return value.length === sourceLines.length && value.every((line, index) => (
+    line
+    && typeof line === 'object'
+    && !Array.isArray(line)
+    && Array.isArray((line as { segments?: unknown }).segments)
+    && (line as { segments: unknown[] }).segments.every((segment) => (
+      segment
+      && typeof segment === 'object'
+      && !Array.isArray(segment)
+      && typeof (segment as { text?: unknown }).text === 'string'
+      && typeof (segment as { reading?: unknown }).reading === 'string'
+    ))
+    && ((line as { segments: { text: string }[] }).segments.map((segment) => segment.text).join('') === sourceLines[index])
+  ));
+}
+
 export function validateFuriganaPayload(value: unknown, sourceLyrics: string): ValidationResult {
   if (!Array.isArray(value) || value.length > MAX_LINES) {
     return { ok: false, error: 'invalid_furigana' };
