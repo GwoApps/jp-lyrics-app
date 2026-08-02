@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
-import { Music, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User, Star, FolderPlus, Trash, LayoutGrid, List } from 'lucide-react';
+import { Music, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User, Star, FolderPlus, Trash, LayoutGrid, List, Disc3 } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import SongItemCard from '@/components/SongItemCard';
 import NowPlayingMetadata from '@/components/NowPlayingMetadata';
@@ -16,6 +16,7 @@ import { useAuthSession } from '@/lib/auth-session';
 import { cacheSongCovers } from '@/lib/song-cover-cache';
 import { buildManualCreateUrl } from '@/lib/song-prefill';
 import { getCachedSongs, setCachedSongs } from '@/lib/song-list-cache';
+import { groupSongsByAlbum } from '@/lib/song-albums';
 
 interface SongItem {
   id: string;
@@ -23,6 +24,7 @@ interface SongItem {
   artist: string;
   cover_url?: string | null;
   spotify_track_id?: string | null;
+  spotify_album?: string | null;
   created_by: string;
   created_by_name: string;
   is_public: number;
@@ -56,12 +58,13 @@ function importErrorMsg(t: (k: string) => string, error?: string, fallbackKey?: 
 }
 
 const SONG_VIEW_MODE_KEY = 'jplrc:songs:view-mode';
-type SongViewMode = 'list' | 'grid';
+type SongViewMode = 'list' | 'grid' | 'album';
 
 function getSongViewMode(): SongViewMode {
   if (typeof localStorage === 'undefined') return 'list';
   try {
-    return localStorage.getItem(SONG_VIEW_MODE_KEY) === 'grid' ? 'grid' : 'list';
+    const stored = localStorage.getItem(SONG_VIEW_MODE_KEY);
+    return stored === 'grid' || stored === 'album' ? stored : 'list';
   } catch {
     return 'list';
   }
@@ -324,6 +327,7 @@ export default function HomePage() {
     }
     return true;
   });
+  const albumGroups = songViewMode === 'album' ? groupSongsByAlbum(filteredSongs) : [];
   const visibleSongIds = filteredSongs.map((song) => song.id).join(',');
   const songListRef = useRef<HTMLDivElement>(null);
   const previousSongRectsRef = useRef<Map<string, DOMRect>>(new Map());
@@ -372,6 +376,33 @@ export default function HomePage() {
     try {
       localStorage.setItem(SONG_VIEW_MODE_KEY, mode);
     } catch {}
+  };
+
+  const renderSongCard = (song: SongItem, variant: 'list' | 'grid') => {
+    const isPlaying = nowPlaying?.is_playing && isSongPlaying(song, nowPlaying.track, currentUser?.email);
+    return (
+      <SongItemCard
+        key={song.id}
+        song={song}
+        variant={variant}
+        isPlaying={isPlaying}
+        spotifyConnected={!!spotify?.connected}
+        isFavorite={visibleFavorites.has(song.id)}
+        locale={localeToBCP47(locale)}
+        unknownArtistLabel={t('common.unknownArtist')}
+        createdByLabel={t('home.createdBy')}
+        shareLabel={t('song.share')}
+        onOpen={() => transitionRouter.push(`/songs/${song.id}`)}
+        onPrefetch={() => {
+          if ('connection' in navigator && (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData !== true) {
+            fetch(`/api/songs/${song.id}`).catch(() => {});
+          }
+        }}
+        onToggleFavorite={() => handleToggleFavorite(song.id)}
+        onShare={() => router.push(`/songs/${song.id}/share`)}
+        onDelete={() => handleDelete(song.id, song.title)}
+      />
+    );
   };
 
   return (
@@ -481,6 +512,7 @@ export default function HomePage() {
           <div className="ml-auto inline-flex shrink-0 rounded-md border border-[var(--border)] bg-[var(--accent)] p-0.5" role="group" aria-label={t('home.viewMode')}>
             <button type="button" onClick={() => changeSongViewMode('list')} className={`rounded p-1.5 transition-colors ${songViewMode === 'list' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`} title={t('home.listView')} aria-label={t('home.listView')} aria-pressed={songViewMode === 'list'}><List className="h-3.5 w-3.5" /></button>
             <button type="button" onClick={() => changeSongViewMode('grid')} className={`rounded p-1.5 transition-colors ${songViewMode === 'grid' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`} title={t('home.gridView')} aria-label={t('home.gridView')} aria-pressed={songViewMode === 'grid'}><LayoutGrid className="h-3.5 w-3.5" /></button>
+            <button type="button" onClick={() => changeSongViewMode('album')} className={`rounded p-1.5 transition-colors ${songViewMode === 'album' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`} title={t('home.albumView')} aria-label={t('home.albumView')} aria-pressed={songViewMode === 'album'}><Disc3 className="h-3.5 w-3.5" /></button>
           </div>
         </div>
         {mobileSearchOpen && (
@@ -524,6 +556,16 @@ export default function HomePage() {
             aria-pressed={songViewMode === 'grid'}
           >
             <LayoutGrid className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => changeSongViewMode('album')}
+            className={`rounded p-1.5 transition-colors ${songViewMode === 'album' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
+            title={t('home.albumView')}
+            aria-label={t('home.albumView')}
+            aria-pressed={songViewMode === 'album'}
+          >
+            <Disc3 className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
@@ -660,32 +702,25 @@ export default function HomePage() {
         </div>
       ) : (
         <div ref={songListRef} className={songViewMode === 'grid' ? 'song-grid grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4' : 'space-y-1.5 sm:space-y-2'}>
-          {filteredSongs.map((song) => {
-            const isPlaying = nowPlaying?.is_playing && isSongPlaying(song, nowPlaying.track, currentUser?.email);
+          {songViewMode === 'album' ? albumGroups.map((group) => {
+            const coverUrl = group.songs.find((song) => song.cover_url)?.cover_url;
             return (
-              <SongItemCard
-                key={song.id}
-                song={song}
-                variant={songViewMode}
-                isPlaying={isPlaying}
-                spotifyConnected={!!spotify?.connected}
-                isFavorite={visibleFavorites.has(song.id)}
-                locale={localeToBCP47(locale)}
-                unknownArtistLabel={t('common.unknownArtist')}
-                createdByLabel={t('home.createdBy')}
-                shareLabel={t('song.share')}
-                onOpen={() => transitionRouter.push(`/songs/${song.id}`)}
-                onPrefetch={() => {
-                  if ('connection' in navigator && (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData !== true) {
-                    fetch(`/api/songs/${song.id}`).catch(() => {});
-                  }
-                }}
-                onToggleFavorite={() => handleToggleFavorite(song.id)}
-                onShare={() => router.push(`/songs/${song.id}/share`)}
-                onDelete={() => handleDelete(song.id, song.title)}
-              />
+              <section key={group.key} className="album-group rounded-lg border border-[var(--border)] bg-[var(--card)]/40 p-2.5 sm:p-3">
+                <header className="mb-2.5 flex min-w-0 items-center gap-2.5 px-1">
+                  {coverUrl ? (
+                    <img src={coverUrl} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover bg-[var(--muted)]" loading="lazy" />
+                  ) : (
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[var(--accent)] text-[var(--muted-foreground)]"><Disc3 className="h-4 w-4" /></div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <h2 className="truncate text-sm font-semibold tracking-tight">{group.album ?? t('home.unclassifiedAlbum')}</h2>
+                    <p className="truncate text-xs text-[var(--muted-foreground)]">{group.artist ? `${group.artist} · ${t('home.albumTrackCount', { count: group.songs.length })}` : t('home.albumTrackCount', { count: group.songs.length })}</p>
+                  </div>
+                </header>
+                <div className="space-y-1.5">{group.songs.map((song) => renderSongCard(song, 'list'))}</div>
+              </section>
             );
-          })}
+          }) : filteredSongs.map((song) => renderSongCard(song, songViewMode))}
         </div>
       )}
 

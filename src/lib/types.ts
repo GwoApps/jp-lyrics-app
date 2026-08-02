@@ -47,6 +47,7 @@ export interface SongListItem {
   public_requested: number;
   cover_url?: string | null;
   spotify_track_id?: string | null;
+  spotify_album?: string | null;
   created_at: string;
   updated_at: string;
 }
