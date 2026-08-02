@@ -197,6 +197,20 @@ textarea {
   padding-bottom: 1.25rem;
 }
 .now-playing-reveal { min-height: 0; overflow: hidden; }
+.now-playing-metadata {
+  flex: 1;
+  min-width: 0;
+}
+.now-playing-metadata--out { animation: nowPlayingMetadataOut 140ms ease-in forwards; }
+.now-playing-metadata--in { animation: nowPlayingMetadataIn 180ms ease-out both; }
+@keyframes nowPlayingMetadataOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes nowPlayingMetadataIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 .now-playing-card {
   opacity: 0;
   transform: translateY(-8px) scale(0.985);
@@ -290,8 +304,8 @@ textarea {
   .now-playing-slot--visible { padding-bottom: 1.5rem; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .now-playing-slot, .now-playing-card, .now-playing-card::before, .now-playing-card::after { transition: none; }
-  .now-playing-card, .now-playing-card::before, .now-playing-card::after { animation: none !important; }
+  .now-playing-slot, .now-playing-card, .now-playing-metadata, .now-playing-card::before, .now-playing-card::after { transition: none; }
+  .now-playing-card, .now-playing-metadata, .now-playing-card::before, .now-playing-card::after { animation: none !important; }
   .now-playing-card:hover::before,
   .now-playing-card[data-touching="true"]::before { opacity: 0.42; }
   .now-playing-card:hover::after,

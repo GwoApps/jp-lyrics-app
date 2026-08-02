@@ -6,6 +6,7 @@ import { useTransitionRouter } from 'next-view-transitions';
 import { Music, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User, Star, FolderPlus, Trash, LayoutGrid, List } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import SongItemCard from '@/components/SongItemCard';
+import NowPlayingMetadata from '@/components/NowPlayingMetadata';
 import Toast from '@/components/Toast';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useI18n } from '@/lib/i18n';
@@ -615,10 +616,7 @@ export default function HomePage() {
                 <Music className="h-5 w-5 text-[var(--success)]" />
                 <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-[var(--success)] animate-pulse" />
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate">{nowPlaying.track.name}</div>
-                <div className="text-xs text-[var(--muted-foreground)] truncate">{nowPlaying.track.artist}</div>
-              </div>
+              <NowPlayingMetadata track={nowPlaying.track} />
               {matchedSong ? (
                 <button
                   onClick={() => router.push(`/songs/${matchedSong.id}`)}
