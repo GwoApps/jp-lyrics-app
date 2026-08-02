@@ -278,7 +278,19 @@
     "cantoneseDetected": "Cantonese wording detected — Jyutping is recommended",
     "jyutpingHint": "Tone-numbered Jyutping annotations will be generated automatically after saving",
     "cantoneseLyricsPlaceholder": "e.g.\n今日我哋一齊去行街\n你有冇時間呀...",
-    "cantoneseLrcPlaceholder": "e.g.\n[00:05.58] 今日我哋一齊去行街\n[00:10.23] 你有冇時間呀..."
+    "cantoneseLrcPlaceholder": "e.g.\n[00:05.58] 今日我哋一齊去行街\n[00:10.23] 你有冇時間呀...",
+    "linkcoreImport": "Import lyrics from Linkcore",
+    "linkcoreUrlPlaceholder": "Paste a linkco.re lyrics page URL",
+    "linkcoreImportButton": "Import lyrics",
+    "linkcoreImporting": "Importing...",
+    "linkcoreHint": "Only linkco.re song lyrics pages are supported. Imported text will fill the field below.",
+    "linkcoreUrlRequired": "Enter a Linkcore lyrics page URL",
+    "linkcoreImported": "Linkcore lyrics imported",
+    "invalid_linkcore_url": "Enter a valid Linkcore lyrics page URL",
+    "linkcore_fetch_failed": "Could not fetch the Linkcore lyrics page. Try again later.",
+    "linkcore_invalid_content_type": "This Linkcore link is not a lyrics page",
+    "lyrics_not_found": "No importable lyrics were found on this Linkcore page",
+    "linkcoreImportFailed": "Could not import Linkcore lyrics"
   },
   "furigana": {
     "title": "Correct Annotations",

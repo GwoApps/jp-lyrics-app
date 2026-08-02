@@ -278,7 +278,19 @@
     "cantoneseDetected": "检测到粤语用词，建议使用粤拼注音",
     "jyutpingHint": "保存后会自动生成带声调数字的粤拼注音",
     "cantoneseLyricsPlaceholder": "例如：\n今日我哋一齊去行街\n你有冇時間呀...",
-    "cantoneseLrcPlaceholder": "例如：\n[00:05.58] 今日我哋一齊去行街\n[00:10.23] 你有冇時間呀..."
+    "cantoneseLrcPlaceholder": "例如：\n[00:05.58] 今日我哋一齊去行街\n[00:10.23] 你有冇時間呀...",
+    "linkcoreImport": "从 Linkcore 导入歌词",
+    "linkcoreUrlPlaceholder": "粘贴 linkco.re 歌词页面链接",
+    "linkcoreImportButton": "导入歌词",
+    "linkcoreImporting": "导入中...",
+    "linkcoreHint": "仅支持 linkco.re 的歌曲歌词页面；导入内容会填入下方文本框。",
+    "linkcoreUrlRequired": "请输入 Linkcore 歌词页面链接",
+    "linkcoreImported": "已导入 Linkcore 歌词",
+    "invalid_linkcore_url": "请输入有效的 Linkcore 歌词页面链接",
+    "linkcore_fetch_failed": "无法获取 Linkcore 歌词页面，请稍后重试",
+    "linkcore_invalid_content_type": "该 Linkcore 链接不是歌词页面",
+    "lyrics_not_found": "该 Linkcore 页面没有可导入的歌词",
+    "linkcoreImportFailed": "导入 Linkcore 歌词失败"
   },
   "furigana": {
     "title": "纠正注音",

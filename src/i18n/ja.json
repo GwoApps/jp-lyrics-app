@@ -278,7 +278,19 @@
     "cantoneseDetected": "広東語表現を検出しました。粤拼注音を推奨します",
     "jyutpingHint": "保存後、声調番号付きの粤拼注音を自動生成します",
     "cantoneseLyricsPlaceholder": "例：\n今日我哋一齊去行街\n你有冇時間呀...",
-    "cantoneseLrcPlaceholder": "例：\n[00:05.58] 今日我哋一齊去行街\n[00:10.23] 你有冇時間呀..."
+    "cantoneseLrcPlaceholder": "例：\n[00:05.58] 今日我哋一齊去行街\n[00:10.23] 你有冇時間呀...",
+    "linkcoreImport": "Linkcoreから歌詞を取り込む",
+    "linkcoreUrlPlaceholder": "linkco.reの歌詞ページURLを貼り付け",
+    "linkcoreImportButton": "歌詞を取り込む",
+    "linkcoreImporting": "取り込み中...",
+    "linkcoreHint": "linkco.reの曲の歌詞ページのみ対応しています。取り込んだ内容は下の入力欄に入ります。",
+    "linkcoreUrlRequired": "Linkcoreの歌詞ページURLを入力してください",
+    "linkcoreImported": "Linkcoreの歌詞を取り込みました",
+    "invalid_linkcore_url": "有効なLinkcoreの歌詞ページURLを入力してください",
+    "linkcore_fetch_failed": "Linkcoreの歌詞ページを取得できません。しばらくしてから再試行してください",
+    "linkcore_invalid_content_type": "このLinkcore URLは歌詞ページではありません",
+    "lyrics_not_found": "このLinkcoreページに取り込める歌詞がありません",
+    "linkcoreImportFailed": "Linkcoreの歌詞の取り込みに失敗しました"
   },
   "furigana": {
     "title": "注音を修正",

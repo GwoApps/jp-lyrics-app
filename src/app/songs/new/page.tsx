@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Upload } from 'lucide-react';
+import { LinkIcon, Upload } from 'lucide-react';
 import Toast from '@/components/Toast';
 import { useI18n } from '@/lib/i18n';
 import type { ReadingScheme } from '@/lib/types';
@@ -24,6 +24,8 @@ export default function NewSongPage() {
   const [readingScheme, setReadingScheme] = useState<ReadingScheme>('ja-kana');
   const [readingSchemeConfirmed, setReadingSchemeConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [linkcoreUrl, setLinkcoreUrl] = useState('');
+  const [importingLinkcore, setImportingLinkcore] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -43,6 +45,34 @@ export default function NewSongPage() {
     reader.readAsText(file);
     // reset so same file can be re-selected
     e.target.value = '';
+  };
+
+  const handleLinkcoreImport = async () => {
+    if (!linkcoreUrl.trim()) {
+      showToast('error', t('new.linkcoreUrlRequired'));
+      return;
+    }
+    setImportingLinkcore(true);
+    try {
+      const response = await fetch('/api/lyrics/linkcore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: linkcoreUrl.trim() }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const key = typeof data.error === 'string' ? `new.${data.error}` : 'new.linkcoreImportFailed';
+        showToast('error', t(key));
+        return;
+      }
+      setLyrics(data.lyrics);
+      setLyricsMode('text');
+      showToast('success', t('new.linkcoreImported'));
+    } catch {
+      showToast('error', t('new.linkcoreImportFailed'));
+    } finally {
+      setImportingLinkcore(false);
+    }
   };
 
   const handleSave = async () => {
@@ -205,6 +235,40 @@ export default function NewSongPage() {
                 <span>{t('new.uploadFile')}</span>
               </button>
             </div>
+          </div>
+
+          <div className="mb-3 rounded-md border border-[var(--border)] bg-[var(--accent)]/45 p-2.5 sm:p-3">
+            <label htmlFor="linkcore-url" className="mb-2 block text-xs font-medium text-[var(--muted-foreground)]">
+              {t('new.linkcoreImport')}
+            </label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="relative min-w-0 flex-1">
+                <LinkIcon className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--muted-foreground)]" />
+                <input
+                  id="linkcore-url"
+                  type="url"
+                  value={linkcoreUrl}
+                  onChange={(event) => setLinkcoreUrl(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      void handleLinkcoreImport();
+                    }
+                  }}
+                  placeholder={t('new.linkcoreUrlPlaceholder')}
+                  className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] py-2 pl-8 pr-3 text-xs outline-none transition-colors placeholder:text-[var(--muted-foreground)]/50 focus:border-[var(--primary)]"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleLinkcoreImport()}
+                disabled={importingLinkcore}
+                className="shrink-0 rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-xs font-medium text-[var(--foreground)] transition-colors hover:border-[var(--primary)]/50 hover:text-[var(--primary)] disabled:opacity-50"
+              >
+                {importingLinkcore ? t('new.linkcoreImporting') : t('new.linkcoreImportButton')}
+              </button>
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-[var(--muted-foreground)]">{t('new.linkcoreHint')}</p>
           </div>
 
           <textarea
