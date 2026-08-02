@@ -97,6 +97,7 @@ export default function HomePage() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [importAlert, setImportAlert] = useState<ImportAlertState>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [songViewMode, setSongViewMode] = useState<SongViewMode>(getSongViewMode);
   const [mySongsOnly, setMySongsOnly] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -454,50 +455,55 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Search & Filter */}
-      <div className="mb-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+      {/* Search & Filter: mobile keeps controls on one compact row and expands search on demand. */}
+      <div className="mb-4 sm:hidden">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setMobileSearchOpen((open) => !open)}
+            className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors ${mobileSearchOpen ? 'bg-[var(--primary)] text-[var(--primary-foreground)]' : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
+            aria-label={t('home.search')}
+            aria-expanded={mobileSearchOpen}
+          >
+            <Search className="h-3.5 w-3.5" />
+          </button>
+          {currentUser && (
+            <div className="flex min-w-0 flex-1 gap-2">
+              <button onClick={() => setFavoritesOnly(!favoritesOnly)} className={`inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium transition-colors ${favoritesOnly ? 'bg-[var(--warning)]/20 text-[var(--warning)]' : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}>
+                <Star className={`h-3.5 w-3.5 shrink-0 ${favoritesOnly ? 'fill-current' : ''}`} /><span className="truncate">{t('home.favorites')}</span>
+              </button>
+              <button onClick={() => setMySongsOnly(!mySongsOnly)} className={`inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium transition-colors ${mySongsOnly ? 'bg-[var(--primary)] text-[var(--primary-foreground)]' : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}>
+                <User className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{t('home.mine')}</span>
+              </button>
+            </div>
+          )}
+          <div className="ml-auto inline-flex shrink-0 rounded-md border border-[var(--border)] bg-[var(--accent)] p-0.5" role="group" aria-label={t('home.viewMode')}>
+            <button type="button" onClick={() => changeSongViewMode('list')} className={`rounded p-1.5 transition-colors ${songViewMode === 'list' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`} title={t('home.listView')} aria-label={t('home.listView')} aria-pressed={songViewMode === 'list'}><List className="h-3.5 w-3.5" /></button>
+            <button type="button" onClick={() => changeSongViewMode('grid')} className={`rounded p-1.5 transition-colors ${songViewMode === 'grid' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`} title={t('home.gridView')} aria-label={t('home.gridView')} aria-pressed={songViewMode === 'grid'}><LayoutGrid className="h-3.5 w-3.5" /></button>
+          </div>
+        </div>
+        {mobileSearchOpen && (
+          <div className="home-search-shell relative mt-2">
+            <Search className="home-search-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--muted-foreground)]" />
+            <input type="search" autoFocus value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={t('home.search')} className="home-search-field w-full rounded-md border border-[var(--border)] bg-[var(--input)] pl-9 pr-8 py-2 text-xs outline-none placeholder:text-[var(--muted-foreground)]/50" />
+            {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label={t('common.clear')}><X className="h-3.5 w-3.5" /></button>}
+          </div>
+        )}
+      </div>
+
+      <div className="mb-4 hidden sm:flex sm:items-center gap-2">
         <div className="home-search-shell relative flex-1">
           <Search className="home-search-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--muted-foreground)]" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t('home.search')}
-            className="home-search-field w-full rounded-md border border-[var(--border)] bg-[var(--input)] pl-9 pr-8 py-2 text-xs outline-none placeholder:text-[var(--muted-foreground)]/50"
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
+          <input type="search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={t('home.search')} className="home-search-field w-full rounded-md border border-[var(--border)] bg-[var(--input)] pl-9 pr-8 py-2 text-xs outline-none placeholder:text-[var(--muted-foreground)]/50" />
+          {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label={t('common.clear')}><X className="h-3.5 w-3.5" /></button>}
         </div>
         {currentUser && (
           <div className="flex gap-2">
-            <button
-              onClick={() => setFavoritesOnly(!favoritesOnly)}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors shrink-0 ${
-                favoritesOnly
-                  ? 'bg-[var(--warning)]/20 text-[var(--warning)]'
-                  : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
-              }`}
-            >
-              <Star className={`h-3.5 w-3.5 ${favoritesOnly ? 'fill-current' : ''}`} />
-              <span>{t('home.favorites')}</span>
-            </button>
-            <button
-              onClick={() => setMySongsOnly(!mySongsOnly)}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors shrink-0 ${
-                mySongsOnly
-                  ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
-                  : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
-              }`}
-            >
-              <User className="h-3.5 w-3.5" />
-              <span>{t('home.mine')}</span>
-            </button>
+            <button onClick={() => setFavoritesOnly(!favoritesOnly)} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors shrink-0 ${favoritesOnly ? 'bg-[var(--warning)]/20 text-[var(--warning)]' : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}><Star className={`h-3.5 w-3.5 ${favoritesOnly ? 'fill-current' : ''}`} /><span>{t('home.favorites')}</span></button>
+            <button onClick={() => setMySongsOnly(!mySongsOnly)} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors shrink-0 ${mySongsOnly ? 'bg-[var(--primary)] text-[var(--primary-foreground)]' : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}><User className="h-3.5 w-3.5" /><span>{t('home.mine')}</span></button>
           </div>
         )}
-        <div className="inline-flex self-start sm:self-auto rounded-md border border-[var(--border)] bg-[var(--accent)] p-0.5 shrink-0" role="group" aria-label={t('home.viewMode')}>
+        <div className="inline-flex shrink-0 rounded-md border border-[var(--border)] bg-[var(--accent)] p-0.5" role="group" aria-label={t('home.viewMode')}>
           <button
             type="button"
             onClick={() => changeSongViewMode('list')}
