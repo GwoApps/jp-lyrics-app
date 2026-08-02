@@ -18,7 +18,7 @@ function Nav() {
   const isAdmin = session?.user?.isAdmin === true;
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-[var(--border)] bg-[var(--background)]/80 backdrop-blur-sm">
+    <nav className="app-topbar sticky top-0 z-50 border-b border-[var(--border)] bg-[var(--background)]/80 backdrop-blur-sm">
       <div className="mx-auto flex h-11 max-w-[860px] items-center px-4 sm:px-6">
         <Link href="/" className="whitespace-nowrap text-sm font-bold tracking-tight text-[var(--primary)]">
           {t('common.appName')}

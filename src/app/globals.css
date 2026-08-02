@@ -63,6 +63,10 @@ body {
   line-height: 1.6;
   transition: background-color 240ms ease;
 }
+/* Match the document background transition so the sticky top bar does not jump ahead of page content. */
+.app-topbar {
+  transition: background-color 240ms ease, border-color 240ms ease;
+}
 /* Applied only while a song detail has a successfully extracted cover color. */
 body.song-page-themed {
   background: color-mix(in srgb, var(--background) 96%, var(--song-page-accent));
@@ -171,6 +175,7 @@ textarea {
 @media (prefers-reduced-motion: reduce) {
   .theme-toggle-button,
   .theme-toggle-icon,
+  .app-topbar,
   .home-search-field,
   .home-search-icon {
     animation: none !important;
