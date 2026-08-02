@@ -101,6 +101,46 @@ export function decodeBase64Utf8(encoded: string): string {
   return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
 }
 
+interface PetitLyricsCandidate {
+  type: number;
+  data: string;
+  title: string;
+  artist: string;
+}
+
+const PETITLYRICS_SYNC_CANDIDATE_LIMIT = 4;
+
+function normalizePetitLyricsMetadata(value: string): string {
+  return value.normalize('NFKC').toLocaleLowerCase('ja-JP').replace(/[\s\p{P}\p{S}]+/gu, '');
+}
+
+function isPetitLyricsMatch(candidate: PetitLyricsCandidate, title: string, artist: string): boolean {
+  const candidateTitle = normalizePetitLyricsMetadata(candidate.title);
+  const requestedTitle = normalizePetitLyricsMetadata(title);
+  const candidateArtist = normalizePetitLyricsMetadata(candidate.artist);
+  const requestedArtist = normalizePetitLyricsMetadata(artist);
+  return candidateTitle === requestedTitle
+    && (!requestedArtist || candidateArtist === requestedArtist || candidateArtist.includes(requestedArtist) || requestedArtist.includes(candidateArtist));
+}
+
+export function parsePetitLyricsResponse(xml: string, requestedType: number): PetitLyricsCandidate | null {
+  const dataMatch = xml.match(/<lyricsData>([\s\S]*?)<\/lyricsData>/);
+  if (!dataMatch?.[1]) return null;
+  const typeMatch = xml.match(/<lyricsType>(\d+)<\/lyricsType>/);
+  const titleMatch = xml.match(/<title>([\s\S]*?)<\/title>/);
+  const artistMatch = xml.match(/<artist>([\s\S]*?)<\/artist>/);
+  try {
+    return {
+      type: typeMatch ? parseInt(typeMatch[1], 10) : requestedType,
+      data: decodeBase64Utf8(dataMatch[1]),
+      title: unescapeLyrics(titleMatch?.[1] ?? ''),
+      artist: unescapeLyrics(artistMatch?.[1] ?? ''),
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function fetchFromPetitLyrics(title: string, artist: string): Promise<LyricsResult | null> {
   const url = 'https://p0.petitlyrics.com/api/GetPetitLyricsData.php';
   const headers = {
@@ -108,7 +148,7 @@ async function fetchFromPetitLyrics(title: string, artist: string): Promise<Lyri
     'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 14; Pixel 8 Build/AP1A.240305.019.A1)',
   };
 
-  async function fetchType(lyricsType: number): Promise<{ type: number; data: string } | null> {
+  async function fetchType(lyricsType: number, index: number): Promise<PetitLyricsCandidate | null> {
     const body = new URLSearchParams({
       clientAppId: 'p1110417',
       lyricsType: String(lyricsType),
@@ -117,37 +157,35 @@ async function fetchFromPetitLyrics(title: string, artist: string): Promise<Lyri
       key_title: title,
       key_album: '',
       maxcount: '1',
-      index: '0',
+      index: String(index),
       logFlag: '0',
     });
     try {
-      const res = await fetchWithTimeout(url, { method: 'POST', headers, body });
+      const res = await fetchWithTimeout(url, { method: 'POST', headers, body }, 8_000);
       if (!res.ok) return null;
-      const xml = await res.text();
-      const dataMatch = xml.match(/<lyricsData>([\s\S]*?)<\/lyricsData>/);
-      const typeMatch = xml.match(/<lyricsType>(\d+)<\/lyricsType>/);
-      if (!dataMatch?.[1]) return null;
-      const decoded = decodeBase64Utf8(dataMatch[1]);
-      return { type: typeMatch ? parseInt(typeMatch[1]) : lyricsType, data: decoded };
+      return parsePetitLyricsResponse(await res.text(), lyricsType);
     } catch { return null; }
   }
 
-  const synced = await fetchType(3);
-  if (synced) {
-    if (synced.type === 3) {
-      const lrc = xmlToLrc(synced.data);
-      if (lrc) return { synced: lrc, plain: stripTimestamps(lrc) };
-    } else if (synced.type === 1) {
-      return { synced: '', plain: synced.data.trim() };
-    }
+  // The API only returns one result per request, even when maxcount is higher. Search a small
+  // set of indexed WYSIWYG candidates first, otherwise a plain-text first result drops timing.
+  for (let index = 0; index < PETITLYRICS_SYNC_CANDIDATE_LIMIT; index += 1) {
+    const synced = await fetchType(3, index);
+    if (!synced) break;
+    if (synced.type !== 3 || !isPetitLyricsMatch(synced, title, artist)) continue;
+    const lrc = petitLyricsXmlToLrc(synced.data);
+    if (lrc) return { synced: lrc, plain: stripTimestamps(lrc) };
   }
 
-  const plain = await fetchType(1);
-  if (plain?.data?.trim()) return { synced: '', plain: plain.data.trim() };
+  // Keep PetitLyrics as a useful plain-text fallback only after all checked sync candidates fail.
+  const plain = await fetchType(1, 0);
+  if (plain?.data?.trim() && isPetitLyricsMatch(plain, title, artist)) {
+    return { synced: '', plain: plain.data.trim() };
+  }
   return null;
 }
 
-function xmlToLrc(xml: string): string | null {
+export function petitLyricsXmlToLrc(xml: string): string | null {
   const lines: string[] = [];
   const lineMatches = xml.matchAll(/<line>([\s\S]*?)<\/line>/g);
   for (const m of lineMatches) {
