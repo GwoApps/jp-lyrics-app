@@ -378,13 +378,14 @@ export default function HomePage() {
     } catch {}
   };
 
-  const renderSongCard = (song: SongItem, variant: 'list' | 'grid') => {
+  const renderSongCard = (song: SongItem, variant: 'list' | 'grid', hideCover = false) => {
     const isPlaying = nowPlaying?.is_playing && isSongPlaying(song, nowPlaying.track, currentUser?.email);
     return (
       <SongItemCard
         key={song.id}
         song={song}
         variant={variant}
+        hideCover={hideCover}
         isPlaying={isPlaying}
         spotifyConnected={!!spotify?.connected}
         isFavorite={visibleFavorites.has(song.id)}
@@ -717,7 +718,7 @@ export default function HomePage() {
                     <p className="truncate text-xs text-[var(--muted-foreground)]">{group.artist ? `${group.artist} · ${t('home.albumTrackCount', { count: group.songs.length })}` : t('home.albumTrackCount', { count: group.songs.length })}</p>
                   </div>
                 </header>
-                <div className="space-y-1.5">{group.songs.map((song) => renderSongCard(song, 'list'))}</div>
+                <div className="space-y-1.5">{group.songs.map((song) => renderSongCard(song, 'list', true))}</div>
               </section>
             );
           }) : filteredSongs.map((song) => renderSongCard(song, songViewMode))}

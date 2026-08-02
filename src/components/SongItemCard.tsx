@@ -17,6 +17,7 @@ export interface SongItemCardSong {
 interface SongItemCardProps {
   song: SongItemCardSong;
   variant?: 'list' | 'grid';
+  hideCover?: boolean;
   isPlaying: boolean | undefined;
   spotifyConnected: boolean;
   isFavorite: boolean;
@@ -34,6 +35,7 @@ interface SongItemCardProps {
 export default function SongItemCard({
   song,
   variant = 'list',
+  hideCover = false,
   isPlaying,
   spotifyConnected,
   isFavorite,
@@ -94,7 +96,7 @@ export default function SongItemCard({
       onPointerLeave={handlePointerCancel}
     >
       <div className="song-item-card__pointer-glow" aria-hidden="true" />
-      <CoverImage src={song.cover_url} alt={song.title} size={variant === 'grid' ? 'md' : 'sm'} className="song-item-card__cover z-10" viewTransitionName={`song-cover-${song.id}`} />
+      {!hideCover && <CoverImage src={song.cover_url} alt={song.title} size={variant === 'grid' ? 'md' : 'sm'} className="song-item-card__cover z-10" viewTransitionName={`song-cover-${song.id}`} />}
       <div className="song-item-card__content relative z-10 flex-1 min-w-0">
         <div className="text-sm font-medium truncate flex items-center gap-2">
           <span className="truncate">{song.title}</span>
