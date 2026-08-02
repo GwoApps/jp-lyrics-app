@@ -94,16 +94,19 @@ export async function searchLrclib(query: string): Promise<LyricsResult | null> 
 
 // ─── PetitLyrics ──
 
+export function decodeBase64Bytes(encoded: string): Uint8Array {
+  const binary = atob(encoded.trim());
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
 /** PetitLyrics wraps UTF-8 lyric bytes in Base64; atob alone only returns a binary string. */
 export function decodeBase64Utf8(encoded: string): string {
-  const binary = atob(encoded.trim());
-  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-  return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  return new TextDecoder('utf-8', { fatal: true }).decode(decodeBase64Bytes(encoded));
 }
 
 interface PetitLyricsCandidate {
   type: number;
-  data: string;
+  data: string | Uint8Array;
   title: string;
   artist: string;
 }
@@ -127,18 +130,54 @@ export function parsePetitLyricsResponse(xml: string, requestedType: number): Pe
   const dataMatch = xml.match(/<lyricsData>([\s\S]*?)<\/lyricsData>/);
   if (!dataMatch?.[1]) return null;
   const typeMatch = xml.match(/<lyricsType>(\d+)<\/lyricsType>/);
+  const lyricsType = typeMatch ? parseInt(typeMatch[1], 10) : requestedType;
   const titleMatch = xml.match(/<title>([\s\S]*?)<\/title>/);
   const artistMatch = xml.match(/<artist>([\s\S]*?)<\/artist>/);
   try {
     return {
-      type: typeMatch ? parseInt(typeMatch[1], 10) : requestedType,
-      data: decodeBase64Utf8(dataMatch[1]),
+      type: lyricsType,
+      data: lyricsType === 2 ? decodeBase64Bytes(dataMatch[1]) : decodeBase64Utf8(dataMatch[1]),
       title: unescapeLyrics(titleMatch?.[1] ?? ''),
       artist: unescapeLyrics(artistMatch?.[1] ?? ''),
     };
   } catch {
     return null;
   }
+}
+
+export function decodePetitLyricsLsyToLrc(payload: Uint8Array, plainLyrics: string): string | null {
+  const timeArrayOffset = 0xcc;
+  if (payload.length < timeArrayOffset || !plainLyrics) return null;
+
+  const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+  const lineCount = view.getUint32(0x38, true);
+  if (lineCount === 0 || lineCount > 2_000 || payload.length < timeArrayOffset + lineCount * 2) return null;
+
+  let key = view.getUint16(0x1a, true);
+  if (view.getUint8(0x19) === 1) {
+    key = (key & 0x0003)
+      | ((key & 0x000c) << 2)
+      | ((key & 0x0030) >> 2)
+      | ((key & 0x00c0) << 2)
+      | ((key & 0x0300) >> 2)
+      | ((key & 0x0c00) << 2)
+      | ((key & 0x3000) >> 2)
+      | (key & 0xc000);
+  }
+
+  const lyricLines = plainLyrics.replace(/\r\n?/g, '\n').split('\n');
+  while (lyricLines.length > lineCount && lyricLines.at(-1) === '') lyricLines.pop();
+  if (lyricLines.length !== lineCount) return null;
+
+  let previousTimeCs = -1;
+  const lrcLines = lyricLines.map((line, index) => {
+    let timeCs = view.getUint16(timeArrayOffset + index * 2, true) ^ key;
+    while (timeCs < previousTimeCs) timeCs += 0x1_0000;
+    previousTimeCs = timeCs;
+    return `[${msToLrcTime(timeCs * 10)}]${line}`;
+  });
+  while (lrcLines.length > 0 && lyricLines[lrcLines.length - 1] === '') lrcLines.pop();
+  return lrcLines.join('\n');
 }
 
 async function fetchFromPetitLyrics(title: string, artist: string): Promise<LyricsResult | null> {
@@ -168,18 +207,29 @@ async function fetchFromPetitLyrics(title: string, artist: string): Promise<Lyri
   }
 
   // The API only returns one result per request, even when maxcount is higher. Search a small
-  // set of indexed WYSIWYG candidates first, otherwise a plain-text first result drops timing.
+  // set of indexed WYSIWYG/LSY candidates first, otherwise a plain-text first result drops timing.
   for (let index = 0; index < PETITLYRICS_SYNC_CANDIDATE_LIMIT; index += 1) {
     const synced = await fetchType(3, index);
     if (!synced) break;
-    if (synced.type !== 3 || !isPetitLyricsMatch(synced, title, artist)) continue;
-    const lrc = petitLyricsXmlToLrc(synced.data);
-    if (lrc) return { synced: lrc, plain: stripTimestamps(lrc) };
+    if (!isPetitLyricsMatch(synced, title, artist)) continue;
+
+    if (synced.type === 3 && typeof synced.data === 'string') {
+      const lrc = petitLyricsXmlToLrc(synced.data);
+      if (lrc) return { synced: lrc, plain: stripTimestamps(lrc) };
+    }
+
+    if (synced.type === 2 && synced.data instanceof Uint8Array) {
+      const plain = await fetchType(1, index);
+      if (plain?.type === 1 && typeof plain.data === 'string' && isPetitLyricsMatch(plain, title, artist)) {
+        const lrc = decodePetitLyricsLsyToLrc(synced.data, plain.data);
+        if (lrc) return { synced: lrc, plain: plain.data.trim() };
+      }
+    }
   }
 
   // Keep PetitLyrics as a useful plain-text fallback only after all checked sync candidates fail.
   const plain = await fetchType(1, 0);
-  if (plain?.data?.trim() && isPetitLyricsMatch(plain, title, artist)) {
+  if (plain?.data && typeof plain.data === 'string' && isPetitLyricsMatch(plain, title, artist)) {
     return { synced: '', plain: plain.data.trim() };
   }
   return null;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { decodeBase64Utf8, parsePetitLyricsResponse, petitLyricsXmlToLrc, unescapeLyrics } from './lyrics-fetcher.ts';
+import { decodeBase64Utf8, decodePetitLyricsLsyToLrc, parsePetitLyricsResponse, petitLyricsXmlToLrc, unescapeLyrics } from './lyrics-fetcher.ts';
 
 test('decodeBase64Utf8 decodes PetitLyrics Japanese UTF-8 payloads without mojibake', () => {
   const lyrics = 'こんなだらけた暮らしで\r\n案外しあわせなの\r\nどうかしてると思わない?';
@@ -18,10 +18,27 @@ test('unescapeLyrics decodes named, decimal, and hexadecimal HTML entities', () 
   assert.equal(unescapeLyrics('Tom &amp; Jerry &#39;A&#39; &#x266A; &quot;歌&quot;'), "Tom & Jerry 'A' ♪ \"歌\"");
 });
 
+test('decodes PetitLyrics type-2 LSY timings while preserving blank lyric rows', () => {
+  const payload = new Uint8Array(0xcc + 8);
+  const view = new DataView(payload.buffer);
+  const key = 0x1234;
+  view.setUint16(0x1a, key, true);
+  view.setUint32(0x38, 4, true);
+  [20, 403, 776, 1177].forEach((timeCs, index) => view.setUint16(0xcc + index * 2, timeCs ^ key, true));
+
+  assert.equal(
+    decodePetitLyricsLsyToLrc(payload, '第一行\r\n\r\n第二行\r\n第三行\r\n'),
+    '[00:00.20]第一行\n[00:04.03]\n[00:07.76]第二行\n[00:11.77]第三行',
+  );
+  assert.equal(decodePetitLyricsLsyToLrc(payload, '第一行\n第二行'), null);
+});
+
+
 test('parses PetitLyrics candidate metadata and converts its WYSIWYG timing to line LRC', () => {
   const timingXml = '<wsy><line><linestring>第一行</linestring><word><starttime>1470</starttime><wordstring>第一行</wordstring></word></line></wsy>';
   const response = `<response><song><title>テスト曲</title><artist>歌手 A</artist><lyricsType>3</lyricsType><lyricsData>${Buffer.from(timingXml, 'utf8').toString('base64')}</lyricsData></song></response>`;
   const candidate = parsePetitLyricsResponse(response, 3);
   assert.deepEqual(candidate, { type: 3, data: timingXml, title: 'テスト曲', artist: '歌手 A' });
-  assert.equal(petitLyricsXmlToLrc(candidate!.data), '[00:01.47]第一行');
+  assert.equal(typeof candidate?.data, 'string');
+  assert.equal(petitLyricsXmlToLrc(candidate!.data as string), '[00:01.47]第一行');
 });
