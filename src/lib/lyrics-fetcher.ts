@@ -1,3 +1,7 @@
+import * as heModule from 'he';
+
+const decodeHtmlEntity = (heModule as unknown as { default?: typeof heModule }).default?.decode ?? heModule.decode;
+
 /**
  * Shared lyrics fetcher — multi-source chain used by sync and import-playlist.
  *
@@ -14,11 +18,27 @@ export interface LyricsResult {
   plain: string;
 }
 
+/** Decode named and numeric HTML entities returned by third-party lyrics providers. */
+export function unescapeLyrics(value: string): string {
+  return decodeHtmlEntity(value);
+}
+
+function unescapeLyricsResult(result: LyricsResult): LyricsResult {
+  return {
+    synced: unescapeLyrics(result.synced),
+    plain: unescapeLyrics(result.plain),
+  };
+}
+
 export interface LyricsFetchResult {
   result: LyricsResult | null;
   source: string;
   /** Heuristic 0–100 confidence based on source and match strategy. */
   confidence: number;
+}
+
+function fetchedResult(result: LyricsResult, source: string, confidence: number): LyricsFetchResult {
+  return { result: unescapeLyricsResult(result), source, confidence };
 }
 
 function stripTimestamps(lrc: string): string {
@@ -168,14 +188,10 @@ async function fetchFromUtaNet(title: string, artist: string): Promise<LyricsRes
     const html = await res.text();
     const kashiMatch = html.match(/<div[^>]*id="kashi_area"[^>]*>([\s\S]*?)<\/div>/i);
     if (!kashiMatch) return null;
-    const lyrics = kashiMatch[1]
+    const lyrics = unescapeLyrics(kashiMatch[1]
       .replace(/<br\s*\/?>/gi, '\n')
       .replace(/<[^>]+>/g, '')
-      .replace(/\u3000/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&#\d+;/g, '')
+      .replace(/\u3000/g, ' '))
       .trim();
     if (!lyrics) return null;
     return { synced: '', plain: lyrics };
@@ -218,33 +234,33 @@ export async function fetchLyrics(
 ): Promise<LyricsFetchResult> {
   // 1. LRCLIB exact
   let result = await fetchFromLrclib(title, artist);
-  if (result) return { result, source: 'lrclib', confidence: 98 };
+  if (result) return fetchedResult(result, 'lrclib', 98);
 
   // 2. LRCLIB with Spotify canonical name
   if (opts?.spotifyCanonical) {
     result = await fetchFromLrclib(opts.spotifyCanonical.name, opts.spotifyCanonical.artist);
-    if (result) return { result, source: 'lrclib', confidence: 96 };
+    if (result) return fetchedResult(result, 'lrclib', 96);
     result = await searchLrclib(`${opts.spotifyCanonical.name} ${opts.spotifyCanonical.artist}`);
-    if (result) return { result, source: 'lrclib-search', confidence: 82 };
+    if (result) return fetchedResult(result, 'lrclib-search', 82);
   }
 
   // 3. LRCLIB fuzzy search
   result = await searchLrclib(`${title} ${artist}`);
-  if (result) return { result, source: 'lrclib-search', confidence: 78 };
+  if (result) return fetchedResult(result, 'lrclib-search', 78);
 
   // 4. PetitLyrics
   const pl = await fetchFromPetitLyrics(title, artist);
   if (pl && (pl.synced || pl.plain)) {
-    return { result: pl, source: 'petitlyrics', confidence: pl.synced ? 90 : 82 };
+    return fetchedResult(pl, 'petitlyrics', pl.synced ? 90 : 82);
   }
 
   // 5. Uta-Net
   const un = await fetchFromUtaNet(title, artist);
-  if (un) return { result: un, source: 'uta-net', confidence: 76 };
+  if (un) return fetchedResult(un, 'uta-net', 76);
 
   // 6. ytmusicapi
   const yt = await fetchFromYtMusic(title, artist);
-  if (yt) return { result: yt, source: 'ytmusic', confidence: yt.synced ? 74 : 68 };
+  if (yt) return fetchedResult(yt, 'ytmusic', yt.synced ? 74 : 68);
 
   return { result: null, source: '', confidence: 0 };
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { decodeBase64Utf8 } from './lyrics-fetcher.ts';
+import { decodeBase64Utf8, unescapeLyrics } from './lyrics-fetcher.ts';
 
 test('decodeBase64Utf8 decodes PetitLyrics Japanese UTF-8 payloads without mojibake', () => {
   const lyrics = 'こんなだらけた暮らしで\r\n案外しあわせなの\r\nどうかしてると思わない?';
@@ -12,4 +12,8 @@ test('decodeBase64Utf8 decodes PetitLyrics Japanese UTF-8 payloads without mojib
 test('decodeBase64Utf8 rejects malformed UTF-8 instead of storing replacement characters', () => {
   const invalidUtf8 = Buffer.from([0xe3, 0x28]).toString('base64');
   assert.throws(() => decodeBase64Utf8(invalidUtf8), TypeError);
+});
+
+test('unescapeLyrics decodes named, decimal, and hexadecimal HTML entities', () => {
+  assert.equal(unescapeLyrics('Tom &amp; Jerry &#39;A&#39; &#x266A; &quot;歌&quot;'), "Tom & Jerry 'A' ♪ \"歌\"");
 });
