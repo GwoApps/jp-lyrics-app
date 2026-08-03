@@ -96,6 +96,8 @@ export interface UseSongDataReturn {
   showTranslation: boolean;
   setShowTranslation: React.Dispatch<React.SetStateAction<boolean>>;
   translating: boolean;
+  translationError: string | null;
+  dismissTranslationError: () => void;
   handleTranslate: () => Promise<void>;
   furiganaLoading: boolean;
   furiganaError: string;
@@ -157,6 +159,7 @@ export function useSongData(id: string): UseSongDataReturn {
     return localStorage.getItem('jplrc-show-translation') === 'true';
   });
   const [translating, setTranslating] = useState(false);
+  const [translationError, setTranslationError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [importAlert, setImportAlert] = useState<ImportAlertState | null>(null);
@@ -399,6 +402,7 @@ export function useSongData(id: string): UseSongDataReturn {
 
   const handleTranslate = useCallback(async () => {
     setTranslating(true);
+    setTranslationError(null);
     try {
       const res = await fetch(`/api/songs/${id}/translate`, {
         method: 'POST',
@@ -415,16 +419,20 @@ export function useSongData(id: string): UseSongDataReturn {
           translation_failed: 'song.translationFailed',
           translation_invalid_response: 'song.translationFailed',
         };
-        showToast('error', data.error && errorKey[data.error]
+        const message = data.error && errorKey[data.error]
           ? t(errorKey[data.error])
-          : t('song.translationFailed'));
+          : t('song.translationFailed');
+        setTranslationError(message);
+        showToast('error', message);
         return;
       }
       setSong((prev) => prev ? { ...prev, lyrics_translation: JSON.stringify(data.translations) } : prev);
       setShowTranslation(true);
       showToast('success', t('song.translationReady'));
     } catch {
-      showToast('error', t('song.networkErrorAlert'));
+      const message = t('song.networkErrorAlert');
+      setTranslationError(message);
+      showToast('error', message);
     } finally {
       setTranslating(false);
     }
@@ -446,6 +454,8 @@ export function useSongData(id: string): UseSongDataReturn {
     }
   }, [showTranslation, song?.lyrics_raw, translations.length, translating, t, showToast, handleTranslate]);
 
+
+  const dismissTranslationError = useCallback(() => setTranslationError(null), []);
 
   const handleDelete = useCallback(() => {
     if (!song) return;
@@ -669,6 +679,8 @@ export function useSongData(id: string): UseSongDataReturn {
     showTranslation,
     setShowTranslation,
     translating,
+    translationError,
+    dismissTranslationError,
     handleTranslate,
     furiganaLoading,
     furiganaError,

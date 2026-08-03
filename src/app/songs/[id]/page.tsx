@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactN
 import { useRouter, useParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
 import Link from 'next/link';
-import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2, Info, X } from 'lucide-react';
+import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2, Info, X, CircleAlert } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import FuriganaLineView from '@/components/FuriganaLine';
@@ -715,6 +715,30 @@ export default function SongViewPage() {
         <div className="lyrics-ambient-orbit" aria-hidden="true" />
         <div className="lyrics-ambient-orbit lyrics-ambient-orbit--secondary" aria-hidden="true" />
         <div className="lyrics-panel relative isolate h-full rounded-lg overflow-hidden">
+          {/* Translation status overlay: visible progress while translating, persistent error with dismiss */}
+          {(data.translating || data.translationError) && (
+            <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 max-w-[calc(100%-2rem)]">
+              {data.translating ? (
+                <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--background)]/90 px-3 py-1.5 text-xs text-[var(--muted-foreground)] shadow-sm backdrop-blur-sm">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--primary)]" />
+                  {t('song.translating')}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-2 rounded-full border border-[var(--warning)]/40 bg-[var(--background)]/90 px-3 py-1.5 text-xs text-[var(--warning)] shadow-sm backdrop-blur-sm">
+                  <CircleAlert className="h-3.5 w-3.5 shrink-0" />
+                  <span className="max-w-[240px] sm:max-w-[360px] truncate">{data.translationError}</span>
+                  <button
+                    type="button"
+                    onClick={data.dismissTranslationError}
+                    aria-label={t('common.close')}
+                    className="rounded-full p-0.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              )}
+            </div>
+          )}
           <div ref={lyricsRef} className="relative z-10 p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden scroll-smooth" style={{ fontSize: `${data.fontSize}px` }}>
             {furiganaLines.length > 0 ? (
               furiganaLines.map((line, i) => (
@@ -926,7 +950,7 @@ function buildReadingMenuItems(
       keepOpen: true,
     }]),
     {
-      icon: <Languages className="h-3.5 w-3.5" />,
+      icon: data.translating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Languages className="h-3.5 w-3.5" />,
       label: t('song.translation'),
       status: data.translating ? t('song.translating') : t(data.showTranslation ? 'common.on' : 'common.off'),
       onClick: () => {
