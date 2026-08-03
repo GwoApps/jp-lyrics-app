@@ -181,7 +181,14 @@
     "translationPrompt": "这首歌还没有中文翻译，需要现在翻译吗？",
     "translate": "翻译",
     "translatingProgress": "翻译中 {done}/{total}",
-    "translationContinue": "继续翻译"
+    "translationContinue": "继续翻译",
+    "clearFurigana": "清除假名",
+    "clearTranslation": "清除翻译",
+    "recolorCover": "重新专辑取色",
+    "furiganaCleared": "假名已清除",
+    "translationCleared": "翻译已清除",
+    "coverRecolored": "已重新取色",
+    "clearFailed": "清除失败"
   },
   "timeline": {
     "title": "LRC 时间轴编辑",

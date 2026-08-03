@@ -181,7 +181,14 @@
     "translationPrompt": "這首歌還沒有中文翻譯，需要現在翻譯嗎？",
     "translate": "翻譯",
     "translatingProgress": "翻譯中 {done}/{total}",
-    "translationContinue": "繼續翻譯"
+    "translationContinue": "繼續翻譯",
+    "clearFurigana": "清除假名",
+    "clearTranslation": "清除翻譯",
+    "recolorCover": "重新專輯取色",
+    "furiganaCleared": "假名已清除",
+    "translationCleared": "翻譯已清除",
+    "coverRecolored": "已重新取色",
+    "clearFailed": "清除失敗"
   },
   "timeline": {
     "title": "LRC 時間軸編輯",

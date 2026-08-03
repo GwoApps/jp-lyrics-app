@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactN
 import { useRouter, useParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
 import Link from 'next/link';
-import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2, Info, X, CircleAlert } from 'lucide-react';
+import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2, Info, X, CircleAlert, Eraser, Palette } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import FuriganaLineView from '@/components/FuriganaLine';
@@ -160,8 +160,9 @@ export default function SongViewPage() {
   // Start with the list's cached cover so the shared element has real visual content on its first render.
   const [fallbackCoverUrl, setFallbackCoverUrl] = useState<string | null>(() => getCachedSongCover(id));
   const [showSongInfo, setShowSongInfo] = useState(false);
+  const [coverRefresh, setCoverRefresh] = useState(0);
   const coverUrl = data.song?.cover_url ?? fallbackCoverUrl;
-  const coverTheme = useCoverTheme(coverUrl);
+  const coverTheme = useCoverTheme(coverUrl, coverRefresh);
   const coverColor = coverTheme.palette;
   useEffect(() => {
     if (data.song?.cover_url) {
@@ -543,6 +544,25 @@ export default function SongViewPage() {
                   onClick: () => setShowSyncConfirm(true),
                   disabled: data.syncing || !canEdit,
                 },
+                ...(data.debug ? [
+                  {
+                    icon: <Eraser className="h-3.5 w-3.5" />,
+                    label: t('song.clearFurigana'),
+                    onClick: () => void data.clearFurigana(),
+                    disabled: !canEdit,
+                  },
+                  {
+                    icon: <Eraser className="h-3.5 w-3.5" />,
+                    label: t('song.clearTranslation'),
+                    onClick: () => void data.clearTranslation(),
+                    disabled: !canEdit,
+                  },
+                  {
+                    icon: <Palette className="h-3.5 w-3.5" />,
+                    label: t('song.recolorCover'),
+                    onClick: () => setCoverRefresh((n) => n + 1),
+                  },
+                ] as const : []),
               ]}
             />
 
@@ -817,7 +837,7 @@ export default function SongViewPage() {
       <MobileMenu
         data={data} sync={sync} song={song} id={id} router={router}
         furiganaLines={furiganaLines} pipSupported={pipSupported}
-        onOpenPiP={handleOpenPiP} onShowSongInfo={() => setShowSongInfo(true)} canEdit={canEdit}
+        onOpenPiP={handleOpenPiP} onShowSongInfo={() => setShowSongInfo(true)} onRecolorCover={() => setCoverRefresh((n) => n + 1)} canEdit={canEdit}
       />
 
       {data.toast && <Toast type={data.toast.type} message={data.toast.msg} actionLabel={data.toast.actionLabel} onAction={data.toast.onAction} />}
@@ -1106,7 +1126,7 @@ function ToolbarMenu({ label, items, triggerClassName }: { label: ReactNode; ite
 }
 
 /** Mobile bottom toolbar — A-/A+, Sync, Copy visible; rest in 3-dot menu */
-function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported, onOpenPiP, onShowSongInfo, canEdit }: {
+function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported, onOpenPiP, onShowSongInfo, onRecolorCover, canEdit }: {
   data: ReturnType<typeof useSongData>;
   sync: ReturnType<typeof useSpotifySync>;
   song: NonNullable<ReturnType<typeof useSongData>['song']>;
@@ -1116,6 +1136,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
   pipSupported: boolean;
   onOpenPiP: () => void;
   onShowSongInfo: () => void;
+  onRecolorCover: () => void;
   canEdit: boolean;
 }) {
   const { t } = useI18n();
@@ -1412,6 +1433,51 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
                   <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />
                   <span>{data.syncing ? t('song.syncing') : t('song.sync')}</span>
                 </button>
+                {data.debug && (
+                  <>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-menu-item
+                      onClick={() => {
+                        setShowEditMenu(false);
+                        void data.clearFurigana();
+                      }}
+                      disabled={!canEdit}
+                      className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)] disabled:opacity-50"
+                    >
+                      <Eraser className="h-4 w-4" />
+                      <span>{t('song.clearFurigana')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-menu-item
+                      onClick={() => {
+                        setShowEditMenu(false);
+                        void data.clearTranslation();
+                      }}
+                      disabled={!canEdit}
+                      className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)] disabled:opacity-50"
+                    >
+                      <Eraser className="h-4 w-4" />
+                      <span>{t('song.clearTranslation')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-menu-item
+                      onClick={() => {
+                        setShowEditMenu(false);
+                        onRecolorCover();
+                      }}
+                      className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
+                    >
+                      <Palette className="h-4 w-4" />
+                      <span>{t('song.recolorCover')}</span>
+                    </button>
+                  </>
+                )}
                 <button
                   type="button"
                   role="menuitem"

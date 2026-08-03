@@ -99,6 +99,8 @@ export interface UseSongDataReturn {
   translationError: string | null;
   translationProgress: { done: number; total: number } | null;
   dismissTranslationError: () => void;
+  clearFurigana: () => Promise<void>;
+  clearTranslation: () => Promise<void>;
   handleTranslate: () => Promise<void>;
   furiganaLoading: boolean;
   furiganaError: string;
@@ -486,6 +488,49 @@ export function useSongData(id: string): UseSongDataReturn {
     setTranslationProgress(null);
   }, []);
 
+  /** Debug tooling: wipe the furigana cache so annotations regenerate. */
+  const clearFurigana = useCallback(async () => {
+    if (!song) return;
+    try {
+      const res = await fetch(`/api/songs/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clear_furigana: true }),
+      });
+      const updated = await res.json();
+      if (!res.ok || !updated?.lyrics_furigana) {
+        showToast('error', t('song.clearFailed'));
+        return;
+      }
+      requestedLyricsRef.current = '';
+      setSong(updated);
+      showToast('success', t('song.furiganaCleared'));
+    } catch {
+      showToast('error', t('song.clearFailed'));
+    }
+  }, [id, song, t, showToast]);
+
+  /** Debug tooling: wipe the translation cache so it can be regenerated. */
+  const clearTranslation = useCallback(async () => {
+    if (!song) return;
+    try {
+      const res = await fetch(`/api/songs/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clear_translation: true }),
+      });
+      const updated = await res.json();
+      if (!res.ok || !updated?.lyrics_translation) {
+        showToast('error', t('song.clearFailed'));
+        return;
+      }
+      setSong(updated);
+      showToast('success', t('song.translationCleared'));
+    } catch {
+      showToast('error', t('song.clearFailed'));
+    }
+  }, [id, song, t, showToast]);
+
   const handleDelete = useCallback(() => {
     if (!song) return;
     setDeleteConfirm(true);
@@ -711,6 +756,8 @@ export function useSongData(id: string): UseSongDataReturn {
     translationError,
     translationProgress,
     dismissTranslationError,
+    clearFurigana,
+    clearTranslation,
     handleTranslate,
     furiganaLoading,
     furiganaError,

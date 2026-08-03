@@ -14,7 +14,7 @@ function rgb(color: CoverColor) {
 }
 
 /** Load a cover and extract its Material-ranked palette without side effects. */
-export function useCoverPalette(coverUrl: string | null | undefined): CoverPalette | null {
+export function useCoverPalette(coverUrl: string | null | undefined, refreshKey = 0): CoverPalette | null {
   const [paletteState, setPaletteState] = useState<{
     url: string | null | undefined;
     palette: CoverPalette | null;
@@ -39,7 +39,7 @@ export function useCoverPalette(coverUrl: string | null | undefined): CoverPalet
     return () => {
       cancelled = true;
     };
-  }, [coverUrl]);
+  }, [coverUrl, refreshKey]);
 
   return palette;
 }
@@ -48,8 +48,8 @@ export function useCoverPalette(coverUrl: string | null | undefined): CoverPalet
  * Shared page-level cover theme pipeline. It adds the body tint and returns
  * the complete CSS-variable contract for a song surface root.
  */
-export function useCoverTheme(coverUrl: string | null | undefined): CoverTheme {
-  const palette = useCoverPalette(coverUrl);
+export function useCoverTheme(coverUrl: string | null | undefined, refreshKey = 0): CoverTheme {
+  const palette = useCoverPalette(coverUrl, refreshKey);
   const style = useMemo<React.CSSProperties | undefined>(() => {
     if (!palette) return undefined;
     return {

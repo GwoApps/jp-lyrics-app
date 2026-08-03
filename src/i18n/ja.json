@@ -181,7 +181,14 @@
     "translationPrompt": "この曲にはまだ中国語訳がありません。今翻訳しますか？",
     "translate": "翻訳",
     "translatingProgress": "翻訳中 {done}/{total}",
-    "translationContinue": "翻訳を続ける"
+    "translationContinue": "翻訳を続ける",
+    "clearFurigana": "ふりがなをクリア",
+    "clearTranslation": "翻訳をクリア",
+    "recolorCover": "カバー色を再取得",
+    "furiganaCleared": "ふりがなをクリアしました",
+    "translationCleared": "翻訳をクリアしました",
+    "coverRecolored": "色を再取得しました",
+    "clearFailed": "クリアに失敗しました"
   },
   "timeline": {
     "title": "LRC タイムライン編集",

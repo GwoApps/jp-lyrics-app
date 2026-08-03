@@ -73,7 +73,7 @@ export async function PUT(
   const db = getDB();
   const { id } = await params;
   const body = await request.json();
-  const { title, artist, lyrics_raw, lyrics_synced, reading_scheme, reading_scheme_confirmed } = body;
+  const { title, artist, lyrics_raw, lyrics_synced, reading_scheme, reading_scheme_confirmed, clear_furigana, clear_translation } = body;
 
   if (reading_scheme !== undefined && reading_scheme !== 'ja-kana' && reading_scheme !== 'yue-jyutping') {
     return NextResponse.json({ error: 'invalid_reading_scheme' }, { status: 400 });
@@ -100,14 +100,17 @@ export async function PUT(
   let lyricsFurigana = existing.lyrics_furigana;
   const nextReadingScheme = (reading_scheme ?? existing.reading_scheme) as ReadingScheme;
   const readingSchemeChanged = nextReadingScheme !== existing.reading_scheme;
-  // Clear furigana whenever the rendered plain lyrics change.
-  if (newRaw !== existing.lyrics_raw || readingSchemeChanged) {
+  // Clear furigana whenever the rendered plain lyrics change, or explicitly on request (debug tooling).
+  if (newRaw !== existing.lyrics_raw || readingSchemeChanged || clear_furigana === true) {
     lyricsFurigana = '[]';
   }
 
   const lyricsContentChanged = newRaw !== existing.lyrics_raw;
   // Line-aligned translations become stale whenever the lyrics text changes; drop them.
-  const lyricsTranslation = lyricsContentChanged ? '[]' : existing.lyrics_translation;
+  // Explicit clear (debug tooling) also wipes the cache regardless of content change.
+  const lyricsTranslation = clear_translation === true
+    ? '[]'
+    : lyricsContentChanged ? '[]' : existing.lyrics_translation;
   await db.update(schema.songs).set({
     title: title !== undefined ? title : existing.title,
     artist: artist !== undefined ? artist : existing.artist,

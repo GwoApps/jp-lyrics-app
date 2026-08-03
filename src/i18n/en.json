@@ -181,7 +181,14 @@
     "translationPrompt": "This song has no translation yet. Translate it now?",
     "translate": "Translate",
     "translatingProgress": "Translating {done}/{total}",
-    "translationContinue": "Continue translating"
+    "translationContinue": "Continue translating",
+    "clearFurigana": "Clear furigana",
+    "clearTranslation": "Clear translation",
+    "recolorCover": "Re-extract cover colors",
+    "furiganaCleared": "Furigana cleared",
+    "translationCleared": "Translation cleared",
+    "coverRecolored": "Colors re-extracted",
+    "clearFailed": "Clear failed"
   },
   "timeline": {
     "title": "LRC Timeline Editor",
