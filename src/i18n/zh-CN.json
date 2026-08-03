@@ -171,7 +171,8 @@
     "useJyutping": "使用粤拼",
     "jyutpingEnabled": "已切换为粤拼注音",
     "japaneseReadingEnabled": "已切换为日语假名注音",
-    "readingSchemeUpdateFailed": "更新注音方案失败"
+    "readingSchemeUpdateFailed": "更新注音方案失败",
+    "translationEdit": "翻译校正"
   },
   "timeline": {
     "title": "LRC 时间轴编辑",
@@ -396,5 +397,20 @@
     "approveFailed": "批准申请失败",
     "rejectFailed": "拒绝申请失败",
     "deleteSongFailed": "删除歌曲失败"
+  },
+  "translation": {
+    "title": "翻译校正",
+    "editBreadcrumb": "翻译校正",
+    "lineSummary": "已填 {count} / {total} 行",
+    "sourceColumn": "原文",
+    "translatedColumn": "翻译",
+    "emptyLine": "空行",
+    "inputPlaceholder": "输入翻译…",
+    "saved": "翻译已保存",
+    "saveFailed": "保存失败",
+    "unsavedConfirm": "有未保存的修改，确定离开？",
+    "loginRequired": "请先连接 Spotify 以编辑翻译",
+    "forbidden": "没有权限修改这首歌词",
+    "staleSource": "歌词已在其他页面更新，请刷新后重新校正"
   }
 }

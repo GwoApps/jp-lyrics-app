@@ -171,7 +171,8 @@
     "useJyutping": "粤拼を使用",
     "jyutpingEnabled": "粤拼注音に切り替えました",
     "japaneseReadingEnabled": "日本語のかな注音に切り替えました",
-    "readingSchemeUpdateFailed": "注音方式を更新できませんでした"
+    "readingSchemeUpdateFailed": "注音方式を更新できませんでした",
+    "translationEdit": "翻訳の編集"
   },
   "timeline": {
     "title": "LRC タイムライン編集",
@@ -396,5 +397,20 @@
     "approveFailed": "申請の承認に失敗しました",
     "rejectFailed": "申請の却下に失敗しました",
     "deleteSongFailed": "曲の削除に失敗しました"
+  },
+  "translation": {
+    "title": "翻訳の編集",
+    "editBreadcrumb": "翻訳編集",
+    "lineSummary": "{count} / {total} 行を入力済み",
+    "sourceColumn": "原文",
+    "translatedColumn": "翻訳",
+    "emptyLine": "空行",
+    "inputPlaceholder": "翻訳を入力…",
+    "saved": "翻訳を保存しました",
+    "saveFailed": "保存に失敗しました",
+    "unsavedConfirm": "未保存の変更があります。離れますか？",
+    "loginRequired": "翻訳の編集には Spotify への接続が必要です",
+    "forbidden": "この歌詞を編集する権限がありません",
+    "staleSource": "歌詞が別のページで更新されました。再読み込みしてやり直してください"
   }
 }

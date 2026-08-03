@@ -106,11 +106,14 @@ export async function PUT(
   }
 
   const lyricsContentChanged = newRaw !== existing.lyrics_raw;
+  // Line-aligned translations become stale whenever the lyrics text changes; drop them.
+  const lyricsTranslation = lyricsContentChanged ? '[]' : existing.lyrics_translation;
   await db.update(schema.songs).set({
     title: title !== undefined ? title : existing.title,
     artist: artist !== undefined ? artist : existing.artist,
     lyricsRaw: newRaw,
     lyricsFurigana,
+    lyricsTranslation,
     readingScheme: nextReadingScheme,
     readingSchemeConfirmed: reading_scheme_confirmed !== undefined
       ? Number(reading_scheme_confirmed)

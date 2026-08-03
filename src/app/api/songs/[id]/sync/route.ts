@@ -45,6 +45,7 @@ export async function POST(
   await db.update(schema.songs).set({
     lyricsRaw: result.plain,
     lyricsFurigana: '[]',
+    lyricsTranslation: '[]',
     readingSchemeConfirmed: 0,
     lyricsSynced: result.synced,
     lyricsSource: source,

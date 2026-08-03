@@ -515,6 +515,12 @@ export default function SongViewPage() {
                   onClick: () => router.push(`/songs/${id}/furigana/edit`),
                   disabled: !canEdit,
                 },
+                {
+                  icon: <Languages className="h-3.5 w-3.5" />,
+                  label: t('song.translationEdit'),
+                  onClick: () => router.push(`/songs/${id}/translation/edit`),
+                  disabled: !canEdit,
+                },
                 ...(song.lyrics_raw ? [{
                   icon: <Clock3 className="h-3.5 w-3.5" />,
                   label: t('song.timelineEdit'),
@@ -1048,6 +1054,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
     ...(canEdit ? [
       { icon: <Pencil className="h-4 w-4" />, label: t('common.edit'), onClick: () => router.push(`/songs/${id}/edit`) },
       { icon: <Languages className="h-4 w-4" />, label: t('furigana.title'), onClick: () => router.push(`/songs/${id}/furigana/edit`) },
+      { icon: <Languages className="h-4 w-4" />, label: t('song.translationEdit'), onClick: () => router.push(`/songs/${id}/translation/edit`) },
       { icon: <Trash2 className="h-4 w-4" />, label: t('common.delete'), onClick: data.handleDelete, danger: true },
     ] : []),
   ];

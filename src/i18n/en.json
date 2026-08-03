@@ -171,7 +171,8 @@
     "useJyutping": "Use Jyutping",
     "jyutpingEnabled": "Switched to Jyutping annotations",
     "japaneseReadingEnabled": "Switched to Japanese kana annotations",
-    "readingSchemeUpdateFailed": "Failed to update the annotation scheme"
+    "readingSchemeUpdateFailed": "Failed to update the annotation scheme",
+    "translationEdit": "Edit translation"
   },
   "timeline": {
     "title": "LRC Timeline Editor",
@@ -396,5 +397,20 @@
     "approveFailed": "Failed to approve request",
     "rejectFailed": "Failed to reject request",
     "deleteSongFailed": "Failed to delete song"
+  },
+  "translation": {
+    "title": "Edit translation",
+    "editBreadcrumb": "Translation",
+    "lineSummary": "{count} / {total} lines translated",
+    "sourceColumn": "Original",
+    "translatedColumn": "Translation",
+    "emptyLine": "Empty line",
+    "inputPlaceholder": "Enter translation…",
+    "saved": "Translation saved",
+    "saveFailed": "Failed to save",
+    "unsavedConfirm": "Discard unsaved changes?",
+    "loginRequired": "Connect Spotify to edit translations",
+    "forbidden": "No permission to edit this song",
+    "staleSource": "Lyrics were updated elsewhere, please reload and retry"
   }
 }
