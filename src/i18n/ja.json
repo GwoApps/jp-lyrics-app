@@ -190,7 +190,16 @@
     "coverRecolored": "色を再取得しました",
     "clearFailed": "クリアに失敗しました",
     "dotParams": "エフェクトパラメータ",
-    "dotParamsReset": "リセット"
+    "dotParamsReset": "リセット",
+    "uploadCover": "カバーを変更",
+    "coverUploading": "アップロード中…",
+    "removeCover": "カバーを削除",
+    "coverUploaded": "カバーを更新しました",
+    "coverRemoved": "カバーを削除しました",
+    "coverUploadFailed": "カバー操作に失敗しました",
+    "coverTooLarge": "画像は5MB以下にしてください",
+    "coverUnsupported": "対応していない画像形式です",
+    "coverHint": "JPG / PNG / WebP / GIF 対応、最大5MB。アップロード後すぐに反映されます"
   },
   "timeline": {
     "title": "LRC タイムライン編集",

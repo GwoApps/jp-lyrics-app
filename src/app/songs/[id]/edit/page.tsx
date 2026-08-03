@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
-import { Upload } from 'lucide-react';
+import { Upload, ImagePlus, ImageOff, Music } from 'lucide-react';
 import Toast from '@/components/Toast';
 import { useI18n } from '@/lib/i18n';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
@@ -40,13 +40,64 @@ export default function EditSongPage() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const coverFileRef = useRef<HTMLInputElement>(null);
+  const [coverUploading, setCoverUploading] = useState(false);
   const coverTheme = useCoverTheme(coverUrl);
   const coverColor = coverTheme.palette;
   const songThemeStyle = coverTheme.style;
+  const isCustomCover = !!coverUrl?.startsWith('/api/songs/');
 
   const showToast = (type: 'success' | 'error', msg: string) => {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleCoverUpload = async (file: File) => {
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      showToast('error', t('song.coverUnsupported'));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('error', t('song.coverTooLarge'));
+      return;
+    }
+    setCoverUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`/api/songs/${id}/cover`, { method: 'POST', body: form });
+      const result = await res.json();
+      if (!res.ok || !result?.cover_url) {
+        showToast('error', t('song.coverUploadFailed'));
+        return;
+      }
+      setCoverUrl(result.cover_url);
+      showToast('success', t('song.coverUploaded'));
+    } catch {
+      showToast('error', t('song.coverUploadFailed'));
+    } finally {
+      setCoverUploading(false);
+      if (coverFileRef.current) coverFileRef.current.value = '';
+    }
+  };
+
+  const handleCoverRemove = async () => {
+    setCoverUploading(true);
+    try {
+      const res = await fetch(`/api/songs/${id}/cover`, { method: 'DELETE' });
+      const result = await res.json();
+      if (!res.ok || result?.cover_url !== null) {
+        showToast('error', t('song.coverUploadFailed'));
+        return;
+      }
+      setCoverUrl(null);
+      showToast('success', t('song.coverRemoved'));
+    } catch {
+      showToast('error', t('song.coverUploadFailed'));
+    } finally {
+      setCoverUploading(false);
+    }
   };
 
   useEffect(() => {
@@ -232,6 +283,51 @@ export default function EditSongPage() {
               {t('edit.cantoneseDetected')}
             </button>
           )}
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-2">{t('song.uploadCover')}</label>
+          <div className="flex items-center gap-4">
+            <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--accent)]">
+              {coverUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={coverUrl} alt={title || ''} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-[var(--muted-foreground)]">
+                  <Music className="h-6 w-6 opacity-50" />
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <input ref={coverFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handleCoverUpload(file);
+                }} />
+                <button
+                  type="button"
+                  onClick={() => coverFileRef.current?.click()}
+                  disabled={coverUploading}
+                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium bg-[var(--accent)] text-[var(--foreground)] hover:opacity-85 transition-opacity disabled:opacity-50"
+                >
+                  <ImagePlus className="h-3.5 w-3.5" />
+                  {coverUploading ? t('song.coverUploading') : t('song.uploadCover')}
+                </button>
+                {isCustomCover && (
+                  <button
+                    type="button"
+                    onClick={() => void handleCoverRemove()}
+                    disabled={coverUploading}
+                    className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--destructive)] transition-colors disabled:opacity-50"
+                  >
+                    <ImageOff className="h-3.5 w-3.5" />
+                    {t('song.removeCover')}
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-[var(--muted-foreground)]">{t('song.coverHint')}</p>
+            </div>
+          </div>
         </div>
 
         <div>

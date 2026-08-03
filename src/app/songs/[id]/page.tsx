@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useCallback, type ReactNode } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
 import Link from 'next/link';
@@ -18,8 +18,9 @@ import { isTitleMatch, findBestMatch } from '@/lib/match';
 import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
 import type { CoverColor } from '@/lib/cover-color';
+import type { CoverPalette } from '@/lib/cover-color';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
-import { getCachedSongCover, cacheSongCover } from '@/lib/song-cover-cache';
+import { getCachedSongCover, cacheSongCover, clearCachedSongPalette } from '@/lib/song-cover-cache';
 import { getCachedSong } from '@/lib/song-list-cache';
 import type { FuriganaLine } from '@/lib/types';
 import { useAuthSession } from '@/lib/auth-session';
@@ -166,7 +167,24 @@ export default function SongViewPage() {
   const [showDotParams, setShowDotParams] = useState(false);
   const [dotParams, setDotParams] = useState<DotGridParams>(DEFAULT_DOT_GRID_PARAMS);
   const coverUrl = data.song?.cover_url ?? fallbackCoverUrl;
-  const coverTheme = useCoverTheme(coverUrl, coverRefresh);
+
+  /** Persist a freshly extracted palette to the server (skip when unchanged). */
+  const handlePaletteExtracted = useCallback((palette: CoverPalette | null) => {
+    if (!palette || !data.song) return;
+    const server = data.song.cover_palette;
+    if (server && JSON.stringify(server) === JSON.stringify(palette)) return;
+    void fetch(`/api/songs/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cover_palette: palette }),
+    }).then((res) => res.json()).then((updated) => {
+      if (updated?.cover_palette) {
+        data.refreshSong();
+      }
+    }).catch(() => { /* server cache is best-effort; localStorage already has it */ });
+  }, [id, data.song]);
+
+  const coverTheme = useCoverTheme(coverUrl, coverRefresh, data.song?.cover_palette ?? null, id, handlePaletteExtracted);
   const coverColor = coverTheme.palette;
   useEffect(() => {
     if (data.song?.cover_url) {
@@ -564,7 +582,10 @@ export default function SongViewPage() {
                   {
                     icon: <Palette className="h-3.5 w-3.5" />,
                     label: t('song.recolorCover'),
-                    onClick: () => setCoverRefresh((n) => n + 1),
+                    onClick: () => {
+                      clearCachedSongPalette(id);
+                      setCoverRefresh((n) => n + 1);
+                    },
                   },
                   {
                     icon: <SlidersHorizontal className="h-3.5 w-3.5" />,
@@ -852,7 +873,10 @@ export default function SongViewPage() {
       <MobileMenu
         data={data} sync={sync} song={song} id={id} router={router}
         furiganaLines={furiganaLines} pipSupported={pipSupported}
-        onOpenPiP={handleOpenPiP} onShowSongInfo={() => setShowSongInfo(true)} onRecolorCover={() => setCoverRefresh((n) => n + 1)} onToggleDotParams={() => setShowDotParams((v) => !v)} canEdit={canEdit}
+        onOpenPiP={handleOpenPiP} onShowSongInfo={() => setShowSongInfo(true)} onRecolorCover={() => {
+          clearCachedSongPalette(id);
+          setCoverRefresh((n) => n + 1);
+        }} onToggleDotParams={() => setShowDotParams((v) => !v)} canEdit={canEdit}
       />
 
       {data.debug && showDotParams && (

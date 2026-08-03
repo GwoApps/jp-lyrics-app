@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import type { FuriganaLine, ReadingMode, ReadingScheme } from '@/lib/types';
+import type { CoverPaletteJson, FuriganaLine, ReadingMode, ReadingScheme } from '@/lib/types';
 import { mapTimelineTimestamps, parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
 import { useI18n } from '@/lib/i18n';
@@ -58,6 +58,7 @@ interface SongData {
   lyrics_synced: string;
   lyrics_translation: string;
   cover_url?: string | null;
+  cover_palette?: CoverPaletteJson | null;
   spotify_track_id?: string | null;
   spotify_uri?: string | null;
   spotify_album?: string | null;

@@ -12,6 +12,7 @@ export const songs = sqliteTable('songs', {
   lyricsSynced: text('lyrics_synced').notNull().default(''),
   lyricsTranslation: text('lyrics_translation').notNull().default('[]'),
   coverUrl: text('cover_url'),
+  coverPalette: text('cover_palette'),
   spotifyTrackId: text('spotify_track_id'),
   spotifyUri: text('spotify_uri'),
   spotifyAlbum: text('spotify_album'),

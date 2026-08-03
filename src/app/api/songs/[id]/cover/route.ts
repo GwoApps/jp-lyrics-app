@@ -1,10 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDB, schema, eq } from '@/lib/db';
+import { getDB, schema, sql } from '@/lib/db';
+import { eq } from 'drizzle-orm';
 import { getAuthUser } from '@/lib/auth';
-import { getSpotifyTokenForUser, searchSpotifyTrack } from '@/lib/spotify';
+import { mkdir, writeFile, readdir, unlink } from 'fs/promises';
+import path from 'path';
 
-// GET /api/songs/[id]/cover — return cached cover URL or search Spotify
-export async function GET(
+// POST /api/songs/[id]/cover — upload a custom album cover (multipart form-data, field "file").
+// Stores the image under data/covers/<id>.<ext>, points cover_url at the local
+// cover-image route (versioned to bust caches) and resets the cached palette.
+// DELETE /api/songs/[id]/cover — remove a custom cover and restore cover_url to null.
+const MIME_TO_EXT: Record<string, string> = {
+  'image/jpeg': 'jpeg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+};
+const MAX_SIZE = 5 * 1024 * 1024;
+
+function coversDir() {
+  return path.join(process.cwd(), 'data', 'covers');
+}
+
+async function removeCoverFiles(id: string) {
+  try {
+    const entries = await readdir(coversDir());
+    await Promise.all(
+      entries.filter((name) => name.startsWith(`${id}.`)).map((name) => unlink(path.join(coversDir(), name)))
+    );
+  } catch { /* dir may not exist yet */ }
+}
+
+export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -17,60 +43,80 @@ export async function GET(
   }
 
   const existing = await db.select({
-    id: schema.songs.id,
-    title: schema.songs.title,
-    artist: schema.songs.artist,
-    coverUrl: schema.songs.coverUrl,
-    spotifyTrackId: schema.songs.spotifyTrackId,
     createdBy: schema.songs.createdBy,
-    isPublic: schema.songs.isPublic,
-  }).from(schema.songs).where(eq(schema.songs.id, id)).get() as {
-    id: string;
-    title: string;
-    artist: string;
-    coverUrl: string | null;
-    spotifyTrackId: string | null;
-    createdBy: string;
-    isPublic: number;
-  } | undefined;
-
+  }).from(schema.songs).where(eq(schema.songs.id, id)).get();
   if (!existing) {
     return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
   }
-
-  if (!existing.isPublic && !user.isAdmin && existing.createdBy !== user.id) {
+  if (!user.isAdmin && existing.createdBy !== user.id) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
-  // Return cached URL if available
-  if (existing.coverUrl && existing.spotifyTrackId) {
-    return NextResponse.json({ cover_url: existing.coverUrl, spotify_track_id: existing.spotifyTrackId });
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return NextResponse.json({ error: 'invalid_form' }, { status: 400 });
+  }
+  const file = formData.get('file');
+  if (!(file instanceof File)) {
+    return NextResponse.json({ error: 'missing_file' }, { status: 400 });
+  }
+  const ext = MIME_TO_EXT[file.type];
+  if (!ext) {
+    return NextResponse.json({ error: 'unsupported_image_type' }, { status: 400 });
+  }
+  if (file.size > MAX_SIZE) {
+    return NextResponse.json({ error: 'cover_too_large' }, { status: 400 });
   }
 
-  // Require a valid Spotify token to search
-  const token = await getSpotifyTokenForUser(user.id);
-  if (!token) {
-    return NextResponse.json({ error: 'spotify_not_connected' }, { status: 400 });
+  const buffer = Buffer.from(await file.arrayBuffer());
+  await mkdir(coversDir(), { recursive: true });
+  await removeCoverFiles(id);
+  await writeFile(path.join(coversDir(), `${id}.${ext}`), buffer);
+
+  await db.update(schema.songs).set({
+    coverUrl: `/api/songs/${id}/cover-image?ext=${ext}&v=${Date.now()}`,
+    coverPalette: null,
+    updatedAt: sql`(datetime('now', 'localtime'))`,
+  }).where(eq(schema.songs.id, id)).run();
+
+  const updated = await db.select({ coverUrl: schema.songs.coverUrl }).from(schema.songs).where(eq(schema.songs.id, id)).get();
+  return NextResponse.json({ cover_url: updated?.coverUrl ?? null });
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const db = getDB();
+  const { id } = await params;
+
+  const user = await getAuthUser(request);
+  if (!user) {
+    return NextResponse.json({ error: 'login_required' }, { status: 401 });
   }
 
-  const track = await searchSpotifyTrack(user.id, existing.title, existing.artist);
-  if (!track) {
-    return NextResponse.json({ error: 'cover_not_found' }, { status: 404 });
+  const existing = await db.select({
+    createdBy: schema.songs.createdBy,
+    coverUrl: schema.songs.coverUrl,
+  }).from(schema.songs).where(eq(schema.songs.id, id)).get();
+  if (!existing) {
+    return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
+  }
+  if (!user.isAdmin && existing.createdBy !== user.id) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
-  // Public readers may resolve a cover for display, but only owner/admin can mutate metadata.
-  if (user.isAdmin || existing.createdBy === user.id) {
-    await db.update(schema.songs).set({
-      coverUrl: track.coverUrl || existing.coverUrl,
-      spotifyTrackId: track.id,
-      spotifyUri: track.uri,
-      spotifyAlbum: track.album,
-      spotifyDurationMs: track.durationMs,
-      spotifyCanonicalTitle: track.title,
-      spotifyCanonicalArtist: track.artist,
-      updatedAt: new Date().toISOString(),
-    }).where(eq(schema.songs.id, id));
+  // Only remove local covers; external (Spotify) URLs are untouched.
+  if (existing.coverUrl?.startsWith('/api/songs/')) {
+    await removeCoverFiles(id);
   }
+  await db.update(schema.songs).set({
+    coverUrl: null,
+    coverPalette: null,
+    updatedAt: sql`(datetime('now', 'localtime'))`,
+  }).where(eq(schema.songs.id, id)).run();
 
-  return NextResponse.json({ cover_url: track.coverUrl || existing.coverUrl, spotify_track_id: track.id });
+  return NextResponse.json({ cover_url: null });
 }

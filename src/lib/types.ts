@@ -9,6 +9,7 @@ export interface Song {
   lyrics_synced: string;
   lyrics_translation: string;
   cover_url?: string | null;
+  cover_palette?: CoverPaletteJson | null;
   spotify_track_id?: string | null;
   spotify_uri?: string | null;
   spotify_album?: string | null;
@@ -37,6 +38,18 @@ export interface FuriganaLine {
 
 export type ReadingMode = 'original' | 'furigana';
 export type ReadingScheme = 'ja-kana' | 'yue-jyutping';
+
+/** Serialized cover palette as stored in the DB / API (snake_case field). */
+export interface CoverColorJson {
+  r: number;
+  g: number;
+  b: number;
+}
+export interface CoverPaletteJson {
+  primary: CoverColorJson;
+  secondary: CoverColorJson;
+  tertiary: CoverColorJson;
+}
 
 export interface SongListItem {
   id: string;

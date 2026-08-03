@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB, schema, sql } from '@/lib/db';
 import { eq } from 'drizzle-orm';
-import type { Song } from '@/lib/types';
+import type { CoverPaletteJson, Song } from '@/lib/types';
 import { getAuthUser } from '@/lib/auth';
 import { resolveLrcTextUpdate } from '@/lib/lrc';
 import type { ReadingScheme } from '@/lib/types';
@@ -11,6 +11,34 @@ function sanitizeSong(song: Song, canEdit: boolean) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { created_by, ...rest } = song;
   return { ...rest, permissions: { can_edit: canEdit } };
+}
+
+/** Parse the stored cover_palette TEXT into an object, or null when absent/invalid. */
+function parsePalette(raw: string | null | undefined): CoverPaletteJson | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (
+      parsed && parsed.primary && parsed.secondary && parsed.tertiary
+      && ['primary', 'secondary', 'tertiary'].every((k) => {
+        const c = parsed[k];
+        return c && Number.isInteger(c.r) && Number.isInteger(c.g) && Number.isInteger(c.b);
+      })
+    ) {
+      return parsed as CoverPaletteJson;
+    }
+  } catch { /* fall through */ }
+  return null;
+}
+
+function isCoverPaletteShape(value: unknown): value is CoverPaletteJson {
+  if (!value || typeof value !== 'object') return false;
+  const p = value as Record<string, unknown>;
+  return ['primary', 'secondary', 'tertiary'].every((k) => {
+    const c = p[k] as Record<string, unknown> | undefined;
+    return !!c && typeof c.r === 'number' && typeof c.g === 'number' && typeof c.b === 'number'
+      && c.r >= 0 && c.r <= 255 && c.g >= 0 && c.g <= 255 && c.b >= 0 && c.b <= 255;
+  });
 }
 
 const songFields = {
@@ -24,6 +52,7 @@ const songFields = {
   lyrics_synced: schema.songs.lyricsSynced,
   lyrics_translation: schema.songs.lyricsTranslation,
   cover_url: schema.songs.coverUrl,
+  cover_palette: schema.songs.coverPalette,
   spotify_track_id: schema.songs.spotifyTrackId,
   spotify_uri: schema.songs.spotifyUri,
   spotify_album: schema.songs.spotifyAlbum,
@@ -42,7 +71,12 @@ const songFields = {
 };
 
 function findSong(id: string) {
-  return getDB().select(songFields).from(schema.songs).where(eq(schema.songs.id, id)).get() as Promise<Song | undefined>;
+  return getDB().select(songFields).from(schema.songs).where(eq(schema.songs.id, id)).get()
+    .then((row: { cover_palette: string | null } | undefined) => {
+      if (!row) return undefined;
+      const { cover_palette, ...rest } = row;
+      return { ...rest, cover_palette: parsePalette(cover_palette) } as Song;
+    });
 }
 
 // GET /api/songs/[id] - get single song
@@ -73,7 +107,11 @@ export async function PUT(
   const db = getDB();
   const { id } = await params;
   const body = await request.json();
-  const { title, artist, lyrics_raw, lyrics_synced, reading_scheme, reading_scheme_confirmed, clear_furigana, clear_translation } = body;
+  const { title, artist, lyrics_raw, lyrics_synced, reading_scheme, reading_scheme_confirmed, clear_furigana, clear_translation, cover_palette } = body;
+
+  if (cover_palette !== undefined && cover_palette !== null && !isCoverPaletteShape(cover_palette)) {
+    return NextResponse.json({ error: 'invalid_cover_palette' }, { status: 400 });
+  }
 
   if (reading_scheme !== undefined && reading_scheme !== 'ja-kana' && reading_scheme !== 'yue-jyutping') {
     return NextResponse.json({ error: 'invalid_reading_scheme' }, { status: 400 });
@@ -117,6 +155,9 @@ export async function PUT(
     lyricsRaw: newRaw,
     lyricsFurigana,
     lyricsTranslation,
+    coverPalette: cover_palette !== undefined
+      ? cover_palette === null ? null : JSON.stringify(cover_palette)
+      : existing.cover_palette,
     readingScheme: nextReadingScheme,
     readingSchemeConfirmed: reading_scheme_confirmed !== undefined
       ? Number(reading_scheme_confirmed)

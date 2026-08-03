@@ -190,7 +190,16 @@
     "coverRecolored": "Colors re-extracted",
     "clearFailed": "Clear failed",
     "dotParams": "Effect params",
-    "dotParamsReset": "Reset"
+    "dotParamsReset": "Reset",
+    "uploadCover": "Change cover",
+    "coverUploading": "Uploading…",
+    "removeCover": "Remove cover",
+    "coverUploaded": "Cover updated",
+    "coverRemoved": "Cover removed",
+    "coverUploadFailed": "Cover operation failed",
+    "coverTooLarge": "Image must be under 5MB",
+    "coverUnsupported": "Unsupported image format",
+    "coverHint": "JPG / PNG / WebP / GIF, up to 5MB; takes effect immediately"
   },
   "timeline": {
     "title": "LRC Timeline Editor",

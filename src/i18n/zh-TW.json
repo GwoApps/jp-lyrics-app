@@ -190,7 +190,16 @@
     "coverRecolored": "已重新取色",
     "clearFailed": "清除失敗",
     "dotParams": "光效參數",
-    "dotParamsReset": "重置"
+    "dotParamsReset": "重置",
+    "uploadCover": "更換封面",
+    "coverUploading": "上傳中…",
+    "removeCover": "移除封面",
+    "coverUploaded": "封面已更新",
+    "coverRemoved": "封面已移除",
+    "coverUploadFailed": "封面操作失敗",
+    "coverTooLarge": "圖片不能超過 5MB",
+    "coverUnsupported": "不支援的圖片格式",
+    "coverHint": "支援 JPG / PNG / WebP / GIF，最大 5MB；上傳後立即生效"
   },
   "timeline": {
     "title": "LRC 時間軸編輯",
