@@ -446,6 +446,7 @@ export function useSongData(id: string): UseSongDataReturn {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      showToast('success', t('share.copied'));
       setTimeout(() => setCopied(false), 2000);
     } catch {
       showToast('error', t('song.copyFailed'));
