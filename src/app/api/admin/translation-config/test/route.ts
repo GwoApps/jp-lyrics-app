@@ -19,30 +19,21 @@ export async function POST(request: NextRequest) {
   const db = getDB();
   const body = (await request.json().catch(() => ({}))) as Partial<StoredTranslationConfig>;
 
-  const hasSnapshot = Object.values(body).some((v) => typeof v === 'string' && v.trim() !== '');
-  if (hasSnapshot) {
-    // Test the form values as-is (not yet saved).
-    const candidate: StoredTranslationConfig = {};
-    const fieldMap: Array<[keyof StoredTranslationConfig, string | undefined]> = [
-      ['provider', body.provider],
-      ['base_url', body.base_url],
-      ['api_key', body.api_key],
-      ['model', body.model],
-      ['target_lang', body.target_lang],
-    ];
-    for (const [key, value] of fieldMap) {
-      if (typeof value === 'string' && value.trim()) candidate[key] = value.trim();
-    }
-    const config = resolveTranslationConfig(candidate, getTranslationConfig());
-    if (!config) {
-      return NextResponse.json({ ok: false, latencyMs: 0, message: 'missing_api_key' }, { status: 200 });
-    }
-    return NextResponse.json(await testTranslationConnection(config));
-  }
-
-  // No snapshot → test the currently effective (stored ∪ env) config.
+  // Test the form snapshot merged over the stored config: blank form fields
+  // (e.g. an untouched api_key) keep their stored/env value, non-blank ones override.
   const stored = await getStoredTranslationConfig(db);
-  const config = resolveTranslationConfig(stored, getTranslationConfig());
+  const candidate: StoredTranslationConfig = { ...(stored ?? {}) };
+  const fieldMap: Array<[keyof StoredTranslationConfig, string | undefined]> = [
+    ['provider', body.provider],
+    ['base_url', body.base_url],
+    ['api_key', body.api_key],
+    ['model', body.model],
+    ['target_lang', body.target_lang],
+  ];
+  for (const [key, value] of fieldMap) {
+    if (typeof value === 'string' && value.trim()) candidate[key] = value.trim();
+  }
+  const config = resolveTranslationConfig(candidate, getTranslationConfig());
   if (!config) {
     return NextResponse.json({ ok: false, latencyMs: 0, message: 'missing_api_key' }, { status: 200 });
   }

@@ -421,7 +421,9 @@
     "translationClear": "清空設定",
     "translationClearConfirm": "確定清空翻譯服務設定？將恢復使用環境變數預設值",
     "translationInvalidProvider": "無效的服務商",
-    "translationLoadFailed": "載入設定失敗"
+    "translationLoadFailed": "載入設定失敗",
+    "translationApiKeyPlaceholder": "輸入新金鑰…",
+    "translationApiKeyHint": "留空保持不變；金鑰不會回顯，僅顯示打碼形式"
   },
   "translation": {
     "title": "翻譯校正",

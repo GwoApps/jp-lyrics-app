@@ -421,7 +421,9 @@
     "translationClear": "Clear config",
     "translationClearConfirm": "Clear the translation service config? Falls back to environment defaults",
     "translationInvalidProvider": "Invalid provider",
-    "translationLoadFailed": "Failed to load config"
+    "translationLoadFailed": "Failed to load config",
+    "translationApiKeyPlaceholder": "Enter a new key…",
+    "translationApiKeyHint": "Leave blank to keep the current key; keys are never echoed back, only masked"
   },
   "translation": {
     "title": "Edit translation",

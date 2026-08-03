@@ -11,9 +11,15 @@ import { useI18n } from '@/lib/i18n';
 interface StoredConfig {
   provider?: string;
   base_url?: string;
-  api_key?: string;
   model?: string;
   target_lang?: string;
+  has_api_key?: boolean;
+  api_key_masked?: string | null;
+}
+
+/** Form state: includes the api_key input (never prefilled, never echoed by the API). */
+interface FormConfig extends StoredConfig {
+  api_key: string;
 }
 
 interface ConfigResponse {
@@ -28,11 +34,11 @@ interface TestResult {
   message: string;
 }
 
-const EMPTY_FORM: StoredConfig = { provider: '', base_url: '', api_key: '', model: '', target_lang: '' };
+const EMPTY_FORM: FormConfig = { provider: '', base_url: '', api_key: '', model: '', target_lang: '' };
 
 export default function TranslationConfigPanel() {
   const { t } = useI18n();
-  const [form, setForm] = useState<StoredConfig>(EMPTY_FORM);
+  const [form, setForm] = useState<FormConfig>(EMPTY_FORM);
   const [effective, setEffective] = useState<StoredConfig | null>(null);
   const [source, setSource] = useState<'db' | 'env' | 'none'>('none');
   const [loading, setLoading] = useState(true);
@@ -51,10 +57,12 @@ export default function TranslationConfigPanel() {
   const applyResponse = useCallback((data: ConfigResponse) => {
     setEffective(data.effective);
     setSource(data.source);
+    // Never prefill the api_key field — the API does not return it; a blank
+    // key keeps the current stored/env key (PUT only updates it when non-blank).
     setForm({
       provider: data.stored?.provider ?? '',
       base_url: data.stored?.base_url ?? '',
-      api_key: data.stored?.api_key ?? '',
+      api_key: '',
       model: data.stored?.model ?? '',
       target_lang: data.stored?.target_lang ?? '',
     });
@@ -80,10 +88,19 @@ export default function TranslationConfigPanel() {
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
+      // Omit a blank api_key so the stored key is preserved (API never echoes it back).
+      const payload: Record<string, string> = {
+        provider: form.provider ?? '',
+        base_url: form.base_url ?? '',
+        api_key: form.api_key,
+        model: form.model ?? '',
+        target_lang: form.target_lang ?? '',
+      };
+      if (!payload.api_key?.trim()) delete payload.api_key;
       const res = await fetch('/api/admin/translation-config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -136,7 +153,7 @@ export default function TranslationConfigPanel() {
     }
   }, [form, t]);
 
-  const setField = (key: keyof StoredConfig, value: string) => {
+  const setField = <K extends keyof FormConfig>(key: K, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setTestResult(null);
   };
@@ -183,7 +200,7 @@ export default function TranslationConfigPanel() {
             <div className="flex items-center gap-2">
               <dt className="w-28 shrink-0 text-xs text-[var(--muted-foreground)]">{t('admin.translationApiKey')}</dt>
               <dd className="font-mono text-xs">
-                {effective.api_key ? `••••${effective.api_key.slice(-4)}` : '—'}
+                {effective.has_api_key ? effective.api_key_masked : '—'}
               </dd>
             </div>
             <div className="flex items-center gap-2">
@@ -239,7 +256,7 @@ export default function TranslationConfigPanel() {
                 type={showKey ? 'text' : 'password'}
                 value={form.api_key ?? ''}
                 onChange={(e) => setField('api_key', e.target.value)}
-                placeholder={effective?.api_key ? `••••${effective.api_key.slice(-4)}` : ''}
+                placeholder={effective?.has_api_key ? (effective.api_key_masked ?? '') : t('admin.translationApiKeyPlaceholder')}
                 autoComplete="off"
                 className={`${inputClass} pr-9`}
               />
@@ -252,6 +269,7 @@ export default function TranslationConfigPanel() {
                 {showKey ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
               </button>
             </div>
+            <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]/70">{t('admin.translationApiKeyHint')}</span>
           </label>
           <label className="block">
             <span className="mb-1 block text-xs text-[var(--muted-foreground)]">{t('admin.translationTargetLang')}</span>
