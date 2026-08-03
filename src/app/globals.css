@@ -373,6 +373,10 @@ textarea {
   z-index: 100;
   animation: slideUp 0.3s ease-out;
 }
+.toast--with-action {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+}
 .toast-icon {
   width: 1rem;
   height: 1rem;
@@ -381,6 +385,20 @@ textarea {
 .toast-description {
   min-width: 0;
   color: var(--foreground);
+}
+.toast-action {
+  flex-shrink: 0;
+  padding: 0.25rem 0.625rem;
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--accent);
+  color: var(--foreground);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: opacity 0.15s ease;
+}
+.toast-action:hover {
+  opacity: 0.85;
 }
 @media (min-width: 640px) {
   .toast {
@@ -964,6 +982,11 @@ textarea {
   border-color: color-mix(in srgb, var(--border) 72%, var(--destructive));
 }
 .toast-error .toast-icon { color: var(--destructive); }
+.toast-info {
+  background: color-mix(in srgb, var(--background) 94%, var(--primary));
+  border-color: color-mix(in srgb, var(--border) 72%, var(--primary));
+}
+.toast-info .toast-icon { color: var(--primary); }
 
 /* Cover image shared element transition */
 .cover-transition {

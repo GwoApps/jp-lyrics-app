@@ -177,7 +177,9 @@
     "syncConfirmBody": "Fetches lyrics from the online source and overwrites the current lyrics, furigana and translation; both annotations will need to be regenerated. Continue?",
     "copyOriginal": "Copy original",
     "copyTranslation": "Copy translation",
-    "copyTranslationEmpty": "No translation available"
+    "copyTranslationEmpty": "No translation available",
+    "translationPrompt": "This song has no translation yet. Translate it now?",
+    "translate": "Translate"
   },
   "timeline": {
     "title": "LRC Timeline Editor",

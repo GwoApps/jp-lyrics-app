@@ -177,7 +177,9 @@
     "syncConfirmBody": "將從線上來源重新取得歌詞，覆蓋目前的歌詞、注音與翻譯；注音和翻譯需要重新產生。確定繼續？",
     "copyOriginal": "複製原文",
     "copyTranslation": "複製翻譯",
-    "copyTranslationEmpty": "尚無翻譯"
+    "copyTranslationEmpty": "尚無翻譯",
+    "translationPrompt": "這首歌還沒有中文翻譯，需要現在翻譯嗎？",
+    "translate": "翻譯"
   },
   "timeline": {
     "title": "LRC 時間軸編輯",

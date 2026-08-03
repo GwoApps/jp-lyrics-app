@@ -75,8 +75,10 @@ interface SongData {
 }
 
 interface ToastState {
-  type: 'success' | 'error';
+  type: 'success' | 'error' | 'info';
   msg: string;
+  actionLabel?: string;
+  onAction?: () => void;
 }
 
 export interface ImportAlertState {
@@ -279,9 +281,10 @@ export function useSongData(id: string): UseSongDataReturn {
     return mapTimelineTimestamps(renderedRows, song.lyrics_raw || '', song.lyrics_synced || '');
   }, [song, furiganaLines]);
 
-  const showToast = useCallback((type: 'success' | 'error', msg: string) => {
-    setToast({ type, msg });
-    setTimeout(() => setToast(null), 3000);
+  const showToast = useCallback((type: 'success' | 'error' | 'info', msg: string, actionLabel?: string, onAction?: () => void) => {
+    setToast({ type, msg, actionLabel, onAction });
+    // Action toasts stay longer so the user has time to react.
+    setTimeout(() => setToast(null), actionLabel ? 8000 : 3000);
   }, []);
 
   const updateReadingPreference = useCallback(async (payload: {
@@ -426,6 +429,22 @@ export function useSongData(id: string): UseSongDataReturn {
       setTranslating(false);
     }
   }, [id, t, showToast]);
+
+  // When the translation display is on but the song has no translation yet,
+  // offer to translate it (once per page visit).
+  const translationPromptedRef = useRef(false);
+  useEffect(() => {
+    if (
+      showTranslation &&
+      song?.lyrics_raw?.trim() &&
+      translations.length === 0 &&
+      !translating &&
+      !translationPromptedRef.current
+    ) {
+      translationPromptedRef.current = true;
+      showToast('info', t('song.translationPrompt'), t('song.translate'), () => { void handleTranslate(); });
+    }
+  }, [showTranslation, song?.lyrics_raw, translations.length, translating, t, showToast, handleTranslate]);
 
 
   const handleDelete = useCallback(() => {

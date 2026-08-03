@@ -779,7 +779,7 @@ export default function SongViewPage() {
         onOpenPiP={handleOpenPiP} onShowSongInfo={() => setShowSongInfo(true)} canEdit={canEdit}
       />
 
-      {data.toast && <Toast type={data.toast.type} message={data.toast.msg} />}
+      {data.toast && <Toast type={data.toast.type} message={data.toast.msg} actionLabel={data.toast.actionLabel} onAction={data.toast.onAction} />}
 
       {showSongInfo && (
         <div

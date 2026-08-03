@@ -177,7 +177,9 @@
     "syncConfirmBody": "オンラインから歌詞を再取得し、現在の歌詞・ふりがな・翻訳を上書きします。ふりがなと翻訳は再生成が必要です。続行しますか？",
     "copyOriginal": "原文をコピー",
     "copyTranslation": "翻訳をコピー",
-    "copyTranslationEmpty": "翻訳がありません"
+    "copyTranslationEmpty": "翻訳がありません",
+    "translationPrompt": "この曲にはまだ中国語訳がありません。今翻訳しますか？",
+    "translate": "翻訳"
   },
   "timeline": {
     "title": "LRC タイムライン編集",
