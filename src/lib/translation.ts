@@ -34,7 +34,7 @@ export class TranslationError extends Error {
 
 const DEFAULT_OPENAI_BASE_URL = 'https://api.deepseek.com/v1';
 const DEFAULT_ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
-const DEFAULT_OPENAI_MODEL = 'deepseek-chat';
+const DEFAULT_OPENAI_MODEL = 'deepseek-v4-flash';
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-5';
 
 export function getTranslationConfig(env: Record<string, string | undefined> = process.env): TranslationConfig | null {

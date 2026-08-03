@@ -35,7 +35,7 @@ const CFG: TranslationConfig = {
   provider: 'openai',
   baseUrl: 'https://api.deepseek.com/v1',
   apiKey: 'test-key',
-  model: 'deepseek-chat',
+  model: 'deepseek-v4-flash',
   targetLang: 'zh-CN',
 };
 
@@ -51,7 +51,7 @@ test('falls back to DEEPSEEK_API_KEY with openai provider defaults', () => {
   assert.equal(cfg!.provider, 'openai');
   assert.equal(cfg!.apiKey, 'sk-fallback');
   assert.equal(cfg!.baseUrl, 'https://api.deepseek.com/v1');
-  assert.equal(cfg!.model, 'deepseek-chat');
+  assert.equal(cfg!.model, 'deepseek-v4-flash');
   assert.equal(cfg!.targetLang, 'zh-CN');
 });
 
@@ -90,7 +90,7 @@ test('translates via OpenAI-compatible API and preserves line structure', async 
   const headers = captured.current.init.headers as Record<string, string>;
   assert.equal(headers.Authorization, 'Bearer test-key');
   const body = openAIBody(captured.current);
-  assert.equal(body.model, 'deepseek-chat');
+  assert.equal(body.model, 'deepseek-v4-flash');
   assert.equal(JSON.parse(body.messages[1].content).length, 3);
 });
 
@@ -150,7 +150,7 @@ test('translates via Anthropic Messages API', async () => {
   assert.equal(headers['x-api-key'], 'test-key');
   assert.equal(headers['anthropic-version'], '2023-06-01');
   const body = JSON.parse(String(captured.current.init.body)) as { model: string; system: string };
-  assert.equal(body.model, 'deepseek-chat');
+  assert.equal(body.model, 'deepseek-v4-flash');
   assert.equal(typeof body.system, 'string');
 });
 
