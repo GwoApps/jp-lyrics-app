@@ -12,6 +12,17 @@ import {
 
 // GET /api/admin/translation-config — current stored + effective translation service config (admin only).
 // PUT /api/admin/translation-config — save overrides; empty body/blank fields clears back to env defaults.
+
+function toWireConfig(config: { provider: string; baseUrl: string; apiKey: string; model: string; targetLang: string }) {
+  return {
+    provider: config.provider,
+    base_url: config.baseUrl,
+    api_key: config.apiKey,
+    model: config.model,
+    target_lang: config.targetLang,
+  };
+}
+
 export async function GET(request: NextRequest) {
   const user = await getAuthUser(request);
   if (!user?.isAdmin) {
@@ -22,11 +33,12 @@ export async function GET(request: NextRequest) {
   const stored = await getStoredTranslationConfig(db);
   const envConfig = getTranslationConfig();
   const effective = resolveTranslationConfig(stored, envConfig);
+  const hasStored = stored !== null && Object.keys(stored).length > 0;
 
   return NextResponse.json({
     stored,
-    effective,
-    source: effective ? (stored?.api_key?.trim() ? 'db' : 'env') : 'none',
+    effective: effective ? toWireConfig(effective) : null,
+    source: effective ? (hasStored ? 'db' : 'env') : 'none',
   });
 }
 
@@ -66,9 +78,10 @@ export async function PUT(request: NextRequest) {
   const reloaded = await getStoredTranslationConfig(db);
   const envConfig = getTranslationConfig();
   const effective = resolveTranslationConfig(reloaded, envConfig);
+  const hasStored = reloaded !== null && Object.keys(reloaded).length > 0;
   return NextResponse.json({
     stored: reloaded,
-    effective,
-    source: effective ? (reloaded?.api_key?.trim() ? 'db' : 'env') : 'none',
+    effective: effective ? toWireConfig(effective) : null,
+    source: effective ? (hasStored ? 'db' : 'env') : 'none',
   });
 }
