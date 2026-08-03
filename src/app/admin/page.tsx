@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Users, Music, Shield, ShieldOff, Ban, Trash2, ArrowLeft, Eye, EyeOff, Loader2, Clock, Check, X } from 'lucide-react';
+import { Users, Music, Shield, ShieldOff, Ban, Trash2, ArrowLeft, Eye, EyeOff, Loader2, Clock, Check, X, Languages } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import Toast from '@/components/Toast';
+import TranslationConfigPanel from '@/components/admin/TranslationConfigPanel';
 import { useI18n } from '@/lib/i18n';
 import { useAuthSession } from '@/lib/auth-session';
 
@@ -31,7 +32,7 @@ interface AdminSong {
   updated_at: string;
 }
 
-type Tab = 'users' | 'songs' | 'pending';
+type Tab = 'users' | 'songs' | 'pending' | 'translation';
 
 const ADMIN_ERROR_KEYS: Record<string, string> = {
   forbidden: 'apiErrors.forbidden',
@@ -296,6 +297,17 @@ export default function AdminPage() {
           <Clock className="h-3.5 w-3.5" />
           {t('admin.pending')} ({pendingSongs.length})
         </button>
+        <button
+          onClick={() => setTab('translation')}
+          className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${
+            tab === 'translation'
+              ? 'border-[var(--primary)] text-[var(--primary)]'
+              : 'border-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+          }`}
+        >
+          <Languages className="h-3.5 w-3.5" />
+          {t('admin.translationTab')}
+        </button>
       </div>
 
       {loading ? (
@@ -482,7 +494,7 @@ export default function AdminPage() {
             ))}
           </div>
         )
-      ) : (
+      ) : tab === 'pending' ? (
         /* Pending Approval Tab */
         pendingSongs.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -528,7 +540,10 @@ export default function AdminPage() {
             ))}
           </div>
         )
-      )}
+      ) : tab === 'translation' ? (
+        /* Translation Service Tab */
+        <TranslationConfigPanel />
+      ) : null}
 
       {toast && <Toast type={toast.type} message={toast.msg} />}
 

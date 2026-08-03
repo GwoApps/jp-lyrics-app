@@ -37,6 +37,73 @@ const DEFAULT_ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
 const DEFAULT_OPENAI_MODEL = 'deepseek-v4-flash';
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-5';
 
+export interface TranslationTestResult {
+  ok: boolean;
+  latencyMs: number;
+  message: string;
+}
+
+/**
+ * Minimal connectivity check against the configured provider: send a tiny
+ * request and report status + latency. Used by the admin "Test" button.
+ */
+export async function testTranslationConnection(config: TranslationConfig): Promise<TranslationTestResult> {
+  const t0 = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  try {
+    if (config.provider === 'anthropic') {
+      const base = config.baseUrl.replace(/\/+$/, '');
+      const url = base.endsWith('/v1') ? `${base}/messages` : `${base}/v1/messages`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': config.apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: config.model,
+          max_tokens: 16,
+          messages: [{ role: 'user', content: 'Reply with exactly: OK' }],
+        }),
+        signal: controller.signal,
+      });
+      const text = await res.text().catch(() => '');
+      if (!res.ok) {
+        return { ok: false, latencyMs: Date.now() - t0, message: `HTTP ${res.status} ${text.slice(0, 200)}` };
+      }
+      const data = JSON.parse(text) as { content?: { type?: string; text?: string }[] };
+      return { ok: true, latencyMs: Date.now() - t0, message: data.content?.[0]?.text?.slice(0, 100) ?? '' };
+    }
+
+    const url = `${config.baseUrl.replace(/\/+$/, '')}/chat/completions`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        max_tokens: 16,
+        messages: [{ role: 'user', content: 'Reply with exactly: OK' }],
+      }),
+      signal: controller.signal,
+    });
+    const text = await res.text().catch(() => '');
+    if (!res.ok) {
+      return { ok: false, latencyMs: Date.now() - t0, message: `HTTP ${res.status} ${text.slice(0, 200)}` };
+    }
+    const data = JSON.parse(text) as { choices?: { message?: { content?: string } }[] };
+    return { ok: true, latencyMs: Date.now() - t0, message: data.choices?.[0]?.message?.content?.slice(0, 100) ?? '' };
+  } catch (error) {
+    return { ok: false, latencyMs: Date.now() - t0, message: error instanceof Error ? error.message : 'network error' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function getTranslationConfig(env: Record<string, string | undefined> = process.env): TranslationConfig | null {
   const provider: TranslationProvider = env.TRANSLATION_PROVIDER === 'anthropic' ? 'anthropic' : 'openai';
   const apiKey = env.TRANSLATION_API_KEY || env.DEEPSEEK_API_KEY || '';

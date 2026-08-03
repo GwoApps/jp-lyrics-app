@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDB, schema, sql } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { eq } from 'drizzle-orm';
-import { getTranslationConfig, isTranslationConfigured, translateLyricLines, TranslationError } from '@/lib/translation';
+import { getTranslationConfig, translateLyricLines, TranslationError } from '@/lib/translation';
+import { getStoredTranslationConfig, resolveTranslationConfig } from '@/lib/translation-settings';
 // POST /api/songs/[id]/translate — translate lyrics via the configured LLM provider and cache the result.
 // Body: { force?: boolean } — force re-translation, skipping the cached result.
 export async function POST(
@@ -35,10 +36,12 @@ export async function POST(
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
-  if (!isTranslationConfigured()) {
+  // Effective config: admin-stored DB settings override environment variables.
+  const stored = await getStoredTranslationConfig(db);
+  const config = resolveTranslationConfig(stored, getTranslationConfig());
+  if (!config) {
     return NextResponse.json({ error: 'translation_not_configured' }, { status: 503 });
   }
-  const config = getTranslationConfig()!;
 
   // Cache hit: return existing translation unless force is requested.
   // An empty array (the default '[]' placeholder) is NOT a valid cache — it means

@@ -50,6 +50,13 @@
       "when": 1785737595784,
       "tag": "0006_add_lyrics_translation",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1785745404347,
+      "tag": "0007_add_settings_table",
+      "breakpoints": true
     }
   ]
 }

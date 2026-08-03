@@ -70,3 +70,9 @@ export const users = sqliteTable('users', {
   createdAt: text('created_at').notNull().default(sql`(datetime('now', 'localtime'))`),
   updatedAt: text('updated_at').notNull().default(sql`(datetime('now', 'localtime'))`),
 });
+
+// Key-value store for admin-managed settings (e.g. translation service overrides).
+export const settings = sqliteTable('settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+});
