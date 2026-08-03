@@ -107,6 +107,7 @@ export default function SongViewPage() {
 
   // Data + handlers hook
   const data = useSongData(id);
+  const [showSyncConfirm, setShowSyncConfirm] = useState(false);
   const lyricsRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -501,6 +502,12 @@ export default function SongViewPage() {
                   onClick: () => router.push(`/songs/${id}/timeline/edit`),
                   disabled: !canEdit,
                 } as const] : []),
+                {
+                  icon: <RefreshCw className={`h-3.5 w-3.5 ${data.syncing ? 'animate-spin' : ''}`} />,
+                  label: data.syncing ? t('song.syncing') : t('song.sync'),
+                  onClick: () => setShowSyncConfirm(true),
+                  disabled: data.syncing || !canEdit,
+                },
               ]}
             />
 
@@ -512,12 +519,6 @@ export default function SongViewPage() {
                   label: t('song.debug'),
                   status: t(data.debug ? 'common.on' : 'common.off'),
                   onClick: () => data.setDebug(!data.debug),
-                },
-                {
-                  icon: <RefreshCw className={`h-3.5 w-3.5 ${data.syncing ? 'animate-spin' : ''}`} />,
-                  label: data.syncing ? t('song.syncing') : t('song.sync'),
-                  onClick: data.handleSync,
-                  disabled: data.syncing || !canEdit,
                 },
 
                 {
@@ -822,6 +823,18 @@ export default function SongViewPage() {
 
       <ConfirmDialog open={data.deleteConfirm} title={t('dialog.deleteConfirmTitle', { title: song?.title || '' })} body={t('dialog.deleteConfirmBody')} confirmLabel={t('common.delete')} cancelLabel={t('common.cancel')} variant="danger" onConfirm={data.confirmDelete} onCancel={() => data.setDeleteConfirm(false)} />
       <ConfirmDialog
+        open={showSyncConfirm}
+        title={t('song.syncConfirmTitle')}
+        body={t('song.syncConfirmBody')}
+        confirmLabel={t('song.sync')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={() => {
+          setShowSyncConfirm(false);
+          void data.handleSync();
+        }}
+        onCancel={() => setShowSyncConfirm(false)}
+      />
+      <ConfirmDialog
         open={!!data.importAlert}
         title={t('dialog.importErrorTitle')}
         body={data.importAlert?.message}
@@ -1034,6 +1047,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [showEditMenu, setShowEditMenu] = useState(false);
+  const [showSyncConfirm, setShowSyncConfirm] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const langMenuRef = useRef<HTMLDivElement>(null);
 
@@ -1053,10 +1067,8 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
     return () => { document.removeEventListener('touchstart', handler); document.removeEventListener('mousedown', handler); };
   }, [showMenu, showLangMenu]);
 
-  const menuItems = [
+  const menuItems: ToolbarMenuItem[] = [
     { icon: <Info className="h-4 w-4" />, label: t('song.info'), onClick: onShowSongInfo },
-    { icon: <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />, label: data.syncing ? t('song.syncing') : t('song.sync'), onClick: data.handleSync, disabled: data.syncing || !canEdit },
-    ...(song.lyrics_raw && canEdit ? [{ icon: <Clock3 className="h-4 w-4" />, label: t('song.timelineEdit'), onClick: () => router.push(`/songs/${id}/timeline/edit`) }] : []),
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: t('song.pipBtn'), onClick: onOpenPiP }] : []),
     { icon: <Bug className="h-4 w-4" />, label: t('song.debug'), status: t(data.debug ? 'common.on' : 'common.off'), onClick: () => data.setDebug(!data.debug), keepOpen: true },
     { icon: <Download className="h-4 w-4" />, label: t('song.download'), status: <ChevronDown className="h-3.5 w-3.5 -rotate-90" />, onClick: () => { setShowEditMenu(false); setShowDownloadMenu(true); }, keepOpen: true },
@@ -1244,6 +1256,32 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
                   <Languages className="h-4 w-4" />
                   <span>{t('song.translationEdit')}</span>
                 </button>
+                {song.lyrics_raw && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-menu-item
+                    onClick={() => router.push(`/songs/${id}/timeline/edit`)}
+                    className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
+                  >
+                    <Clock3 className="h-4 w-4" />
+                    <span>{t('song.timelineEdit')}</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-menu-item
+                  onClick={() => {
+                    setShowEditMenu(false);
+                    setShowSyncConfirm(true);
+                  }}
+                  disabled={data.syncing}
+                  className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)] disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />
+                  <span>{data.syncing ? t('song.syncing') : t('song.sync')}</span>
+                </button>
                 <button
                   type="button"
                   role="menuitem"
@@ -1267,7 +1305,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
                     data-menu-item
                     key={i}
                     onClick={() => {
-                      item.onClick();
+                      item.onClick?.();
                       if (!('keepOpen' in item && item.keepOpen)) {
                         setShowMenu(false);
                       }
@@ -1291,6 +1329,19 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={showSyncConfirm}
+        title={t('song.syncConfirmTitle')}
+        body={t('song.syncConfirmBody')}
+        confirmLabel={t('song.sync')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={() => {
+          setShowSyncConfirm(false);
+          void data.handleSync();
+        }}
+        onCancel={() => setShowSyncConfirm(false)}
+      />
     </div>
   );
 }

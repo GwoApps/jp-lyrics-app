@@ -172,7 +172,9 @@
     "jyutpingEnabled": "Switched to Jyutping annotations",
     "japaneseReadingEnabled": "Switched to Japanese kana annotations",
     "readingSchemeUpdateFailed": "Failed to update the annotation scheme",
-    "translationEdit": "Edit translation"
+    "translationEdit": "Edit translation",
+    "syncConfirmTitle": "Sync lyrics",
+    "syncConfirmBody": "Fetches lyrics from the online source and overwrites the current lyrics, furigana and translation; both annotations will need to be regenerated. Continue?"
   },
   "timeline": {
     "title": "LRC Timeline Editor",

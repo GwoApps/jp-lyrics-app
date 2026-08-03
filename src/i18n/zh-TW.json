@@ -172,7 +172,9 @@
     "jyutpingEnabled": "已切換為粵拼注音",
     "japaneseReadingEnabled": "已切換為日語假名注音",
     "readingSchemeUpdateFailed": "更新注音方案失敗",
-    "translationEdit": "翻譯校正"
+    "translationEdit": "翻譯校正",
+    "syncConfirmTitle": "同步歌詞",
+    "syncConfirmBody": "將從線上來源重新取得歌詞，覆蓋目前的歌詞、注音與翻譯；注音和翻譯需要重新產生。確定繼續？"
   },
   "timeline": {
     "title": "LRC 時間軸編輯",
