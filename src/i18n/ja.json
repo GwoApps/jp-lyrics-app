@@ -188,7 +188,9 @@
     "furiganaCleared": "ふりがなをクリアしました",
     "translationCleared": "翻訳をクリアしました",
     "coverRecolored": "色を再取得しました",
-    "clearFailed": "クリアに失敗しました"
+    "clearFailed": "クリアに失敗しました",
+    "dotParams": "エフェクトパラメータ",
+    "dotParamsReset": "リセット"
   },
   "timeline": {
     "title": "LRC タイムライン編集",

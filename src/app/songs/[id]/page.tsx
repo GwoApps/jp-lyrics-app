@@ -4,11 +4,12 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactN
 import { useRouter, useParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
 import Link from 'next/link';
-import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2, Info, X, CircleAlert, Eraser, Palette } from 'lucide-react';
+import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2, Info, X, CircleAlert, Eraser, Palette, SlidersHorizontal } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import FuriganaLineView from '@/components/FuriganaLine';
-import LyricsDotGrid from '@/components/LyricsDotGrid';
+import LyricsDotGrid, { DEFAULT_DOT_GRID_PARAMS, type DotGridParams } from '@/components/LyricsDotGrid';
+import LyricsDotParamsPanel from '@/components/LyricsDotParamsPanel';
 import Toast from '@/components/Toast';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useI18n } from '@/lib/i18n';
@@ -162,6 +163,8 @@ export default function SongViewPage() {
   const [fallbackCoverUrl, setFallbackCoverUrl] = useState<string | null>(() => getCachedSongCover(id));
   const [showSongInfo, setShowSongInfo] = useState(false);
   const [coverRefresh, setCoverRefresh] = useState(0);
+  const [showDotParams, setShowDotParams] = useState(false);
+  const [dotParams, setDotParams] = useState<DotGridParams>(DEFAULT_DOT_GRID_PARAMS);
   const coverUrl = data.song?.cover_url ?? fallbackCoverUrl;
   const coverTheme = useCoverTheme(coverUrl, coverRefresh);
   const coverColor = coverTheme.palette;
@@ -563,6 +566,11 @@ export default function SongViewPage() {
                     label: t('song.recolorCover'),
                     onClick: () => setCoverRefresh((n) => n + 1),
                   },
+                  {
+                    icon: <SlidersHorizontal className="h-3.5 w-3.5" />,
+                    label: t('song.dotParams'),
+                    onClick: () => setShowDotParams((v) => !v),
+                  },
                 ] as const : []),
               ]}
             />
@@ -741,6 +749,7 @@ export default function SongViewPage() {
             accent={coverColor
               ? `${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b}`
               : undefined}
+            params={dotParams}
           />
           {/* Translation status overlay: visible progress while translating, persistent error with dismiss + continue */}
           {(data.translating || data.translationError || (data.translationProgress && data.translationProgress.done < data.translationProgress.total)) && (
@@ -843,8 +852,16 @@ export default function SongViewPage() {
       <MobileMenu
         data={data} sync={sync} song={song} id={id} router={router}
         furiganaLines={furiganaLines} pipSupported={pipSupported}
-        onOpenPiP={handleOpenPiP} onShowSongInfo={() => setShowSongInfo(true)} onRecolorCover={() => setCoverRefresh((n) => n + 1)} canEdit={canEdit}
+        onOpenPiP={handleOpenPiP} onShowSongInfo={() => setShowSongInfo(true)} onRecolorCover={() => setCoverRefresh((n) => n + 1)} onToggleDotParams={() => setShowDotParams((v) => !v)} canEdit={canEdit}
       />
+
+      {data.debug && showDotParams && (
+        <LyricsDotParamsPanel
+          params={dotParams}
+          onChange={setDotParams}
+          onClose={() => setShowDotParams(false)}
+        />
+      )}
 
       {data.toast && <Toast type={data.toast.type} message={data.toast.msg} actionLabel={data.toast.actionLabel} onAction={data.toast.onAction} />}
 
@@ -1132,7 +1149,7 @@ function ToolbarMenu({ label, items, triggerClassName }: { label: ReactNode; ite
 }
 
 /** Mobile bottom toolbar — A-/A+, Sync, Copy visible; rest in 3-dot menu */
-function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported, onOpenPiP, onShowSongInfo, onRecolorCover, canEdit }: {
+function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported, onOpenPiP, onShowSongInfo, onRecolorCover, onToggleDotParams, canEdit }: {
   data: ReturnType<typeof useSongData>;
   sync: ReturnType<typeof useSpotifySync>;
   song: NonNullable<ReturnType<typeof useSongData>['song']>;
@@ -1143,6 +1160,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
   onOpenPiP: () => void;
   onShowSongInfo: () => void;
   onRecolorCover: () => void;
+  onToggleDotParams: () => void;
   canEdit: boolean;
 }) {
   const { t } = useI18n();
@@ -1481,6 +1499,19 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
                     >
                       <Palette className="h-4 w-4" />
                       <span>{t('song.recolorCover')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-menu-item
+                      onClick={() => {
+                        setShowEditMenu(false);
+                        onToggleDotParams();
+                      }}
+                      className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
+                    >
+                      <SlidersHorizontal className="h-4 w-4" />
+                      <span>{t('song.dotParams')}</span>
                     </button>
                   </>
                 )}

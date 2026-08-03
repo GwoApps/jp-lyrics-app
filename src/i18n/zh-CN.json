@@ -188,7 +188,9 @@
     "furiganaCleared": "假名已清除",
     "translationCleared": "翻译已清除",
     "coverRecolored": "已重新取色",
-    "clearFailed": "清除失败"
+    "clearFailed": "清除失败",
+    "dotParams": "光效参数",
+    "dotParamsReset": "重置"
   },
   "timeline": {
     "title": "LRC 时间轴编辑",

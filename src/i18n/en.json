@@ -188,7 +188,9 @@
     "furiganaCleared": "Furigana cleared",
     "translationCleared": "Translation cleared",
     "coverRecolored": "Colors re-extracted",
-    "clearFailed": "Clear failed"
+    "clearFailed": "Clear failed",
+    "dotParams": "Effect params",
+    "dotParamsReset": "Reset"
   },
   "timeline": {
     "title": "LRC Timeline Editor",

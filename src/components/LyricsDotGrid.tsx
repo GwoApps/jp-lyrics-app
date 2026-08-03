@@ -2,6 +2,37 @@
 
 import { useEffect, useRef } from 'react';
 
+/** Tunable dot-grid parameters (debug panel drives these live). */
+export interface DotGridParams {
+  /** Dot spacing in px. */
+  spacing: number;
+  /** Base dot radius in px. */
+  dot: number;
+  /** Spotlight radius in px. */
+  radius: number;
+  /** Dim base-dot opacity. */
+  base: number;
+  /** Peak size multiplier for lit dots. */
+  scale: number;
+  /** Pointer follow easing (0..1; 1 = instant). */
+  ease: number;
+  /** Bloom glow on lit dots. */
+  glow: boolean;
+  /** Dots get pulled slightly toward the pointer. */
+  mag: boolean;
+}
+
+export const DEFAULT_DOT_GRID_PARAMS: DotGridParams = {
+  spacing: 22,
+  dot: 1.6,
+  radius: 150,
+  base: 0.14,
+  scale: 1.6,
+  ease: 0.18,
+  glow: true,
+  mag: false,
+};
+
 /**
  * Interactive dot-grid highlight for the lyrics panel.
  *
@@ -20,15 +51,28 @@ import { useEffect, useRef } from 'react';
 interface LyricsDotGridProps {
   /** Accent as 'r g b' (cover palette primary). Falls back to white. */
   accent?: string;
+  /** Live parameter overrides (debug panel). */
+  params?: Partial<DotGridParams>;
 }
 
-export default function LyricsDotGrid({ accent }: LyricsDotGridProps) {
+export default function LyricsDotGrid({ accent, params }: LyricsDotGridProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const accentRef = useRef('255 255 255');
+  const paramsRef = useRef<DotGridParams>(DEFAULT_DOT_GRID_PARAMS);
+  const resizeRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (accent) accentRef.current = accent;
   }, [accent]);
+
+  useEffect(() => {
+    const next = { ...DEFAULT_DOT_GRID_PARAMS, ...params };
+    const prev = paramsRef.current;
+    // Spacing/base changes alter the cached dim layer, so rebuild the grid.
+    const needsRebuild = next.spacing !== prev.spacing || next.base !== prev.base;
+    paramsRef.current = next;
+    if (needsRebuild) resizeRef.current?.();
+  }, [params]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -48,7 +92,21 @@ export default function LyricsDotGrid({ accent }: LyricsDotGridProps) {
       base: 0.14,
       scale: 1.6,
       ease: reduced ? 1 : 0.18,
+      glow: true,
+      mag: false,
     };
+    const syncParams = () => {
+      const p = paramsRef.current;
+      S.spacing = p.spacing;
+      S.dot = p.dot;
+      S.radius = p.radius;
+      S.base = p.base;
+      S.scale = p.scale;
+      S.ease = reduced ? 1 : p.ease;
+      S.glow = p.glow;
+      S.mag = p.mag;
+    };
+    syncParams();
 
     let W = 0;
     let H = 0;
@@ -103,6 +161,7 @@ export default function LyricsDotGrid({ accent }: LyricsDotGridProps) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       buildGrid();
     };
+    resizeRef.current = resize;
 
     const draw = () => {
       ctx.clearRect(0, 0, W, H);
@@ -118,7 +177,7 @@ export default function LyricsDotGrid({ accent }: LyricsDotGridProps) {
       const minY = pointer.y - R;
       const maxY = pointer.y + R;
 
-      ctx.shadowColor = `rgba(${cr},${cg},${cb},.85)`;
+      ctx.shadowColor = S.glow ? `rgba(${cr},${cg},${cb},.85)` : 'transparent';
       for (const d of dots) {
         if (d.x < minX || d.x > maxX || d.y < minY || d.y > maxY) continue;
         const dx = d.x - pointer.x;
@@ -130,11 +189,20 @@ export default function LyricsDotGrid({ accent }: LyricsDotGridProps) {
         v = Math.max(0, Math.min(1, v)) * p;
         if (v < 0.012) continue;
 
+        // Magnet pull: lit dots get drawn slightly toward the pointer.
+        let px = d.x;
+        let py = d.y;
+        if (S.mag && dist > 0.01) {
+          const pull = v * S.spacing * 0.32;
+          px -= (dx / dist) * pull;
+          py -= (dy / dist) * pull;
+        }
+
         const r = S.dot * (0.72 + (S.scale - 0.72) * v);
-        ctx.shadowBlur = 10 * v;
+        ctx.shadowBlur = S.glow ? 10 * v : 0;
         ctx.fillStyle = `rgba(${cr},${cg},${cb},${0.10 + 0.9 * v})`;
         ctx.beginPath();
-        ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
+        ctx.arc(px, py, r, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.shadowBlur = 0;
