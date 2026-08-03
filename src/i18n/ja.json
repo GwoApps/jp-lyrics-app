@@ -285,7 +285,9 @@
     "readingJapanese": "日本語かな",
     "readingCantonese": "広東語粤拼",
     "readingSchemeHint": "注音方式を切り替えると、既存の注音は消去され、新しい方式で再生成されます。",
-    "cantoneseDetected": "広東語表現を検出しました。粤拼注音に切り替える"
+    "cantoneseDetected": "広東語表現を検出しました。粤拼注音に切り替える",
+    "titlePlaceholder": "例：残酷な天使のテーゼ",
+    "artistPlaceholder": "例：高橋洋子"
   },
   "new": {
     "title": "新しい曲を追加",
@@ -327,7 +329,8 @@
     "linkcore_fetch_failed": "Linkcoreの歌詞ページを取得できません。しばらくしてから再試行してください",
     "linkcore_invalid_content_type": "このLinkcore URLは歌詞ページではありません",
     "lyrics_not_found": "このLinkcoreページに取り込める歌詞がありません",
-    "linkcoreImportFailed": "Linkcoreの歌詞の取り込みに失敗しました"
+    "linkcoreImportFailed": "Linkcoreの歌詞の取り込みに失敗しました",
+    "readingSchemeHint": "注音方式を切り替えると、既存の注音は消去され、新しい方式で再生成されます。"
   },
   "furigana": {
     "title": "注音を修正",

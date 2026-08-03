@@ -285,7 +285,9 @@
     "readingJapanese": "日語假名",
     "readingCantonese": "粵語粵拼",
     "readingSchemeHint": "切換注音方案後，現有注音會被清除並按新方案重新產生。",
-    "cantoneseDetected": "偵測到粵語用詞，改用粵拼注音"
+    "cantoneseDetected": "偵測到粵語用詞，改用粵拼注音",
+    "titlePlaceholder": "例如：殘酷天使的行動綱領",
+    "artistPlaceholder": "例如：高橋洋子"
   },
   "new": {
     "title": "新增歌曲",
@@ -327,7 +329,8 @@
     "linkcore_fetch_failed": "無法取得 Linkcore 歌詞頁面，請稍後再試",
     "linkcore_invalid_content_type": "此 Linkcore 連結不是歌詞頁面",
     "lyrics_not_found": "此 Linkcore 頁面沒有可匯入的歌詞",
-    "linkcoreImportFailed": "匯入 Linkcore 歌詞失敗"
+    "linkcoreImportFailed": "匯入 Linkcore 歌詞失敗",
+    "readingSchemeHint": "切換注音方案後，現有注音會被清除並按新方案重新產生。"
   },
   "furigana": {
     "title": "糾正注音",

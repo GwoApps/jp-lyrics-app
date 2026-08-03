@@ -285,7 +285,9 @@
     "readingJapanese": "日语假名",
     "readingCantonese": "粤语粤拼",
     "readingSchemeHint": "切换注音方案后，现有注音会被清除并按新方案重新生成。",
-    "cantoneseDetected": "检测到粤语用词，改用粤拼注音"
+    "cantoneseDetected": "检测到粤语用词，改用粤拼注音",
+    "titlePlaceholder": "例如：残酷天使的行动纲领",
+    "artistPlaceholder": "例如：高桥洋子"
   },
   "new": {
     "title": "添加新歌曲",
@@ -312,6 +314,7 @@
     "readingJapanese": "日语假名",
     "readingCantonese": "粤语粤拼",
     "readingAutoHint": "可以手动选择；未选择时会在保存后根据歌词提示。",
+    "readingSchemeHint": "切换注音方案后，现有注音会被清除并按新方案重新生成。",
     "cantoneseDetected": "检测到粤语用词，建议使用粤拼注音",
     "jyutpingHint": "保存后会自动生成带声调数字的粤拼注音",
     "cantoneseLyricsPlaceholder": "例如：\n今日我哋一齊去行街\n你有冇時間呀...",
