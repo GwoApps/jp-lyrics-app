@@ -25,15 +25,15 @@ export interface DotGridParams {
 }
 
 export const DEFAULT_DOT_GRID_PARAMS: DotGridParams = {
-  spacing: 22,
+  spacing: 30,
   dot: 1.6,
   radius: 150,
-  base: 0.14,
-  scale: 1.6,
+  base: 0.04,
+  scale: 1.2,
   ease: 0.18,
   glow: true,
   mag: false,
-  alpha: 1,
+  alpha: 0.35,
 };
 
 /**
