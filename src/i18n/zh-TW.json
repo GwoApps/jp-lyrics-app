@@ -174,7 +174,10 @@
     "readingSchemeUpdateFailed": "更新注音方案失敗",
     "translationEdit": "翻譯校正",
     "syncConfirmTitle": "同步歌詞",
-    "syncConfirmBody": "將從線上來源重新取得歌詞，覆蓋目前的歌詞、注音與翻譯；注音和翻譯需要重新產生。確定繼續？"
+    "syncConfirmBody": "將從線上來源重新取得歌詞，覆蓋目前的歌詞、注音與翻譯；注音和翻譯需要重新產生。確定繼續？",
+    "copyOriginal": "複製原文",
+    "copyTranslation": "複製翻譯",
+    "copyTranslationEmpty": "尚無翻譯"
   },
   "timeline": {
     "title": "LRC 時間軸編輯",

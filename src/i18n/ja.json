@@ -174,7 +174,10 @@
     "readingSchemeUpdateFailed": "注音方式を更新できませんでした",
     "translationEdit": "翻訳の編集",
     "syncConfirmTitle": "歌詞を同期",
-    "syncConfirmBody": "オンラインから歌詞を再取得し、現在の歌詞・ふりがな・翻訳を上書きします。ふりがなと翻訳は再生成が必要です。続行しますか？"
+    "syncConfirmBody": "オンラインから歌詞を再取得し、現在の歌詞・ふりがな・翻訳を上書きします。ふりがなと翻訳は再生成が必要です。続行しますか？",
+    "copyOriginal": "原文をコピー",
+    "copyTranslation": "翻訳をコピー",
+    "copyTranslationEmpty": "翻訳がありません"
   },
   "timeline": {
     "title": "LRC タイムライン編集",

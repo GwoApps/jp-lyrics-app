@@ -174,7 +174,10 @@
     "readingSchemeUpdateFailed": "Failed to update the annotation scheme",
     "translationEdit": "Edit translation",
     "syncConfirmTitle": "Sync lyrics",
-    "syncConfirmBody": "Fetches lyrics from the online source and overwrites the current lyrics, furigana and translation; both annotations will need to be regenerated. Continue?"
+    "syncConfirmBody": "Fetches lyrics from the online source and overwrites the current lyrics, furigana and translation; both annotations will need to be regenerated. Continue?",
+    "copyOriginal": "Copy original",
+    "copyTranslation": "Copy translation",
+    "copyTranslationEmpty": "No translation available"
   },
   "timeline": {
     "title": "LRC Timeline Editor",

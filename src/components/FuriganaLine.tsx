@@ -33,6 +33,7 @@ export default function FuriganaLineView({
   romanizeFurigana = false,
   readingScheme = 'ja-kana',
   translation,
+  onCopyTranslation,
 }: {
   line: FuriganaLine;
   isActive: boolean;
@@ -47,6 +48,7 @@ export default function FuriganaLineView({
   romanizeFurigana?: boolean;
   readingScheme?: ReadingScheme;
   translation?: string | null;
+  onCopyTranslation?: () => void;
 }) {
   const { t } = useI18n();
   const [animKey, setAnimKey] = useState(0);
@@ -64,10 +66,11 @@ export default function FuriganaLineView({
   // The lyric line's large line-height (2.2 / 2.8) leaves ~0.6em / 0.9em of
   // half-leading below the text; pull the translation up by that amount so it
   // hugs the original line, then restore the same space underneath so spacing
-  // to the next lyric line stays uniform.
+  // to the next lyric line stays uniform. select-none: translations are copied
+  // via the context menu, not by text selection.
   const translationBlock = translation ? (
     <div
-      className={`lyric-translation -mt-[0.6em] pb-[0.6em] sm:-mt-[0.9em] sm:pb-[0.9em] text-[0.72em] leading-relaxed text-[var(--muted-foreground)]/85 ${debugTs != null ? 'pl-[60px] sm:pl-[72px]' : ''}`}
+      className={`lyric-translation select-none -mt-[0.6em] pb-[0.6em] sm:-mt-[0.9em] sm:pb-[0.9em] text-[0.72em] leading-relaxed text-[var(--muted-foreground)]/85 ${debugTs != null ? 'pl-[60px] sm:pl-[72px]' : ''}`}
     >
       {translation}
     </div>
@@ -125,8 +128,14 @@ export default function FuriganaLineView({
       <ContextMenuContent aria-label={t('song.more')}>
         <ContextMenuItem onSelect={onCopyLine}>
           <Copy className="h-3.5 w-3.5" />
-          {t('song.copy')}
+          {t('song.copyOriginal')}
         </ContextMenuItem>
+        {translation && onCopyTranslation && (
+          <ContextMenuItem onSelect={onCopyTranslation}>
+            <Copy className="h-3.5 w-3.5" />
+            {t('song.copyTranslation')}
+          </ContextMenuItem>
+        )}
         <ContextMenuItem onSelect={onShareLine}>
           <Share2 className="h-3.5 w-3.5" />
           {t('song.share')}

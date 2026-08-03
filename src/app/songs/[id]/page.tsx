@@ -339,6 +339,32 @@ export default function SongViewPage() {
     }
   };
 
+  const copyLyricTranslation = async (index: number) => {
+    const text = data.translations[index]?.trim();
+    if (!text) {
+      data.showToast('error', t('song.copyTranslationEmpty'));
+      return;
+    }
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand('copy');
+        textarea.remove();
+        if (!copied) throw new Error('copy_failed');
+      }
+      data.showToast('success', t('share.copied'));
+    } catch {
+      data.showToast('error', t('song.copyFailed'));
+    }
+  };
+
   return (
     <div className={`song-view fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-visible sm:block sm:h-auto sm:pb-0${coverColor ? ' song-view--accented' : ''}`} style={songThemeStyle}>
       {/* Breadcrumb */}
@@ -443,14 +469,22 @@ export default function SongViewPage() {
           {/* Desktop toolbar */}
           <div className="hidden self-end sm:flex flex-col items-end gap-3">
             <div className="flex flex-wrap items-center justify-end gap-2 [&>*]:shrink-0">
-            <button
-              onClick={data.handleCopy}
-              className={btnCls(data.copied)}
-              aria-label={t('song.copy')}
-              title={t('song.copy')}
-            >
-              {data.copied ? <Check className="h-4 w-4 text-[var(--success)]" /> : <Copy className="h-4 w-4" />}
-            </button>
+            <ToolbarMenu
+              label={<span className="inline-flex items-center gap-1">{data.copied ? <Check className="h-4 w-4 text-[var(--success)]" /> : <Copy className="h-4 w-4" />}</span>}
+              items={[
+                {
+                  icon: <Copy className="h-3.5 w-3.5" />,
+                  label: t('song.copyOriginal'),
+                  onClick: () => data.handleCopy('original'),
+                },
+                {
+                  icon: <Languages className="h-3.5 w-3.5" />,
+                  label: t('song.copyTranslation'),
+                  onClick: () => data.handleCopy('translation'),
+                  disabled: data.translations.length === 0,
+                },
+              ]}
+            />
             {furiganaLines.length > 0 && pipSupported && (
               <button
                 onClick={handleOpenPiP}
@@ -692,6 +726,7 @@ export default function SongViewPage() {
                     timestamp={hasSyncData && lineTimestamps[i] != null ? lineTimestamps[i] : undefined}
                     onSeek={hasSyncData && isSameSong && spotify?.connected ? handleSeek : undefined}
                     onCopyLine={() => copyLyricLine(line)}
+                    onCopyTranslation={() => copyLyricTranslation(i)}
                     onShareLine={() => router.push(`/songs/${id}/share?line=${i}`)}
                     onCorrectFurigana={() => router.push(`/songs/${id}/furigana/edit`)}
                     canCorrectFurigana={canEdit}
@@ -1043,6 +1078,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
   canEdit: boolean;
 }) {
   const { t } = useI18n();
+  const [showCopyMenu, setShowCopyMenu] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
@@ -1050,10 +1086,11 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
   const [showSyncConfirm, setShowSyncConfirm] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const langMenuRef = useRef<HTMLDivElement>(null);
+  const copyMenuRef = useRef<HTMLDivElement>(null);
 
   // Close menus on outside tap
   useEffect(() => {
-    if (!showMenu && !showLangMenu) return;
+    if (!showMenu && !showLangMenu && !showCopyMenu) return;
     const handler = (e: TouchEvent | MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setShowMenu(false);
@@ -1061,11 +1098,14 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
       if (langMenuRef.current && !langMenuRef.current.contains(e.target as Node)) {
         setShowLangMenu(false);
       }
+      if (copyMenuRef.current && !copyMenuRef.current.contains(e.target as Node)) {
+        setShowCopyMenu(false);
+      }
     };
     document.addEventListener('touchstart', handler);
     document.addEventListener('mousedown', handler);
     return () => { document.removeEventListener('touchstart', handler); document.removeEventListener('mousedown', handler); };
-  }, [showMenu, showLangMenu]);
+  }, [showMenu, showLangMenu, showCopyMenu]);
 
   const menuItems: ToolbarMenuItem[] = [
     { icon: <Info className="h-4 w-4" />, label: t('song.info'), onClick: onShowSongInfo },
@@ -1097,10 +1137,57 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
           <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="song-mobile-text-button flex items-center justify-center px-2 py-1 text-base font-medium">A+</button>
         </div>
 
-        {/* Copy */}
-        <MobileIconButton label={data.copied ? t('share.copied') : t('song.copy')} onClick={data.handleCopy} className={data.copied ? 'text-[var(--success)]' : ''}>
-          {data.copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
-        </MobileIconButton>
+        {/* Copy — original / translation */}
+        <div className="relative" ref={copyMenuRef}>
+          <MobileIconButton
+            label={data.copied ? t('share.copied') : t('song.copy')}
+            onClick={() => {
+              setShowMenu(false);
+              setShowLangMenu(false);
+              setShowCopyMenu((v) => !v);
+            }}
+            className={`${data.copied ? 'text-[var(--success)]' : ''} ${showCopyMenu ? 'song-mobile-button--active' : ''}`}
+            data-open={showCopyMenu}
+            aria-haspopup="menu"
+            aria-expanded={showCopyMenu}
+          >
+            {data.copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
+          </MobileIconButton>
+          <div
+            role="menu"
+            aria-hidden={!showCopyMenu}
+            data-open={showCopyMenu}
+            className="song-menu-popover song-menu-popover--mobile absolute right-0 bottom-full z-50 mb-2 min-w-[200px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)] py-1.5 shadow-xl"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              data-menu-item
+              onClick={() => {
+                setShowCopyMenu(false);
+                void data.handleCopy('original');
+              }}
+              className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
+            >
+              <Copy className="h-4 w-4" />
+              <span>{t('song.copyOriginal')}</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              data-menu-item
+              onClick={() => {
+                setShowCopyMenu(false);
+                void data.handleCopy('translation');
+              }}
+              disabled={data.translations.length === 0}
+              className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)] disabled:opacity-50"
+            >
+              <Languages className="h-4 w-4" />
+              <span>{t('song.copyTranslation')}</span>
+            </button>
+          </div>
+        </div>
 
         {/* Original / Furigana — expands a menu like the desktop Languages menu */}
         <div className="relative" ref={langMenuRef}>
@@ -1108,6 +1195,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
             label={t(data.readingMode === 'original' ? 'song.readingOriginal' : 'song.readingFurigana')}
             onClick={() => {
               setShowMenu(false);
+              setShowCopyMenu(false);
               setShowLangMenu((v) => !v);
             }}
             className={`${data.readingMode !== 'furigana' ? 'song-mobile-button--active' : ''} ${showLangMenu ? 'song-mobile-button--active' : ''}`}
@@ -1169,6 +1257,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
                 setShowDownloadMenu(false);
                 setShowEditMenu(false);
                 setShowLangMenu(false);
+                setShowCopyMenu(false);
                 setShowMenu(true);
               }
             }}

@@ -121,7 +121,7 @@ export interface UseSongDataReturn {
   handleSync: () => Promise<void>;
   handleDelete: () => void;
   confirmDelete: () => Promise<void>;
-  handleCopy: () => Promise<void>;
+  handleCopy: (mode?: 'original' | 'translation') => Promise<void>;
   handleImportPlaying: (spotify: SpotifyState | null) => Promise<void>;
   openPiP: (
     furiganaLines: FuriganaLine[],
@@ -440,9 +440,19 @@ export function useSongData(id: string): UseSongDataReturn {
     setDeleteConfirm(false);
   }, [id, song, router, t, showToast]);
 
-  const handleCopy = useCallback(async () => {
+  const handleCopy = useCallback(async (mode: 'original' | 'translation' = 'original') => {
     if (!song) return;
-    const text = song.lyrics_raw || furiganaLines.map(l => l.segments.map(s => s.text).join('')).join('\n');
+    let text: string;
+    if (mode === 'translation') {
+      const lines = translations.filter((tr) => tr.trim() !== '');
+      if (lines.length === 0) {
+        showToast('error', t('song.copyTranslationEmpty'));
+        return;
+      }
+      text = lines.join('\n');
+    } else {
+      text = song.lyrics_raw || furiganaLines.map(l => l.segments.map(s => s.text).join('')).join('\n');
+    }
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -451,7 +461,7 @@ export function useSongData(id: string): UseSongDataReturn {
     } catch {
       showToast('error', t('song.copyFailed'));
     }
-  }, [song, furiganaLines, t, showToast]);
+  }, [song, furiganaLines, translations, t, showToast]);
 
   const handleImportPlaying = useCallback(async (spotify: SpotifyState | null) => {
     if (!spotify?.track) return;
