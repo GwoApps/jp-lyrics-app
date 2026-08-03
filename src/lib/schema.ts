@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, primaryKey, blob } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
 export const songs = sqliteTable('songs', {
@@ -76,4 +76,14 @@ export const users = sqliteTable('users', {
 export const settings = sqliteTable('settings', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
+});
+
+// User-uploaded custom cover artwork, stored as a BLOB so it works on both
+// local SQLite and Cloudflare D1 (Workers have no persistent filesystem).
+// Spotify artwork is never stored here — its CDN URL is reused directly.
+export const songCovers = sqliteTable('song_covers', {
+  songId: text('song_id').primaryKey().references(() => songs.id, { onDelete: 'cascade' }),
+  mime: text('mime').notNull(),
+  data: blob('data').notNull(),
+  updatedAt: text('updated_at').notNull().default(sql`(datetime('now', 'localtime'))`),
 });
