@@ -20,6 +20,8 @@ export interface DotGridParams {
   glow: boolean;
   /** Dots get pulled slightly toward the pointer. */
   mag: boolean;
+  /** Overall opacity multiplier for the accent-lit dots. */
+  alpha: number;
 }
 
 export const DEFAULT_DOT_GRID_PARAMS: DotGridParams = {
@@ -31,6 +33,7 @@ export const DEFAULT_DOT_GRID_PARAMS: DotGridParams = {
   ease: 0.18,
   glow: true,
   mag: false,
+  alpha: 1,
 };
 
 /**
@@ -60,6 +63,7 @@ export default function LyricsDotGrid({ accent, params }: LyricsDotGridProps) {
   const accentRef = useRef('255 255 255');
   const paramsRef = useRef<DotGridParams>(DEFAULT_DOT_GRID_PARAMS);
   const resizeRef = useRef<(() => void) | null>(null);
+  const syncRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (accent) accentRef.current = accent;
@@ -68,9 +72,10 @@ export default function LyricsDotGrid({ accent, params }: LyricsDotGridProps) {
   useEffect(() => {
     const next = { ...DEFAULT_DOT_GRID_PARAMS, ...params };
     const prev = paramsRef.current;
-    // Spacing/base changes alter the cached dim layer, so rebuild the grid.
-    const needsRebuild = next.spacing !== prev.spacing || next.base !== prev.base;
+    // These alter the cached dim layer, so the grid must be rebuilt.
+    const needsRebuild = next.spacing !== prev.spacing || next.dot !== prev.dot || next.base !== prev.base;
     paramsRef.current = next;
+    syncRef.current?.();
     if (needsRebuild) resizeRef.current?.();
   }, [params]);
 
@@ -94,6 +99,7 @@ export default function LyricsDotGrid({ accent, params }: LyricsDotGridProps) {
       ease: reduced ? 1 : 0.18,
       glow: true,
       mag: false,
+      alpha: 1,
     };
     const syncParams = () => {
       const p = paramsRef.current;
@@ -105,8 +111,10 @@ export default function LyricsDotGrid({ accent, params }: LyricsDotGridProps) {
       S.ease = reduced ? 1 : p.ease;
       S.glow = p.glow;
       S.mag = p.mag;
+      S.alpha = p.alpha;
     };
     syncParams();
+    syncRef.current = syncParams;
 
     let W = 0;
     let H = 0;
@@ -200,7 +208,7 @@ export default function LyricsDotGrid({ accent, params }: LyricsDotGridProps) {
 
         const r = S.dot * (0.72 + (S.scale - 0.72) * v);
         ctx.shadowBlur = S.glow ? 10 * v : 0;
-        ctx.fillStyle = `rgba(${cr},${cg},${cb},${0.10 + 0.9 * v})`;
+        ctx.fillStyle = `rgba(${cr},${cg},${cb},${(0.10 + 0.9 * v) * S.alpha})`;
         ctx.beginPath();
         ctx.arc(px, py, r, 0, Math.PI * 2);
         ctx.fill();

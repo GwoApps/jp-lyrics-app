@@ -101,6 +101,7 @@ export default function LyricsDotParamsPanel({ params, onChange, onClose }: Lyri
         <Slider label="base" value={params.base} min={0} max={0.4} step={0.01} format={(v) => v.toFixed(2)} onChange={(v) => set('base', v)} />
         <Slider label="scale" value={params.scale} min={1} max={3.5} step={0.1} format={(v) => v.toFixed(1)} onChange={(v) => set('scale', v)} />
         <Slider label="ease" value={params.ease} min={0.03} max={1} step={0.01} format={(v) => v.toFixed(2)} onChange={(v) => set('ease', v)} />
+        <Slider label="alpha" value={params.alpha} min={0} max={1} step={0.05} format={(v) => v.toFixed(2)} onChange={(v) => set('alpha', v)} />
         <div className="grid grid-cols-2 gap-2 border-t border-[var(--border)]/60 pt-2">
           <Toggle label="bloom" checked={params.glow} onChange={(v) => set('glow', v)} />
           <Toggle label="magnet" checked={params.mag} onChange={(v) => set('mag', v)} />
