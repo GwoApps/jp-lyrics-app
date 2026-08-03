@@ -8,6 +8,7 @@ import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, 
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import FuriganaLineView from '@/components/FuriganaLine';
+import LyricsDotGrid from '@/components/LyricsDotGrid';
 import Toast from '@/components/Toast';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useI18n } from '@/lib/i18n';
@@ -736,6 +737,11 @@ export default function SongViewPage() {
         <div className="lyrics-ambient-orbit" aria-hidden="true" />
         <div className="lyrics-ambient-orbit lyrics-ambient-orbit--secondary" aria-hidden="true" />
         <div className="lyrics-panel relative isolate h-full rounded-lg overflow-hidden">
+          <LyricsDotGrid
+            accent={coverColor
+              ? `${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b}`
+              : undefined}
+          />
           {/* Translation status overlay: visible progress while translating, persistent error with dismiss + continue */}
           {(data.translating || data.translationError || (data.translationProgress && data.translationProgress.done < data.translationProgress.total)) && (
             <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 max-w-[calc(100%-2rem)]">

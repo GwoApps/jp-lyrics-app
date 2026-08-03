@@ -1,0 +1,197 @@
+'use client';
+
+import { useEffect, useRef } from 'react';
+
+/**
+ * Interactive dot-grid highlight for the lyrics panel.
+ *
+ * Port of the Canvas technique from the reference demo:
+ * - A fixed-spacing dot grid covers the container; the dim base layer is
+ *   pre-rendered once to an offscreen canvas and blitted each frame.
+ * - A pointer spotlight follows the cursor with eased lag; dots within the
+ *   radius get a smoothstep-falloff brightness/size boost tinted with the
+ *   song's cover accent color.
+ * - Only dots inside the spotlight's bounding box are redrawn per frame.
+ * - HiDPI-aware (dpr capped at 2); honours prefers-reduced-motion by
+ *   disabling easing.
+ * - Hover-only: on touch devices the canvas stays empty (never blocks
+ *   scrolling, pointer-events: none).
+ */
+interface LyricsDotGridProps {
+  /** Accent as 'r g b' (cover palette primary). Falls back to white. */
+  accent?: string;
+}
+
+export default function LyricsDotGrid({ accent }: LyricsDotGridProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const accentRef = useRef('255 255 255');
+
+  useEffect(() => {
+    if (accent) accentRef.current = accent;
+  }, [accent]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const parent = canvas?.parentElement;
+    if (!canvas || !parent) return;
+    // Pointer-spotlight effects are a mouse affair; skip touch-only devices.
+    if (!window.matchMedia('(hover: hover)').matches) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const S = {
+      spacing: 22,
+      dot: 1.6,
+      radius: 150,
+      base: 0.14,
+      scale: 1.6,
+      ease: reduced ? 1 : 0.18,
+    };
+
+    let W = 0;
+    let H = 0;
+    let dpr = 1;
+    let dots: { x: number; y: number }[] = [];
+    let baseLayer: HTMLCanvasElement | null = null;
+    const pointer = { x: -9999, y: -9999, tx: -9999, ty: -9999, inside: false, power: 0, tpower: 0 };
+
+    const falloffSmooth = (t: number) => {
+      const s = t * t * (3 - 2 * t);
+      return 1 - s;
+    };
+
+    const buildGrid = () => {
+      dots = [];
+      const sp = S.spacing;
+      const cols = Math.floor(W / sp);
+      const rows = Math.floor(H / sp);
+      const ox = (W - (cols - 1) * sp) / 2;
+      const oy = (H - (rows - 1) * sp) / 2;
+      for (let j = 0; j < rows; j++) {
+        for (let i = 0; i < cols; i++) {
+          dots.push({ x: ox + i * sp, y: oy + j * sp });
+        }
+      }
+      renderBase();
+    };
+
+    /** Dim base dots rendered once, cached offscreen. */
+    const renderBase = () => {
+      baseLayer = document.createElement('canvas');
+      baseLayer.width = canvas.width;
+      baseLayer.height = canvas.height;
+      const b = baseLayer.getContext('2d');
+      if (!b) return;
+      b.setTransform(dpr, 0, 0, dpr, 0, 0);
+      b.fillStyle = `rgba(255,255,255,${S.base})`;
+      for (const d of dots) {
+        b.beginPath();
+        b.arc(d.x, d.y, S.dot * 0.72, 0, Math.PI * 2);
+        b.fill();
+      }
+    };
+
+    const resize = () => {
+      const r = parent.getBoundingClientRect();
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      W = r.width;
+      H = r.height;
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      buildGrid();
+    };
+
+    const draw = () => {
+      ctx.clearRect(0, 0, W, H);
+      if (baseLayer) ctx.drawImage(baseLayer, 0, 0, W, H);
+
+      const p = pointer.power;
+      if (p < 0.002) return;
+
+      const R = S.radius;
+      const [cr, cg, cb] = accentRef.current.split(' ').map(Number);
+      const minX = pointer.x - R;
+      const maxX = pointer.x + R;
+      const minY = pointer.y - R;
+      const maxY = pointer.y + R;
+
+      ctx.shadowColor = `rgba(${cr},${cg},${cb},.85)`;
+      for (const d of dots) {
+        if (d.x < minX || d.x > maxX || d.y < minY || d.y > maxY) continue;
+        const dx = d.x - pointer.x;
+        const dy = d.y - pointer.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > R) continue;
+
+        let v = falloffSmooth(dist / R);
+        v = Math.max(0, Math.min(1, v)) * p;
+        if (v < 0.012) continue;
+
+        const r = S.dot * (0.72 + (S.scale - 0.72) * v);
+        ctx.shadowBlur = 10 * v;
+        ctx.fillStyle = `rgba(${cr},${cg},${cb},${0.10 + 0.9 * v})`;
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.shadowBlur = 0;
+    };
+
+    let raf = 0;
+    let last = performance.now();
+    const frame = (now: number) => {
+      const dt = Math.min((now - last) / 16.667, 3);
+      last = now;
+      const e = 1 - Math.pow(1 - S.ease, dt);
+      pointer.x += (pointer.tx - pointer.x) * e;
+      pointer.y += (pointer.ty - pointer.y) * e;
+      pointer.power += (pointer.tpower - pointer.power) * (1 - Math.pow(1 - 0.09, dt));
+      draw();
+      raf = requestAnimationFrame(frame);
+    };
+
+    const movePointer = (clientX: number, clientY: number) => {
+      const r = parent.getBoundingClientRect();
+      pointer.tx = clientX - r.left;
+      pointer.ty = clientY - r.top;
+      if (!pointer.inside) {
+        pointer.x = pointer.tx;
+        pointer.y = pointer.ty;
+      }
+      pointer.inside = true;
+      pointer.tpower = 1;
+    };
+    const onMove = (e: PointerEvent) => movePointer(e.clientX, e.clientY);
+    const onLeave = () => {
+      pointer.inside = false;
+      pointer.tpower = 0;
+    };
+
+    parent.addEventListener('pointermove', onMove);
+    parent.addEventListener('pointerleave', onLeave);
+
+    const ro = new ResizeObserver(resize);
+    ro.observe(parent);
+    resize();
+    raf = requestAnimationFrame(frame);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      parent.removeEventListener('pointermove', onMove);
+      parent.removeEventListener('pointerleave', onLeave);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 h-full w-full"
+      style={{ zIndex: 5 }}
+    />
+  );
+}
