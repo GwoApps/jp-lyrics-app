@@ -61,9 +61,13 @@ export default function FuriganaLineView({
 
   if (line.segments.length === 0) return <div className="h-5 sm:h-6" />;
 
+  // The lyric line's large line-height (2.2 / 2.8) leaves ~0.6em / 0.9em of
+  // half-leading below the text; pull the translation up by that amount so it
+  // hugs the original line, then restore the same space underneath so spacing
+  // to the next lyric line stays uniform.
   const translationBlock = translation ? (
     <div
-      className={`lyric-translation mt-0.5 text-[0.72em] leading-relaxed text-[var(--muted-foreground)]/85 ${debugTs != null ? 'pl-[60px] sm:pl-[72px]' : ''}`}
+      className={`lyric-translation -mt-[0.6em] pb-[0.6em] sm:-mt-[0.9em] sm:pb-[0.9em] text-[0.72em] leading-relaxed text-[var(--muted-foreground)]/85 ${debugTs != null ? 'pl-[60px] sm:pl-[72px]' : ''}`}
     >
       {translation}
     </div>
