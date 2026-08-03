@@ -1033,6 +1033,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
   const [showMenu, setShowMenu] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+  const [showEditMenu, setShowEditMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const langMenuRef = useRef<HTMLDivElement>(null);
 
@@ -1058,13 +1059,14 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
     ...(song.lyrics_raw && canEdit ? [{ icon: <Clock3 className="h-4 w-4" />, label: t('song.timelineEdit'), onClick: () => router.push(`/songs/${id}/timeline/edit`) }] : []),
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: t('song.pipBtn'), onClick: onOpenPiP }] : []),
     { icon: <Bug className="h-4 w-4" />, label: t('song.debug'), status: t(data.debug ? 'common.on' : 'common.off'), onClick: () => data.setDebug(!data.debug), keepOpen: true },
-    { icon: <Download className="h-4 w-4" />, label: t('song.download'), status: <ChevronDown className="h-3.5 w-3.5 -rotate-90" />, onClick: () => setShowDownloadMenu(true), keepOpen: true },
-    ...(canEdit ? [
-      { icon: <Pencil className="h-4 w-4" />, label: t('common.edit'), onClick: () => router.push(`/songs/${id}/edit`) },
-      { icon: <Languages className="h-4 w-4" />, label: t('furigana.title'), onClick: () => router.push(`/songs/${id}/furigana/edit`) },
-      { icon: <Languages className="h-4 w-4" />, label: t('song.translationEdit'), onClick: () => router.push(`/songs/${id}/translation/edit`) },
-      { icon: <Trash2 className="h-4 w-4" />, label: t('common.delete'), onClick: data.handleDelete, danger: true },
-    ] : []),
+    { icon: <Download className="h-4 w-4" />, label: t('song.download'), status: <ChevronDown className="h-3.5 w-3.5 -rotate-90" />, onClick: () => { setShowEditMenu(false); setShowDownloadMenu(true); }, keepOpen: true },
+    ...(canEdit ? [{
+      icon: <Pencil className="h-4 w-4" />,
+      label: t('common.edit'),
+      status: <ChevronDown className="h-3.5 w-3.5 -rotate-90" />,
+      onClick: () => { setShowDownloadMenu(false); setShowEditMenu(true); },
+      keepOpen: true,
+    }] : []),
   ];
 
   const downloadItems = [
@@ -1153,6 +1155,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
                 setShowMenu(false);
               } else {
                 setShowDownloadMenu(false);
+                setShowEditMenu(false);
                 setShowLangMenu(false);
                 setShowMenu(true);
               }
@@ -1198,6 +1201,62 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
                     <span>{item.label}</span>
                   </button>
                 ))}
+              </div>
+            ) : showEditMenu ? (
+              <div key="edit" className="song-menu-page song-menu-page--forward">
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-menu-item
+                  onClick={() => setShowEditMenu(false)}
+                  className="song-menu-item flex w-full items-center gap-3 border-b border-[var(--border)] px-4 py-2.5 text-left text-sm font-medium text-[var(--foreground)] hover:bg-[var(--accent)]"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  <span>{t('common.edit')}</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-menu-item
+                  onClick={() => router.push(`/songs/${id}/edit`)}
+                  className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
+                >
+                  <Pencil className="h-4 w-4" />
+                  <span>{t('common.edit')}</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-menu-item
+                  onClick={() => router.push(`/songs/${id}/furigana/edit`)}
+                  className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
+                >
+                  <Languages className="h-4 w-4" />
+                  <span>{t('furigana.title')}</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-menu-item
+                  onClick={() => router.push(`/songs/${id}/translation/edit`)}
+                  className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
+                >
+                  <Languages className="h-4 w-4" />
+                  <span>{t('song.translationEdit')}</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  data-menu-item
+                  onClick={() => {
+                    setShowMenu(false);
+                    data.handleDelete();
+                  }}
+                  className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--destructive)] hover:bg-[var(--destructive)]/10"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span>{t('common.delete')}</span>
+                </button>
               </div>
             ) : (
               <div key="main" className="song-menu-page song-menu-page--back">
