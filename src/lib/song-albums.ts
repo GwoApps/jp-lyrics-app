@@ -11,6 +11,10 @@ export interface SongAlbumGroup<T extends AlbumSong> {
   songs: T[];
 }
 
+export type SongAlbumEntry<T extends AlbumSong> =
+  | { type: 'group'; group: SongAlbumGroup<T> }
+  | { type: 'song'; song: T };
+
 interface InternalGroup<T extends AlbumSong> extends SongAlbumGroup<T> {
   titleKeys: Set<string>;
 }
@@ -19,8 +23,14 @@ function normalizeGroupValue(value: string): string {
   return value.normalize('NFKC').trim().toLocaleLowerCase();
 }
 
-/** Group known Spotify albums by album + artist. Skip single-song albums whose title equals the track title. */
-export function groupSongsByAlbum<T extends AlbumSong & { title: string }>(songs: T[]): SongAlbumGroup<T>[] {
+/**
+ * Group known Spotify albums by album + artist. Skip single-song albums whose
+ * title equals the track title. Songs without a usable album are returned
+ * separately so the caller can flatten them into the outer list.
+ */
+export function groupSongsByAlbum<T extends AlbumSong & { title: string }>(
+  songs: T[],
+): { entries: SongAlbumEntry<T>[]; unclassified: T[] } {
   const collected = new Map<string, InternalGroup<T>>();
   const unclassified: T[] = [];
 
@@ -46,11 +56,9 @@ export function groupSongsByAlbum<T extends AlbumSong & { title: string }>(songs
     else groups.push(group);
   }
 
-  if (unclassified.length) groups.push({ key: '__unclassified__', album: null, artist: null, songs: unclassified });
-  return groups.sort((left, right) => {
-    if (left.album === null) return 1;
-    if (right.album === null) return -1;
-    return left.album.localeCompare(right.album, undefined, { sensitivity: 'base' })
-      || (left.artist ?? '').localeCompare(right.artist ?? '', undefined, { sensitivity: 'base' });
-  });
+  groups.sort((left, right) =>
+    left.album!.localeCompare(right.album!, undefined, { sensitivity: 'base' })
+      || (left.artist ?? '').localeCompare(right.artist ?? '', undefined, { sensitivity: 'base' }));
+
+  return { entries: groups.map((group) => ({ type: 'group', group })), unclassified };
 }

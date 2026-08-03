@@ -327,7 +327,7 @@ export default function HomePage() {
     }
     return true;
   });
-  const albumGroups = songViewMode === 'album' ? groupSongsByAlbum(filteredSongs) : [];
+  const albumView = songViewMode === 'album' ? groupSongsByAlbum(filteredSongs) : { entries: [], unclassified: [] };
   const visibleSongIds = filteredSongs.map((song) => song.id).join(',');
   const songListRef = useRef<HTMLDivElement>(null);
   const previousSongRectsRef = useRef<Map<string, DOMRect>>(new Map());
@@ -703,25 +703,30 @@ export default function HomePage() {
         </div>
       ) : (
         <div ref={songListRef} className={songViewMode === 'grid' ? 'song-grid grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4' : 'space-y-1.5 sm:space-y-2'}>
-          {songViewMode === 'album' ? albumGroups.map((group) => {
-            const coverUrl = group.songs.find((song) => song.cover_url)?.cover_url;
-            return (
-              <section key={group.key} className="album-group rounded-lg border border-[var(--border)] bg-[var(--card)]/40 p-2.5 sm:p-3">
-                <header className="mb-2.5 flex min-w-0 items-center gap-2.5 px-1">
-                  {coverUrl ? (
-                    <img src={coverUrl} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover bg-[var(--muted)]" loading="lazy" />
-                  ) : (
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[var(--accent)] text-[var(--muted-foreground)]"><Disc3 className="h-4 w-4" /></div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <h2 className="truncate text-sm font-semibold tracking-tight">{group.album ?? t('home.unclassifiedAlbum')}</h2>
-                    <p className="truncate text-xs text-[var(--muted-foreground)]">{group.artist ? `${group.artist} · ${t('home.albumTrackCount', { count: group.songs.length })}` : t('home.albumTrackCount', { count: group.songs.length })}</p>
-                  </div>
-                </header>
-                <div className="space-y-1.5">{group.songs.map((song) => renderSongCard(song, 'list', true))}</div>
-              </section>
-            );
-          }) : filteredSongs.map((song) => renderSongCard(song, songViewMode))}
+          {songViewMode === 'album' ? (<>
+            {albumView.entries.map((entry) => {
+              if (entry.type !== 'group') return null;
+              const group = entry.group;
+              const coverUrl = group.songs.find((song) => song.cover_url)?.cover_url;
+              return (
+                <section key={group.key} className="album-group rounded-lg border border-[var(--border)] bg-[var(--card)]/40 p-2.5 sm:p-3">
+                  <header className="mb-2.5 flex min-w-0 items-center gap-2.5 px-1">
+                    {coverUrl ? (
+                      <img src={coverUrl} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover bg-[var(--muted)]" loading="lazy" />
+                    ) : (
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[var(--accent)] text-[var(--muted-foreground)]"><Disc3 className="h-4 w-4" /></div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <h2 className="truncate text-sm font-semibold tracking-tight">{group.album}</h2>
+                      <p className="truncate text-xs text-[var(--muted-foreground)]">{group.artist ? `${group.artist} · ${t('home.albumTrackCount', { count: group.songs.length })}` : t('home.albumTrackCount', { count: group.songs.length })}</p>
+                    </div>
+                  </header>
+                  <div className="space-y-1.5">{group.songs.map((song) => renderSongCard(song, 'list', true))}</div>
+                </section>
+              );
+            })}
+            {albumView.unclassified.map((song) => renderSongCard(song, 'list'))}
+          </>) : filteredSongs.map((song) => renderSongCard(song, songViewMode))}
         </div>
       )}
 
