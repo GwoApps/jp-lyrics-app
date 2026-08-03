@@ -19,7 +19,6 @@ interface SongData {
 }
 
 export default function EditSongPage() {
-  const router = useRouter();
   const params = useParams();
   const { t } = useI18n();
   const id = params?.id as string;
