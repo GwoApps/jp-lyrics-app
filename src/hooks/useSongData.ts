@@ -56,6 +56,7 @@ interface SongData {
   reading_scheme: ReadingScheme;
   reading_scheme_confirmed: number;
   lyrics_synced: string;
+  lyrics_translation: string;
   cover_url?: string | null;
   spotify_track_id?: string | null;
   spotify_uri?: string | null;
@@ -89,6 +90,11 @@ export interface UseSongDataReturn {
   refreshSong: () => Promise<void>;
   syncLines: ReturnType<typeof parseLrc>;
   furiganaLines: FuriganaLine[];
+  translations: string[];
+  showTranslation: boolean;
+  setShowTranslation: React.Dispatch<React.SetStateAction<boolean>>;
+  translating: boolean;
+  handleTranslate: () => Promise<void>;
   furiganaLoading: boolean;
   furiganaError: string;
   lineTimestamps: (number | null)[];
@@ -144,6 +150,11 @@ export function useSongData(id: string): UseSongDataReturn {
       || localStorage.getItem('jplrc-reading-mode') === 'romaji';
   });
   const [debug, setDebug] = useState(false);
+  const [showTranslation, setShowTranslation] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('jplrc-show-translation') === 'true';
+  });
+  const [translating, setTranslating] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [importAlert, setImportAlert] = useState<ImportAlertState | null>(null);
@@ -165,11 +176,20 @@ export function useSongData(id: string): UseSongDataReturn {
   useEffect(() => { localStorage.setItem('jplrc-font-size', String(fontSize)); }, [fontSize]);
   useEffect(() => { localStorage.setItem('jplrc-reading-mode', readingMode); }, [readingMode]);
   useEffect(() => { localStorage.setItem('jplrc-romanize-furigana', String(romanizeFurigana)); }, [romanizeFurigana]);
+  useEffect(() => { localStorage.setItem('jplrc-show-translation', String(showTranslation)); }, [showTranslation]);
 
   // Derived
   const serverFurigana = useMemo<FuriganaLine[]>(() => {
     if (!song?.lyrics_furigana) return [];
     try { return JSON.parse(song.lyrics_furigana); } catch { return []; }
+  }, [song]);
+
+  const translations = useMemo<string[]>(() => {
+    if (!song?.lyrics_translation) return [];
+    try {
+      const parsed = JSON.parse(song.lyrics_translation);
+      return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+    } catch { return []; }
   }, [song]);
 
   // Client-side furigana (lazy-loaded from kuromoji-es CDN when needed)
@@ -370,6 +390,40 @@ export function useSongData(id: string): UseSongDataReturn {
       setImportAlert({ message: t('song.networkErrorAlert') });
     } finally {
       setSyncing(false);
+    }
+  }, [id, t, showToast]);
+
+
+  const handleTranslate = useCallback(async () => {
+    setTranslating(true);
+    try {
+      const res = await fetch(`/api/songs/${id}/translate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok || !Array.isArray(data.translations)) {
+        const errorKey: Record<string, string> = {
+          login_required: 'apiErrors.loginRequired',
+          forbidden: 'apiErrors.forbidden',
+          translation_not_configured: 'song.translationUnavailable',
+          empty_lyrics: 'song.translationEmptyLyrics',
+          translation_failed: 'song.translationFailed',
+          translation_invalid_response: 'song.translationFailed',
+        };
+        showToast('error', data.error && errorKey[data.error]
+          ? t(errorKey[data.error])
+          : t('song.translationFailed'));
+        return;
+      }
+      setSong((prev) => prev ? { ...prev, lyrics_translation: JSON.stringify(data.translations) } : prev);
+      setShowTranslation(true);
+      showToast('success', t('song.translationReady'));
+    } catch {
+      showToast('error', t('song.networkErrorAlert'));
+    } finally {
+      setTranslating(false);
     }
   }, [id, t, showToast]);
 
@@ -581,6 +635,11 @@ export function useSongData(id: string): UseSongDataReturn {
     refreshSong,
     syncLines,
     furiganaLines,
+    translations,
+    showTranslation,
+    setShowTranslation,
+    translating,
+    handleTranslate,
     furiganaLoading,
     furiganaError,
     lineTimestamps,

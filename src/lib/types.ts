@@ -7,6 +7,7 @@ export interface Song {
   reading_scheme: ReadingScheme;
   reading_scheme_confirmed: number;
   lyrics_synced: string;
+  lyrics_translation: string;
   cover_url?: string | null;
   spotify_track_id?: string | null;
   spotify_uri?: string | null;

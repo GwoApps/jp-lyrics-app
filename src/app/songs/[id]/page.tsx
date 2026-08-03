@@ -487,6 +487,16 @@ export default function SongViewPage() {
                   status: t(data.romanizeFurigana ? 'common.on' : 'common.off'),
                   onClick: () => data.setRomanizeFurigana(!data.romanizeFurigana),
                 }]),
+                {
+                  icon: <Languages className="h-3.5 w-3.5" />,
+                  label: t('song.translation'),
+                  status: data.translating ? t('song.translating') : t(data.showTranslation ? 'common.on' : 'common.off'),
+                  onClick: () => {
+                    if (data.translations.length > 0) data.setShowTranslation(!data.showTranslation);
+                    else void data.handleTranslate();
+                  },
+                  disabled: data.translating || (!canEdit && data.translations.length === 0),
+                },
               ]}
             />
 
@@ -707,6 +717,7 @@ export default function SongViewPage() {
                     readingMode={data.readingMode}
                     romanizeFurigana={data.romanizeFurigana}
                     readingScheme={song.reading_scheme}
+                    translation={data.showTranslation ? data.translations[i] ?? null : null}
                   />
                 </div>
               ))
@@ -1021,6 +1032,17 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
     ...(song.lyrics_raw && canEdit ? [{ icon: <Clock3 className="h-4 w-4" />, label: t('song.timelineEdit'), onClick: () => router.push(`/songs/${id}/timeline/edit`) }] : []),
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: t('song.pipBtn'), onClick: onOpenPiP }] : []),
     ...(song.reading_scheme === 'yue-jyutping' ? [] : [{ icon: <Languages className="h-4 w-4" />, label: t('song.romanizeFurigana'), status: t(data.romanizeFurigana ? 'common.on' : 'common.off'), onClick: () => data.setRomanizeFurigana(!data.romanizeFurigana), keepOpen: true }]),
+    {
+      icon: <Languages className="h-4 w-4" />,
+      label: t('song.translation'),
+      status: data.translating ? t('song.translating') : t(data.showTranslation ? 'common.on' : 'common.off'),
+      onClick: () => {
+        if (data.translations.length > 0) data.setShowTranslation(!data.showTranslation);
+        else void data.handleTranslate();
+      },
+      disabled: data.translating || (!canEdit && data.translations.length === 0),
+      keepOpen: true,
+    },
     { icon: <Bug className="h-4 w-4" />, label: t('song.debug'), status: t(data.debug ? 'common.on' : 'common.off'), onClick: () => data.setDebug(!data.debug), keepOpen: true },
     { icon: <Download className="h-4 w-4" />, label: t('song.download'), status: <ChevronDown className="h-3.5 w-3.5 -rotate-90" />, onClick: () => setShowDownloadMenu(true), keepOpen: true },
     ...(canEdit ? [

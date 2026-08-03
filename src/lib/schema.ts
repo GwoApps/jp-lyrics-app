@@ -10,6 +10,7 @@ export const songs = sqliteTable('songs', {
   readingScheme: text('reading_scheme').notNull().default('ja-kana'),
   readingSchemeConfirmed: integer('reading_scheme_confirmed').notNull().default(0),
   lyricsSynced: text('lyrics_synced').notNull().default(''),
+  lyricsTranslation: text('lyrics_translation').notNull().default('[]'),
   coverUrl: text('cover_url'),
   spotifyTrackId: text('spotify_track_id'),
   spotifyUri: text('spotify_uri'),

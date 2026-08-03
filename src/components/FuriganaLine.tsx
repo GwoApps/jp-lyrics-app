@@ -32,6 +32,7 @@ export default function FuriganaLineView({
   readingMode = 'furigana',
   romanizeFurigana = false,
   readingScheme = 'ja-kana',
+  translation,
 }: {
   line: FuriganaLine;
   isActive: boolean;
@@ -45,6 +46,7 @@ export default function FuriganaLineView({
   readingMode?: ReadingMode;
   romanizeFurigana?: boolean;
   readingScheme?: ReadingScheme;
+  translation?: string | null;
 }) {
   const { t } = useI18n();
   const [animKey, setAnimKey] = useState(0);
@@ -59,44 +61,55 @@ export default function FuriganaLineView({
 
   if (line.segments.length === 0) return <div className="h-5 sm:h-6" />;
 
-  const lineContent = (
+  const translationBlock = translation ? (
     <div
-      className={`lyric-line-context-trigger flex items-baseline gap-2 sm:gap-3 ${onSeek && timestamp != null ? 'cursor-pointer' : ''}`}
-      onClick={onSeek && timestamp != null ? () => onSeek(timestamp) : undefined}
+      className={`lyric-translation mt-0.5 text-[0.72em] leading-relaxed text-[var(--muted-foreground)]/85 ${debugTs != null ? 'pl-[60px] sm:pl-[72px]' : ''}`}
     >
-      {debugTs != null && (
-        <span className="shrink-0 w-[60px] sm:w-[72px] text-right font-mono text-[10px] text-[var(--primary)] opacity-70 tabular-nums">
-          {fmtMs(debugTs)}
-        </span>
-      )}
+      {translation}
+    </div>
+  ) : null;
+
+  const lineContent = (
+    <div>
       <div
-        key={animKey}
-        className={`lyric-line leading-[2.2] sm:leading-[2.8] transition-all duration-300 ${
-          isActive
-            ? 'lyric-line--active scale-[1.03] origin-left lyric-active'
-            : ''
-        } ${onSeek && timestamp != null ? 'hover:!opacity-100' : ''}`}
-        style={{ fontWeight: isActive ? 700 : 400 }}
+        className={`lyric-line-context-trigger flex items-baseline gap-2 sm:gap-3 ${onSeek && timestamp != null ? 'cursor-pointer' : ''}`}
+        onClick={onSeek && timestamp != null ? () => onSeek(timestamp) : undefined}
       >
-        {normalizeFuriganaSegments(line.segments).map((seg, i) => {
-          if (readingMode === 'original') return <span key={i}>{seg.text}</span>;
-          const reading = resolveFuriganaReading(seg.text, seg.reading, romanizeFurigana, readingScheme);
-          if (!reading) return <span key={i}>{seg.text}</span>;
-          const cantoneseReading = readingScheme === 'yue-jyutping';
-          const koreanWord = romanizeFurigana && isKoreanReadingSegment(seg.text);
-          const katakanaChunk = romanizeFurigana && isKatakanaReadingSegment(seg.text);
-          const rubyClass = cantoneseReading
-            ? 'lyric-ruby--cantonese'
-            : koreanWord
-              ? 'lyric-ruby--korean'
-              : katakanaChunk ? 'lyric-ruby--katakana' : undefined;
-          return (
-            <ruby key={i} className={rubyClass}>
-              {seg.text}<rp>(</rp><rt lang={cantoneseReading ? 'yue-Latn' : romanizeFurigana ? 'en' : 'ja'}>{reading}</rt><rp>)</rp>
-            </ruby>
-          );
-        })}
+        {debugTs != null && (
+          <span className="shrink-0 w-[60px] sm:w-[72px] text-right font-mono text-[10px] text-[var(--primary)] opacity-70 tabular-nums">
+            {fmtMs(debugTs)}
+          </span>
+        )}
+        <div
+          key={animKey}
+          className={`lyric-line leading-[2.2] sm:leading-[2.8] transition-all duration-300 ${
+            isActive
+              ? 'lyric-line--active scale-[1.03] origin-left lyric-active'
+              : ''
+          } ${onSeek && timestamp != null ? 'hover:!opacity-100' : ''}`}
+          style={{ fontWeight: isActive ? 700 : 400 }}
+        >
+          {normalizeFuriganaSegments(line.segments).map((seg, i) => {
+            if (readingMode === 'original') return <span key={i}>{seg.text}</span>;
+            const reading = resolveFuriganaReading(seg.text, seg.reading, romanizeFurigana, readingScheme);
+            if (!reading) return <span key={i}>{seg.text}</span>;
+            const cantoneseReading = readingScheme === 'yue-jyutping';
+            const koreanWord = romanizeFurigana && isKoreanReadingSegment(seg.text);
+            const katakanaChunk = romanizeFurigana && isKatakanaReadingSegment(seg.text);
+            const rubyClass = cantoneseReading
+              ? 'lyric-ruby--cantonese'
+              : koreanWord
+                ? 'lyric-ruby--korean'
+                : katakanaChunk ? 'lyric-ruby--katakana' : undefined;
+            return (
+              <ruby key={i} className={rubyClass}>
+                {seg.text}<rp>(</rp><rt lang={cantoneseReading ? 'yue-Latn' : romanizeFurigana ? 'en' : 'ja'}>{reading}</rt><rp>)</rp>
+              </ruby>
+            );
+          })}
+        </div>
       </div>
+      {translationBlock}
     </div>
   );
 

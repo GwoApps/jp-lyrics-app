@@ -22,6 +22,7 @@ const songFields = {
   reading_scheme: schema.songs.readingScheme,
   reading_scheme_confirmed: schema.songs.readingSchemeConfirmed,
   lyrics_synced: schema.songs.lyricsSynced,
+  lyrics_translation: schema.songs.lyricsTranslation,
   cover_url: schema.songs.coverUrl,
   spotify_track_id: schema.songs.spotifyTrackId,
   spotify_uri: schema.songs.spotifyUri,

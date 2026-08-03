@@ -1,0 +1,1 @@
+ALTER TABLE `songs` ADD `lyrics_translation` text DEFAULT '[]' NOT NULL;
