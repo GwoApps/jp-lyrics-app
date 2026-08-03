@@ -41,10 +41,12 @@ export async function POST(
   const config = getTranslationConfig()!;
 
   // Cache hit: return existing translation unless force is requested.
+  // An empty array (the default '[]' placeholder) is NOT a valid cache — it means
+  // the song was never translated, so fall through to real translation.
   if (!body.force && existing.lyricsTranslation) {
     try {
       const cached = JSON.parse(existing.lyricsTranslation);
-      if (Array.isArray(cached) && cached.every((item) => typeof item === 'string')) {
+      if (Array.isArray(cached) && cached.length > 0 && cached.every((item) => typeof item === 'string')) {
         return NextResponse.json({ translations: cached, cached: true });
       }
     } catch { /* fall through to re-translate */ }
