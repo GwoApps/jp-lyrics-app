@@ -179,7 +179,9 @@
     "copyTranslation": "Copy translation",
     "copyTranslationEmpty": "No translation available",
     "translationPrompt": "This song has no translation yet. Translate it now?",
-    "translate": "Translate"
+    "translate": "Translate",
+    "translatingProgress": "Translating {done}/{total}",
+    "translationContinue": "Continue translating"
   },
   "timeline": {
     "title": "LRC Timeline Editor",

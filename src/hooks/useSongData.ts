@@ -97,6 +97,7 @@ export interface UseSongDataReturn {
   setShowTranslation: React.Dispatch<React.SetStateAction<boolean>>;
   translating: boolean;
   translationError: string | null;
+  translationProgress: { done: number; total: number } | null;
   dismissTranslationError: () => void;
   handleTranslate: () => Promise<void>;
   furiganaLoading: boolean;
@@ -160,6 +161,7 @@ export function useSongData(id: string): UseSongDataReturn {
   });
   const [translating, setTranslating] = useState(false);
   const [translationError, setTranslationError] = useState<string | null>(null);
+  const [translationProgress, setTranslationProgress] = useState<{ done: number; total: number } | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [importAlert, setImportAlert] = useState<ImportAlertState | null>(null);
@@ -401,34 +403,58 @@ export function useSongData(id: string): UseSongDataReturn {
 
 
   const handleTranslate = useCallback(async () => {
+    if (!song) return;
+    const total = furiganaLines.length || song.lyrics_raw.split('\n').length;
+    if (total === 0) return;
+    const batchSize = 10;
+
+    // Seed the merged array from any existing (partial) cache so an interrupted
+    // translation can resume: batches whose lines are already translated are skipped.
+    const seed: (string | null)[] = Array(total).fill(null);
+    try {
+      const parsed = JSON.parse(song.lyrics_translation || '[]');
+      if (Array.isArray(parsed)) {
+        parsed.forEach((item, i) => { if (i < total && typeof item === 'string') seed[i] = item; });
+      }
+    } catch { /* start from scratch */ }
+
     setTranslating(true);
     setTranslationError(null);
+    setTranslationProgress({ done: seed.filter((v) => v !== null).length, total });
     try {
-      const res = await fetch(`/api/songs/${id}/translate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      const data = await res.json();
-      if (!res.ok || !Array.isArray(data.translations)) {
-        const errorKey: Record<string, string> = {
-          login_required: 'apiErrors.loginRequired',
-          forbidden: 'apiErrors.forbidden',
-          translation_not_configured: 'song.translationUnavailable',
-          empty_lyrics: 'song.translationEmptyLyrics',
-          translation_failed: 'song.translationFailed',
-          translation_invalid_response: 'song.translationFailed',
-        };
-        const message = data.error && errorKey[data.error]
-          ? t(errorKey[data.error])
-          : t('song.translationFailed');
-        setTranslationError(message);
-        showToast('error', message);
-        return;
+      for (let start = 0; start < total; start += batchSize) {
+        const batch = seed.slice(start, start + batchSize);
+        if (!batch.every((v) => v !== null)) {
+          const res = await fetch(`/api/songs/${id}/translate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ start, count: batchSize }),
+          });
+          const data = await res.json();
+          if (!res.ok || !Array.isArray(data.translations)) {
+            const errorKey: Record<string, string> = {
+              login_required: 'apiErrors.loginRequired',
+              forbidden: 'apiErrors.forbidden',
+              translation_not_configured: 'song.translationUnavailable',
+              empty_lyrics: 'song.translationEmptyLyrics',
+              translation_failed: 'song.translationFailed',
+              translation_invalid_response: 'song.translationFailed',
+            };
+            const message = data.error && errorKey[data.error]
+              ? t(errorKey[data.error])
+              : t('song.translationFailed');
+            setTranslationError(message);
+            showToast('error', message);
+            return; // progress is preserved so the user can continue later
+          }
+          data.translations.forEach((tr: string, i: number) => { seed[start + i] = tr; });
+          setSong((prev) => prev ? { ...prev, lyrics_translation: JSON.stringify(seed) } : prev);
+        }
+        setTranslationProgress({ done: Math.min(start + batchSize, total), total });
       }
-      setSong((prev) => prev ? { ...prev, lyrics_translation: JSON.stringify(data.translations) } : prev);
       setShowTranslation(true);
       showToast('success', t('song.translationReady'));
+      setTranslationProgress(null);
     } catch {
       const message = t('song.networkErrorAlert');
       setTranslationError(message);
@@ -436,7 +462,7 @@ export function useSongData(id: string): UseSongDataReturn {
     } finally {
       setTranslating(false);
     }
-  }, [id, t, showToast]);
+  }, [id, song, furiganaLines, t, showToast]);
 
   // When the translation display is on but the song has no translation yet,
   // offer to translate it (once per page visit).
@@ -455,7 +481,10 @@ export function useSongData(id: string): UseSongDataReturn {
   }, [showTranslation, song?.lyrics_raw, translations.length, translating, t, showToast, handleTranslate]);
 
 
-  const dismissTranslationError = useCallback(() => setTranslationError(null), []);
+  const dismissTranslationError = useCallback(() => {
+    setTranslationError(null);
+    setTranslationProgress(null);
+  }, []);
 
   const handleDelete = useCallback(() => {
     if (!song) return;
@@ -680,6 +709,7 @@ export function useSongData(id: string): UseSongDataReturn {
     setShowTranslation,
     translating,
     translationError,
+    translationProgress,
     dismissTranslationError,
     handleTranslate,
     furiganaLoading,

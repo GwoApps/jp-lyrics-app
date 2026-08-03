@@ -179,7 +179,9 @@
     "copyTranslation": "翻訳をコピー",
     "copyTranslationEmpty": "翻訳がありません",
     "translationPrompt": "この曲にはまだ中国語訳がありません。今翻訳しますか？",
-    "translate": "翻訳"
+    "translate": "翻訳",
+    "translatingProgress": "翻訳中 {done}/{total}",
+    "translationContinue": "翻訳を続ける"
   },
   "timeline": {
     "title": "LRC タイムライン編集",

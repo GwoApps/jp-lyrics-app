@@ -179,7 +179,9 @@
     "copyTranslation": "复制翻译",
     "copyTranslationEmpty": "暂无翻译",
     "translationPrompt": "这首歌还没有中文翻译，需要现在翻译吗？",
-    "translate": "翻译"
+    "translate": "翻译",
+    "translatingProgress": "翻译中 {done}/{total}",
+    "translationContinue": "继续翻译"
   },
   "timeline": {
     "title": "LRC 时间轴编辑",

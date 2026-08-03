@@ -715,18 +715,34 @@ export default function SongViewPage() {
         <div className="lyrics-ambient-orbit" aria-hidden="true" />
         <div className="lyrics-ambient-orbit lyrics-ambient-orbit--secondary" aria-hidden="true" />
         <div className="lyrics-panel relative isolate h-full rounded-lg overflow-hidden">
-          {/* Translation status overlay: visible progress while translating, persistent error with dismiss */}
-          {(data.translating || data.translationError) && (
+          {/* Translation status overlay: visible progress while translating, persistent error with dismiss + continue */}
+          {(data.translating || data.translationError || (data.translationProgress && data.translationProgress.done < data.translationProgress.total)) && (
             <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 max-w-[calc(100%-2rem)]">
               {data.translating ? (
                 <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--background)]/90 px-3 py-1.5 text-xs text-[var(--muted-foreground)] shadow-sm backdrop-blur-sm">
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--primary)]" />
-                  {t('song.translating')}
+                  {data.translationProgress
+                    ? t('song.translatingProgress', { done: data.translationProgress.done, total: data.translationProgress.total })
+                    : t('song.translating')}
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-2 rounded-full border border-[var(--warning)]/40 bg-[var(--background)]/90 px-3 py-1.5 text-xs text-[var(--warning)] shadow-sm backdrop-blur-sm">
                   <CircleAlert className="h-3.5 w-3.5 shrink-0" />
-                  <span className="max-w-[240px] sm:max-w-[360px] truncate">{data.translationError}</span>
+                  <span className="max-w-[200px] sm:max-w-[320px] truncate">
+                    {data.translationError
+                      ?? (data.translationProgress
+                        ? t('song.translatingProgress', { done: data.translationProgress.done, total: data.translationProgress.total })
+                        : '')}
+                  </span>
+                  {data.translationProgress && data.translationProgress.done < data.translationProgress.total && (
+                    <button
+                      type="button"
+                      onClick={() => void data.handleTranslate()}
+                      className="rounded-full border border-[var(--warning)]/40 px-2 py-0.5 font-medium text-[var(--warning)] hover:bg-[var(--warning)]/10"
+                    >
+                      {t('song.translationContinue')}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={data.dismissTranslationError}
