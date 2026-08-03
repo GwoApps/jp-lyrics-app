@@ -85,9 +85,12 @@ export default function SongForm({
   const [linkcoreUrl, setLinkcoreUrl] = useState('');
   const [importingLinkcore, setImportingLinkcore] = useState(false);
 
-  // Custom cover management (edit mode only).
+  // Custom cover management (edit mode uploads immediately; create mode
+  // keeps the file pending and uploads after the song is created).
   const [coverUrl, setCoverUrl] = useState<string | null>(initialCoverUrl);
   const [coverUploading, setCoverUploading] = useState(false);
+  const [pendingCoverFile, setPendingCoverFile] = useState<File | null>(null);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverFileRef = useRef<HTMLInputElement>(null);
@@ -143,7 +146,7 @@ export default function SongForm({
     }
   };
 
-  const handleCoverUpload = async (file: File) => {
+  const handleCoverSelect = (file: File | null) => {
     if (!file) return;
     if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
       showToast('error', t('song.coverUnsupported'));
@@ -153,6 +156,19 @@ export default function SongForm({
       showToast('error', t('song.coverTooLarge'));
       return;
     }
+    if (mode === 'edit' && songId) {
+      void handleCoverUpload(file);
+      return;
+    }
+    setPendingCoverFile(file);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setCoverPreviewUrl(typeof event.target?.result === 'string' ? event.target.result : null);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCoverUpload = async (file: File) => {
     setCoverUploading(true);
     try {
       const form = new FormData();
@@ -224,6 +240,19 @@ export default function SongForm({
         }
       }
       const song = await onSave(body);
+      // Create mode: upload the pending cover now that the song exists.
+      // Leaving the cover empty keeps whatever the server resolved (e.g.
+      // Spotify artwork) — a failed upload never blocks navigation.
+      if (mode === 'create' && pendingCoverFile) {
+        const form = new FormData();
+        form.append('file', pendingCoverFile);
+        const res = await fetch(`/api/songs/${song.id}/cover`, { method: 'POST', body: form });
+        const result = await res.json().catch(() => null);
+        if (!res.ok || !result?.cover_url) {
+          showToast('error', t('song.coverUploadFailed'));
+          return;
+        }
+      }
       showToast('success', t(`${ns}.saved`));
       setTimeout(() => router.push(`/songs/${song.id}`), 800);
     } catch (error: unknown) {
@@ -323,15 +352,15 @@ export default function SongForm({
           )}
         </div>
 
-        {/* Cover (edit mode) */}
+        {/* Cover (edit: manage existing; create: optional pending upload) */}
         {canManageCover && (
           <div>
             <label className="block text-xs font-medium text-[var(--muted-foreground)] mb-2">{t('song.uploadCover')}</label>
             <div className="flex items-center gap-4">
               <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--accent)]">
-                {coverUrl ? (
+                {coverUrl || coverPreviewUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={coverUrl} alt={title || ''} className="h-full w-full object-cover" />
+                  <img src={coverUrl ?? coverPreviewUrl ?? ''} alt={title || ''} className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-[var(--muted-foreground)]">
                     <Music className="h-6 w-6 opacity-50" />
@@ -342,21 +371,28 @@ export default function SongForm({
                 <div className="flex items-center gap-2">
                   <input ref={coverFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) void handleCoverUpload(file);
+                    if (file) handleCoverSelect(file);
                   }} />
                   <button
                     type="button"
                     onClick={() => coverFileRef.current?.click()}
-                    disabled={coverUploading}
+                    disabled={coverUploading || saving}
                     className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium bg-[var(--accent)] text-[var(--foreground)] hover:opacity-85 transition-opacity disabled:opacity-50"
                   >
                     <ImagePlus className="h-3.5 w-3.5" />
                     {coverUploading ? t('song.coverUploading') : t('song.uploadCover')}
                   </button>
-                  {isCustomCover && (
+                  {(mode === 'edit' ? isCustomCover : !!pendingCoverFile) && (
                     <button
                       type="button"
-                      onClick={() => void handleCoverRemove()}
+                      onClick={() => {
+                        if (mode === 'edit') {
+                          void handleCoverRemove();
+                        } else {
+                          setPendingCoverFile(null);
+                          setCoverPreviewUrl(null);
+                        }
+                      }}
                       disabled={coverUploading}
                       className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--destructive)] transition-colors disabled:opacity-50"
                     >
@@ -365,7 +401,9 @@ export default function SongForm({
                     </button>
                   )}
                 </div>
-                <p className="text-[11px] text-[var(--muted-foreground)]">{t('song.coverHint')}</p>
+                <p className="text-[11px] text-[var(--muted-foreground)]">
+                  {mode === 'create' ? t('song.coverCreateHint') : t('song.coverHint')}
+                </p>
               </div>
             </div>
           </div>

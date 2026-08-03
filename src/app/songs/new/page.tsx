@@ -39,6 +39,7 @@ export default function NewSongPage() {
         initialTitle={prefill.title}
         initialArtist={prefill.artist}
         initialReadingSchemeConfirmed={false}
+        canManageCover
         showLinkcore
         showCantonesePlaceholders
         spotifyTrackId={prefill.spotifyTrackId}

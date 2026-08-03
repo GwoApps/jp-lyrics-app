@@ -199,7 +199,8 @@
     "coverUploadFailed": "カバー操作に失敗しました",
     "coverTooLarge": "画像は5MB以下にしてください",
     "coverUnsupported": "対応していない画像形式です",
-    "coverHint": "JPG / PNG / WebP / GIF 対応、最大5MB。アップロード後すぐに反映されます"
+    "coverHint": "JPG / PNG / WebP / GIF 対応、最大5MB。アップロード後すぐに反映されます",
+    "coverCreateHint": "任意です。未設定の場合、Spotify 連携があれば自動で取得します"
   },
   "timeline": {
     "title": "LRC タイムライン編集",
