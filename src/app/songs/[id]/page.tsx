@@ -470,7 +470,8 @@ export default function SongViewPage() {
           <div className="hidden self-end sm:flex flex-col items-end gap-3">
             <div className="flex flex-wrap items-center justify-end gap-2 [&>*]:shrink-0">
             <ToolbarMenu
-              label={<span className="inline-flex items-center gap-1">{data.copied ? <Check className="h-4 w-4 text-[var(--success)]" /> : <Copy className="h-4 w-4" />}</span>}
+              label={<span className="inline-flex items-center">{data.copied ? <Check className="h-4 w-4 text-[var(--success)]" /> : <Copy className="h-4 w-4" />}</span>}
+              triggerClassName={btnCls(data.copied)}
               items={[
                 {
                   icon: <Copy className="h-3.5 w-3.5" />,
@@ -1036,7 +1037,7 @@ function MobileIconButton({ label, className = '', children, onClick, ...props }
   );
 }
 
-function ToolbarMenu({ label, items }: { label: ReactNode; items: ToolbarMenuItem[] }) {
+function ToolbarMenu({ label, items, triggerClassName }: { label: ReactNode; items: ToolbarMenuItem[]; triggerClassName?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -1054,7 +1055,7 @@ function ToolbarMenu({ label, items }: { label: ReactNode; items: ToolbarMenuIte
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className={`${btnTextCls(open)} song-menu-trigger`}
+        className={triggerClassName ?? `${btnTextCls(open)} song-menu-trigger`}
         data-open={open}
         aria-haspopup="menu"
         aria-expanded={open}
