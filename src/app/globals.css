@@ -413,7 +413,21 @@ textarea {
 
 /* Safe area for iOS bottom bar */
 /* Active lyrics line highlight */
+@keyframes lyricsPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 .lyrics-panel-shell {
+  /* Fade in + rise once the song data has loaded and the panel mounts.
+     Plays only on the initial loading→ready transition (the shell stays
+     mounted afterwards, so edits/sync don't replay it). */
+  animation: lyricsPanelIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
   --lyric-accent: var(--border);
   --lyric-orbit-accent: var(--lyric-accent);
   --lyric-orbit-accent-2: var(--lyric-orbit-accent);
@@ -431,6 +445,11 @@ textarea {
   --lyric-ambient-secondary-opacity: 0;
   --lyric-ambient-breath-opacity: 0;
   --lyric-ambient-breath-min-opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lyrics-panel-shell {
+    animation: none;
+  }
 }
 .lyrics-panel {
   z-index: 1;
