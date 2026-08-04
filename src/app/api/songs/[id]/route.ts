@@ -51,6 +51,7 @@ const songFields = {
   reading_scheme_confirmed: schema.songs.readingSchemeConfirmed,
   lyrics_synced: schema.songs.lyricsSynced,
   lyrics_translation: schema.songs.lyricsTranslation,
+  lyrics_glossary: schema.songs.lyricsGlossary,
   cover_url: schema.songs.coverUrl,
   cover_palette: schema.songs.coverPalette,
   spotify_track_id: schema.songs.spotifyTrackId,
@@ -149,12 +150,15 @@ export async function PUT(
   const lyricsTranslation = clear_translation === true
     ? '[]'
     : lyricsContentChanged ? '[]' : existing.lyrics_translation;
+  // The terminology glossary is tied to the lyrics content; invalidate it on change.
+  const lyricsGlossary = lyricsContentChanged ? null : existing.lyrics_glossary;
   await db.update(schema.songs).set({
     title: title !== undefined ? title : existing.title,
     artist: artist !== undefined ? artist : existing.artist,
     lyricsRaw: newRaw,
     lyricsFurigana,
     lyricsTranslation,
+    lyricsGlossary,
     coverPalette: cover_palette !== undefined
       ? cover_palette === null ? null : JSON.stringify(cover_palette)
       : existing.cover_palette,

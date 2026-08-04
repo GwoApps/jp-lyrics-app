@@ -5,6 +5,14 @@
  * (DeepSeek, OpenAI, Qwen, local vLLM, ...), the Anthropic Messages API,
  * or the Cloudflare Workers AI binding (no API key needed).
  *
+ * Features:
+ * - Optional terminology extraction (glossary) for consistent proper-noun
+ *   translations across batches, plus song title/artist context.
+ * - Automatic retry with exponential backoff for transient failures
+ *   (network errors, 5xx, provider 429). Quota errors are never retried.
+ * - JSON-array-first response parsing with a newline fallback and strict
+ *   line-count normalization.
+ *
  * Environment variables:
  *   TRANSLATION_PROVIDER  'openai' | 'anthropic' | 'workers-ai'  (default: openai)
  *   TRANSLATION_BASE_URL  base URL without the path suffix   (default: DeepSeek / Anthropic)
@@ -21,6 +29,18 @@
 
 export type TranslationProvider = 'openai' | 'anthropic' | 'workers-ai';
 
+export interface GlossaryEntry {
+  original: string;
+  translation: string;
+}
+
+/** Per-request translation context: song identity + terminology table. */
+export interface TranslationContext {
+  title?: string;
+  artist?: string;
+  glossary?: GlossaryEntry[];
+}
+
 export interface TranslationConfig {
   provider: TranslationProvider;
   baseUrl: string;
@@ -31,11 +51,14 @@ export interface TranslationConfig {
 
 export class TranslationError extends Error {
   code: 'translation_failed' | 'translation_invalid_response' | 'ai_quota_exceeded';
+  /** True when retrying might help (5xx / provider 429 / network). */
+  retryable: boolean;
 
-  constructor(code: 'translation_failed' | 'translation_invalid_response' | 'ai_quota_exceeded', message: string) {
+  constructor(code: 'translation_failed' | 'translation_invalid_response' | 'ai_quota_exceeded', message: string, retryable = false) {
     super(message);
     this.name = 'TranslationError';
     this.code = code;
+    this.retryable = retryable;
   }
 }
 
@@ -44,6 +67,10 @@ const DEFAULT_ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
 const DEFAULT_OPENAI_MODEL = 'deepseek-v4-flash';
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-5';
 const DEFAULT_WORKERS_AI_MODEL = '@cf/google/gemini-3.6-flash';
+
+/** Attempts and backoff for transient failures (1s, 2s). */
+const RETRY_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 1000;
 
 export interface TranslationTestResult {
   ok: boolean;
@@ -155,32 +182,50 @@ export function isTranslationConfigured(): boolean {
   return getTranslationConfig() !== null;
 }
 
-const SYSTEM_PROMPT = (targetLang: string) =>
-  `You are a professional song-lyrics translator. Translate the given lyrics into ${targetLang}.
-Rules:
-- Translate every non-empty line faithfully but naturally; keep meaning, mood, and line structure.
-- Keep the number of output entries EXACTLY equal to the number of input lines.
-- For an empty input line, output an empty string.
-- Do not add explanations, headers, or timestamps.
-- Respond with ONLY a JSON array of strings.`;
+const SYSTEM_PROMPT = (targetLang: string, ctx?: TranslationContext) => {
+  const parts = [
+    `You are a professional song-lyrics translator. Translate the given lyrics into ${targetLang}.`,
+    'Rules:',
+    '- Translate every non-empty line faithfully but naturally; keep meaning, mood, and line structure.',
+    '- Keep the number of output entries EXACTLY equal to the number of input lines.',
+    '- For an empty input line, output an empty string.',
+    '- Do not add explanations, headers, or timestamps.',
+    '- Respond with ONLY a JSON array of strings.',
+  ];
+  if (ctx?.title || ctx?.artist) {
+    parts.push(`Song context — title: "${ctx.title ?? ''}", artist: "${ctx.artist ?? ''}". Use these consistently whenever they appear in the lyrics.`);
+  }
+  if (ctx?.glossary && ctx.glossary.length > 0) {
+    parts.push('Terminology — use exactly these translations for the following terms:');
+    ctx.glossary.forEach((entry) => parts.push(`- ${entry.original} → ${entry.translation}`));
+  }
+  return parts.join('\n');
+};
 
-function buildOpenAIPayload(lines: string[], cfg: TranslationConfig) {
+const GLOSSARY_PROMPT = `You extract terminology for translating song lyrics.
+Given the song title, artist, and full lyrics, list the proper nouns and
+terms whose translations must stay consistent across the whole song
+(person/place/brand names, work titles, repeated foreign words).
+Return ONLY a JSON array of {"original":"...","translation":"..."} objects.
+If there is nothing to extract, return an empty array []. Max 20 entries.`;
+
+function buildOpenAIPayload(lines: string[], cfg: TranslationConfig, ctx?: TranslationContext) {
   return {
     model: cfg.model,
     temperature: 0.2,
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT(cfg.targetLang) },
+      { role: 'system', content: SYSTEM_PROMPT(cfg.targetLang, ctx) },
       { role: 'user', content: JSON.stringify(lines) },
     ],
   };
 }
 
-function buildAnthropicPayload(lines: string[], cfg: TranslationConfig) {
+function buildAnthropicPayload(lines: string[], cfg: TranslationConfig, ctx?: TranslationContext) {
   return {
     model: cfg.model,
     max_tokens: 4096,
     temperature: 0.2,
-    system: SYSTEM_PROMPT(cfg.targetLang),
+    system: SYSTEM_PROMPT(cfg.targetLang, ctx),
     messages: [{ role: 'user', content: JSON.stringify(lines) }],
   };
 }
@@ -205,7 +250,29 @@ function normalizeTranslations(sourceLines: string[], parsed: unknown): string[]
   return sourceLines.map((source, i) => (source.trim() ? (raw[i] ?? '').trim() : ''));
 }
 
-async function requestOpenAI(lines: string[], cfg: TranslationConfig, fetchImpl: typeof fetch): Promise<string> {
+/** Retry helper with exponential backoff; only retries transient failures. */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  attempts: number,
+  baseDelayMs: number,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      const retryable = error instanceof TranslationError
+        ? error.retryable
+        : true; // network errors etc.
+      if (!retryable || attempt === attempts - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, baseDelayMs * 2 ** attempt));
+    }
+  }
+  throw lastError;
+}
+
+async function requestOpenAI(lines: string[], cfg: TranslationConfig, fetchImpl: typeof fetch, ctx?: TranslationContext): Promise<string> {
   const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 60_000);
@@ -216,11 +283,11 @@ async function requestOpenAI(lines: string[], cfg: TranslationConfig, fetchImpl:
         'Content-Type': 'application/json',
         Authorization: `Bearer ${cfg.apiKey}`,
       },
-      body: JSON.stringify(buildOpenAIPayload(lines, cfg)),
+      body: JSON.stringify(buildOpenAIPayload(lines, cfg, ctx)),
       signal: controller.signal,
     });
     if (!response.ok) {
-      throw new TranslationError('translation_failed', `upstream status ${response.status}`);
+      throw new TranslationError('translation_failed', `upstream status ${response.status}`, response.status >= 500 || response.status === 429);
     }
     const data = await response.json() as { choices?: { message?: { content?: string } }[] };
     const content = data.choices?.[0]?.message?.content;
@@ -233,7 +300,7 @@ async function requestOpenAI(lines: string[], cfg: TranslationConfig, fetchImpl:
   }
 }
 
-async function requestAnthropic(lines: string[], cfg: TranslationConfig, fetchImpl: typeof fetch): Promise<string> {
+async function requestAnthropic(lines: string[], cfg: TranslationConfig, fetchImpl: typeof fetch, ctx?: TranslationContext): Promise<string> {
   const base = cfg.baseUrl.replace(/\/+$/, '');
   const url = base.endsWith('/v1') ? `${base}/messages` : `${base}/v1/messages`;
   const controller = new AbortController();
@@ -246,11 +313,11 @@ async function requestAnthropic(lines: string[], cfg: TranslationConfig, fetchIm
         'x-api-key': cfg.apiKey,
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify(buildAnthropicPayload(lines, cfg)),
+      body: JSON.stringify(buildAnthropicPayload(lines, cfg, ctx)),
       signal: controller.signal,
     });
     if (!response.ok) {
-      throw new TranslationError('translation_failed', `upstream status ${response.status}`);
+      throw new TranslationError('translation_failed', `upstream status ${response.status}`, response.status >= 500 || response.status === 429);
     }
     const data = await response.json() as { content?: { type?: string; text?: string }[] };
     const text = data.content?.find((block) => block.type === 'text')?.text;
@@ -277,7 +344,7 @@ async function getWorkersAiBinding(): Promise<{ run: (model: string, inputs: unk
   }
 }
 
-async function requestWorkersAI(lines: string[], cfg: TranslationConfig): Promise<string> {
+async function requestWorkersAI(lines: string[], cfg: TranslationConfig, ctx?: TranslationContext): Promise<string> {
   const ai = await getWorkersAiBinding();
   if (!ai) {
     throw new TranslationError('translation_failed', 'Workers AI binding unavailable');
@@ -287,7 +354,7 @@ async function requestWorkersAI(lines: string[], cfg: TranslationConfig): Promis
   // Dynamic import keeps the node test runner (no @ alias) from resolving
   // the DB-backed usage module unless the workers-ai path is actually used.
   const { checkAiQuota, estimateTokens, neuronsForTokens, recordAiUsage } = await import('@/lib/ai-usage');
-  const prompt = SYSTEM_PROMPT(cfg.targetLang);
+  const prompt = SYSTEM_PROMPT(cfg.targetLang, ctx);
   const inputText = `${prompt}\n${JSON.stringify(lines)}`;
   const quota = await checkAiQuota(neuronsForTokens(estimateTokens(inputText), 0));
   if (!quota.ok) {
@@ -316,19 +383,103 @@ async function requestWorkersAI(lines: string[], cfg: TranslationConfig): Promis
 }
 
 /**
+ * Extract a terminology table from the full song. Returns [] on any
+ * failure so translation can proceed without it (best-effort feature).
+ */
+export async function extractLyricsGlossary(
+  title: string,
+  artist: string,
+  lines: string[],
+  cfg: TranslationConfig,
+): Promise<GlossaryEntry[]> {
+  const input = JSON.stringify({ title, artist, lyrics: lines });
+  try {
+    const text = await withRetry(async () => {
+      const messages = [
+        { role: 'system', content: GLOSSARY_PROMPT },
+        { role: 'user', content: input },
+      ];
+      if (cfg.provider === 'anthropic') {
+        return await requestAnthropicRaw(messages, cfg);
+      }
+      if (cfg.provider === 'workers-ai') {
+        const ai = await getWorkersAiBinding();
+        if (!ai) throw new TranslationError('translation_failed', 'Workers AI binding unavailable');
+        const data = await ai.run(cfg.model, { messages, max_tokens: 512, temperature: 0 });
+        return data?.response ?? '';
+      }
+      const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
+        body: JSON.stringify({ model: cfg.model, messages, max_tokens: 512, temperature: 0 }),
+      });
+      if (!res.ok) throw new TranslationError('translation_failed', `upstream status ${res.status}`, res.status >= 500 || res.status === 429);
+      const data = await res.json() as { choices?: { message?: { content?: string } }[] };
+      return data.choices?.[0]?.message?.content ?? '';
+    }, RETRY_ATTEMPTS, RETRY_BASE_DELAY_MS);
+
+    const parsed = extractJsonArray(text);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is GlossaryEntry =>
+        typeof item === 'object' && item !== null
+        && typeof (item as GlossaryEntry).original === 'string'
+        && typeof (item as GlossaryEntry).translation === 'string')
+      .slice(0, 20);
+  } catch {
+    return [];
+  }
+}
+
+/** Minimal Anthropic messages call shared by glossary extraction. */
+async function requestAnthropicRaw(
+  messages: { role: string; content: string }[],
+  cfg: TranslationConfig,
+): Promise<string> {
+  const base = cfg.baseUrl.replace(/\/+$/, '');
+  const url = base.endsWith('/v1') ? `${base}/messages` : `${base}/v1/messages`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': cfg.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({ model: cfg.model, messages, max_tokens: 512, temperature: 0 }),
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new TranslationError('translation_failed', `upstream status ${res.status}`, res.status >= 500 || res.status === 429);
+    const data = await res.json() as { content?: { type?: string; text?: string }[] };
+    return data.content?.find((block) => block.type === 'text')?.text ?? '';
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Translate lyric lines. The returned array has the same length as `lines`;
- * empty source lines always map to empty strings.
+ * empty source lines always map to empty strings. Transient failures are
+ * retried with exponential backoff; quota errors fail fast.
  */
 export async function translateLyricLines(
   lines: string[],
   cfg: TranslationConfig,
   fetchImpl: typeof fetch = fetch,
+  ctx?: TranslationContext,
 ): Promise<string[]> {
-  const text = cfg.provider === 'anthropic'
-    ? await requestAnthropic(lines, cfg, fetchImpl)
-    : cfg.provider === 'workers-ai'
-      ? await requestWorkersAI(lines, cfg)
-      : await requestOpenAI(lines, cfg, fetchImpl);
+  const text = await withRetry(async () => {
+    if (cfg.provider === 'anthropic') {
+      return await requestAnthropic(lines, cfg, fetchImpl, ctx);
+    }
+    if (cfg.provider === 'workers-ai') {
+      return await requestWorkersAI(lines, cfg, ctx);
+    }
+    return await requestOpenAI(lines, cfg, fetchImpl, ctx);
+  }, RETRY_ATTEMPTS, RETRY_BASE_DELAY_MS);
 
   // Prefer a JSON array; fall back to newline-separated plain text.
   const parsed = extractJsonArray(text);
