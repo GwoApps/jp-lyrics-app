@@ -451,6 +451,62 @@ textarea {
     animation: none;
   }
 }
+
+/* Reasoning panel — Apple Intelligence-style flowing color edge + blink cursor */
+@keyframes reasoningGlowSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes reasoningCursorBlink {
+  0%, 45% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.reasoning-glow {
+  position: relative;
+  isolation: isolate;
+  padding: 1.5px;
+  background: transparent;
+}
+.reasoning-glow::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -150%;
+  background: conic-gradient(
+    from 0deg,
+    #8b5cf6, #3b82f6, #22d3ee, #34d399, #fbbf24, #fb7185, #8b5cf6
+  );
+  animation: reasoningGlowSpin 8s linear infinite;
+}
+.reasoning-glow::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: 0.75rem;
+  box-shadow:
+    0 0 28px -6px rgba(139, 92, 246, 0.4),
+    0 0 14px -4px rgba(59, 130, 246, 0.3),
+    inset 0 0 8px -2px rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+}
+.reasoning-cursor {
+  display: inline-block;
+  width: 7px;
+  height: 0.95em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #a78bfa, #60a5fa);
+  box-shadow: 0 0 6px rgba(139, 92, 246, 0.7);
+  animation: reasoningCursorBlink 1.1s step-end infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reasoning-glow::before,
+  .reasoning-cursor {
+    animation: none;
+  }
+}
 .lyrics-panel {
   z-index: 1;
   background: color-mix(in srgb, var(--card) 90%, var(--lyric-accent));

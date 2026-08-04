@@ -113,6 +113,20 @@ export default function SongViewPage() {
   const [showSyncConfirm, setShowSyncConfirm] = useState(false);
   const lyricsRef = useRef<HTMLDivElement>(null);
   const reasoningScrollRef = useRef<HTMLDivElement>(null);
+  const [reasoningFollow, setReasoningFollow] = useState(true);
+
+  // Reasoning panel auto-scroll: follow the latest chunk unless the user has
+  // scrolled up (a "back to bottom" button appears in that case).
+  const handleReasoningScroll = () => {
+    const el = reasoningScrollRef.current;
+    if (!el) return;
+    setReasoningFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
+  };
+  const scrollReasoningToBottom = () => {
+    const el = reasoningScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+    setReasoningFollow(true);
+  };
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   // Mutable ref bag for the rAF sync loop (avoids stale closures)
@@ -134,11 +148,13 @@ export default function SongViewPage() {
   const spotifyConnected = session ? session.spotify.connected : null;
 
   // Spotify sync hook (polling + rAF + follow-playing)
-  // Keep the reasoning panel pinned to the latest streamed chunk.
+  // Keep the reasoning panel pinned to the latest streamed chunk (only while
+  // the user hasn't scrolled up to inspect earlier output).
   useEffect(() => {
+    if (!reasoningFollow) return;
     const el = reasoningScrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [data.translationReasoning]);
+  }, [data.translationReasoning, reasoningFollow]);
 
   const sync = useSpotifySync(syncRefs, lineRefs, lyricsRef, spotifyConnected === true);
 
@@ -784,30 +800,47 @@ export default function SongViewPage() {
             <div className="absolute left-1/2 top-3 z-20 flex max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col items-center gap-2">
               {data.translating ? (
                 <>
-                  <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--background)]/90 px-3 py-1.5 text-xs text-[var(--muted-foreground)] shadow-sm backdrop-blur-sm">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--primary)]" />
+                  <span className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--background)]/90 px-3 py-1.5 text-xs text-[var(--muted-foreground)] shadow-sm backdrop-blur-sm">
+                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[var(--primary)]" />
                     {data.translationProgress
                       ? t('song.translatingProgress', { done: data.translationProgress.done, total: data.translationProgress.total })
                       : t('song.translating')}
-                    {data.translationReasoning && (
-                      <button
-                        type="button"
-                        onClick={() => data.setShowTranslationReasoning(!data.showTranslationReasoning)}
-                        className="ml-1 inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-2 py-0.5 font-medium text-[var(--primary)] hover:bg-[var(--primary)]/10"
-                      >
-                        <Brain className="h-3 w-3" />
-                        {data.showTranslationReasoning ? t('song.translationReasoningHide') : t('song.translationReasoningShow')}
-                      </button>
-                    )}
                   </span>
+                  {data.translationReasoning && (
+                    <button
+                      type="button"
+                      onClick={() => data.setShowTranslationReasoning(!data.showTranslationReasoning)}
+                      className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--background)]/90 px-2.5 py-1 text-[11px] font-medium text-[var(--primary)] shadow-sm backdrop-blur-sm hover:bg-[var(--primary)]/10"
+                    >
+                      <Brain className="h-3 w-3" />
+                      {data.showTranslationReasoning ? t('song.translationReasoningHide') : t('song.translationReasoningShow')}
+                    </button>
+                  )}
                   {data.showTranslationReasoning && data.translationReasoning && (
-                    <div className="w-[min(94vw,560px)] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--card)]/95 shadow-xl backdrop-blur-sm">
-                      <div className="flex items-center gap-1.5 border-b border-[var(--border)] px-3 py-2 text-[11px] font-medium text-[var(--muted-foreground)]">
-                        <Brain className="h-3 w-3 text-[var(--primary)]" />
-                        {t('song.translationReasoning')}
-                      </div>
-                      <div ref={reasoningScrollRef} className="max-h-56 overflow-y-auto whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-relaxed text-[var(--muted-foreground)]">
-                        {data.translationReasoning}
+                    <div className="reasoning-glow w-[min(94vw,560px)] overflow-hidden rounded-xl">
+                      <div className="relative rounded-[11px] bg-[var(--card)]/95 backdrop-blur-sm">
+                        <div className="flex items-center gap-1.5 border-b border-[var(--border)]/60 px-3 py-2 text-[11px] font-medium text-[var(--muted-foreground)]">
+                          <Brain className="h-3 w-3 text-[var(--primary)]" />
+                          {t('song.translationReasoning')}
+                        </div>
+                        <div
+                          ref={reasoningScrollRef}
+                          onScroll={handleReasoningScroll}
+                          className="max-h-56 overflow-y-auto whitespace-pre-wrap break-words p-3 pr-8 font-mono text-[11px] leading-relaxed text-[var(--muted-foreground)]"
+                        >
+                          {data.translationReasoning}
+                          {data.translating && <span className="reasoning-cursor" />}
+                        </div>
+                        {!reasoningFollow && (
+                          <button
+                            type="button"
+                            onClick={scrollReasoningToBottom}
+                            className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--background)]/95 px-2 py-1 text-[10px] font-medium text-[var(--primary)] shadow-sm backdrop-blur-sm hover:bg-[var(--primary)]/10"
+                          >
+                            <ArrowDown className="h-3 w-3" />
+                            {t('song.translationReasoningBottom')}
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
