@@ -54,8 +54,9 @@ export async function GET(request: NextRequest) {
 
     readingCache.set(text, { candidates, expiresAt: Date.now() + CACHE_TTL_MS });
     return NextResponse.json({ candidates });
-  } catch {
+  } catch (error) {
     // Suggestions are an enhancement. Manual editing remains available offline.
+    console.error(`[readings] furigana suggestion lookup failed — ${error instanceof Error ? error.message : String(error)}`);
     return NextResponse.json({ candidates: [] });
   } finally {
     clearTimeout(timeout);

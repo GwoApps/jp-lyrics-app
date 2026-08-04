@@ -96,7 +96,11 @@ export async function POST(
         }
         return NextResponse.json({ start: 0, count: cached.length, translations: cached, cached: true });
       }
-    } catch { /* fall through to re-translate */ }
+    } catch (error) {
+      // Damaged translation cache — re-translate instead.
+      console.warn(`[translate] stored translation cache unparseable for "${existing.title}" — ${error instanceof Error ? error.message : String(error)}`);
+      /* fall through to re-translate */
+    }
   }
 
   const end = body.count !== undefined && body.count > 0 ? start + body.count : undefined;
@@ -111,7 +115,11 @@ export async function POST(
     try {
       const parsed = JSON.parse(existing.lyricsTranslation);
       if (Array.isArray(parsed)) cache = parsed.filter((item): item is string => typeof item === 'string');
-    } catch { /* start empty */ }
+    } catch (error) {
+      // Damaged cache — start from an empty seed.
+      console.warn(`[translate] stored translation cache unparseable (slice) — ${error instanceof Error ? error.message : String(error)}`);
+      /* start empty */
+    }
   }
 
   // Dedup: map each distinct non-empty line to its first occurrence (whole song),
@@ -159,7 +167,11 @@ export async function POST(
     try {
       const parsed = JSON.parse(existing.lyricsGlossary);
       if (Array.isArray(parsed)) glossary = parsed as GlossaryEntry[];
-    } catch { /* ignored */ }
+    } catch (error) {
+      // Damaged glossary — ignore and translate without terminology.
+      console.warn(`[translate] stored glossary unparseable for "${existing.title}" — ${error instanceof Error ? error.message : String(error)}`);
+      /* ignored */
+    }
   }
   if (!glossary && !isSlice) {
     glossary = await extractLyricsGlossary(existing.title, existing.artist, lines, config);
@@ -220,6 +232,7 @@ export async function POST(
           send('done', { start, count: finalSlice.length, translations: finalSlice, cached: false });
         } catch (error) {
           if (error instanceof TranslationError) {
+            console.error(`[translate] stream failed: ${error.code} — ${error.message}`);
             send('error', { error: error.code });
           } else {
             console.error('[translate] stream error:', error);
@@ -241,6 +254,12 @@ export async function POST(
       : [];
   } catch (error) {
     if (error instanceof TranslationError) {
+      if (error.code === 'ai_quota_exceeded') {
+        // Expected daily-cap behaviour, but still observable in logs.
+        console.warn(`[translate] daily AI quota exceeded — ${error.message}`);
+      } else {
+        console.error(`[translate] failed: ${error.code} — ${error.message}`);
+      }
       return NextResponse.json(
         { error: error.code },
         { status: error.code === 'ai_quota_exceeded' ? 429 : 502 },

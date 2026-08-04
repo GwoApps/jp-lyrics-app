@@ -70,7 +70,10 @@ export async function GET(request: NextRequest) {
         await db.run(sql`UPDATE collections SET user_email = ${userId} WHERE user_email = ${oldId}`);
         await db.run(sql`UPDATE songs SET created_by = ${userId} WHERE created_by = ${oldId}`);
       }
-    } catch { /* migration best-effort */ }
+    } catch (error) {
+      // Migration is best-effort — but a silent failure hides missing tables/columns.
+      console.warn(`[auth/callback] user-id migration failed — ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   // Check if user is blocked
@@ -81,7 +84,10 @@ export async function GET(request: NextRequest) {
     if (existingUser?.is_blocked === 1) {
       return NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=blocked`);
     }
-  } catch { /* users table may not exist yet */ }
+  } catch (error) {
+    // users table may not exist yet — but on CF a missing table is a deploy problem worth logging.
+    console.warn(`[auth/callback] users lookup failed — ${error instanceof Error ? error.message : String(error)}`);
+  }
 
   const expiresAt = Math.floor(Date.now() / 1000) + tokenData.expires_in;
 
@@ -115,7 +121,10 @@ export async function GET(request: NextRequest) {
     if (adminCount.cnt === 0) {
       await db.run(sql`UPDATE users SET is_admin = 1 WHERE id = ${userId}`);
     }
-  } catch { /* users table may not exist yet */ }
+  } catch (error) {
+    // users table may not exist yet — but on CF a missing table is a deploy problem worth logging.
+    console.warn(`[auth/callback] users upsert failed — ${error instanceof Error ? error.message : String(error)}`);
+  }
 
   // Set signed session cookie (used when no gateway auth headers)
   const token = await signSession(userId);

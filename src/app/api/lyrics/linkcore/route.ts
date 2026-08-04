@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const code = error instanceof LinkcoreLyricsErrorResponse ? error.code : 'linkcore_fetch_failed';
     const status = code === 'invalid_linkcore_url' ? 400 : 422;
+    console.error(`[linkcore] lyrics fetch failed (${code}) — ${error instanceof Error ? error.message : String(error)}`);
     return NextResponse.json({ error: code }, { status });
   }
 }

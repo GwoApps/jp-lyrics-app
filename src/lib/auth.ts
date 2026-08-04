@@ -83,8 +83,9 @@ async function getUserStatus(userId: string): Promise<{ isAdmin: boolean; isBloc
     }).from(schema.users).where(eq(schema.users.id, userId)).get();
     if (!row) return null;
     return { isAdmin: row.isAdmin === 1, isBlocked: row.isBlocked === 1 };
-  } catch {
+  } catch (error) {
     // Fail closed: authentication cannot be trusted if its authority store is unavailable.
+    console.error(`[auth] role lookup failed — ${error instanceof Error ? error.message : String(error)}`);
     return null;
   }
 }

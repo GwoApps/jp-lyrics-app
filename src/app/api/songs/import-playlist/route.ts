@@ -131,8 +131,9 @@ export async function POST(request: NextRequest) {
       lyrics = r.result;
       source = r.source;
       confidence = r.confidence;
-    } catch {
+    } catch (error) {
       // Individual track failure — continue to next
+      console.warn(`[import-playlist] lyrics fetch failed for "${track.title}" — ${error instanceof Error ? error.message : String(error)}`);
     }
 
     try {
@@ -161,7 +162,8 @@ export async function POST(request: NextRequest) {
       const synced = !!(lyrics?.synced);
       results.push({ title: track.title, artist: track.artist, status: 'imported', source, synced });
       imported++;
-    } catch {
+    } catch (error) {
+      console.warn(`[import-playlist] failed to save "${track.title}" — ${error instanceof Error ? error.message : String(error)}`);
       results.push({ title: track.title, artist: track.artist, status: 'failed' });
       failed++;
     }

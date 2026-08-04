@@ -56,8 +56,9 @@ export async function getAiUsage(date = todayKey()): Promise<{ neurons: number; 
       requests: schema.aiUsage.requests,
     }).from(schema.aiUsage).where(eq(schema.aiUsage.usageDate, date)).get();
     return { neurons: row?.neurons ?? 0, requests: row?.requests ?? 0 };
-  } catch {
+  } catch (error) {
     // Table may not exist yet on a fresh deploy; treat as zero usage.
+    console.warn(`[ai-usage] usage lookup failed — ${error instanceof Error ? error.message : String(error)}`);
     return { neurons: 0, requests: 0 };
   }
 }
@@ -89,8 +90,9 @@ export async function recordAiUsage(neurons: number): Promise<void> {
         requests: sql`${schema.aiUsage.requests} + 1`,
       },
     }).run();
-  } catch {
+  } catch (error) {
     // Never let accounting break a translation.
+    console.warn(`[ai-usage] usage recording failed — ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

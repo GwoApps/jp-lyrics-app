@@ -49,7 +49,9 @@ export async function GET(
     let furiganaLines: { segments: { text: string; reading?: string }[] }[] = [];
     try {
       if (song.lyrics_furigana) furiganaLines = JSON.parse(song.lyrics_furigana);
-    } catch { /* */ }
+    } catch (error) {
+      console.warn(`[export] failed to parse lyrics_furigana for "${song.title}" — ${error instanceof Error ? error.message : String(error)}`);
+    }
 
     const htmlLines = furiganaLines.length > 0
       ? furiganaLines.map(line => {

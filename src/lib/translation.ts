@@ -435,7 +435,9 @@ export async function extractLyricsGlossary(
         && typeof (item as GlossaryEntry).original === 'string'
         && typeof (item as GlossaryEntry).translation === 'string')
       .slice(0, 20);
-  } catch {
+  } catch (error) {
+    // Terminology is best-effort — but a silent failure hides provider/network issues.
+    console.warn(`[translation] glossary extraction failed — ${error instanceof Error ? error.message : String(error)}`);
     return [];
   }
 }
