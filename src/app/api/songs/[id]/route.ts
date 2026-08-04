@@ -161,7 +161,11 @@ export async function PUT(
     lyricsGlossary,
     coverPalette: cover_palette !== undefined
       ? cover_palette === null ? null : JSON.stringify(cover_palette)
-      : existing.cover_palette,
+      : existing.cover_palette === null || existing.cover_palette === undefined
+        ? null
+        : typeof existing.cover_palette === 'string'
+          ? existing.cover_palette
+          : JSON.stringify(existing.cover_palette),
     readingScheme: nextReadingScheme,
     readingSchemeConfirmed: reading_scheme_confirmed !== undefined
       ? Number(reading_scheme_confirmed)
