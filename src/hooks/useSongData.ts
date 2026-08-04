@@ -406,67 +406,61 @@ export function useSongData(id: string): UseSongDataReturn {
 
 
   const handleTranslate = useCallback(async () => {
-    if (!song) return;
-    const total = furiganaLines.length || song.lyrics_raw.split('\n').length;
-    if (total === 0) return;
-    const batchSize = 10;
-
-    // Seed the merged array from any existing (partial) cache so an interrupted
-    // translation can resume: batches whose lines are already translated are skipped.
-    const seed: (string | null)[] = Array(total).fill(null);
-    try {
-      const parsed = JSON.parse(song.lyrics_translation || '[]');
-      if (Array.isArray(parsed)) {
-        parsed.forEach((item, i) => { if (i < total && typeof item === 'string') seed[i] = item; });
+    if (translating) return;
+      const total = furiganaLines.length;
+      if (total === 0) {
+        showToast('error', t('song.translationEmptyLyrics'));
+        return;
       }
-    } catch { /* start from scratch */ }
-
-    setTranslating(true);
-    setTranslationError(null);
-    setTranslationProgress({ done: seed.filter((v) => v !== null).length, total });
-    try {
-      for (let start = 0; start < total; start += batchSize) {
-        const batch = seed.slice(start, start + batchSize);
-        if (!batch.every((v) => v !== null)) {
-          const res = await fetch(`/api/songs/${id}/translate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ start, count: batchSize }),
-          });
-          const data = await res.json();
-          if (!res.ok || !Array.isArray(data.translations)) {
-            const errorKey: Record<string, string> = {
-              login_required: 'apiErrors.loginRequired',
-              forbidden: 'apiErrors.forbidden',
-              translation_not_configured: 'song.translationUnavailable',
-              empty_lyrics: 'song.translationEmptyLyrics',
-              translation_failed: 'song.translationFailed',
-              translation_invalid_response: 'song.translationFailed',
-              ai_quota_exceeded: 'song.translationQuotaExceeded',
-            };
-            const message = data.error && errorKey[data.error]
-              ? t(errorKey[data.error])
-              : t('song.translationFailed');
-            setTranslationError(message);
-            showToast('error', message);
-            return; // progress is preserved so the user can continue later
-          }
-          data.translations.forEach((tr: string, i: number) => { seed[start + i] = tr; });
+      setTranslating(true);
+      setTranslationError(null);
+      try {
+        // Whole song in ONE request: the model sees the full lyrics, so the
+        // translation is contextually coherent (repeats, story, mood). The
+        // server skips already-translated lines (cache/dedup), so this same
+        // call also serves as resume/retry — no batching needed.
+        const res = await fetch(`/api/songs/${id}/translate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const data = await res.json();
+        if (res.ok && Array.isArray(data.translations)) {
+          const seed: (string | null)[] = Array(total).fill(null);
+          try {
+            const parsed = JSON.parse(song?.lyrics_translation ?? '[]');
+            if (Array.isArray(parsed)) {
+              parsed.forEach((item, i) => { if (i < total && typeof item === 'string') seed[i] = item; });
+            }
+          } catch { /* keep empty seed */ }
+          data.translations.forEach((tr: string, i: number) => { if (i < total) seed[i] = tr; });
           setSong((prev) => prev ? { ...prev, lyrics_translation: JSON.stringify(seed) } : prev);
+          setShowTranslation(true);
+          showToast('success', t('song.translationReady'));
+          return;
         }
-        setTranslationProgress({ done: Math.min(start + batchSize, total), total });
+        const errorKey: Record<string, string> = {
+          login_required: 'apiErrors.loginRequired',
+          forbidden: 'apiErrors.forbidden',
+          translation_not_configured: 'song.translationUnavailable',
+          empty_lyrics: 'song.translationEmptyLyrics',
+          translation_failed: 'song.translationFailed',
+          translation_invalid_response: 'song.translationFailed',
+          ai_quota_exceeded: 'song.translationQuotaExceeded',
+        };
+        const message = data.error && errorKey[data.error]
+          ? t(errorKey[data.error])
+          : t('song.translationFailed');
+        setTranslationError(message);
+        showToast('error', message);
+      } catch {
+        const message = t('song.networkErrorAlert');
+        setTranslationError(message);
+        showToast('error', message);
+      } finally {
+        setTranslating(false);
       }
-      setShowTranslation(true);
-      showToast('success', t('song.translationReady'));
-      setTranslationProgress(null);
-    } catch {
-      const message = t('song.networkErrorAlert');
-      setTranslationError(message);
-      showToast('error', message);
-    } finally {
-      setTranslating(false);
-    }
-  }, [id, song, furiganaLines, t, showToast]);
+    }, [id, song, furiganaLines, t, showToast, translating]);
 
   // When the translation display is on but the song has no translation yet,
   // offer to translate it (once per page visit).

@@ -212,6 +212,7 @@ If there is nothing to extract, return an empty array []. Max 20 entries.`;
 function buildOpenAIPayload(lines: string[], cfg: TranslationConfig, ctx?: TranslationContext) {
   return {
     model: cfg.model,
+    max_tokens: 8192,
     temperature: 0.2,
     messages: [
       { role: 'system', content: SYSTEM_PROMPT(cfg.targetLang, ctx) },
@@ -223,7 +224,7 @@ function buildOpenAIPayload(lines: string[], cfg: TranslationConfig, ctx?: Trans
 function buildAnthropicPayload(lines: string[], cfg: TranslationConfig, ctx?: TranslationContext) {
   return {
     model: cfg.model,
-    max_tokens: 4096,
+    max_tokens: 8192,
     temperature: 0.2,
     system: SYSTEM_PROMPT(cfg.targetLang, ctx),
     messages: [{ role: 'user', content: JSON.stringify(lines) }],
@@ -275,7 +276,8 @@ async function withRetry<T>(
 async function requestOpenAI(lines: string[], cfg: TranslationConfig, fetchImpl: typeof fetch, ctx?: TranslationContext): Promise<string> {
   const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60_000);
+  // Whole-song requests can take a while — allow up to 5 minutes.
+  const timer = setTimeout(() => controller.abort(), 300_000);
   try {
     const response = await fetchImpl(url, {
       method: 'POST',
@@ -304,7 +306,8 @@ async function requestAnthropic(lines: string[], cfg: TranslationConfig, fetchIm
   const base = cfg.baseUrl.replace(/\/+$/, '');
   const url = base.endsWith('/v1') ? `${base}/messages` : `${base}/v1/messages`;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60_000);
+  // Whole-song requests can take a while — allow up to 5 minutes.
+  const timer = setTimeout(() => controller.abort(), 300_000);
   try {
     const response = await fetchImpl(url, {
       method: 'POST',

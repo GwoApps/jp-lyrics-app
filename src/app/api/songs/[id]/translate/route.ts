@@ -62,13 +62,17 @@ export async function POST(
 
   // An empty array (the default '[]' placeholder) is NOT a valid cache — it means
   // the song was never translated, so fall through to real translation.
-  // Sliced requests never short-circuit: the client skips already-translated batches.
+  // A cache only short-circuits when it is COMPLETE (line count aligned and
+  // every non-empty source line has a translation). Partial caches fall
+  // through so the whole-song request re-translates just the missing lines
+  // (cache/dedup skip the rest) — one request, full-lyrics context.
   const start = Math.max(0, body.start ?? 0);
   const isSlice = body.start !== undefined;
   if (!isSlice && !body.force && existing.lyricsTranslation) {
     try {
       const cached = JSON.parse(existing.lyricsTranslation);
-      if (Array.isArray(cached) && cached.length > 0 && cached.every((item) => typeof item === 'string')) {
+      if (Array.isArray(cached) && cached.length === lines.length
+        && cached.every((item, i) => typeof item === 'string' && (lines[i].trim() ? item !== '' : true))) {
         return NextResponse.json({ start: 0, count: cached.length, translations: cached, cached: true });
       }
     } catch { /* fall through to re-translate */ }
