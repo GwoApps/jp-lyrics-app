@@ -28,6 +28,12 @@
 			// You can change the bucket name if you want
 			// See https://developers.cloudflare.com/workers/wrangler/commands/#r2-bucket-create
 			"bucket_name": "jp-lyrics-app-opennext-cache"
+		},
+		// Custom album covers (uploaded artwork, not Spotify CDN URLs).
+		// Create the bucket before deploying: wrangler r2 bucket create jp-lyrics-app-covers
+		{
+			"binding": "COVER_R2_BUCKET",
+			"bucket_name": "jp-lyrics-app-covers"
 		}
 	],
 	"images": {

@@ -2,13 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDB, schema, sql } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import { getAuthUser } from '@/lib/auth';
+import { deleteCover, putCover } from '@/lib/cover-store';
 
 // POST /api/songs/[id]/cover — upload a custom album cover (multipart form-data, field "file").
-// The image is stored as a BLOB in the song_covers table — this works on both
-// the local SQLite deployment and Cloudflare D1 (Workers have no persistent
-// filesystem, so data/covers/ files would not survive there).
-// cover_url points at the local cover-image route (versioned to bust caches)
-// and the cached palette is reset.
+// The image is stored via cover-store: R2 on Cloudflare Workers, SQLite BLOB
+// on local deployments. cover_url points at the local cover-image route
+// (versioned to bust caches) and the cached palette is reset.
 // DELETE /api/songs/[id]/cover — remove a custom cover and restore cover_url to null.
 const MIME_TYPES: Record<string, string> = {
   'image/jpeg': 'jpeg',
@@ -16,7 +15,7 @@ const MIME_TYPES: Record<string, string> = {
   'image/webp': 'webp',
   'image/gif': 'gif',
 };
-const MAX_SIZE = 1.5 * 1024 * 1024; // D1 hard limit is a 2 MB row; keep well under it
+const MAX_SIZE = 1.5 * 1024 * 1024; // D1 row limit used to be 2MB; keep the cap uniform everywhere
 
 export async function POST(
   request: NextRequest,
@@ -57,23 +56,9 @@ export async function POST(
     return NextResponse.json({ error: 'cover_too_large' }, { status: 400 });
   }
 
-  // D1's stmt.bind() only accepts ArrayBuffer (not Uint8Array); libsql
-  // accepts both, so ArrayBuffer works on every backend.
+  // ArrayBuffer works for both R2 put() and libsql/D1 blob binds.
   const bytes = await file.arrayBuffer();
-
-  await db.insert(schema.songCovers).values({
-    songId: id,
-    mime: file.type,
-    data: bytes,
-    updatedAt: sql`(datetime('now', 'localtime'))`,
-  }).onConflictDoUpdate({
-    target: schema.songCovers.songId,
-    set: {
-      mime: file.type,
-      data: bytes,
-      updatedAt: sql`(datetime('now', 'localtime'))`,
-    },
-  }).run();
+  await putCover(id, file.type, bytes);
 
   await db.update(schema.songs).set({
     coverUrl: `/api/songs/${id}/cover-image?v=${Date.now()}`,
@@ -110,7 +95,7 @@ export async function DELETE(
 
   // Only remove local covers; external (Spotify) URLs are untouched.
   if (existing.coverUrl?.startsWith('/api/songs/')) {
-    await db.delete(schema.songCovers).where(eq(schema.songCovers.songId, id)).run();
+    await deleteCover(id);
   }
   await db.update(schema.songs).set({
     coverUrl: null,
