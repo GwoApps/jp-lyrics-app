@@ -56,9 +56,17 @@ interface LyricsDotGridProps {
   accent?: string;
   /** Live parameter overrides (debug panel). */
   params?: Partial<DotGridParams>;
+  /**
+   * Optional live microphone spectrum (Uint8Array of byte frequency data,
+   * written in place each frame by the caller). When non-null, the bottom
+   * rows of the dot grid light up as a spectrum wave — using the same
+   * per-dot glow as the pointer spotlight, no extra light sources. The
+   * tallest peak never exceeds one third of the panel height.
+   */
+  spectrumRef?: { current: Uint8Array | null };
 }
 
-export default function LyricsDotGrid({ accent, params }: LyricsDotGridProps) {
+export default function LyricsDotGrid({ accent, params, spectrumRef }: LyricsDotGridProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const accentRef = useRef('255 255 255');
   const paramsRef = useRef<DotGridParams>(DEFAULT_DOT_GRID_PARAMS);
@@ -174,6 +182,43 @@ export default function LyricsDotGrid({ accent, params }: LyricsDotGridProps) {
     const draw = () => {
       ctx.clearRect(0, 0, W, H);
       if (baseLayer) ctx.drawImage(baseLayer, 0, 0, W, H);
+
+      // Microphone spectrum: light up the bottom rows of the grid only —
+      // the dots themselves glow (same shadowBlur technique as the pointer
+      // spotlight); no extra light sources are drawn.
+      const spec = spectrumRef?.current;
+      if (spec && spec.length > 1) {
+        const sp = S.spacing;
+        const cols = Math.max(1, Math.floor(W / sp));
+        const rows = Math.max(1, Math.floor(H / sp));
+        // Hard cap: the tallest peak reaches one third of the panel.
+        const maxRows = Math.max(1, Math.floor(rows / 3));
+        const [cr, cg, cb] = accentRef.current.split(' ').map(Number);
+        ctx.shadowColor = S.glow ? `rgba(${cr},${cg},${cb},.85)` : 'transparent';
+        const N = spec.length;
+        const binsPerCol = N / cols;
+        for (let i = 0; i < cols; i++) {
+          const b0 = Math.floor(i * binsPerCol);
+          const b1 = Math.max(b0 + 1, Math.floor((i + 1) * binsPerCol));
+          let sum = 0;
+          for (let b = b0; b < b1; b++) sum += spec[b] ?? 0;
+          const v = Math.min(1, (sum / (b1 - b0)) / 255);
+          if (v < 0.03) continue;
+          const lit = Math.max(1, Math.round(v * maxRows));
+          for (let k = 0; k < lit; k++) {
+            const d = dots[(rows - 1 - k) * cols + i];
+            if (!d) continue;
+            // Base of the wave is brightest; the tip fades.
+            const strength = 0.3 + 0.7 * v * (1 - k / maxRows);
+            ctx.shadowBlur = S.glow ? 12 * strength : 0;
+            ctx.fillStyle = `rgba(${cr},${cg},${cb},${(0.15 + 0.85 * strength) * S.alpha})`;
+            ctx.beginPath();
+            ctx.arc(d.x, d.y, S.dot * (0.72 + (S.scale - 0.72) * strength), 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.shadowBlur = 0;
+      }
 
       const p = pointer.power;
       if (p < 0.002) return;

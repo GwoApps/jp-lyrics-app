@@ -4,12 +4,13 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useCallback
 import { useRouter, useParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
 import Link from 'next/link';
-import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, ArrowDown, Minus, Plus, Music, Download, Loader2, ExternalLink, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2, Info, X, CircleAlert, Eraser, Palette, SlidersHorizontal, Brain } from 'lucide-react';
+import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, ArrowDown, Minus, Plus, Music, Download, Loader2, ExternalLink, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2, Info, X, CircleAlert, Eraser, Palette, SlidersHorizontal, Brain, FlaskConical } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import FuriganaLineView from '@/components/FuriganaLine';
 import LyricsDotGrid, { DEFAULT_DOT_GRID_PARAMS, type DotGridParams } from '@/components/LyricsDotGrid';
 import LyricsDotParamsPanel from '@/components/LyricsDotParamsPanel';
+import ExperimentsPanel from '@/components/ExperimentsPanel';
 import Toast from '@/components/Toast';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useI18n } from '@/lib/i18n';
@@ -188,6 +189,80 @@ export default function SongViewPage() {
   const [showSongInfo, setShowSongInfo] = useState(false);
   const [coverRefresh, setCoverRefresh] = useState(0);
   const [showDotParams, setShowDotParams] = useState(false);
+  const [showExperiments, setShowExperiments] = useState(false);
+  const [spectrumCaptureOn, setSpectrumCaptureOn] = useState(false);
+  const [spectrumError, setSpectrumError] = useState<string | null>(null);
+  // Live mic spectrum: the analyser writes byte frequency data into this
+  // shared array every frame; LyricsDotGrid reads it without any re-render.
+  const spectrumRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const spectrumRafRef = useRef(0);
+
+  const stopSpectrum = useCallback(() => {
+    cancelAnimationFrame(spectrumRafRef.current);
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    void audioCtxRef.current?.close().catch(() => {});
+    streamRef.current = null;
+    audioCtxRef.current = null;
+    analyserRef.current = null;
+    spectrumRef.current = null;
+  }, []);
+
+  const startSpectrum = useCallback(async () => {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('no mediaDevices API (insecure context?)');
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const ctx = new AudioContext();
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256; // 128 frequency bins
+      source.connect(analyser);
+      streamRef.current = stream;
+      audioCtxRef.current = ctx;
+      analyserRef.current = analyser;
+      spectrumRef.current = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
+      const loop = () => {
+        const analyserNode = analyserRef.current;
+        const buf = spectrumRef.current;
+        if (analyserNode && buf) {
+          analyserNode.getByteFrequencyData(buf);
+          spectrumRafRef.current = requestAnimationFrame(loop);
+        }
+      };
+      loop();
+      setSpectrumError(null);
+      setSpectrumCaptureOn(true);
+    } catch (error) {
+      stopSpectrum();
+      setSpectrumError(error instanceof Error ? error.message : String(error));
+      setSpectrumCaptureOn(false);
+    }
+  }, [stopSpectrum]);
+
+  const toggleSpectrum = useCallback(() => {
+    if (spectrumCaptureOn) {
+      stopSpectrum();
+      setSpectrumCaptureOn(false);
+    } else {
+      void startSpectrum();
+    }
+  }, [spectrumCaptureOn, startSpectrum, stopSpectrum]);
+
+  // Always release the microphone when leaving the page.
+  useEffect(() => () => stopSpectrum(), [stopSpectrum]);
+
+  const closeExperiments = useCallback(() => {
+    setShowExperiments(false);
+    // Privacy default: stop capturing when the panel closes.
+    if (spectrumCaptureOn) {
+      stopSpectrum();
+      setSpectrumCaptureOn(false);
+    }
+  }, [spectrumCaptureOn, stopSpectrum]);
   const [dotParams, setDotParams] = useState<DotGridParams>(DEFAULT_DOT_GRID_PARAMS);
   const coverUrl = data.song?.cover_url ?? fallbackCoverUrl;
 
@@ -628,6 +703,11 @@ export default function SongViewPage() {
                   status: t(data.debug ? 'common.on' : 'common.off'),
                   onClick: () => data.setDebug(!data.debug),
                 },
+                {
+                  icon: <FlaskConical className="h-3.5 w-3.5" />,
+                  label: t('song.experimentsTitle'),
+                  onClick: () => setShowExperiments(true),
+                },
 
                 {
                   icon: <Download className="h-3.5 w-3.5" />,
@@ -794,6 +874,7 @@ export default function SongViewPage() {
               ? `${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b}`
               : undefined}
             params={dotParams}
+            spectrumRef={spectrumCaptureOn ? spectrumRef : undefined}
           />
           <div ref={lyricsRef} className="relative z-10 p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden scroll-smooth" style={{ fontSize: `${data.fontSize}px` }}>
             {furiganaLines.length > 0 ? (
@@ -859,7 +940,7 @@ export default function SongViewPage() {
         onOpenPiP={handleOpenPiP} onShowSongInfo={() => setShowSongInfo(true)} onRecolorCover={() => {
           clearCachedSongPalette(id);
           setCoverRefresh((n) => n + 1);
-        }} onToggleDotParams={() => setShowDotParams((v) => !v)} canEdit={canEdit}
+        }} onToggleDotParams={() => setShowDotParams((v) => !v)} onOpenExperiments={() => setShowExperiments(true)} canEdit={canEdit}
       />
 
       {data.debug && showDotParams && (
@@ -867,6 +948,15 @@ export default function SongViewPage() {
           params={dotParams}
           onChange={setDotParams}
           onClose={() => setShowDotParams(false)}
+        />
+      )}
+
+      {showExperiments && (
+        <ExperimentsPanel
+          spectrumOn={spectrumCaptureOn}
+          spectrumError={spectrumError}
+          onToggleSpectrum={toggleSpectrum}
+          onClose={closeExperiments}
         />
       )}
 
@@ -1236,7 +1326,7 @@ function ToolbarMenu({ label, items, triggerClassName }: { label: ReactNode; ite
 }
 
 /** Mobile bottom toolbar — A-/A+, Sync, Copy visible; rest in 3-dot menu */
-function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported, onOpenPiP, onShowSongInfo, onRecolorCover, onToggleDotParams, canEdit }: {
+function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported, onOpenPiP, onShowSongInfo, onRecolorCover, onToggleDotParams, onOpenExperiments, canEdit }: {
   data: ReturnType<typeof useSongData>;
   sync: ReturnType<typeof useSpotifySync>;
   song: NonNullable<ReturnType<typeof useSongData>['song']>;
@@ -1246,6 +1336,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
   pipSupported: boolean;
   onOpenPiP: () => void;
   onShowSongInfo: () => void;
+  onOpenExperiments: () => void;
   onRecolorCover: () => void;
   onToggleDotParams: () => void;
   canEdit: boolean;
@@ -1284,6 +1375,7 @@ function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported,
     { icon: <Info className="h-4 w-4" />, label: t('song.info'), onClick: onShowSongInfo },
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: t('song.pipBtn'), onClick: onOpenPiP }] : []),
     { icon: <Bug className="h-4 w-4" />, label: t('song.debug'), status: t(data.debug ? 'common.on' : 'common.off'), onClick: () => data.setDebug(!data.debug), keepOpen: true },
+    { icon: <FlaskConical className="h-4 w-4" />, label: t('song.experimentsTitle'), onClick: () => onOpenExperiments() },
     { icon: <Download className="h-4 w-4" />, label: t('song.download'), status: <ChevronDown className="h-3.5 w-3.5 -rotate-90" />, onClick: () => { setShowEditMenu(false); setShowDownloadMenu(true); }, keepOpen: true },
     ...(canEdit ? [{
       icon: <Pencil className="h-4 w-4" />,
