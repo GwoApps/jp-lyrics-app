@@ -2,14 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDB, schema, sql } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import { getAuthUser } from '@/lib/auth';
-import { extractLyricsGlossary, getTranslationConfig, translateLyricLines, TranslationError, type GlossaryEntry } from '@/lib/translation';
+import { extractLyricsGlossary, getTranslationConfig, streamTranslateLyricLines, translateLyricLines, TranslationError, type GlossaryEntry } from '@/lib/translation';
 import { getStoredTranslationConfig, resolveTranslationConfig } from '@/lib/translation-settings';
+
+const SSE_HEADERS = {
+  'Content-Type': 'text/event-stream',
+  'Cache-Control': 'no-cache, no-transform',
+  Connection: 'keep-alive',
+  'X-Accel-Buffering': 'no',
+};
 // POST /api/songs/[id]/translate — translate lyrics via the configured LLM provider and cache the result.
-// Body: { force?: boolean, start?: number, count?: number }
+// Body: { force?: boolean, start?: number, count?: number, stream?: boolean }
 //   - Without `start`: translate the whole song (cache hit short-circuits unless `force`).
 //   - With `start`: translate only lines [start, start + count); the result is MERGED into the
 //     stored cache so partial translations survive failures (resume/continue support).
-// Response: { start, count, translations } — the translated slice, aligned to lyric lines.
+//   - With `stream: true`: responds text/event-stream (SSE) — the provider's
+//     reasoning/translation deltas are forwarded live as `reasoning` and
+//     `translation` events, then a final `done` event carries the aligned
+//     translations array. Errors arrive as `error` events.
+// Response (non-stream): { start, count, translations } — the translated slice, aligned to lyric lines.
 //
 // Optimization: repeated lines (choruses) are translated once per distinct
 // content — copies reuse the first occurrence's translation from the cache
@@ -27,7 +38,7 @@ export async function POST(
     return NextResponse.json({ error: 'login_required' }, { status: 401 });
   }
 
-  let body: { force?: boolean; start?: number; count?: number } = {};
+  let body: { force?: boolean; start?: number; count?: number; stream?: boolean } = {};
   try {
     body = await request.json();
   } catch { /* empty body is fine */ }
@@ -73,6 +84,16 @@ export async function POST(
       const cached = JSON.parse(existing.lyricsTranslation);
       if (Array.isArray(cached) && cached.length === lines.length
         && cached.every((item, i) => typeof item === 'string' && (lines[i].trim() ? item !== '' : true))) {
+        if (body.stream === true) {
+          const encoder = new TextEncoder();
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(encoder.encode(`event: done\ndata: ${JSON.stringify({ start: 0, count: cached.length, translations: cached, cached: true })}\n\n`));
+              controller.close();
+            },
+          });
+          return new Response(stream, { headers: SSE_HEADERS });
+        }
         return NextResponse.json({ start: 0, count: cached.length, translations: cached, cached: true });
       }
     } catch { /* fall through to re-translate */ }
@@ -148,10 +169,75 @@ export async function POST(
     }).where(eq(schema.songs.id, id)).run();
   }
 
+  const ctx = { title: existing.title, artist: existing.artist, glossary: glossary ?? undefined };
+
+  // Expand duplicates from their first occurrence's result, merge into the
+  // stored cache, persist, and return the final line-aligned slice.
+  const expandAndMerge = (translations: string[]): string[] => {
+    const bySliceIndex = new Map<number, string>();
+    needTranslation.forEach((sliceIndex, j) => { bySliceIndex.set(sliceIndex, translations[j] ?? ''); });
+    slice.forEach((line, i) => {
+      if (resolved[i] !== null) return;
+      const key = line.trim();
+      if (!key) { resolved[i] = ''; return; }
+      const first = firstOccurrence.get(key)!;
+      const fromBatch = bySliceIndex.get(first - start);
+      resolved[i] = fromBatch ?? (first < cache.length ? cache[first] : '');
+    });
+    const finalSlice = resolved.map((v) => v ?? '');
+
+    let merged: string[] = [];
+    if (cache.length > 0) {
+      merged = [...cache];
+    }
+    if (merged.length < lines.length) {
+      merged = [...merged, ...Array(lines.length - merged.length).fill('')];
+    }
+    finalSlice.forEach((translation, i) => { merged[start + i] = translation; });
+
+    void db.update(schema.songs).set({
+      lyricsTranslation: JSON.stringify(merged),
+      updatedAt: sql`(datetime('now', 'localtime'))`,
+    }).where(eq(schema.songs.id, id)).run();
+
+    return finalSlice;
+  };
+
+  // Streaming mode: forward the provider's reasoning/translation deltas live,
+  // then emit a final `done` event with the aligned translations array.
+  if (body.stream === true) {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const send = (event: string, data: unknown) => {
+          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        };
+        try {
+          const translations = uniqueLines.length > 0
+            ? await streamTranslateLyricLines(uniqueLines, config, (chunk) => send(chunk.type, { text: chunk.text }), fetch, ctx)
+            : [];
+          const finalSlice = expandAndMerge(translations);
+          send('done', { start, count: finalSlice.length, translations: finalSlice, cached: false });
+        } catch (error) {
+          if (error instanceof TranslationError) {
+            send('error', { error: error.code });
+          } else {
+            console.error('[translate] stream error:', error);
+            send('error', { error: 'translation_failed' });
+          }
+        } finally {
+          controller.close();
+        }
+      },
+    });
+    return new Response(stream, { headers: SSE_HEADERS });
+  }
+
+  // Non-streaming path (unchanged behaviour).
   let translations: string[];
   try {
     translations = uniqueLines.length > 0
-      ? await translateLyricLines(uniqueLines, config, fetch, { title: existing.title, artist: existing.artist, glossary: glossary ?? undefined })
+      ? await translateLyricLines(uniqueLines, config, fetch, ctx)
       : [];
   } catch (error) {
     if (error instanceof TranslationError) {
@@ -164,33 +250,6 @@ export async function POST(
     return NextResponse.json({ error: 'translation_failed' }, { status: 502 });
   }
 
-  // Expand: fill duplicates from their first occurrence's result.
-  const bySliceIndex = new Map<number, string>();
-  needTranslation.forEach((sliceIndex, j) => { bySliceIndex.set(sliceIndex, translations[j] ?? ''); });
-  slice.forEach((line, i) => {
-    if (resolved[i] !== null) return;
-    const key = line.trim();
-    if (!key) { resolved[i] = ''; return; }
-    const first = firstOccurrence.get(key)!;
-    const fromBatch = bySliceIndex.get(first - start);
-    resolved[i] = fromBatch ?? (first < cache.length ? cache[first] : '');
-  });
-  const finalSlice = resolved.map((v) => v ?? '');
-
-  // Merge the slice into the stored cache so partial progress survives failures.
-  let merged: string[] = [];
-  if (cache.length > 0) {
-    merged = [...cache];
-  }
-  if (merged.length < lines.length) {
-    merged = [...merged, ...Array(lines.length - merged.length).fill('')];
-  }
-  finalSlice.forEach((translation, i) => { merged[start + i] = translation; });
-
-  await db.update(schema.songs).set({
-    lyricsTranslation: JSON.stringify(merged),
-    updatedAt: sql`(datetime('now', 'localtime'))`,
-  }).where(eq(schema.songs.id, id)).run();
-
+  const finalSlice = expandAndMerge(translations);
   return NextResponse.json({ start, count: finalSlice.length, translations: finalSlice, cached: false });
 }

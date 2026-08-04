@@ -99,6 +99,9 @@ export interface UseSongDataReturn {
   translating: boolean;
   translationError: string | null;
   translationProgress: { done: number; total: number } | null;
+  translationReasoning: string;
+  showTranslationReasoning: boolean;
+  setShowTranslationReasoning: (show: boolean) => void;
   dismissTranslationError: () => void;
   clearFurigana: () => Promise<void>;
   clearTranslation: () => Promise<void>;
@@ -165,6 +168,8 @@ export function useSongData(id: string): UseSongDataReturn {
   const [translating, setTranslating] = useState(false);
   const [translationError, setTranslationError] = useState<string | null>(null);
   const [translationProgress, setTranslationProgress] = useState<{ done: number; total: number } | null>(null);
+  const [translationReasoning, setTranslationReasoning] = useState('');
+  const [showTranslationReasoning, setShowTranslationReasoning] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [importAlert, setImportAlert] = useState<ImportAlertState | null>(null);
@@ -407,60 +412,102 @@ export function useSongData(id: string): UseSongDataReturn {
 
   const handleTranslate = useCallback(async () => {
     if (translating) return;
-      const total = furiganaLines.length;
-      if (total === 0) {
-        showToast('error', t('song.translationEmptyLyrics'));
+    const total = furiganaLines.length;
+    if (total === 0) {
+      showToast('error', t('song.translationEmptyLyrics'));
+      return;
+    }
+    setTranslating(true);
+    setTranslationError(null);
+    setTranslationReasoning('');
+    try {
+      // Whole song in ONE request, streamed via SSE: the model sees the full
+      // lyrics (coherent context) and its live reasoning/translation deltas
+      // are shown in the expandable panel. The server skips already-translated
+      // lines (cache/dedup), so this same call also serves as resume/retry.
+      const res = await fetch(`/api/songs/${id}/translate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stream: true }),
+      });
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error ?? 'translation_failed');
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let translations: string[] | null = null;
+      let streamError: string | null = null;
+      let finished = false;
+      while (!finished) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split('\n\n');
+        buffer = events.pop() ?? '';
+        for (const evt of events) {
+          let eventName = 'message';
+          let dataStr = '';
+          for (const line of evt.split('\n')) {
+            if (line.startsWith('event:')) eventName = line.slice(6).trim();
+            else if (line.startsWith('data:')) dataStr += line.slice(5).trim();
+          }
+          if (!dataStr) continue;
+          let payload: { text?: string; translations?: string[]; error?: string };
+          try { payload = JSON.parse(dataStr); } catch { continue; }
+          if (eventName === 'reasoning' && typeof payload.text === 'string') {
+            setTranslationReasoning((prev) => prev + payload.text);
+          } else if (eventName === 'translation') {
+            // Live content delta; the aligned result arrives in `done`.
+          } else if (eventName === 'done' && Array.isArray(payload.translations)) {
+            translations = payload.translations;
+            finished = true;
+          } else if (eventName === 'error' && payload.error) {
+            streamError = payload.error;
+            finished = true;
+          }
+        }
+      }
+
+      if (translations) {
+        const seed: (string | null)[] = Array(total).fill(null);
+        try {
+          const parsed = JSON.parse(song?.lyrics_translation ?? '[]');
+          if (Array.isArray(parsed)) {
+            parsed.forEach((item, i) => { if (i < total && typeof item === 'string') seed[i] = item; });
+          }
+        } catch { /* keep empty seed */ }
+        translations.forEach((tr: string, i: number) => { if (i < total) seed[i] = tr; });
+        setSong((prev) => prev ? { ...prev, lyrics_translation: JSON.stringify(seed) } : prev);
+        setShowTranslation(true);
+        showToast('success', t('song.translationReady'));
         return;
       }
-      setTranslating(true);
-      setTranslationError(null);
-      try {
-        // Whole song in ONE request: the model sees the full lyrics, so the
-        // translation is contextually coherent (repeats, story, mood). The
-        // server skips already-translated lines (cache/dedup), so this same
-        // call also serves as resume/retry — no batching needed.
-        const res = await fetch(`/api/songs/${id}/translate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        });
-        const data = await res.json();
-        if (res.ok && Array.isArray(data.translations)) {
-          const seed: (string | null)[] = Array(total).fill(null);
-          try {
-            const parsed = JSON.parse(song?.lyrics_translation ?? '[]');
-            if (Array.isArray(parsed)) {
-              parsed.forEach((item, i) => { if (i < total && typeof item === 'string') seed[i] = item; });
-            }
-          } catch { /* keep empty seed */ }
-          data.translations.forEach((tr: string, i: number) => { if (i < total) seed[i] = tr; });
-          setSong((prev) => prev ? { ...prev, lyrics_translation: JSON.stringify(seed) } : prev);
-          setShowTranslation(true);
-          showToast('success', t('song.translationReady'));
-          return;
-        }
-        const errorKey: Record<string, string> = {
-          login_required: 'apiErrors.loginRequired',
-          forbidden: 'apiErrors.forbidden',
-          translation_not_configured: 'song.translationUnavailable',
-          empty_lyrics: 'song.translationEmptyLyrics',
-          translation_failed: 'song.translationFailed',
-          translation_invalid_response: 'song.translationFailed',
-          ai_quota_exceeded: 'song.translationQuotaExceeded',
-        };
-        const message = data.error && errorKey[data.error]
-          ? t(errorKey[data.error])
-          : t('song.translationFailed');
-        setTranslationError(message);
-        showToast('error', message);
-      } catch {
-        const message = t('song.networkErrorAlert');
-        setTranslationError(message);
-        showToast('error', message);
-      } finally {
-        setTranslating(false);
-      }
-    }, [id, song, furiganaLines, t, showToast, translating]);
+
+      const errorKey: Record<string, string> = {
+        login_required: 'apiErrors.loginRequired',
+        forbidden: 'apiErrors.forbidden',
+        translation_not_configured: 'song.translationUnavailable',
+        empty_lyrics: 'song.translationEmptyLyrics',
+        translation_failed: 'song.translationFailed',
+        translation_invalid_response: 'song.translationFailed',
+        ai_quota_exceeded: 'song.translationQuotaExceeded',
+      };
+      const message = streamError && errorKey[streamError]
+        ? t(errorKey[streamError])
+        : t('song.translationFailed');
+      setTranslationError(message);
+      showToast('error', message);
+    } catch {
+      const message = t('song.networkErrorAlert');
+      setTranslationError(message);
+      showToast('error', message);
+    } finally {
+      setTranslating(false);
+    }
+  }, [id, song, furiganaLines, t, showToast, translating]);
 
   // When the translation display is on but the song has no translation yet,
   // offer to translate it (once per page visit).
@@ -751,6 +798,9 @@ export function useSongData(id: string): UseSongDataReturn {
     translating,
     translationError,
     translationProgress,
+    translationReasoning,
+    showTranslationReasoning,
+    setShowTranslationReasoning,
     dismissTranslationError,
     clearFurigana,
     clearTranslation,

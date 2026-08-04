@@ -469,6 +469,197 @@ async function requestAnthropicRaw(
 }
 
 /**
+ * Streaming counterpart of translateLyricLines: calls the provider with
+ * stream:true and forwards reasoning/translation deltas via onDelta, then
+ * returns the final line-aligned translation array (parsed & normalized).
+ * Workers AI has no streaming — it falls back to a single non-streamed
+ * call and emits one translation delta. No retries here (a mid-stream
+ * failure is surfaced to the client instead of replaying deltas).
+ */
+export async function streamTranslateLyricLines(
+  lines: string[],
+  cfg: TranslationConfig,
+  onDelta: (chunk: { type: 'reasoning' | 'translation'; text: string }) => void,
+  fetchImpl: typeof fetch = fetch,
+  ctx?: TranslationContext,
+): Promise<string[]> {
+  let text: string;
+  if (cfg.provider === 'workers-ai') {
+    const { checkAiQuota, estimateTokens, neuronsForTokens, recordAiUsage } = await import('@/lib/ai-usage');
+    const prompt = SYSTEM_PROMPT(cfg.targetLang, ctx);
+    const inputText = `${prompt}\n${JSON.stringify(lines)}`;
+    const quota = await checkAiQuota(neuronsForTokens(estimateTokens(inputText), 0));
+    if (!quota.ok) {
+      throw new TranslationError('ai_quota_exceeded', `Daily AI quota reached (${quota.used}/${quota.limit} neurons)`);
+    }
+    const ai = await getWorkersAiBinding();
+    if (!ai) throw new TranslationError('translation_failed', 'Workers AI binding unavailable');
+    const data = await ai.run(cfg.model, {
+      messages: [
+        { role: 'system', content: prompt },
+        { role: 'user', content: JSON.stringify(lines) },
+      ],
+      temperature: 0.2,
+    });
+    text = data?.response ?? '';
+    if (!text.trim()) throw new TranslationError('translation_invalid_response', 'empty model response');
+    const usage = (data as unknown as { usage?: { input_tokens?: number; output_tokens?: number } }).usage;
+    const inputTokens = usage?.input_tokens ?? estimateTokens(inputText);
+    const outputTokens = usage?.output_tokens ?? estimateTokens(text);
+    await recordAiUsage(neuronsForTokens(inputTokens, outputTokens));
+    onDelta({ type: 'translation', text });
+  } else if (cfg.provider === 'anthropic') {
+    text = await streamAnthropic(lines, cfg, onDelta, fetchImpl, ctx);
+  } else {
+    text = await streamOpenAI(lines, cfg, onDelta, fetchImpl, ctx);
+  }
+
+  const parsed = extractJsonArray(text);
+  if (parsed !== null) return normalizeTranslations(lines, parsed);
+  const fallback = text.split('\n').map((line) => line.trim());
+  return normalizeTranslations(lines, fallback);
+}
+
+/** OpenAI-compatible streaming chat completions (DeepSeek etc.). */
+async function streamOpenAI(
+  lines: string[],
+  cfg: TranslationConfig,
+  onDelta: (chunk: { type: 'reasoning' | 'translation'; text: string }) => void,
+  fetchImpl: typeof fetch,
+  ctx?: TranslationContext,
+): Promise<string> {
+  const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 300_000);
+  try {
+    const response = await fetchImpl(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${cfg.apiKey}`,
+      },
+      body: JSON.stringify({
+        ...buildOpenAIPayload(lines, cfg, ctx),
+        stream: true,
+        stream_options: { include_usage: true },
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const bodyText = await response.text().catch(() => '');
+      throw new TranslationError('translation_failed', `upstream status ${response.status} ${bodyText.slice(0, 200)}`, response.status >= 500 || response.status === 429);
+    }
+    if (!response.body) throw new TranslationError('translation_failed', 'empty stream');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let reasoning = '';
+    let content = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split('\n\n');
+      buffer = events.pop() ?? '';
+      for (const event of events) {
+        for (const line of event.split('\n')) {
+          if (!line.startsWith('data:')) continue;
+          const payload = line.slice(5).trim();
+          if (payload === '[DONE]') continue;
+          let parsed: { choices?: { delta?: { content?: string; reasoning_content?: string } }[] };
+          try {
+            parsed = JSON.parse(payload);
+          } catch { continue; }
+          const delta = parsed.choices?.[0]?.delta;
+          if (!delta) continue;
+          if (typeof delta.reasoning_content === 'string' && delta.reasoning_content) {
+            reasoning += delta.reasoning_content;
+            onDelta({ type: 'reasoning', text: delta.reasoning_content });
+          }
+          if (typeof delta.content === 'string' && delta.content) {
+            content += delta.content;
+            onDelta({ type: 'translation', text: delta.content });
+          }
+        }
+      }
+    }
+    if (!content.trim()) throw new TranslationError('translation_invalid_response', 'empty model response');
+    return content;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Anthropic Messages streaming (thinking + text deltas). */
+async function streamAnthropic(
+  lines: string[],
+  cfg: TranslationConfig,
+  onDelta: (chunk: { type: 'reasoning' | 'translation'; text: string }) => void,
+  fetchImpl: typeof fetch,
+  ctx?: TranslationContext,
+): Promise<string> {
+  const base = cfg.baseUrl.replace(/\/+$/, '');
+  const url = base.endsWith('/v1') ? `${base}/messages` : `${base}/v1/messages`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 300_000);
+  try {
+    const response = await fetchImpl(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': cfg.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({ ...buildAnthropicPayload(lines, cfg, ctx), stream: true }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const bodyText = await response.text().catch(() => '');
+      throw new TranslationError('translation_failed', `upstream status ${response.status} ${bodyText.slice(0, 200)}`, response.status >= 500 || response.status === 429);
+    }
+    if (!response.body) throw new TranslationError('translation_failed', 'empty stream');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let content = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split('\n\n');
+      buffer = events.pop() ?? '';
+      for (const event of events) {
+        const dataLine = event.split('\n').find((line) => line.startsWith('data:'));
+        if (!dataLine) continue;
+        const payload = dataLine.slice(5).trim();
+        if (!payload) continue;
+        let parsed: { type?: string; delta?: { type?: string; text?: string; thinking?: string }; content_block?: { type?: string; thinking?: string } };
+        try {
+          parsed = JSON.parse(payload);
+        } catch { continue; }
+        if (parsed.type === 'content_block_delta') {
+          if (parsed.delta?.type === 'thinking_delta' && typeof parsed.delta.thinking === 'string' && parsed.delta.thinking) {
+            onDelta({ type: 'reasoning', text: parsed.delta.thinking });
+          }
+          if (parsed.delta?.type === 'text_delta' && typeof parsed.delta.text === 'string' && parsed.delta.text) {
+            content += parsed.delta.text;
+            onDelta({ type: 'translation', text: parsed.delta.text });
+          }
+        } else if (parsed.type === 'content_block_start' && parsed.content_block?.type === 'thinking' && typeof parsed.content_block.thinking === 'string' && parsed.content_block.thinking) {
+          onDelta({ type: 'reasoning', text: parsed.content_block.thinking });
+        }
+      }
+    }
+    if (!content.trim()) throw new TranslationError('translation_invalid_response', 'empty model response');
+    return content;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Translate lyric lines. The returned array has the same length as `lines`;
  * empty source lines always map to empty strings. Transient failures are
  * retried with exponential backoff; quota errors fail fast.

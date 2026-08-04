@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useCallback
 import { useRouter, useParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
 import Link from 'next/link';
-import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2, Info, X, CircleAlert, Eraser, Palette, SlidersHorizontal } from 'lucide-react';
+import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2, Info, X, CircleAlert, Eraser, Palette, SlidersHorizontal, Brain } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import FuriganaLineView from '@/components/FuriganaLine';
@@ -112,6 +112,7 @@ export default function SongViewPage() {
   const data = useSongData(id);
   const [showSyncConfirm, setShowSyncConfirm] = useState(false);
   const lyricsRef = useRef<HTMLDivElement>(null);
+  const reasoningScrollRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   // Mutable ref bag for the rAF sync loop (avoids stale closures)
@@ -133,6 +134,12 @@ export default function SongViewPage() {
   const spotifyConnected = session ? session.spotify.connected : null;
 
   // Spotify sync hook (polling + rAF + follow-playing)
+  // Keep the reasoning panel pinned to the latest streamed chunk.
+  useEffect(() => {
+    const el = reasoningScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [data.translationReasoning]);
+
   const sync = useSpotifySync(syncRefs, lineRefs, lyricsRef, spotifyConnected === true);
 
   // Keep syncRefs in sync with state
@@ -774,14 +781,37 @@ export default function SongViewPage() {
           />
           {/* Translation status overlay: visible progress while translating, persistent error with dismiss + continue */}
           {(data.translating || data.translationError || (data.translationProgress && data.translationProgress.done < data.translationProgress.total)) && (
-            <div className="absolute left-1/2 top-3 z-20 -translate-x-1/2 max-w-[calc(100%-2rem)]">
+            <div className="absolute left-1/2 top-3 z-20 flex max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col items-center gap-2">
               {data.translating ? (
-                <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--background)]/90 px-3 py-1.5 text-xs text-[var(--muted-foreground)] shadow-sm backdrop-blur-sm">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--primary)]" />
-                  {data.translationProgress
-                    ? t('song.translatingProgress', { done: data.translationProgress.done, total: data.translationProgress.total })
-                    : t('song.translating')}
-                </span>
+                <>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--background)]/90 px-3 py-1.5 text-xs text-[var(--muted-foreground)] shadow-sm backdrop-blur-sm">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--primary)]" />
+                    {data.translationProgress
+                      ? t('song.translatingProgress', { done: data.translationProgress.done, total: data.translationProgress.total })
+                      : t('song.translating')}
+                    {data.translationReasoning && (
+                      <button
+                        type="button"
+                        onClick={() => data.setShowTranslationReasoning(!data.showTranslationReasoning)}
+                        className="ml-1 inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-2 py-0.5 font-medium text-[var(--primary)] hover:bg-[var(--primary)]/10"
+                      >
+                        <Brain className="h-3 w-3" />
+                        {data.showTranslationReasoning ? t('song.translationReasoningHide') : t('song.translationReasoningShow')}
+                      </button>
+                    )}
+                  </span>
+                  {data.showTranslationReasoning && data.translationReasoning && (
+                    <div className="w-[min(94vw,560px)] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--card)]/95 shadow-xl backdrop-blur-sm">
+                      <div className="flex items-center gap-1.5 border-b border-[var(--border)] px-3 py-2 text-[11px] font-medium text-[var(--muted-foreground)]">
+                        <Brain className="h-3 w-3 text-[var(--primary)]" />
+                        {t('song.translationReasoning')}
+                      </div>
+                      <div ref={reasoningScrollRef} className="max-h-56 overflow-y-auto whitespace-pre-wrap break-words p-3 font-mono text-[11px] leading-relaxed text-[var(--muted-foreground)]">
+                        {data.translationReasoning}
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : (
                 <span className="inline-flex items-center gap-2 rounded-full border border-[var(--warning)]/40 bg-[var(--background)]/90 px-3 py-1.5 text-xs text-[var(--warning)] shadow-sm backdrop-blur-sm">
                   <CircleAlert className="h-3.5 w-3.5 shrink-0" />
