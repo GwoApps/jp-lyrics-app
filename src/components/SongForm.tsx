@@ -173,7 +173,7 @@ export default function SongForm({
     try {
       const form = new FormData();
       form.append('file', file);
-      const res = await fetch(`/api/songs/${songId}`, { method: 'POST', body: form });
+      const res = await fetch(`/api/songs/${songId}/cover`, { method: 'POST', body: form });
       const result = await res.json();
       if (!res.ok || !result?.cover_url) {
         showToast('error', t('song.coverUploadFailed'));
@@ -192,7 +192,7 @@ export default function SongForm({
   const handleCoverRemove = async () => {
     setCoverUploading(true);
     try {
-      const res = await fetch(`/api/songs/${songId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/songs/${songId}/cover`, { method: 'DELETE' });
       const result = await res.json();
       if (!res.ok || result?.cover_url !== null) {
         showToast('error', t('song.coverUploadFailed'));
