@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { FuriganaLine } from '@/lib/types';
 import { isTitleMatch, findBestMatch } from '@/lib/match';
 import { useNowPlaying } from './useNowPlaying';
+import { animateSmoothScroll } from '@/lib/scroll-ease';
 
 export interface SpotifyState {
   connected: boolean;
@@ -159,7 +160,7 @@ export function useSpotifySync(
           const container = lyricsRef.current;
           if (lineEl && container) {
             const lineTop = lineEl.offsetTop - container.offsetTop;
-            container.scrollTo({ top: lineTop - container.clientHeight / 2 + lineEl.offsetHeight / 2, behavior: 'smooth' });
+            animateSmoothScroll(container, lineTop - container.clientHeight / 2 + lineEl.offsetHeight / 2);
           }
         }
         // Update PiP window if open

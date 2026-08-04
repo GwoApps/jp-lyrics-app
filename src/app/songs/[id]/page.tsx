@@ -18,6 +18,7 @@ import { fmtMs, fmtTime, findActiveLine } from '@/lib/lrc';
 import { isTitleMatch, findBestMatch } from '@/lib/match';
 import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
+import { animateSmoothScroll } from '@/lib/scroll-ease';
 import type { CoverColor } from '@/lib/cover-color';
 import type { CoverPalette } from '@/lib/cover-color';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
@@ -176,7 +177,7 @@ export default function SongViewPage() {
       const container = lyricsRef.current;
       if (lineEl && container) {
         const lineTop = lineEl.offsetTop - container.offsetTop;
-        container.scrollTo({ top: lineTop - container.clientHeight / 2 + lineEl.offsetHeight / 2, behavior: 'smooth' });
+        animateSmoothScroll(container, lineTop - container.clientHeight / 2 + lineEl.offsetHeight / 2);
       }
     }
   }, [data.debug]);
@@ -873,7 +874,7 @@ export default function SongViewPage() {
             params={dotParams}
             spectrumRef={spectrumCaptureOn ? spectrumRef : undefined}
           />
-          <div ref={lyricsRef} className="relative z-10 p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden scroll-smooth" style={{ fontSize: `${data.fontSize}px` }}>
+          <div ref={lyricsRef} className="relative z-10 p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden" style={{ fontSize: `${data.fontSize}px` }}>
             {furiganaLines.length > 0 ? (
               furiganaLines.map((line, i) => (
                 <div key={i} ref={(el) => { lineRefs.current[i] = el; }}>
