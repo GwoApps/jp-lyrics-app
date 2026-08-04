@@ -256,13 +256,10 @@ export default function SongViewPage() {
   useEffect(() => () => stopSpectrum(), [stopSpectrum]);
 
   const closeExperiments = useCallback(() => {
+    // Keep the toggle and the capture running — closing the panel only hides
+    // it; the mic stops on page leave (cleanup effect) or manual toggle-off.
     setShowExperiments(false);
-    // Privacy default: stop capturing when the panel closes.
-    if (spectrumCaptureOn) {
-      stopSpectrum();
-      setSpectrumCaptureOn(false);
-    }
-  }, [spectrumCaptureOn, stopSpectrum]);
+  }, []);
   const [dotParams, setDotParams] = useState<DotGridParams>(DEFAULT_DOT_GRID_PARAMS);
   const coverUrl = data.song?.cover_url ?? fallbackCoverUrl;
 
