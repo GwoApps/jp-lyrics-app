@@ -91,13 +91,15 @@ export default function LyricsDotGrid({ accent, params, spectrumRef }: LyricsDot
     const canvas = canvasRef.current;
     const parent = canvas?.parentElement;
     if (!canvas || !parent) return;
-    // Pointer-spotlight effects are a mouse affair; skip touch-only devices.
-    if (!window.matchMedia('(hover: hover)').matches) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // Pointer-spotlight is a mouse affair; on touch-only devices the pointer
+    // never activates (it stays off-screen) — but the render loop still runs
+    // so the base grid and the microphone spectrum are visible on mobile.
+    const hoverCapable = window.matchMedia('(hover: hover)').matches;
     const S = {
       spacing: 22,
       dot: 1.6,
@@ -291,8 +293,10 @@ export default function LyricsDotGrid({ accent, params, spectrumRef }: LyricsDot
       pointer.tpower = 0;
     };
 
-    parent.addEventListener('pointermove', onMove);
-    parent.addEventListener('pointerleave', onLeave);
+    if (hoverCapable) {
+      parent.addEventListener('pointermove', onMove);
+      parent.addEventListener('pointerleave', onLeave);
+    }
 
     const ro = new ResizeObserver(resize);
     ro.observe(parent);
@@ -302,8 +306,10 @@ export default function LyricsDotGrid({ accent, params, spectrumRef }: LyricsDot
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
-      parent.removeEventListener('pointermove', onMove);
-      parent.removeEventListener('pointerleave', onLeave);
+      if (hoverCapable) {
+        parent.removeEventListener('pointermove', onMove);
+        parent.removeEventListener('pointerleave', onLeave);
+      }
     };
   }, []);
 
