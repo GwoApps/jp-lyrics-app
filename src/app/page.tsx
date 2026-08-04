@@ -10,6 +10,11 @@ import NowPlayingMetadata from '@/components/NowPlayingMetadata';
 import Toast from '@/components/Toast';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useI18n } from '@/lib/i18n';
+import type { SongItem } from '@/lib/types';
+import { importErrorMsg } from '@/lib/import-errors';
+import SongFilterBar, { type SongViewMode } from '@/components/home/SongFilterBar';
+import CollectionsPanel from '@/components/home/CollectionsPanel';
+import PlaylistImportDialog from '@/components/home/PlaylistImportDialog';
 import { findBestMatch, isSongPlaying } from '@/lib/match';
 import { useNowPlaying } from '@/hooks/useNowPlaying';
 import { useAuthSession } from '@/lib/auth-session';
@@ -17,20 +22,6 @@ import { cacheSongCovers } from '@/lib/song-cover-cache';
 import { buildManualCreateUrl } from '@/lib/song-prefill';
 import { getCachedSongs, setCachedSongs } from '@/lib/song-list-cache';
 import { groupSongsByAlbum } from '@/lib/song-albums';
-
-interface SongItem {
-  id: string;
-  title: string;
-  artist: string;
-  cover_url?: string | null;
-  spotify_track_id?: string | null;
-  spotify_album?: string | null;
-  created_by: string;
-  created_by_name: string;
-  is_public: number;
-  created_at: string;
-  updated_at: string;
-}
 
 type ToastState = { type: 'success' | 'error'; msg: string } | null;
 type ImportAlertState = { message: string; manualCreateUrl?: string } | null;
@@ -41,30 +32,13 @@ function localeToBCP47(locale: string): string {
   return map[locale] ?? 'zh-CN';
 }
 
-const importErrorKeyMap: Record<string, string> = {
-  title_required: 'home.importTitleRequired',
-  lyrics_not_found: 'home.importLyricsNotFound',
-  login_required: 'home.importLoginRequired',
-  invalid_playlist_url: 'home.importInvalidPlaylistUrl',
-  spotify_not_connected: 'home.importSpotifyNotConnected',
-  playlist_fetch_failed: 'home.importPlaylistFetchFailed',
-  playlist_empty: 'home.importPlaylistEmpty',
-};
-
-function importErrorMsg(t: (k: string) => string, error?: string, fallbackKey?: string): string {
-  if (!error) return fallbackKey ? t(fallbackKey) : error || '';
-  const key = importErrorKeyMap[error];
-  return key ? t(key) : t(fallbackKey || 'home.importFailed');
-}
-
 const SONG_VIEW_MODE_KEY = 'jplrc:songs:view-mode';
-type SongViewMode = 'list' | 'grid' | 'album';
 
 function getSongViewMode(): SongViewMode {
-  if (typeof localStorage === 'undefined') return 'list';
+  if (typeof window === 'undefined') return 'list';
   try {
-    const stored = localStorage.getItem(SONG_VIEW_MODE_KEY);
-    return stored === 'grid' || stored === 'album' ? stored : 'list';
+    const saved = window.localStorage.getItem(SONG_VIEW_MODE_KEY);
+    return saved === 'grid' || saved === 'album' ? saved : 'list';
   } catch {
     return 'list';
   }
@@ -106,13 +80,8 @@ export default function HomePage() {
   const [mySongsOnly, setMySongsOnly] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [showPlaylistImport, setShowPlaylistImport] = useState(false);
-  const [playlistUrl, setPlaylistUrl] = useState('');
-  const [playlistImporting, setPlaylistImporting] = useState(false);
-  const [playlistResult, setPlaylistResult] = useState<{ total: number; imported: number; skipped: number; failed: number } | null>(null);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [collections, setCollections] = useState<{ id: string; name: string; songCount: number }[]>([]);
-  const [showCollections, setShowCollections] = useState(false);
-  const [newCollectionName, setNewCollectionName] = useState('');
   const [filterCollection, setFilterCollection] = useState<string | null>(null);
   const [collectionSongs, setCollectionSongs] = useState<Set<string>>(new Set());
   const router = useRouter();
@@ -243,35 +212,10 @@ export default function HomePage() {
     }
   };
 
-  const handlePlaylistImport = async () => {
-    if (!playlistUrl.trim()) return;
-    setPlaylistImporting(true);
-    setPlaylistResult(null);
-    try {
-      const res = await fetch('/api/songs/import-playlist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playlistUrl: playlistUrl.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        setImportAlert({ message: importErrorMsg(t, data.error, 'home.playlistImportError') });
-        return;
-      }
-      setPlaylistResult(data);
-      // Refresh song list
-      const songsRes = await fetch('/api/songs');
-      if (songsRes.ok) {
-        const data = await songsRes.json();
-        setSongs(data);
-        cacheSongCovers(data);
-        setCachedSongs(data);
-      }
-    } catch {
-      showToast('error', t('home.playlistImportFailed'));
-    } finally {
-      setPlaylistImporting(false);
-    }
+  const handlePlaylistImported = (songs: SongItem[]) => {
+    setSongs(songs);
+    cacheSongCovers(songs);
+    setCachedSongs(songs);
   };
 
   const handleToggleFavorite = async (songId: string) => {
@@ -287,18 +231,16 @@ export default function HomePage() {
     } catch { /* */ }
   };
 
-  const handleCreateCollection = async () => {
-    if (!newCollectionName.trim()) return;
+  const handleCreateCollection = async (name: string) => {
     try {
       const res = await fetch('/api/collections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newCollectionName.trim() }),
+        body: JSON.stringify({ name }),
       });
       if (res.ok) {
         const data = await res.json();
         setCollections((prev) => [...prev, { ...data, songCount: 0 }]);
-        setNewCollectionName('');
       }
     } catch { /* */ }
   };
@@ -451,194 +393,36 @@ export default function HomePage() {
       </div>
 
       {/* Playlist Import */}
-      {showPlaylistImport && (
-        <div className="mb-4 rounded-lg bg-[var(--card)] border border-[var(--border)] p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Download className="h-4 w-4 text-[var(--primary)]" />
-            <span className="text-sm font-medium">{t('home.playlistImportTitle')}</span>
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={playlistUrl}
-              onChange={(e) => setPlaylistUrl(e.target.value)}
-              placeholder={t('home.playlistUrlPlaceholder')}
-              className="flex-1 rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/50"
-              disabled={playlistImporting}
-            />
-            <button
-              onClick={handlePlaylistImport}
-              disabled={playlistImporting || !playlistUrl.trim()}
-              className="inline-flex items-center gap-1.5 rounded-md bg-[var(--primary)] px-4 py-2 text-xs font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {playlistImporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-              <span>{playlistImporting ? t('home.playlistImporting') : t('home.playlistImportBtn')}</span>
-            </button>
-          </div>
-          {playlistResult && (
-            <div className="mt-3 text-xs text-[var(--muted-foreground)]">
-              {t('home.playlistImportResult', {
-                total: String(playlistResult.total),
-                imported: String(playlistResult.imported),
-                skipped: String(playlistResult.skipped),
-                failed: String(playlistResult.failed),
-              })}
-            </div>
-          )}
-        </div>
-      )}
+      <PlaylistImportDialog
+        open={showPlaylistImport}
+        onClose={() => setShowPlaylistImport(false)}
+        onImported={handlePlaylistImported}
+      />
 
       {/* Search & Filter: mobile keeps controls on one compact row and expands search on demand. */}
-      <div className="mb-4 sm:hidden">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setMobileSearchOpen((open) => !open)}
-            className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors ${mobileSearchOpen ? 'bg-[var(--primary)] text-[var(--primary-foreground)]' : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
-            aria-label={t('home.search')}
-            aria-expanded={mobileSearchOpen}
-          >
-            <Search className="h-3.5 w-3.5" />
-          </button>
-          {currentUser && (
-            <div className="flex min-w-0 flex-1 gap-2">
-              <button onClick={() => setFavoritesOnly(!favoritesOnly)} className={`inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium transition-colors ${favoritesOnly ? 'bg-[var(--warning)]/20 text-[var(--warning)]' : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}>
-                <Star className={`h-3.5 w-3.5 shrink-0 ${favoritesOnly ? 'fill-current' : ''}`} /><span className="truncate">{t('home.favorites')}</span>
-              </button>
-              <button onClick={() => setMySongsOnly(!mySongsOnly)} className={`inline-flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium transition-colors ${mySongsOnly ? 'bg-[var(--primary)] text-[var(--primary-foreground)]' : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}>
-                <User className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{t('home.mine')}</span>
-              </button>
-            </div>
-          )}
-          <div className="ml-auto inline-flex shrink-0 rounded-md border border-[var(--border)] bg-[var(--accent)] p-0.5" role="group" aria-label={t('home.viewMode')}>
-            <button type="button" onClick={() => changeSongViewMode('list')} className={`rounded p-1.5 transition-colors ${songViewMode === 'list' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`} title={t('home.listView')} aria-label={t('home.listView')} aria-pressed={songViewMode === 'list'}><List className="h-3.5 w-3.5" /></button>
-            <button type="button" onClick={() => changeSongViewMode('grid')} className={`rounded p-1.5 transition-colors ${songViewMode === 'grid' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`} title={t('home.gridView')} aria-label={t('home.gridView')} aria-pressed={songViewMode === 'grid'}><LayoutGrid className="h-3.5 w-3.5" /></button>
-            <button type="button" onClick={() => changeSongViewMode('album')} className={`rounded p-1.5 transition-colors ${songViewMode === 'album' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`} title={t('home.albumView')} aria-label={t('home.albumView')} aria-pressed={songViewMode === 'album'}><Disc3 className="h-3.5 w-3.5" /></button>
-          </div>
-        </div>
-        {mobileSearchOpen && (
-          <div className="home-search-shell relative mt-2">
-            <Search className="home-search-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--muted-foreground)]" />
-            <input type="search" autoFocus value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={t('home.search')} className="home-search-field w-full rounded-md border border-[var(--border)] bg-[var(--input)] pl-9 pr-8 py-2 text-xs outline-none placeholder:text-[var(--muted-foreground)]/50" />
-            {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label={t('common.clear')}><X className="h-3.5 w-3.5" /></button>}
-          </div>
-        )}
-      </div>
-
-      <div className="mb-4 hidden sm:flex sm:items-center gap-2">
-        <div className="home-search-shell relative flex-1">
-          <Search className="home-search-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--muted-foreground)]" />
-          <input type="search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={t('home.search')} className="home-search-field w-full rounded-md border border-[var(--border)] bg-[var(--input)] pl-9 pr-8 py-2 text-xs outline-none placeholder:text-[var(--muted-foreground)]/50" />
-          {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label={t('common.clear')}><X className="h-3.5 w-3.5" /></button>}
-        </div>
-        {currentUser && (
-          <div className="flex gap-2">
-            <button onClick={() => setFavoritesOnly(!favoritesOnly)} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors shrink-0 ${favoritesOnly ? 'bg-[var(--warning)]/20 text-[var(--warning)]' : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}><Star className={`h-3.5 w-3.5 ${favoritesOnly ? 'fill-current' : ''}`} /><span>{t('home.favorites')}</span></button>
-            <button onClick={() => setMySongsOnly(!mySongsOnly)} className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors shrink-0 ${mySongsOnly ? 'bg-[var(--primary)] text-[var(--primary-foreground)]' : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}><User className="h-3.5 w-3.5" /><span>{t('home.mine')}</span></button>
-          </div>
-        )}
-        <div className="inline-flex shrink-0 rounded-md border border-[var(--border)] bg-[var(--accent)] p-0.5" role="group" aria-label={t('home.viewMode')}>
-          <button
-            type="button"
-            onClick={() => changeSongViewMode('list')}
-            className={`rounded p-1.5 transition-colors ${songViewMode === 'list' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
-            title={t('home.listView')}
-            aria-label={t('home.listView')}
-            aria-pressed={songViewMode === 'list'}
-          >
-            <List className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => changeSongViewMode('grid')}
-            className={`rounded p-1.5 transition-colors ${songViewMode === 'grid' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
-            title={t('home.gridView')}
-            aria-label={t('home.gridView')}
-            aria-pressed={songViewMode === 'grid'}
-          >
-            <LayoutGrid className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => changeSongViewMode('album')}
-            className={`rounded p-1.5 transition-colors ${songViewMode === 'album' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
-            title={t('home.albumView')}
-            aria-label={t('home.albumView')}
-            aria-pressed={songViewMode === 'album'}
-          >
-            <Disc3 className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
+      <SongFilterBar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        mobileSearchOpen={mobileSearchOpen}
+        onToggleMobileSearch={() => setMobileSearchOpen((open) => !open)}
+        showUserFilters={!!currentUser}
+        favoritesOnly={favoritesOnly}
+        onToggleFavorites={() => setFavoritesOnly(!favoritesOnly)}
+        mySongsOnly={mySongsOnly}
+        onToggleMine={() => setMySongsOnly(!mySongsOnly)}
+        viewMode={songViewMode}
+        onViewModeChange={changeSongViewMode}
+      />
 
       {/* Collections */}
       {currentUser && collections.length > 0 && (
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => setShowCollections(!showCollections)}
-            className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors"
-          >
-            <FolderPlus className="h-3.5 w-3.5" />
-            <span>{t('home.collections')}</span>
-          </button>
-          {filterCollection && (
-            <button
-              onClick={() => setFilterCollection(null)}
-              className="inline-flex items-center gap-1 rounded-full bg-[var(--primary)]/20 text-[var(--primary)] px-2.5 py-1 text-[10px] font-medium"
-            >
-              {collections.find(c => c.id === filterCollection)?.name}
-              <X className="h-3 w-3" />
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Collections Panel */}
-      {showCollections && currentUser && (
-        <div className="mb-4 rounded-lg bg-[var(--card)] border border-[var(--border)] p-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium">{t('home.collectionsTitle')}</span>
-            <button onClick={() => setShowCollections(false)} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="flex gap-2 mb-3">
-            <input
-              type="text"
-              value={newCollectionName}
-              onChange={(e) => setNewCollectionName(e.target.value)}
-              placeholder={t('home.newCollectionPlaceholder')}
-              className="flex-1 rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-1.5 text-xs outline-none focus:border-[var(--primary)] transition-colors"
-              onKeyDown={(e) => e.key === 'Enter' && handleCreateCollection()}
-            />
-            <button
-              onClick={handleCreateCollection}
-              disabled={!newCollectionName.trim()}
-              className="rounded-md bg-[var(--primary)] px-3 py-1.5 text-xs font-medium text-[var(--primary-foreground)] disabled:opacity-50"
-            >
-              {t('home.createCollection')}
-            </button>
-          </div>
-          <div className="space-y-1">
-            {collections.map((c) => (
-              <div
-                key={c.id}
-                className={`flex items-center justify-between rounded-md px-3 py-2 text-xs cursor-pointer transition-colors ${
-                  filterCollection === c.id ? 'bg-[var(--primary)]/10 text-[var(--primary)]' : 'hover:bg-[var(--accent)]'
-                }`}
-                onClick={() => setFilterCollection(filterCollection === c.id ? null : c.id)}
-              >
-                <span>{c.name} ({c.songCount})</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleDeleteCollection(c.id); }}
-                  className="text-[var(--muted-foreground)] hover:text-[var(--destructive)]"
-                >
-                  <Trash className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
+        <CollectionsPanel
+          collections={collections}
+          filterCollection={filterCollection}
+          onFilterChange={setFilterCollection}
+          onDelete={handleDeleteCollection}
+          onCreate={handleCreateCollection}
+        />
       )}
 
       {/* Now Playing bar */}

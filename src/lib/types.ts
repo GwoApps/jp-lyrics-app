@@ -65,3 +65,6 @@ export interface SongListItem {
   created_at: string;
   updated_at: string;
 }
+
+/** Song list item as used by the home page (same shape as SongListItem). */
+export type SongItem = SongListItem;
