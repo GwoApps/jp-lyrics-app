@@ -50,7 +50,9 @@ export async function clearStoredTranslationConfig(db: DB): Promise<void> {
 /**
  * Merge a stored (DB) config with the environment-derived config.
  * Stored non-empty fields win; everything else falls back to the env values.
- * Returns null when no usable API key exists anywhere.
+ * Returns null when no usable config exists — workers-ai needs no API key
+ * (it authenticates via the Worker's AI binding), so it never trips the
+ * key check.
  */
 export function resolveTranslationConfig(
   stored: StoredTranslationConfig | null,
@@ -64,9 +66,12 @@ export function resolveTranslationConfig(
     model: '',
     targetLang: 'zh-CN',
   };
+  const provider: TranslationProvider =
+    stored?.provider === 'openai' || stored?.provider === 'anthropic' || stored?.provider === 'workers-ai'
+      ? stored.provider
+      : base.provider;
   const apiKey = stored?.api_key?.trim() || base.apiKey;
-  if (!apiKey) return null;
-  const provider: TranslationProvider = stored?.provider === 'anthropic' ? 'anthropic' : base.provider;
+  if (!apiKey && provider !== 'workers-ai') return null;
   return {
     provider,
     baseUrl: stored?.base_url?.trim() || base.baseUrl,
