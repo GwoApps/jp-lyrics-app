@@ -152,7 +152,7 @@ export default function SongForm({
       showToast('error', t('song.coverUnsupported'));
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > 1.5 * 1024 * 1024) {
       showToast('error', t('song.coverTooLarge'));
       return;
     }

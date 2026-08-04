@@ -197,9 +197,9 @@
     "coverUploaded": "封面已更新",
     "coverRemoved": "封面已移除",
     "coverUploadFailed": "封面操作失敗",
-    "coverTooLarge": "圖片不能超過 5MB",
+    "coverTooLarge": "圖片不能超過 1.5MB",
     "coverUnsupported": "不支援的圖片格式",
-    "coverHint": "支援 JPG / PNG / WebP / GIF，最大 5MB；上傳後立即生效",
+    "coverHint": "支援 JPG / PNG / WebP / GIF，最大 1.5MB；上傳後立即生效",
     "coverCreateHint": "可選；留空時若關聯 Spotify 將自動取得封面"
   },
   "timeline": {

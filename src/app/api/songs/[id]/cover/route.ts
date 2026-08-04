@@ -16,7 +16,7 @@ const MIME_TYPES: Record<string, string> = {
   'image/webp': 'webp',
   'image/gif': 'gif',
 };
-const MAX_SIZE = 5 * 1024 * 1024;
+const MAX_SIZE = 1.5 * 1024 * 1024; // D1 hard limit is a 2 MB row; keep well under it
 
 export async function POST(
   request: NextRequest,
@@ -57,7 +57,9 @@ export async function POST(
     return NextResponse.json({ error: 'cover_too_large' }, { status: 400 });
   }
 
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  // D1's stmt.bind() only accepts ArrayBuffer (not Uint8Array); libsql
+  // accepts both, so ArrayBuffer works on every backend.
+  const bytes = await file.arrayBuffer();
 
   await db.insert(schema.songCovers).values({
     songId: id,
