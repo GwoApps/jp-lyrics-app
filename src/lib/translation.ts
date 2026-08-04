@@ -209,10 +209,15 @@ terms whose translations must stay consistent across the whole song
 Return ONLY a JSON array of {"original":"...","translation":"..."} objects.
 If there is nothing to extract, return an empty array []. Max 20 entries.`;
 
+// Reasoning models (deepseek-v4-flash, Claude thinking) burn a large chunk
+// of the completion budget on their chain of thought; 8k leaves zero room
+// for the actual translation on whole-song requests. 32k covers both.
+const MAX_OUTPUT_TOKENS = 32768;
+
 function buildOpenAIPayload(lines: string[], cfg: TranslationConfig, ctx?: TranslationContext) {
   return {
     model: cfg.model,
-    max_tokens: 8192,
+    max_tokens: MAX_OUTPUT_TOKENS,
     temperature: 0.2,
     messages: [
       { role: 'system', content: SYSTEM_PROMPT(cfg.targetLang, ctx) },
@@ -224,7 +229,7 @@ function buildOpenAIPayload(lines: string[], cfg: TranslationConfig, ctx?: Trans
 function buildAnthropicPayload(lines: string[], cfg: TranslationConfig, ctx?: TranslationContext) {
   return {
     model: cfg.model,
-    max_tokens: 8192,
+    max_tokens: MAX_OUTPUT_TOKENS,
     temperature: 0.2,
     system: SYSTEM_PROMPT(cfg.targetLang, ctx),
     messages: [{ role: 'user', content: JSON.stringify(lines) }],
@@ -408,14 +413,14 @@ export async function extractLyricsGlossary(
       if (cfg.provider === 'workers-ai') {
         const ai = await getWorkersAiBinding();
         if (!ai) throw new TranslationError('translation_failed', 'Workers AI binding unavailable');
-        const data = await ai.run(cfg.model, { messages, max_tokens: 512, temperature: 0 });
+        const data = await ai.run(cfg.model, { messages, max_tokens: 4096, temperature: 0 });
         return data?.response ?? '';
       }
       const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
-        body: JSON.stringify({ model: cfg.model, messages, max_tokens: 512, temperature: 0 }),
+        body: JSON.stringify({ model: cfg.model, messages, max_tokens: 4096, temperature: 0 }),
       });
       if (!res.ok) throw new TranslationError('translation_failed', `upstream status ${res.status}`, res.status >= 500 || res.status === 429);
       const data = await res.json() as { choices?: { message?: { content?: string } }[] };
@@ -452,7 +457,7 @@ async function requestAnthropicRaw(
         'x-api-key': cfg.apiKey,
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify({ model: cfg.model, messages, max_tokens: 512, temperature: 0 }),
+      body: JSON.stringify({ model: cfg.model, messages, max_tokens: 4096, temperature: 0 }),
       signal: controller.signal,
     });
     if (!res.ok) throw new TranslationError('translation_failed', `upstream status ${res.status}`, res.status >= 500 || res.status === 429);
