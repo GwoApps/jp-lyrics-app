@@ -162,6 +162,15 @@ export default function TranslationConfigPanel() {
     : source === 'env' ? t('admin.translationSourceEnv')
     : t('admin.translationSourceNone');
 
+  const effectiveIsWorkersAi = effective?.provider === 'workers-ai';
+  const providerLabel = effectiveIsWorkersAi
+    ? t('admin.translationProviderWorkersAi')
+    : effective?.provider === 'openai'
+      ? t('admin.translationProviderOpenAi')
+      : effective?.provider === 'anthropic'
+        ? 'Anthropic'
+        : effective?.provider || '—';
+
   const inputClass = 'w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm outline-none transition-colors focus:border-[var(--primary)]';
 
   return (
@@ -187,7 +196,7 @@ export default function TranslationConfigPanel() {
           <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
             <div className="flex items-center gap-2">
               <dt className="w-28 shrink-0 text-xs text-[var(--muted-foreground)]">{t('admin.translationProvider')}</dt>
-              <dd className="font-mono text-xs">{effective.provider || '—'}</dd>
+              <dd className="font-mono text-xs">{providerLabel}</dd>
             </div>
             <div className="flex items-center gap-2">
               <dt className="w-28 shrink-0 text-xs text-[var(--muted-foreground)]">{t('admin.translationModel')}</dt>
@@ -195,12 +204,16 @@ export default function TranslationConfigPanel() {
             </div>
             <div className="flex items-center gap-2 sm:col-span-2">
               <dt className="w-28 shrink-0 text-xs text-[var(--muted-foreground)]">{t('admin.translationBaseUrl')}</dt>
-              <dd className="truncate font-mono text-xs">{effective.base_url || '—'}</dd>
+              <dd className="truncate font-mono text-xs">
+                {effectiveIsWorkersAi ? t('admin.translationWorkersAiBinding') : (effective.base_url || '—')}
+              </dd>
             </div>
             <div className="flex items-center gap-2">
               <dt className="w-28 shrink-0 text-xs text-[var(--muted-foreground)]">{t('admin.translationApiKey')}</dt>
               <dd className="font-mono text-xs">
-                {effective.has_api_key ? effective.api_key_masked : '—'}
+                {effectiveIsWorkersAi
+                  ? t('admin.translationWorkersAiNoKey')
+                  : (effective.has_api_key ? effective.api_key_masked : '—')}
               </dd>
             </div>
             <div className="flex items-center gap-2">
@@ -227,9 +240,9 @@ export default function TranslationConfigPanel() {
               className={inputClass}
             >
               <option value="">{t('admin.translationProviderDefault')}</option>
-              <option value="openai">OpenAI 兼容</option>
+              <option value="openai">{t('admin.translationProviderOpenAi')}</option>
               <option value="anthropic">Anthropic</option>
-              <option value="workers-ai">Workers AI（CF，无需密钥）</option>
+              <option value="workers-ai">{t('admin.translationProviderWorkersAi')}</option>
             </select>
           </label>
           <label className="block">
