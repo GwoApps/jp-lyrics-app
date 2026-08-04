@@ -7,6 +7,7 @@ import Toast from '@/components/Toast';
 import { useI18n } from '@/lib/i18n';
 import type { ReadingScheme } from '@/lib/types';
 import { detectCantoneseLyrics } from '@/lib/lyrics-reading';
+import { isCoverRejected, MAX_COVER_BYTES, prepareCoverFile } from '@/lib/cover-compress';
 
 export type LyricsMode = 'text' | 'lrc';
 
@@ -146,26 +147,38 @@ export default function SongForm({
     }
   };
 
-  const handleCoverSelect = (file: File | null) => {
+  const handleCoverSelect = async (file: File | null) => {
     if (!file) return;
     if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
       showToast('error', t('song.coverUnsupported'));
       return;
     }
-    if (file.size > 1.5 * 1024 * 1024) {
+    // Over-cap files are downscaled/re-encoded in the browser (except
+    // animated GIFs, which would lose animation).
+    if (isCoverRejected(file)) {
+      showToast('error', t('song.coverTooLarge'));
+      return;
+    }
+    let prepared = file;
+    try {
+      prepared = await prepareCoverFile(file);
+    } catch {
+      // fall through with the original
+    }
+    if (prepared.size > MAX_COVER_BYTES) {
       showToast('error', t('song.coverTooLarge'));
       return;
     }
     if (mode === 'edit' && songId) {
-      void handleCoverUpload(file);
+      void handleCoverUpload(prepared);
       return;
     }
-    setPendingCoverFile(file);
+    setPendingCoverFile(prepared);
     const reader = new FileReader();
     reader.onload = (event) => {
       setCoverPreviewUrl(typeof event.target?.result === 'string' ? event.target.result : null);
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(prepared);
   };
 
   const handleCoverUpload = async (file: File) => {
@@ -371,7 +384,7 @@ export default function SongForm({
                 <div className="flex items-center gap-2">
                   <input ref={coverFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) handleCoverSelect(file);
+                    if (file) void handleCoverSelect(file);
                   }} />
                   <button
                     type="button"

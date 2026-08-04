@@ -199,7 +199,7 @@
     "coverUploadFailed": "封面操作失败",
     "coverTooLarge": "图片不能超过 1.5MB",
     "coverUnsupported": "不支持的图片格式",
-    "coverHint": "支持 JPG / PNG / WebP / GIF，最大 1.5MB；上传后立即生效",
+    "coverHint": "支持 JPG / PNG / WebP / GIF；大图会自动压缩后上传",
     "coverCreateHint": "可选；留空时若关联 Spotify 将自动获取封面"
   },
   "timeline": {

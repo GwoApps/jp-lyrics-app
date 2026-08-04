@@ -199,7 +199,7 @@
     "coverUploadFailed": "Cover operation failed",
     "coverTooLarge": "Image must be under 1.5MB",
     "coverUnsupported": "Unsupported image format",
-    "coverHint": "JPG / PNG / WebP / GIF, up to 1.5MB; takes effect immediately",
+    "coverHint": "JPG / PNG / WebP / GIF; large images are auto-compressed before upload",
     "coverCreateHint": "Optional; if left empty and linked to Spotify, artwork is fetched automatically"
   },
   "timeline": {
