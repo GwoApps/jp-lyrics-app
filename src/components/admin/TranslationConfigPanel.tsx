@@ -229,6 +229,7 @@ export default function TranslationConfigPanel() {
               <option value="">{t('admin.translationProviderDefault')}</option>
               <option value="openai">OpenAI 兼容</option>
               <option value="anthropic">Anthropic</option>
+              <option value="workers-ai">Workers AI（CF，无需密钥）</option>
             </select>
           </label>
           <label className="block">
@@ -236,10 +237,12 @@ export default function TranslationConfigPanel() {
             <input
               value={form.model ?? ''}
               onChange={(e) => setField('model', e.target.value)}
-              placeholder={effective?.model ?? 'deepseek-v4-flash'}
+              placeholder={effective?.model ?? '@cf/google/gemini-3.6-flash'}
               className={inputClass}
             />
           </label>
+          {form.provider !== 'workers-ai' && (
+          <>
           <label className="block sm:col-span-2">
             <span className="mb-1 block text-xs text-[var(--muted-foreground)]">{t('admin.translationBaseUrl')}</span>
             <input
@@ -280,6 +283,8 @@ export default function TranslationConfigPanel() {
               className={inputClass}
             />
           </label>
+          </>
+          )}
         </div>
 
         {/* Test result */}

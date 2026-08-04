@@ -91,7 +91,7 @@ export async function PUT(request: NextRequest) {
     ];
     for (const [key, value] of fieldMap) {
       if (typeof value === 'string' && value.trim()) {
-        if (key === 'provider' && value !== 'openai' && value !== 'anthropic') {
+        if (key === 'provider' && value !== 'openai' && value !== 'anthropic' && value !== 'workers-ai') {
           return NextResponse.json({ error: 'invalid_provider' }, { status: 400 });
         }
         stored[key] = value.trim();

@@ -36,12 +36,20 @@
 		"binding": "IMAGES"
 	},
 	"d1_databases": [
-		{
-			"binding": "DB",
-			"database_name": "jp-lyrics-app",
-			"database_id": "a9b7c22d-16d1-4ae1-b84c-1138d238f293"
-		}
+	  {
+	    "binding": "DB",
+	    "database_name": "jp-lyrics-app",
+	    "database_id": "a9b7c22d-16d1-4ae1-b84c-1138d238f293"
+	  }
 	],
+	"ai": {
+	  // Workers AI binding — translation uses it when TRANSLATION_PROVIDER=workers-ai
+	  "binding": "AI"
+	},
+	"vars": {
+	  // Cloudflare deploys translate with Workers AI by default (Gemini 3.6 Flash)
+	  "TRANSLATION_PROVIDER": "workers-ai"
+	},
 	"observability": {
     "logs": {
       "enabled": true,
