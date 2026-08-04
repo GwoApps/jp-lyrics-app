@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import type { CoverPaletteJson, FuriganaLine, ReadingMode, ReadingScheme } from '@/lib/types';
 import { mapTimelineTimestamps, parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
+import { readTranslationStream } from '@/lib/translation-stream';
+import { TRANSLATION_ERROR_KEYS } from '@/lib/translation-errors';
 import { useI18n } from '@/lib/i18n';
 import { buildManualCreateUrl } from '@/lib/song-prefill';
 import {
@@ -435,41 +437,10 @@ export function useSongData(id: string): UseSongDataReturn {
         throw new Error((data as { error?: string }).error ?? 'translation_failed');
       }
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let translations: string[] | null = null;
-      let streamError: string | null = null;
-      let finished = false;
-      while (!finished) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split('\n\n');
-        buffer = events.pop() ?? '';
-        for (const evt of events) {
-          let eventName = 'message';
-          let dataStr = '';
-          for (const line of evt.split('\n')) {
-            if (line.startsWith('event:')) eventName = line.slice(6).trim();
-            else if (line.startsWith('data:')) dataStr += line.slice(5).trim();
-          }
-          if (!dataStr) continue;
-          let payload: { text?: string; translations?: string[]; error?: string };
-          try { payload = JSON.parse(dataStr); } catch { continue; }
-          if (eventName === 'reasoning' && typeof payload.text === 'string') {
-            setTranslationReasoning((prev) => prev + payload.text);
-          } else if (eventName === 'translation') {
-            // Live content delta; the aligned result arrives in `done`.
-          } else if (eventName === 'done' && Array.isArray(payload.translations)) {
-            translations = payload.translations;
-            finished = true;
-          } else if (eventName === 'error' && payload.error) {
-            streamError = payload.error;
-            finished = true;
-          }
-        }
-      }
+      const { translations, error: streamError } = await readTranslationStream(
+        res.body,
+        (delta) => setTranslationReasoning((prev) => prev + delta),
+      );
 
       if (translations) {
         const seed: (string | null)[] = Array(total).fill(null);
@@ -486,15 +457,7 @@ export function useSongData(id: string): UseSongDataReturn {
         return;
       }
 
-      const errorKey: Record<string, string> = {
-        login_required: 'apiErrors.loginRequired',
-        forbidden: 'apiErrors.forbidden',
-        translation_not_configured: 'song.translationUnavailable',
-        empty_lyrics: 'song.translationEmptyLyrics',
-        translation_failed: 'song.translationFailed',
-        translation_invalid_response: 'song.translationFailed',
-        ai_quota_exceeded: 'song.translationQuotaExceeded',
-      };
+      const errorKey = TRANSLATION_ERROR_KEYS;
       const message = streamError && errorKey[streamError]
         ? t(errorKey[streamError])
         : t('song.translationFailed');

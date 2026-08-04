@@ -6,7 +6,7 @@ import {
   translateLyricLines,
   TranslationError,
   type TranslationConfig,
-} from './translation.ts';
+} from './translation/index.ts';
 
 interface CapturedCall {
   input: string | URL | Request;

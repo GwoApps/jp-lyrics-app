@@ -27,56 +27,40 @@
  * default model there is Gemini 3.6 Flash.
  */
 
-export type TranslationProvider = 'openai' | 'anthropic' | 'workers-ai';
+import {
+  MAX_OUTPUT_TOKENS,
+  RETRY_ATTEMPTS,
+  RETRY_BASE_DELAY_MS,
+  TranslationError,
+  type GlossaryEntry,
+  type TranslationConfig,
+  type TranslationContext,
+  type TranslationProvider,
+  type TranslationTestResult,
+} from './config.ts';
+import { GLOSSARY_PROMPT, SYSTEM_PROMPT } from './prompts.ts';
+import { extractJsonArray, normalizeTranslations } from './parse.ts';
 
-export interface GlossaryEntry {
-  original: string;
-  translation: string;
-}
-
-/** Per-request translation context: song identity + terminology table. */
-export interface TranslationContext {
-  title?: string;
-  artist?: string;
-  glossary?: GlossaryEntry[];
-}
-
-export interface TranslationConfig {
-  provider: TranslationProvider;
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  targetLang: string;
-}
-
-export class TranslationError extends Error {
-  code: 'translation_failed' | 'translation_invalid_response' | 'ai_quota_exceeded';
-  /** True when retrying might help (5xx / provider 429 / network). */
-  retryable: boolean;
-
-  constructor(code: 'translation_failed' | 'translation_invalid_response' | 'ai_quota_exceeded', message: string, retryable = false) {
-    super(message);
-    this.name = 'TranslationError';
-    this.code = code;
-    this.retryable = retryable;
-  }
-}
-
-const DEFAULT_OPENAI_BASE_URL = 'https://api.deepseek.com/v1';
-const DEFAULT_ANTHROPIC_BASE_URL = 'https://api.anthropic.com';
-const DEFAULT_OPENAI_MODEL = 'deepseek-v4-flash';
-const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-5';
-const DEFAULT_WORKERS_AI_MODEL = '@cf/google/gemini-3.6-flash';
-
-/** Attempts and backoff for transient failures (1s, 2s). */
-const RETRY_ATTEMPTS = 3;
-const RETRY_BASE_DELAY_MS = 1000;
-
-export interface TranslationTestResult {
-  ok: boolean;
-  latencyMs: number;
-  message: string;
-}
+// Re-export the public configuration API so `@/lib/translation` keeps its
+// original surface (callers are untouched by the module split).
+export {
+  DEFAULT_ANTHROPIC_BASE_URL,
+  DEFAULT_ANTHROPIC_MODEL,
+  DEFAULT_OPENAI_BASE_URL,
+  DEFAULT_OPENAI_MODEL,
+  DEFAULT_WORKERS_AI_MODEL,
+  MAX_OUTPUT_TOKENS,
+  RETRY_ATTEMPTS,
+  RETRY_BASE_DELAY_MS,
+  TranslationError,
+  getTranslationConfig,
+  isTranslationConfigured,
+  type GlossaryEntry,
+  type TranslationConfig,
+  type TranslationContext,
+  type TranslationProvider,
+  type TranslationTestResult,
+} from './config.ts';
 
 /**
  * Minimal connectivity check against the configured provider: send a tiny
@@ -150,70 +134,6 @@ export async function testTranslationConnection(config: TranslationConfig): Prom
   }
 }
 
-export function getTranslationConfig(env: Record<string, string | undefined> = process.env): TranslationConfig | null {
-  const provider: TranslationProvider = env.TRANSLATION_PROVIDER === 'anthropic'
-    ? 'anthropic'
-    : env.TRANSLATION_PROVIDER === 'workers-ai'
-      ? 'workers-ai'
-      : 'openai';
-  // workers-ai authenticates via the Worker's AI binding — no key required.
-  const apiKey = provider === 'workers-ai'
-    ? ''
-    : env.TRANSLATION_API_KEY || env.DEEPSEEK_API_KEY || '';
-  if (!apiKey && provider !== 'workers-ai') return null;
-  const defaultModel = provider === 'anthropic'
-    ? DEFAULT_ANTHROPIC_MODEL
-    : provider === 'workers-ai'
-      ? DEFAULT_WORKERS_AI_MODEL
-      : DEFAULT_OPENAI_MODEL;
-  const defaultBaseUrl = provider === 'anthropic'
-    ? DEFAULT_ANTHROPIC_BASE_URL
-    : DEFAULT_OPENAI_BASE_URL;
-  return {
-    provider,
-    baseUrl: env.TRANSLATION_BASE_URL || defaultBaseUrl,
-    apiKey,
-    model: env.TRANSLATION_MODEL || defaultModel,
-    targetLang: env.TRANSLATION_TARGET_LANG || 'zh-CN',
-  };
-}
-
-export function isTranslationConfigured(): boolean {
-  return getTranslationConfig() !== null;
-}
-
-const SYSTEM_PROMPT = (targetLang: string, ctx?: TranslationContext) => {
-  const parts = [
-    `You are a professional song-lyrics translator. Translate the given lyrics into ${targetLang}.`,
-    'Rules:',
-    '- Translate every non-empty line faithfully but naturally; keep meaning, mood, and line structure.',
-    '- Keep the number of output entries EXACTLY equal to the number of input lines.',
-    '- For an empty input line, output an empty string.',
-    '- Do not add explanations, headers, or timestamps.',
-    '- Respond with ONLY a JSON array of strings.',
-  ];
-  if (ctx?.title || ctx?.artist) {
-    parts.push(`Song context — title: "${ctx.title ?? ''}", artist: "${ctx.artist ?? ''}". Use these consistently whenever they appear in the lyrics.`);
-  }
-  if (ctx?.glossary && ctx.glossary.length > 0) {
-    parts.push('Terminology — use exactly these translations for the following terms:');
-    ctx.glossary.forEach((entry) => parts.push(`- ${entry.original} → ${entry.translation}`));
-  }
-  return parts.join('\n');
-};
-
-const GLOSSARY_PROMPT = `You extract terminology for translating song lyrics.
-Given the song title, artist, and full lyrics, list the proper nouns and
-terms whose translations must stay consistent across the whole song
-(person/place/brand names, work titles, repeated foreign words).
-Return ONLY a JSON array of {"original":"...","translation":"..."} objects.
-If there is nothing to extract, return an empty array []. Max 20 entries.`;
-
-// Reasoning models (deepseek-v4-flash, Claude thinking) burn a large chunk
-// of the completion budget on their chain of thought; 8k leaves zero room
-// for the actual translation on whole-song requests. 32k covers both.
-const MAX_OUTPUT_TOKENS = 32768;
-
 function buildOpenAIPayload(lines: string[], cfg: TranslationConfig, ctx?: TranslationContext) {
   return {
     model: cfg.model,
@@ -234,26 +154,6 @@ function buildAnthropicPayload(lines: string[], cfg: TranslationConfig, ctx?: Tr
     system: SYSTEM_PROMPT(cfg.targetLang, ctx),
     messages: [{ role: 'user', content: JSON.stringify(lines) }],
   };
-}
-
-/** Extract the first JSON array found in a model response. */
-function extractJsonArray(text: string): unknown {
-  const start = text.indexOf('[');
-  const end = text.lastIndexOf(']');
-  if (start === -1 || end === -1 || end <= start) return null;
-  try {
-    return JSON.parse(text.slice(start, end + 1));
-  } catch {
-    return null;
-  }
-}
-
-/** Normalize a parsed array to exactly match the source line count; empty source lines stay empty. */
-function normalizeTranslations(sourceLines: string[], parsed: unknown): string[] {
-  const raw = Array.isArray(parsed)
-    ? parsed.map((item) => (typeof item === 'string' ? item : String(item ?? '')))
-    : [];
-  return sourceLines.map((source, i) => (source.trim() ? (raw[i] ?? '').trim() : ''));
 }
 
 /** Retry helper with exponential backoff; only retries transient failures. */
