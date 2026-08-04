@@ -125,6 +125,7 @@
     "translationUnavailable": "翻译服务未配置",
     "translationEmptyLyrics": "歌词为空，无法翻译",
     "translationFailed": "翻译失败",
+    "translationQuotaExceeded": "今日 AI 翻译额度已用尽，请明天再试",
     "spotify": "Spotify",
     "spotifyLoading": "正在加载 Spotify 播放状态…",
     "spotifyDisconnected": "Spotify 未连接",

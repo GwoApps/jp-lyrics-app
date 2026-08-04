@@ -30,9 +30,9 @@ export interface TranslationConfig {
 }
 
 export class TranslationError extends Error {
-  code: 'translation_failed' | 'translation_invalid_response';
+  code: 'translation_failed' | 'translation_invalid_response' | 'ai_quota_exceeded';
 
-  constructor(code: 'translation_failed' | 'translation_invalid_response', message: string) {
+  constructor(code: 'translation_failed' | 'translation_invalid_response' | 'ai_quota_exceeded', message: string) {
     super(message);
     this.name = 'TranslationError';
     this.code = code;
@@ -282,9 +282,23 @@ async function requestWorkersAI(lines: string[], cfg: TranslationConfig): Promis
   if (!ai) {
     throw new TranslationError('translation_failed', 'Workers AI binding unavailable');
   }
+  // Daily Neurons guard: refuse up-front if this request would bust the
+  // budget (estimated from input size), then record actual usage after.
+  // Dynamic import keeps the node test runner (no @ alias) from resolving
+  // the DB-backed usage module unless the workers-ai path is actually used.
+  const { checkAiQuota, estimateTokens, neuronsForTokens, recordAiUsage } = await import('@/lib/ai-usage');
+  const prompt = SYSTEM_PROMPT(cfg.targetLang);
+  const inputText = `${prompt}\n${JSON.stringify(lines)}`;
+  const quota = await checkAiQuota(neuronsForTokens(estimateTokens(inputText), 0));
+  if (!quota.ok) {
+    throw new TranslationError(
+      'ai_quota_exceeded',
+      `Daily AI quota reached (${quota.used}/${quota.limit} neurons)`,
+    );
+  }
   const data = await ai.run(cfg.model, {
     messages: [
-      { role: 'system', content: SYSTEM_PROMPT(cfg.targetLang) },
+      { role: 'system', content: prompt },
       { role: 'user', content: JSON.stringify(lines) },
     ],
     temperature: 0.2,
@@ -293,6 +307,11 @@ async function requestWorkersAI(lines: string[], cfg: TranslationConfig): Promis
   if (typeof text !== 'string' || !text.trim()) {
     throw new TranslationError('translation_invalid_response', 'empty model response');
   }
+  // Prefer the model's own token usage; fall back to estimates.
+  const usage = (data as unknown as { usage?: { input_tokens?: number; output_tokens?: number } }).usage;
+  const inputTokens = usage?.input_tokens ?? estimateTokens(inputText);
+  const outputTokens = usage?.output_tokens ?? estimateTokens(text);
+  await recordAiUsage(neuronsForTokens(inputTokens, outputTokens));
   return text;
 }
 

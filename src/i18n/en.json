@@ -125,6 +125,7 @@
     "translationUnavailable": "Translation service not configured",
     "translationEmptyLyrics": "No lyrics to translate",
     "translationFailed": "Translation failed",
+    "translationQuotaExceeded": "Daily AI translation quota reached — try again tomorrow",
     "spotify": "Spotify",
     "spotifyLoading": "Loading Spotify playback status…",
     "spotifyDisconnected": "Spotify is not connected",

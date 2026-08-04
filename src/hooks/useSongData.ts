@@ -442,6 +442,7 @@ export function useSongData(id: string): UseSongDataReturn {
               empty_lyrics: 'song.translationEmptyLyrics',
               translation_failed: 'song.translationFailed',
               translation_invalid_response: 'song.translationFailed',
+              ai_quota_exceeded: 'song.translationQuotaExceeded',
             };
             const message = data.error && errorKey[data.error]
               ? t(errorKey[data.error])

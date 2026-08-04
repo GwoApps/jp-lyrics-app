@@ -87,3 +87,11 @@ export const songCovers = sqliteTable('song_covers', {
   data: blob('data').notNull(),
   updatedAt: text('updated_at').notNull().default(sql`(datetime('now', 'localtime'))`),
 });
+
+// Daily Workers AI usage counter — a hard cap so the free Neurons
+// allocation can never be exceeded (paid plans bill above it).
+export const aiUsage = sqliteTable('ai_usage', {
+  usageDate: text('usage_date').primaryKey(),
+  neurons: integer('neurons').notNull().default(0),
+  requests: integer('requests').notNull().default(0),
+});

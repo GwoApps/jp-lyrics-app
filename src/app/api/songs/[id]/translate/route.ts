@@ -77,7 +77,10 @@ export async function POST(
     translations = await translateLyricLines(slice, config);
   } catch (error) {
     if (error instanceof TranslationError) {
-      return NextResponse.json({ error: error.code }, { status: 502 });
+      return NextResponse.json(
+        { error: error.code },
+        { status: error.code === 'ai_quota_exceeded' ? 429 : 502 },
+      );
     }
     console.error('[translate] unexpected error:', error);
     return NextResponse.json({ error: 'translation_failed' }, { status: 502 });
