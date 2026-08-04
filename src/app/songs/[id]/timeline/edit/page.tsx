@@ -24,6 +24,10 @@ import {
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import Toast from '@/components/Toast';
+import SpotifyStatusCard from '@/components/timeline/SpotifyStatusCard';
+import OffsetControls from '@/components/timeline/OffsetControls';
+import MarkCurrentLineCard from '@/components/timeline/MarkCurrentLineCard';
+import TimelineLineRow from '@/components/timeline/TimelineLineRow';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { useNowPlaying } from '@/hooks/useNowPlaying';
 import { useI18n } from '@/lib/i18n';
@@ -329,66 +333,30 @@ export default function TimelineEditorPage() {
       </header>
 
       <section className="mb-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${canUseSpotifyTime ? 'bg-[var(--success)]/15 text-[var(--success)]' : 'bg-[var(--muted)] text-[var(--muted-foreground)]'}`}>
-                <Headphones className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium">{nowPlaying?.track?.name || t('timelineWorkspace.spotifyIdle')}</div>
-                <div className="truncate text-xs text-[var(--muted-foreground)]">{nowPlaying?.track?.artist || t('timelineWorkspace.spotifyHint')}</div>
-              </div>
-            </div>
-            <div className="font-mono text-xl font-semibold tabular-nums">{fmtMs(liveProgress)}</div>
-          </div>
-          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[var(--muted)]">
-            <div className="h-full rounded-full bg-[var(--song-accent)] transition-[width] duration-200" style={{ width: `${nowPlaying?.duration_ms ? Math.min(100, liveProgress / nowPlaying.duration_ms * 100) : 0}%` }} />
-          </div>
-          <div className="mt-2 flex justify-between text-[10px] text-[var(--muted-foreground)] tabular-nums">
-            <span>{fmtTime(liveProgress)}</span><span>{fmtTime(nowPlaying?.duration_ms || 0)}</span>
-          </div>
-          {nowPlaying?.track && !spotifyMatches && (
-            <div className="mt-3 flex items-start gap-2 rounded-md bg-[var(--warning)]/10 px-3 py-2 text-xs text-[var(--warning)]">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{t('timelineWorkspace.trackMismatch')}
-            </div>
-          )}
-        </div>
+        <SpotifyStatusCard
+          nowPlaying={nowPlaying}
+          liveProgress={liveProgress}
+          canUseSpotifyTime={canUseSpotifyTime}
+          spotifyMatches={spotifyMatches}
+        />
 
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
-          <div className="text-xs font-medium text-[var(--muted-foreground)]">{t('timeline.offset')}</div>
-          <div className="mt-3 grid grid-cols-4 gap-1.5">
-            {[-500, -100, 100, 500].map((offset) => (
-              <button key={offset} type="button" onClick={() => applyOffset(offset)} className="song-accent-button inline-flex h-8 min-w-0 items-center justify-center rounded-md px-1 text-[10px] tabular-nums">
-                {offset > 0 ? <Plus className="mr-0.5 h-3 w-3 shrink-0" /> : <Minus className="mr-0.5 h-3 w-3 shrink-0" />}{Math.abs(offset)}ms
-              </button>
-            ))}
-          </div>
-          <div className="mt-2 flex min-w-0 items-center gap-1">
-            <input type="number" step="10" value={offsetDraft} onChange={(event) => setOffsetDraft(event.target.value)} className="h-8 min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--input)] px-2 text-xs tabular-nums outline-none focus:border-[var(--song-accent)]" aria-label={t('timeline.customOffset')} />
-            <button type="button" onClick={() => applyOffset(Number(offsetDraft))} className="song-accent-button h-8 shrink-0 rounded-md px-3 text-xs">{t('timeline.apply')}</button>
-          </div>
-        </div>
+        <OffsetControls
+          offsetDraft={offsetDraft}
+          onOffsetDraftChange={setOffsetDraft}
+          onApply={applyOffset}
+        />
       </section>
 
-      <section className="sticky top-14 z-40 mb-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:p-5">
-        <div className="grid items-center gap-4 md:grid-cols-[40px_minmax(0,1fr)_40px]">
-          <button type="button" onClick={() => selectLine(currentIndex - 1)} disabled={currentIndex === 0} className="hidden h-10 w-10 items-center justify-center rounded-md text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-30 md:flex" aria-label={t('timelineWorkspace.previousLine')}><ChevronUp className="h-5 w-5" /></button>
-          <div className="min-w-0 text-center">
-            <div className="mb-2 text-[10px] font-medium text-[var(--muted-foreground)]">{t('timelineWorkspace.currentLine', { current: String(currentIndex + 1), total: String(lines.length) })}</div>
-            <div className="text-lg font-medium leading-relaxed sm:text-2xl">{currentLine?.text}</div>
-            <div className="mt-2 font-mono text-xs text-[var(--muted-foreground)]">{currentLine?.timeMs == null ? t('timelineWorkspace.unmarked') : fmtMs(currentLine.timeMs)}</div>
-          </div>
-          <button type="button" onClick={() => selectLine(currentIndex + 1)} disabled={currentIndex >= lines.length - 1} className="hidden h-10 w-10 items-center justify-center rounded-md text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-30 md:flex" aria-label={t('timelineWorkspace.nextLine')}><ChevronDown className="h-5 w-5" /></button>
-        </div>
-        <button type="button" onClick={markCurrentLine} disabled={!canUseSpotifyTime} className="song-editor-primary-button mx-auto mt-5 flex min-h-12 w-full max-w-md items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40">
-          <LocateFixed className="h-5 w-5" />
-          {canUseSpotifyTime ? t('timelineWorkspace.markAt', { time: fmtMs(liveProgress) }) : t('timelineWorkspace.waitingSpotify')}
-        </button>
-        <div className="mt-3 hidden items-center justify-center gap-4 text-[10px] text-[var(--muted-foreground)] sm:flex">
-          <span>{t('timelineWorkspace.shortcutMark')}</span><span>{t('timelineWorkspace.shortcutNavigate')}</span><span>{t('timelineWorkspace.shortcutSave')}</span>
-        </div>
-      </section>
+      <MarkCurrentLineCard
+        currentIndex={currentIndex}
+        totalLines={lines.length}
+        currentLine={currentLine}
+        liveProgress={liveProgress}
+        canUseSpotifyTime={canUseSpotifyTime}
+        onMark={markCurrentLine}
+        onSelectPrev={() => selectLine(currentIndex - 1)}
+        onSelectNext={() => selectLine(currentIndex + 1)}
+      />
 
       <section className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]">
         <div className="border-b border-[var(--border)] px-4 py-3">
@@ -396,36 +364,20 @@ export default function TimelineEditorPage() {
           <p className="mt-1 text-[11px] text-[var(--muted-foreground)]">{t('timelineWorkspace.listHint')}</p>
         </div>
         <div className="max-h-[58vh] overflow-y-auto p-2 sm:p-3">
-          {lines.map((line, index) => {
-            const selected = index === currentIndex;
-            return (
-              <div key={`${index}-${line.text}`} ref={(element) => { rowRefs.current[index] = element; }} onClick={() => selectLine(index)} className={`mb-1 grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_72px] items-center gap-2 rounded-lg border px-2 py-2 transition-colors sm:grid-cols-[32px_112px_minmax(0,1fr)_72px] sm:gap-3 sm:px-3 ${selected ? 'border-[var(--song-accent)] bg-[var(--song-accent)]/8' : 'border-transparent hover:bg-[var(--accent)]'}`}>
-                <div className="flex justify-center">{line.timeMs == null ? <Circle className="h-4 w-4 text-[var(--muted-foreground)]/50" /> : <CheckCircle2 className="h-4 w-4 text-[var(--success)]" />}</div>
-                <div className="hidden sm:block">
-                  <input key={`${index}-${line.timeMs ?? 'empty'}`} defaultValue={line.timeMs == null ? '' : fmtMs(line.timeMs)} placeholder="--:--.---" onClick={(event) => event.stopPropagation()} onBlur={(event) => {
-                    const value = event.currentTarget.value.trim();
-                    if (!value) {
-                      if (line.timeMs != null) setLineTime(index, null);
-                      return;
-                    }
-                    const parsed = parseLrcTimestamp(value);
-                    if (parsed != null) setLineTime(index, parsed);
-                    else event.currentTarget.value = line.timeMs == null ? '' : fmtMs(line.timeMs);
-                  }} className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-2 font-mono text-[11px] tabular-nums outline-none focus:border-[var(--song-accent)]" aria-label={t('timeline.timestamp', { line: String(index + 1) })} />
-                </div>
-                <div className="min-w-0">
-                  <div className={`truncate text-sm ${selected ? 'font-medium text-[var(--foreground)]' : 'text-[var(--muted-foreground)]'}`}>{line.text}</div>
-                  <div className="mt-0.5 font-mono text-[10px] text-[var(--muted-foreground)] sm:hidden">{line.timeMs == null ? t('timelineWorkspace.unmarked') : fmtMs(line.timeMs)}</div>
-                </div>
-                <div className="flex justify-end gap-1">
-                  {line.timeMs != null && (
-                    <button type="button" onClick={(event) => { event.stopPropagation(); seekSpotify(line.timeMs!); }} disabled={!nowPlaying?.connected} className="rounded-md p-2 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-30" aria-label={t('timelineWorkspace.seekToLine')} title={t('timelineWorkspace.seekToLine')}><Headphones className="h-3.5 w-3.5" /></button>
-                  )}
-                  <button type="button" onClick={(event) => { event.stopPropagation(); setLineTime(index, null); }} disabled={line.timeMs == null} className="rounded-md p-2 text-[var(--muted-foreground)] hover:bg-[var(--destructive)]/10 hover:text-[var(--destructive)] disabled:opacity-20" aria-label={t('timelineWorkspace.clearTime')} title={t('timelineWorkspace.clearTime')}><Eraser className="h-3.5 w-3.5" /></button>
-                </div>
-              </div>
-            );
-          })}
+          {lines.map((line, index) => (
+            <TimelineLineRow
+              key={`${index}-${line.text}`}
+              line={line}
+              index={index}
+              selected={index === currentIndex}
+              canSeek={!!nowPlaying?.connected}
+              registerRow={(el) => { rowRefs.current[index] = el; }}
+              onSelect={() => selectLine(index)}
+              onSetTime={setLineTime}
+              onClearTime={(i) => setLineTime(i, null)}
+              onSeek={seekSpotify}
+            />
+          ))}
         </div>
       </section>
 
