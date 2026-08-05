@@ -472,27 +472,42 @@ textarea {
   position: relative;
   isolation: isolate;
 }
-/* Apple-style back diffusion: the same conic gradient, heavily blurred and
-   rotated in sync with the edge, spreading a soft halo behind the panel.
-   Blur is cached by the compositor; the spin is transform-only, so the
-   halo follows the flowing edge at no extra per-frame cost. */
+/* Apple-style back diffusion: a colored ring hugging the panel edge
+   (same conic gradient as the flowing edge), blurred so the light
+   scatters perpendicularly from the edge at a uniform distance — not a
+   disc where every color blob blooms into its own circle. The aura
+   element carries the blur + spin; blur is rasterized once and the
+   rotation is a compositor transform, so the halo tracks the edge at no
+   per-frame cost. */
 .reasoning-glow-aura {
   position: absolute;
   z-index: -1;
-  inset: -22%;
-  border-radius: 9999px;
+  inset: 0;
+  filter: blur(36px);
+  opacity: 0.6;
+  pointer-events: none;
+  animation: reasoningGlowSpin 8s linear infinite;
+}
+.reasoning-glow-ring {
+  position: absolute;
+  inset: 0;
+  /* Ring width = 36px, hugging the panel's 12px outer radius
+     (12px + 36px keeps the ring's inner edge parallel to the panel). */
+  border: 36px solid transparent;
+  border-radius: 48px;
   background: conic-gradient(
     from 0deg,
     #8b5cf6, #3b82f6, #22d3ee, #34d399, #fbbf24, #fb7185, #8b5cf6
   );
-  filter: blur(36px);
-  opacity: 0.5;
-  pointer-events: none;
-  animation: reasoningGlowSpin 8s linear infinite;
+  /* Punch out the center so only the border ring shows. */
+  -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
 }
 /* Bright canvases make the halo read much stronger — halve its strength. */
 [data-theme="light"] .reasoning-glow-aura {
-  opacity: 0.26;
+  opacity: 0.32;
 }
 .reasoning-glow::before {
   content: '';
