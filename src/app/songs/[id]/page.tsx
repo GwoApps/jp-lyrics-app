@@ -883,7 +883,7 @@ export default function SongViewPage() {
         translationError={data.translationError}
         translationReasoning={data.translationReasoning}
         showTranslationReasoning={data.showTranslationReasoning}
-        onToggleReasoning={() => data.setShowTranslationReasoning(!data.showTranslationReasoning)}
+        onToggleReasoning={data.toggleTranslationReasoning}
         onDismissError={data.dismissTranslationError}
         onContinue={() => void data.handleTranslate()}
       />

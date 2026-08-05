@@ -93,13 +93,15 @@ export default function TranslationStatusOverlay({
                   <Brain className="h-3 w-3 text-[var(--primary)]" />
                   {t('song.translationReasoning')}
                 </div>
-                <div
-                  ref={reasoningScrollRef}
-                  onScroll={handleReasoningScroll}
-                  className="max-h-[45vh] overflow-y-auto whitespace-pre-wrap break-words p-3 pr-8 font-mono text-[11px] leading-relaxed text-[var(--muted-foreground)]"
-                >
+                <div className="px-1.5">
+                  <div
+                    ref={reasoningScrollRef}
+                    onScroll={handleReasoningScroll}
+                    className="reasoning-scroll max-h-[45vh] overflow-y-auto whitespace-pre-wrap break-words p-3 pr-4 font-mono text-[11px] leading-relaxed text-[var(--muted-foreground)]"
+                  >
                   {translationReasoning}
                   {translating && <span className="reasoning-cursor" />}
+                  </div>
                 </div>
                 {!reasoningFollow && (
                   <button

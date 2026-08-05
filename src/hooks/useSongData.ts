@@ -104,6 +104,7 @@ export interface UseSongDataReturn {
   translationReasoning: string;
   showTranslationReasoning: boolean;
   setShowTranslationReasoning: (show: boolean) => void;
+  toggleTranslationReasoning: () => void;
   dismissTranslationError: () => void;
   clearFurigana: () => Promise<void>;
   clearTranslation: () => Promise<void>;
@@ -172,6 +173,9 @@ export function useSongData(id: string): UseSongDataReturn {
   const [translationProgress, setTranslationProgress] = useState<{ done: number; total: number } | null>(null);
   const [translationReasoning, setTranslationReasoning] = useState('');
   const [showTranslationReasoning, setShowTranslationReasoning] = useState(false);
+  // Auto-open the reasoning panel when the model starts emitting reasoning,
+  // but never fight an explicit user collapse during the same session.
+  const reasoningUserHiddenRef = useRef(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [importAlert, setImportAlert] = useState<ImportAlertState | null>(null);
@@ -494,6 +498,22 @@ export function useSongData(id: string): UseSongDataReturn {
   }, [showTranslation, song?.lyrics_raw, translations.length, translating, t, showToast, handleTranslate]);
 
 
+  // Auto-open the reasoning panel as soon as the model starts streaming
+  // reasoning — unless the user has explicitly collapsed it this session.
+  useEffect(() => {
+    if (!translationReasoning.trim() || reasoningUserHiddenRef.current) return;
+    setShowTranslationReasoning(true);
+  }, [translationReasoning, setShowTranslationReasoning]);
+
+  const toggleTranslationReasoning = useCallback(() => {
+    setShowTranslationReasoning((prev) => {
+      const next = !prev;
+      // Collapsing stops the auto-reopen; re-showing re-enables it.
+      reasoningUserHiddenRef.current = !next;
+      return next;
+    });
+  }, []);
+
   const dismissTranslationError = useCallback(() => {
     setTranslationError(null);
     setTranslationProgress(null);
@@ -769,6 +789,7 @@ export function useSongData(id: string): UseSongDataReturn {
     translationReasoning,
     showTranslationReasoning,
     setShowTranslationReasoning,
+    toggleTranslationReasoning,
     dismissTranslationError,
     clearFurigana,
     clearTranslation,
