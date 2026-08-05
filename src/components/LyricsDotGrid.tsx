@@ -204,13 +204,21 @@ export default function LyricsDotGrid({ accent, params, spectrumRef }: LyricsDot
         const [cr, cg, cb] = accentRef.current.split(' ').map(Number);
         ctx.shadowColor = S.glow ? `rgba(${cr},${cg},${cb},.85)` : 'transparent';
         const N = spec.length;
-        const binsPerCol = N / cols;
+        // Use the audible band (skip DC + the mostly-empty top octave) and
+        // map it across the FULL panel width — otherwise the energy (which
+        // lives in the low bins) only lights the left columns.
+        const usable = Math.max(2, Math.floor(N * 0.75));
         for (let i = 0; i < cols; i++) {
-          const b0 = Math.floor(i * binsPerCol);
-          const b1 = Math.max(b0 + 1, Math.floor((i + 1) * binsPerCol));
-          let sum = 0;
-          for (let b = b0; b < b1; b++) sum += spec[b] ?? 0;
-          const v = Math.min(1, (sum / (b1 - b0)) / 255);
+          const t0 = i / cols;
+          const t1 = (i + 1) / cols;
+          const b0 = Math.max(1, Math.floor(1 + (usable - 1) * t0));
+          const b1 = Math.max(b0 + 1, Math.floor(1 + (usable - 1) * t1));
+          // Peak (not mean): averaging many near-silent high bins would
+          // dilute a column below the threshold and leave gaps in the wave.
+          let peak = 0;
+          for (let b = b0; b < b1; b++) peak = Math.max(peak, spec[b] ?? 0);
+          // dB-style scaling: quiet columns stay visible without clipping.
+          const v = Math.min(1, Math.log10(1 + 9 * (peak / 255)));
           if (v < 0.03) continue;
           const lit = Math.max(1, Math.round(v * maxRows));
           for (let k = 0; k < lit; k++) {
