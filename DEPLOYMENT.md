@@ -39,6 +39,24 @@ SPOTIFY_REDIRECT_URI=https://your-domain.com/api/auth/callback
 
 # Poll mode — "server" uses Node.js singleton poller + SSE, "client" polls from browser
 SPOTIFY_POLL_MODE=server
+
+# Lyric translation (optional) — any OpenAI- or Anthropic-compatible LLM API.
+# Provider defaults to OpenAI-compatible; set anthropic for the Messages API.
+# If TRANSLATION_API_KEY is unset, DEEPSEEK_API_KEY is used as a fallback.
+TRANSLATION_PROVIDER=openai
+TRANSLATION_BASE_URL=https://api.deepseek.com/v1
+TRANSLATION_API_KEY=your_api_key
+TRANSLATION_MODEL=deepseek-v4-flash
+TRANSLATION_TARGET_LANG=zh-CN
+# Optional: daily translation quota in tokens; over-limit → 429 ai_quota_exceeded
+AI_DAILY_NEURON_LIMIT=9000
+
+# Optional: require a passphrase before starting Spotify OAuth (server-side only)
+JPLRC_LOGIN_PASSPHRASE_REQUIRED=false
+JPLRC_LOGIN_PASSPHRASE=your_passphrase
+
+# Recommended in production: signs login/session cookies independently
+SESSION_SECRET=your_session_secret
 ```
 
 Start:
@@ -156,7 +174,12 @@ Create `wrangler.jsonc` (not `.toml` — OpenNext uses JSONC format):
   ],
   "vars": {
     "SPOTIFY_POLL_MODE": "client",
-    "SPOTIFY_REDIRECT_URI": "https://jplrc.your-domain.com/api/auth/callback"
+    "SPOTIFY_REDIRECT_URI": "https://jplrc.your-domain.com/api/auth/callback",
+    "TRANSLATION_PROVIDER": "openai",
+    "TRANSLATION_BASE_URL": "https://api.deepseek.com/v1",
+    "TRANSLATION_MODEL": "deepseek-v4-flash",
+    "TRANSLATION_TARGET_LANG": "zh-CN",
+    "AI_DAILY_NEURON_LIMIT": "9000"
   }
 }
 ```
@@ -167,7 +190,12 @@ Set secrets:
 wrangler secret put SPOTIFY_CLIENT_ID
 wrangler secret put SPOTIFY_CLIENT_SECRET
 wrangler secret put SESSION_SECRET   # optional, falls back to SPOTIFY_CLIENT_SECRET
+wrangler secret put TRANSLATION_API_KEY   # optional, for the translation feature
 ```
+
+> **Note:** when using the `workers-ai` translation provider, no API key is
+> needed — add the `ai` binding in `wrangler.jsonc` instead and set
+> `TRANSLATION_PROVIDER=workers-ai`.
 
 ### Step 4: Build & Deploy
 
