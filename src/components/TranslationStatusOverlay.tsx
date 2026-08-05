@@ -83,7 +83,9 @@ export default function TranslationStatusOverlay({
           {showTranslationReasoning && translationReasoning && (
             <div className="reasoning-glow-wrap w-[min(94vw,560px)]">
               <div aria-hidden="true" className="reasoning-glow-aura">
-                <div className="reasoning-glow-ring" />
+                <div className="reasoning-glow-ring">
+                  <div className="reasoning-glow-spin" />
+                </div>
               </div>
               <div className="reasoning-glow w-full overflow-hidden rounded-xl">
               <div className="relative rounded-[11px] bg-[var(--card)]/95 backdrop-blur-sm">

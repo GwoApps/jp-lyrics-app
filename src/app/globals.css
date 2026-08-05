@@ -472,13 +472,14 @@ textarea {
   position: relative;
   isolation: isolate;
 }
-/* Apple-style back diffusion: a colored ring hugging the panel edge
-   (same conic gradient as the flowing edge), blurred so the light
-   scatters perpendicularly from the edge at a uniform distance — not a
-   disc where every color blob blooms into its own circle. The aura
-   element carries the blur + spin; blur is rasterized once and the
-   rotation is a compositor transform, so the halo tracks the edge at no
-   per-frame cost. */
+/* Apple-style back diffusion: a colored ring hugging the panel edge,
+   blurred so the light scatters perpendicularly from the edge at a
+   uniform distance. The ring's SHAPE is fixed (mask on the mid layer,
+   never rotated) while the conic gradient lives on an oversized spin
+   layer that rotates beneath it — so the halo outline stays still and
+   only the light flows along the edge, in sync with the 1.5px border.
+   Layers (inside → out): spin (conic, rotates) → ring (mask punches the
+   center, static) → aura (blur scatters outward, static). */
 .reasoning-glow-aura {
   position: absolute;
   z-index: -1;
@@ -486,7 +487,6 @@ textarea {
   filter: blur(36px);
   opacity: 0.6;
   pointer-events: none;
-  animation: reasoningGlowSpin 8s linear infinite;
 }
 .reasoning-glow-ring {
   position: absolute;
@@ -495,15 +495,24 @@ textarea {
      (12px + 36px keeps the ring's inner edge parallel to the panel). */
   border: 36px solid transparent;
   border-radius: 48px;
-  background: conic-gradient(
-    from 0deg,
-    #8b5cf6, #3b82f6, #22d3ee, #34d399, #fbbf24, #fb7185, #8b5cf6
-  );
-  /* Punch out the center so only the border ring shows. */
+  /* Punch out the center so only the border ring shows. Static — the
+     ring shape never rotates, only the gradient beneath it does. */
   -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
+}
+/* Oversized rotating gradient — big enough to keep covering the fixed
+   ring through the whole spin, so the color under the ring changes
+   continuously while the outline stays put. */
+.reasoning-glow-spin {
+  position: absolute;
+  inset: -200%;
+  background: conic-gradient(
+    from 0deg,
+    #8b5cf6, #3b82f6, #22d3ee, #34d399, #fbbf24, #fb7185, #8b5cf6
+  );
+  animation: reasoningGlowSpin 8s linear infinite;
 }
 /* Bright canvases make the halo read much stronger — halve its strength. */
 [data-theme="light"] .reasoning-glow-aura {
@@ -542,7 +551,7 @@ textarea {
 }
 @media (prefers-reduced-motion: reduce) {
   .reasoning-glow::before,
-  .reasoning-glow-aura,
+  .reasoning-glow-spin,
   .reasoning-cursor {
     animation: none;
   }
