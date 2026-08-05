@@ -49,6 +49,9 @@ export function useSpectrumCapture(): SpectrumCapture {
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const ctx = new AudioContext();
+      // Browsers start AudioContext suspended until a user gesture resumes it;
+      // without this the analyser yields all-zero data and the grid stays dark.
+      await ctx.resume().catch(() => {});
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256; // 128 frequency bins

@@ -72,6 +72,12 @@ export default function LyricsDotGrid({ accent, params, spectrumRef }: LyricsDot
   const paramsRef = useRef<DotGridParams>(DEFAULT_DOT_GRID_PARAMS);
   const resizeRef = useRef<(() => void) | null>(null);
   const syncRef = useRef<(() => void) | null>(null);
+  // Keep the latest spectrumRef prop visible to the (mount-only) render loop.
+  // The effect below runs once with deps=[] — without this live ref it would
+  // keep reading the initial `undefined` forever, so the mic spectrum would
+  // never draw after the capture is toggled on.
+  const spectrumRefLive = useRef(spectrumRef);
+  spectrumRefLive.current = spectrumRef;
 
   useEffect(() => {
     if (accent) accentRef.current = accent;
@@ -188,7 +194,7 @@ export default function LyricsDotGrid({ accent, params, spectrumRef }: LyricsDot
       // Microphone spectrum: light up the bottom rows of the grid only —
       // the dots themselves glow (same shadowBlur technique as the pointer
       // spotlight); no extra light sources are drawn.
-      const spec = spectrumRef?.current;
+      const spec = spectrumRefLive.current?.current;
       if (spec && spec.length > 1) {
         const sp = S.spacing;
         const cols = Math.max(1, Math.floor(W / sp));
