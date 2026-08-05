@@ -204,15 +204,16 @@ export default function LyricsDotGrid({ accent, params, spectrumRef }: LyricsDot
         const [cr, cg, cb] = accentRef.current.split(' ').map(Number);
         ctx.shadowColor = S.glow ? `rgba(${cr},${cg},${cb},.85)` : 'transparent';
         const N = spec.length;
-        // Use the audible band (skip DC + the mostly-empty top octave) and
-        // map it across the FULL panel width — otherwise the energy (which
-        // lives in the low bins) only lights the left columns.
-        const usable = Math.max(2, Math.floor(N * 0.75));
+        // Audible band only (skip DC + the mostly-empty top octaves), mapped
+        // across the FULL panel width with LOGARITHMIC bin spacing — the way
+        // real spectrum analyzers lay out frequency: low bins get a few
+        // precise columns, high bins are aggregated. Linear spacing pins the
+        // energy peak (which lives in the bass bins) to the left edge.
+        const usable = Math.max(2, Math.floor(N * 0.5));
+        const logT = (t: number) => Math.log(1 + t * 5) / Math.log(6);
         for (let i = 0; i < cols; i++) {
-          const t0 = i / cols;
-          const t1 = (i + 1) / cols;
-          const b0 = Math.max(1, Math.floor(1 + (usable - 1) * t0));
-          const b1 = Math.max(b0 + 1, Math.floor(1 + (usable - 1) * t1));
+          const b0 = Math.max(1, Math.floor(1 + (usable - 1) * logT(i / cols)));
+          const b1 = Math.max(b0 + 1, Math.floor(1 + (usable - 1) * logT((i + 1) / cols)));
           // Peak (not mean): averaging many near-silent high bins would
           // dilute a column below the threshold and leave gaps in the wave.
           let peak = 0;
