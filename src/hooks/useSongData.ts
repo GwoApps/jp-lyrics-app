@@ -484,7 +484,12 @@ export function useSongData(id: string): UseSongDataReturn {
       !translationPromptedRef.current
     ) {
       translationPromptedRef.current = true;
-      showToast('info', t('song.translationPrompt'), t('song.translate'), () => { void handleTranslate(); });
+      // The business callback owns toast dismissal: tapping 「翻译」 hides the
+      // prompt toast (the generic Toast component stays action-agnostic).
+      showToast('info', t('song.translationPrompt'), t('song.translate'), () => {
+        setToast(null);
+        void handleTranslate();
+      });
     }
   }, [showTranslation, song?.lyrics_raw, translations.length, translating, t, showToast, handleTranslate]);
 
