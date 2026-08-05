@@ -2,32 +2,21 @@
 
 A Japanese lyrics management web app with furigana annotation, AI translation, Spotify real-time sync, an experiments panel (mic spectrum on the lyrics dot grid), and PWA support.
 
-[日本語](README-ja.md) | [中文](README-zh.md) | [Deployment Guide](DEPLOYMENT.md)
+[Features](FEATURES.md) | [日本語](README-ja.md) | [中文](README-zh.md) | [Deployment Guide](DEPLOYMENT.md)
 
 ## Features
 
-- **Furigana Lyrics** — Paste Japanese lyrics; client-side kuromoji-es auto-converts kanji to hiragana furigana via `<ruby>` annotations (lazy-loaded on first use)
-- **AI Lyric Translation** — SSE-streamed translation into the target language with a live reasoning panel, terminology glossary extraction, retry + quota handling, and pluggable providers (OpenAI-compatible / Anthropic Messages / Cloudflare Workers AI)
-- **Spotify Real-Time Sync** — OAuth-connected playback tracking with SSE streaming (server mode) or direct polling (client mode), line-by-line auto-scroll with Apple-style eased follow animation
-- **Timeline Annotation Workspace** — Mark previously untimed lyrics line by line against live Spotify progress, save partial work, replay marked positions, undo, and apply global offsets
-- **Lyrics Dot Grid** — Canvas dot-matrix background with a pointer spotlight; the **Experiments** panel adds a live microphone spectrum that lights the grid's bottom rows (Web Audio API, peak ≤ 1/3 of panel height)
-- **Share Cards** — Generate a shareable canvas image (landscape/portrait, QR code, selectable lyric lines) and download as PNG
-- **Admin Console** — `/admin` for admins: user management (promote/demote, block/unblock, delete), song visibility control, pending public-approval queue, and live translation-service configuration with connectivity test
-- **Reading Modes** — Switch between original lyrics, furigana, and Hepburn-style romaji; preference is remembered locally
-- **Canonical Spotify Metadata** — Persist stable Track IDs, URI, album, duration, cover, and canonical title/artist for exact matching
-- **Lyrics Provenance** — Track the selected provider, heuristic match confidence, and fetch timestamp
-- **PiP (Picture-in-Picture)** — Floating lyrics window over other apps (desktop Chrome)
-- **PWA** — Installable on Android/iOS with offline caching and update notifications
-- **Dark / Light Theme** — System-aware with manual toggle, persisted via localStorage
-- **Multi-Language UI** — Japanese, English, Simplified Chinese, Traditional Chinese (auto-detected from browser)
-- **lrclib.net Sync** — Fetch timestamped lyrics for precise per-line synchronization
-- **One-Click Import** — Import lyrics for the currently playing Spotify track instantly
-- **Playlist Batch Import** — Import all tracks from a Spotify playlist at once
-- **Favorites & Collections** — Star songs, organize into collections, filter by favorites
-- **Export** — Download lyrics as plain text, LRC (timestamped), or HTML
-- **Copy Lyrics** — Strip furigana, copy clean text to clipboard
-- **Adjustable Font Size** — A−/A+ controls for comfortable reading
-- **Responsive** — Mobile-optimized bottom bar with 3-dot overflow menu
+A Japanese lyrics reader with furigana, AI translation, Spotify-synced
+auto-scroll, and more:
+
+- Furigana annotations, reading modes (furigana / romaji), adjustable font size
+- AI lyric translation with a live reasoning panel and pluggable LLM providers
+- Spotify real-time sync (SSE or polling) with line-by-line eased follow-scroll
+- Timeline workspace for marking lyrics against live playback
+- Share-card generator (QR + selected lines → PNG), admin console
+- PWA, dark/light theme, 4 UI languages, favorites & collections
+
+See **[FEATURES.md](FEATURES.md)** for the full walkthrough.
 
 ## Tech Stack
 
@@ -190,12 +179,6 @@ src/
 | `/api/spotify/now-playing/stream` | GET | SSE now-playing (server mode only) |
 | `/api/collections` | GET/POST | Collections CRUD |
 | `/api/me` | GET | Current authenticated user |
-
-## Experiments
-
-Open the song page → **More** menu (desktop toolbar or mobile overflow) → **Experiments**:
-
-- **Capture mic spectrum** — lights the dot grid's bottom rows with a live frequency wave (peak capped at 1/3 of panel height). The toggle persists while the panel is closed; the mic is released when the toggle is off or you leave the page. Requires a secure context (HTTPS or localhost) and mic permission.
 
 ## License
 
