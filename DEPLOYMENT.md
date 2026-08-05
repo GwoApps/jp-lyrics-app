@@ -7,6 +7,7 @@ Three deployment targets with increasing levels of edge-readiness:
 | Database | Local SQLite file | Cloudflare D1 (built-in) | Turso (remote) |
 | Furigana | Client-side (CDN) | Client-side (CDN) | Client-side (CDN) |
 | Spotify poll | `server` or `client` | `client` only | `client` only |
+| Cover storage | SQLite BLOB (automatic) | R2 object storage (optional, automatic fallback to BLOB) | SQLite BLOB (automatic) |
 | Filesystem | ✅ Required | ❌ Not available | ❌ Not available |
 | Node.js runtime | ✅ Required | ❌ Edge only | ⚡ Edge or Node |
 
@@ -129,6 +130,33 @@ wrangler d1 create jplrc-db
 
 # Note the database_id from the output, then add to wrangler.toml
 ```
+
+### Step 1b: Create R2 Buckets (album covers + OpenNext cache)
+
+Album cover artwork is stored in **R2 object storage** (no D1 row-size
+limits, no BLOB bloat). R2 is wired up via **bindings, not environment
+variables** — the `COVER_R2_BUCKET` and `NEXT_INC_CACHE_R2_BUCKET`
+bindings are already declared in `wrangler.jsonc`; you only need to create
+the buckets once:
+
+```bash
+wrangler r2 bucket create jp-lyrics-app-covers          # album covers
+wrangler r2 bucket create jp-lyrics-app-opennext-cache  # incremental cache
+```
+
+How cover storage behaves:
+
+- **Cloudflare Workers** — covers are stored as R2 objects under the key
+  `covers/<songId>` (content type kept in HTTP metadata). When a cover is
+  replaced or a song deleted, the old object is removed too (double-delete).
+  Uploads are capped at **1.5 MB**.
+- **Docker / Vercel (no R2 binding)** — the same code path automatically
+  falls back to a BLOB column in the `song_covers` table. No configuration
+  needed.
+
+> Note: if you rename a bucket, update `bucket_name` in `wrangler.jsonc` —
+> the binding name `COVER_R2_BUCKET` must stay as-is (it is referenced in
+> `src/lib/cover-store.ts`).
 
 ### Step 2: Set Up Schema
 
