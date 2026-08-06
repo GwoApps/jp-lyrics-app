@@ -42,6 +42,23 @@ export async function POST(
     return NextResponse.json({ synced: false, error: 'lyrics_not_found' }, { status: 404 });
   }
 
+  // Fuzzy-search hits (no exact match) below this confidence may still be the
+  // wrong song despite candidate validation. Keep the user's current lyrics
+  // untouched until they explicitly confirm overriding them.
+  const LOW_CONFIDENCE_THRESHOLD = 80;
+  const { force } = await request.json().catch(() => ({})) as { force?: boolean };
+  if (!force && source === 'lrclib-search' && confidence < LOW_CONFIDENCE_THRESHOLD) {
+    const parsed = result.synced ? parseLrc(result.synced) : [];
+    return NextResponse.json({
+      synced: false,
+      lowConfidence: true,
+      source,
+      confidence,
+      lines: parsed.length,
+      lrc: result.synced,
+    });
+  }
+
   await db.update(schema.songs).set({
     lyricsRaw: result.plain,
     lyricsFurigana: '[]',

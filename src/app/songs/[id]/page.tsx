@@ -991,6 +991,15 @@ export default function SongViewPage() {
         }}
         onCancel={() => data.setImportAlert(null)}
       />
+      <ConfirmDialog
+        open={!!data.lowConfidenceSync}
+        title={t('song.syncLowConfidenceTitle')}
+        body={t('song.syncLowConfidenceBody')}
+        confirmLabel={t('song.syncLowConfidenceConfirm')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={data.confirmLowConfidenceSync}
+        onCancel={data.cancelLowConfidenceSync}
+      />
     </div>
   );
 }
