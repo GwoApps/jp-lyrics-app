@@ -392,7 +392,8 @@
     "landscape": "横向き",
     "portrait": "縦向き",
     "showQrCode": "QRコードを表示",
-    "showSourceText": "共有元テキストを表示"
+    "showSourceText": "共有元テキストを表示",
+    "includeTranslation": "翻訳を含める"
   },
   "admin": {
     "title": "管理画面",

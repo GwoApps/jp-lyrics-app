@@ -14,6 +14,18 @@ export interface ShareSong {
   cover_url: string | null;
   lyrics_raw: string | null;
   lyrics_synced: string | null;
+  /** JSON-array string aligned to `lyrics_raw` lines; each item is that line's translation (may be ''). */
+  lyrics_translation?: string | null;
+}
+
+/** A lyric line with its optional translation (aligned by source line index). */
+export interface LyricLine {
+  /** Lyric text with LRC tags stripped. */
+  text: string;
+  /** Aligned translation for this line, or null when absent. */
+  translation: string | null;
+  /** Original index in the source lyrics (`lyrics_raw`/`lyrics_synced`), used to align with detail-page `?line=` links. */
+  index: number;
 }
 
 export const LANDSCAPE_W = 1200;
@@ -135,13 +147,43 @@ function stripLrcTags(line: string): string {
   return line.replace(/\[\d{2}:\d{2}(\.\d+)?\]/g, '').trim();
 }
 
-export function getLyricsLines(song: ShareSong): string[] {
+function parseTranslations(song: ShareSong): string[] {
+  if (!song.lyrics_translation) return [];
+  try {
+    const parsed = JSON.parse(song.lyrics_translation);
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Source lyric lines paired with their translation.
+ *
+ * Translations are stored as a JSON-array string aligned to `lyrics_raw` line
+ * indexes, so each non-empty source line keeps its original index while looking
+ * up its translation. Empty source lines and missing/blank translations are
+ * skipped (translation becomes `null`).
+ */
+export function getLyricLines(song: ShareSong): LyricLine[] {
   const raw = song.lyrics_raw || song.lyrics_synced;
   if (!raw) return [];
-  return raw
-    .split('\n')
-    .map(stripLrcTags)
-    .filter((line) => line.length > 0);
+  const translations = parseTranslations(song);
+  const lines: LyricLine[] = [];
+  raw.split('\n').forEach((rawLine, index) => {
+    const text = stripLrcTags(rawLine);
+    if (!text) return;
+    const translation = translations[index]?.trim();
+    lines.push({ text, translation: translation || null, index });
+  });
+  return lines;
+}
+
+/** Backwards-compatible helper returning just the original lyric text lines. */
+export function getLyricsLines(song: ShareSong): string[] {
+  return getLyricLines(song).map((line) => line.text);
 }
 
 export function drawCover(
@@ -193,17 +235,74 @@ function drawCaption(
   }
 }
 
+/**
+ * Render lyric blocks (source line + optional translation below) inside a
+ * bounded area. Translation lines use a smaller, dimmer font so the pair stays
+ * visually aligned. Returns the number of blocks rendered (blocks that do not
+ * fit are dropped).
+ */
+function renderLyricBlocks(
+  ctx: CanvasRenderingContext2D,
+  blocks: LyricLine[],
+  opts: {
+    x: number;
+    y: number;
+    maxWidth: number;
+    maxHeight: number;
+    align: 'left' | 'center';
+    includeTranslation: boolean;
+  },
+): number {
+  const { x, y, maxWidth, maxHeight, align, includeTranslation } = opts;
+  const textH = 44;
+  const transH = 26;
+  const textFont = '28px sans-serif';
+  const transFont = '20px sans-serif';
+  const textColor = '#e2e8f0';
+  const transColor = '#94a3b8';
+
+  ctx.textAlign = align;
+  ctx.textBaseline = 'alphabetic';
+  let cursorY = y;
+  let rendered = 0;
+  for (const block of blocks) {
+    // Wrap the source line on its own (1 line when a translation follows, 2 otherwise).
+    const textLines = wrapText(ctx, block.text, maxWidth, includeTranslation ? 1 : 2);
+    const translation = includeTranslation ? block.translation : null;
+    const blockH = textLines.length * textH + (translation ? transH : 0);
+    if (cursorY + blockH > y + maxHeight) break;
+
+    ctx.fillStyle = textColor;
+    ctx.font = textFont;
+    for (const line of textLines) {
+      ctx.fillText(line, x, cursorY);
+      cursorY += textH;
+    }
+    if (translation) {
+      ctx.fillStyle = transColor;
+      ctx.font = transFont;
+      for (const line of wrapText(ctx, translation, maxWidth, 1)) {
+        ctx.fillText(line, x, cursorY);
+        cursorY += transH;
+      }
+    }
+    rendered += 1;
+  }
+  return rendered;
+}
+
 async function drawLandscape(
   ctx: CanvasRenderingContext2D,
   song: ShareSong,
   qrDataUrl: string,
   scanText: string,
   siteText: string,
-  selectedLyrics: string[],
+  selectedLyrics: LyricLine[],
   coverImg: HTMLImageElement | null,
   palette: CoverPalette | null,
   showQrCode: boolean,
   showSourceText: boolean,
+  includeTranslation: boolean,
 ) {
   drawCardBackground(ctx, LANDSCAPE_W, LANDSCAPE_H, palette);
 
@@ -239,20 +338,14 @@ async function drawLandscape(
   const lyricsX = textX;
   const lyricsY = dividerY + 40;
   const lyricsW = 560;
-  const lyricsLineH = 44;
-  const lyricsMaxLines = 6;
-  ctx.fillStyle = '#e2e8f0';
-  ctx.font = '28px sans-serif';
-  ctx.textAlign = 'left';
-  const lyricsLines: string[] = [];
-  for (const line of selectedLyrics) {
-    const wrapped = wrapText(ctx, line, lyricsW, lyricsMaxLines - lyricsLines.length);
-    lyricsLines.push(...wrapped);
-    if (lyricsLines.length >= lyricsMaxLines) break;
-  }
-  for (let i = 0; i < lyricsLines.length; i++) {
-    ctx.fillText(lyricsLines[i], lyricsX, lyricsY + i * lyricsLineH);
-  }
+  renderLyricBlocks(ctx, selectedLyrics, {
+    x: lyricsX,
+    y: lyricsY,
+    maxWidth: lyricsW,
+    maxHeight: LANDSCAPE_H - lyricsY - 10,
+    align: 'left',
+    includeTranslation,
+  });
 
   // QR
   const qrSize = 180;
@@ -275,11 +368,12 @@ async function drawPortrait(
   qrDataUrl: string,
   scanText: string,
   siteText: string,
-  selectedLyrics: string[],
+  selectedLyrics: LyricLine[],
   coverImg: HTMLImageElement | null,
   palette: CoverPalette | null,
   showQrCode: boolean,
   showSourceText: boolean,
+  includeTranslation: boolean,
 ) {
   drawCardBackground(ctx, PORTRAIT_W, PORTRAIT_H, palette);
 
@@ -287,14 +381,14 @@ async function drawPortrait(
   const contentW = PORTRAIT_W - pad * 2;
   const centerX = PORTRAIT_W / 2;
 
-  const coverSize = 380;
+  const coverSize = 300;
   const coverX = (PORTRAIT_W - coverSize) / 2;
   const coverY = 80;
 
   drawCover(ctx, song, coverImg, coverX, coverY, coverSize);
 
   // Title + artist (centered)
-  let textY = coverY + coverSize + 64;
+  let textY = coverY + coverSize + 48;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#ffffff';
@@ -314,26 +408,23 @@ async function drawPortrait(
   ctx.fillStyle = 'rgba(255,255,255,0.08)';
   ctx.fillRect(pad, textY + 36, contentW, 1);
 
-  // Lyrics
-  const lyricsY = textY + 84;
-  const lyricsLineH = 44;
-  const lyricsMaxLines = 4;
-  ctx.fillStyle = '#e2e8f0';
-  ctx.font = '28px sans-serif';
-  const lyricsLines: string[] = [];
-  for (const line of selectedLyrics) {
-    const wrapped = wrapText(ctx, line, contentW, lyricsMaxLines - lyricsLines.length);
-    lyricsLines.push(...wrapped);
-    if (lyricsLines.length >= lyricsMaxLines) break;
-  }
-  for (let i = 0; i < lyricsLines.length; i++) {
-    ctx.fillText(lyricsLines[i], centerX, lyricsY + i * lyricsLineH);
-  }
-
-  // QR
+  // QR (positioned before the lyrics so the lyrics area can size around it)
   const qrSize = 180;
   const qrX = (PORTRAIT_W - qrSize) / 2;
   const qrY = PORTRAIT_H - qrSize - 120;
+
+  // Lyrics — translations (when enabled) add a compact line under each source
+  // line, so the block area stops just above the QR code.
+  const lyricsY = textY + 76;
+  renderLyricBlocks(ctx, selectedLyrics, {
+    x: centerX,
+    y: lyricsY,
+    maxWidth: contentW,
+    maxHeight: qrY - lyricsY - 10,
+    align: 'center',
+    includeTranslation,
+  });
+
   const qrImg = showQrCode ? await loadImage(qrDataUrl) : null;
   if (showQrCode && qrImg) {
     ctx.save();
@@ -351,10 +442,11 @@ export async function drawCard(
   qrDataUrl: string,
   scanText: string,
   siteText: string,
-  selectedLyrics: string[],
+  selectedLyrics: LyricLine[],
   orientation: Orientation,
   showQrCode: boolean,
   showSourceText: boolean,
+  includeTranslation = true,
 ) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -369,10 +461,10 @@ export async function drawCard(
   if (orientation === 'portrait') {
     canvas.width = PORTRAIT_W;
     canvas.height = PORTRAIT_H;
-    await drawPortrait(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics, coverImg, palette, showQrCode, showSourceText);
+    await drawPortrait(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics, coverImg, palette, showQrCode, showSourceText, includeTranslation);
   } else {
     canvas.width = LANDSCAPE_W;
     canvas.height = LANDSCAPE_H;
-    await drawLandscape(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics, coverImg, palette, showQrCode, showSourceText);
+    await drawLandscape(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics, coverImg, palette, showQrCode, showSourceText, includeTranslation);
   }
 }

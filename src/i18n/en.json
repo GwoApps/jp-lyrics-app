@@ -392,7 +392,8 @@
     "landscape": "Landscape",
     "portrait": "Portrait",
     "showQrCode": "Show QR code",
-    "showSourceText": "Show source text"
+    "showSourceText": "Show source text",
+    "includeTranslation": "Include translation"
   },
   "admin": {
     "title": "Admin",

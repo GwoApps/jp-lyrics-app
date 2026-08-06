@@ -392,7 +392,8 @@
     "landscape": "横向",
     "portrait": "竖向",
     "showQrCode": "显示二维码",
-    "showSourceText": "显示分享来源文本"
+    "showSourceText": "显示分享来源文本",
+    "includeTranslation": "包含中文翻译"
   },
   "admin": {
     "title": "管理",

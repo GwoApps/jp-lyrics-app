@@ -7,7 +7,7 @@ import QRCode from 'qrcode';
 import { ArrowLeft, Download, Link2, Loader2, Check, Smartphone, Monitor } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
-import { drawCard, getLyricsLines, LANDSCAPE_H, LANDSCAPE_W, type Orientation, type ShareSong } from '@/lib/share-card';
+import { drawCard, getLyricLines, LANDSCAPE_H, LANDSCAPE_W, type Orientation, type ShareSong } from '@/lib/share-card';
 
 export default function SharePage() {
   const params = useParams();
@@ -28,11 +28,12 @@ export default function SharePage() {
   const [orientation, setOrientation] = useState<Orientation>('landscape');
   const [showQrCode, setShowQrCode] = useState(true);
   const [showSourceText, setShowSourceText] = useState(true);
+  const [includeTranslation, setIncludeTranslation] = useState(true);
 
   const pageUrl = typeof window !== 'undefined' ? `${window.location.origin}/songs/${id}` : '';
   const coverTheme = useCoverTheme(song?.cover_url);
 
-  const lyricsLines = useMemo(() => (song ? getLyricsLines(song) : []), [song]);
+  const lyricLines = useMemo(() => (song ? getLyricLines(song) : []), [song]);
 
   useEffect(() => {
     if (!id) {
@@ -51,13 +52,16 @@ export default function SharePage() {
   }, [id, t]);
 
   useEffect(() => {
-    if (defaultLine !== null && lyricsLines.length > 0) {
+    if (defaultLine !== null && lyricLines.length > 0) {
       const idx = parseInt(defaultLine, 10);
-      if (!Number.isNaN(idx) && idx >= 0 && idx < lyricsLines.length) {
-        setSelected(new Set([idx]));
+      // `line` refers to the source-line index on the detail page; match it via
+      // each lyric block's original index (skips empty source lines correctly).
+      if (!Number.isNaN(idx) && idx >= 0) {
+        const match = lyricLines.find((line) => line.index === idx);
+        if (match) setSelected(new Set([lyricLines.indexOf(match)]));
       }
     }
-  }, [defaultLine, lyricsLines.length]);
+  }, [defaultLine, lyricLines]);
 
   useEffect(() => {
     if (!pageUrl) return;
@@ -78,7 +82,7 @@ export default function SharePage() {
     }
     setReady(false);
     let cancelled = false;
-    const selectedLines = lyricsLines.filter((_, i) => selected.has(i));
+    const selectedLines = lyricLines.filter((_, i) => selected.has(i));
     drawCard(
       canvasRef.current,
       song,
@@ -89,11 +93,12 @@ export default function SharePage() {
       orientation,
       showQrCode,
       showSourceText,
+      includeTranslation,
     ).then(() => {
       if (!cancelled) setReady(true);
     });
     return () => { cancelled = true; };
-  }, [song, qrDataUrl, pageUrl, t, selected, lyricsLines, orientation, showQrCode, showSourceText]);
+  }, [song, qrDataUrl, pageUrl, t, selected, lyricLines, orientation, showQrCode, showSourceText, includeTranslation]);
 
   const toggleLine = (idx: number) => {
     setSelected((prev) => {
@@ -158,7 +163,7 @@ export default function SharePage() {
     );
   }
 
-  const hasLyrics = lyricsLines.length > 0;
+  const hasLyrics = lyricLines.length > 0;
   const cardAspectClass = orientation === 'portrait'
     ? 'max-w-md'
     : 'max-w-3xl';
@@ -226,6 +231,17 @@ export default function SharePage() {
             />
             {t('share.showSourceText')}
           </label>
+          {hasLyrics && (
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-xs text-[var(--foreground)] transition-colors hover:bg-[var(--accent)]">
+              <input
+                type="checkbox"
+                checked={includeTranslation}
+                onChange={(event) => setIncludeTranslation(event.target.checked)}
+                className="h-4 w-4 accent-[var(--song-accent)]"
+              />
+              {t('share.includeTranslation')}
+            </label>
+          )}
         </div>
 
         <div className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-sm">
@@ -280,7 +296,7 @@ export default function SharePage() {
               )}
             </div>
             <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-              {lyricsLines.map((line, idx) => (
+              {lyricLines.map((line, idx) => (
                 <button
                   key={idx}
                   onClick={() => toggleLine(idx)}
@@ -299,7 +315,12 @@ export default function SharePage() {
                   >
                     {selected.has(idx) && <Check className="h-3.5 w-3.5" />}
                   </span>
-                  <span className="line-clamp-2 text-sm">{line}</span>
+                  <span className="min-w-0">
+                    <span className="line-clamp-2 block text-sm">{line.text}</span>
+                    {includeTranslation && line.translation && (
+                      <span className="line-clamp-2 mt-0.5 block text-xs text-[var(--muted-foreground)]">{line.translation}</span>
+                    )}
+                  </span>
                 </button>
               ))}
             </div>
