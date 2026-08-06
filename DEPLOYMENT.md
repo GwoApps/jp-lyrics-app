@@ -26,7 +26,7 @@ The simplest path. Local SQLite file, no external database needed.
 ### Steps
 
 ```bash
-git clone https://github.com/GwoApps/jp-lyrics-app.git
+git clone https://cnb.cool/siubeng/jp-lyrics-app.git
 cd jp-lyrics-app
 ```
 

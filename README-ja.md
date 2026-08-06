@@ -34,7 +34,7 @@
 ## クイックスタート
 
 ```bash
-git clone https://github.com/GwoApps/jp-lyrics-app.git
+git clone https://cnb.cool/siubeng/jp-lyrics-app.git
 cd jp-lyrics-app
 npm install
 cp .env.example .env
