@@ -1,0 +1,27 @@
+name: Sync from CNB
+
+# Mirror sync: cnb.cool/siubeng/jp-lyrics-app (primary remote) -> GitHub
+# (GwoApps/jp-lyrics-app). Runs entirely on GitHub cloud: the CNB repo is
+# public (anonymous fetch), push uses the built-in GITHUB_TOKEN.
+on:
+  schedule:
+    - cron: "0 * * * *" # hourly
+  workflow_dispatch: {} # manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: main
+      - name: Sync main from CNB
+        uses: docker://tencentcom/git-sync
+        env:
+          PLUGIN_TARGET_URL: "https://cnb.cool/siubeng/jp-lyrics-app.git"
+          PLUGIN_AUTH_TYPE: "https"
+          PLUGIN_SYNC_MODE: "pull"
+          PLUGIN_BRANCH: "main"
