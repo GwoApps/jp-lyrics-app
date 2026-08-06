@@ -27,11 +27,6 @@ type ToastState = { type: 'success' | 'error'; msg: string } | null;
 type ImportAlertState = { message: string; manualCreateUrl?: string } | null;
 const EMPTY_SONG_IDS = new Set<string>();
 
-function localeToBCP47(locale: string): string {
-  const map: Record<string, string> = { ja: 'ja-JP', en: 'en-US', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW' };
-  return map[locale] ?? 'zh-CN';
-}
-
 const SONG_VIEW_MODE_KEY = 'jplrc:songs:view-mode';
 
 function getSongViewMode(): SongViewMode {
@@ -45,7 +40,7 @@ function getSongViewMode(): SongViewMode {
 }
 
 export default function HomePage() {
-  const { t, locale } = useI18n();
+  const { t, bcp47 } = useI18n();
   const searchParams = useSearchParams();
   const [initialSongs] = useState(() => getCachedSongs<SongItem>());
   const [songs, setSongs] = useState<SongItem[]>(() => initialSongs ?? []);
@@ -331,7 +326,7 @@ export default function HomePage() {
         isPlaying={isPlaying}
         spotifyConnected={!!spotify?.connected}
         isFavorite={visibleFavorites.has(song.id)}
-        locale={localeToBCP47(locale)}
+        locale={bcp47}
         unknownArtistLabel={t('common.unknownArtist')}
         createdByLabel={t('home.createdBy')}
         shareLabel={t('song.share')}

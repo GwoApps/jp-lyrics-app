@@ -17,6 +17,12 @@ export const LOCALE_META: Record<Locale, { label: string }> = {
   'zh-TW': { label: '繁體中文' },
 };
 
+/** Locale → BCP-47 tag for date formatting. */
+export function localeToBCP47(locale: string): string {
+  const map: Record<string, string> = { ja: 'ja-JP', en: 'en-US', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW' };
+  return map[locale] ?? 'zh-CN';
+}
+
 function detectLocale(): Locale {
   if (typeof window === 'undefined') return 'zh-CN';
   const saved = localStorage.getItem('jplrc-locale') as Locale | null;
@@ -33,11 +39,12 @@ function detectLocale(): Locale {
 
 type I18nContextValue = {
   locale: Locale;
+  bcp47: string;
   setLocale: (l: Locale) => void;
   t: (key: string, vars?: Record<string, string | number>) => string;
 };
 
-const I18nContext = createContext<I18nContextValue>({ locale: 'zh-CN', setLocale: () => {}, t: (k) => k });
+const I18nContext = createContext<I18nContextValue>({ locale: 'zh-CN', bcp47: 'zh-CN', setLocale: () => {}, t: (k) => k });
 const subscribeHydration = () => () => {};
 
 export function I18nProvider({ children }: { children: ReactNode }) {
@@ -65,7 +72,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   // Avoid hydration mismatch: render children only after locale is detected
   if (!ready) return null;
 
-  return <I18nContext.Provider value={{ locale, setLocale, t }}>{children}</I18nContext.Provider>;
+  return <I18nContext.Provider value={{ locale, bcp47: localeToBCP47(locale), setLocale, t }}>{children}</I18nContext.Provider>;
 }
 
 export function useI18n() {

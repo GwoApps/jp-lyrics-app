@@ -110,7 +110,7 @@ export default function SongViewPage() {
   const router = useRouter();
   const transitionRouter = useTransitionRouter();
   const params = useParams();
-  const { t } = useI18n();
+  const { t, bcp47 } = useI18n();
   const id = params?.id as string;
   const cachedSong = useMemo(() => getCachedSong(id), [id]);
 
@@ -923,10 +923,10 @@ export default function SongViewPage() {
 
             <div className="grid gap-2 p-4 text-xs sm:p-5">
               <div className="rounded-lg bg-[var(--accent)] px-3 py-2.5 text-[var(--muted-foreground)]">
-                {t('common.created')}{new Date(song.created_at).toLocaleString('ja-JP')}
+                {t('common.created')}{new Date(song.created_at).toLocaleString(bcp47)}
               </div>
               <div className="rounded-lg bg-[var(--accent)] px-3 py-2.5 text-[var(--muted-foreground)]">
-                {t('common.updated')}{new Date(song.updated_at).toLocaleString('ja-JP')}
+                {t('common.updated')}{new Date(song.updated_at).toLocaleString(bcp47)}
               </div>
               {hasSyncData && (
                 <div className="rounded-lg bg-[var(--accent)] px-3 py-2.5 text-[var(--success)]">
