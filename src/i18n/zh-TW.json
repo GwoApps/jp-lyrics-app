@@ -470,7 +470,10 @@
     "translationInvalidProvider": "無效的服務商",
     "translationLoadFailed": "載入設定失敗",
     "translationApiKeyPlaceholder": "輸入新金鑰…",
-    "translationApiKeyHint": "留空保持不變；金鑰不會回顯，僅顯示打碼形式"
+    "translationApiKeyHint": "留空保持不變；金鑰不會回顯，僅顯示打碼形式",
+    "translationSystemPrompt": "翻譯提示詞（System Prompt）",
+    "translationSystemPromptReset": "重設為預設",
+    "translationSystemPromptHint": "留空使用內建預設提示詞；可在此微調。{{targetLang}}、{{songContext}}、{{glossary}} 佔位符會被自動替換。"
   },
   "translation": {
     "title": "翻譯校正",

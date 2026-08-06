@@ -17,6 +17,8 @@ export interface StoredTranslationConfig {
   api_key?: string;
   model?: string;
   target_lang?: string;
+  /** Admin-overridden system prompt template; empty/missing uses the default. */
+  system_prompt?: string;
 }
 
 type DB = ReturnType<typeof getDB>;
@@ -78,6 +80,7 @@ export function resolveTranslationConfig(
     apiKey,
     model: stored?.model?.trim() || base.model,
     targetLang: stored?.target_lang?.trim() || base.targetLang,
+    systemPrompt: stored?.system_prompt?.trim() || undefined,
   };
 }
 

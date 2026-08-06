@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { getTranslationConfig } from '@/lib/translation';
+import { DEFAULT_SYSTEM_PROMPT } from '@/lib/translation/prompts';
 import {
   getStoredTranslationConfig,
   setStoredTranslationConfig,
@@ -40,6 +41,7 @@ function toWireStored(stored: StoredTranslationConfig | null) {
     base_url: stored.base_url ?? null,
     model: stored.model ?? null,
     target_lang: stored.target_lang ?? null,
+    system_prompt: stored.system_prompt ?? null,
     has_api_key: typeof stored.api_key === 'string' && stored.api_key.length > 0,
     api_key_masked: stored.api_key ? maskApiKey(stored.api_key) : null,
   };
@@ -61,6 +63,7 @@ export async function GET(request: NextRequest) {
     stored: toWireStored(stored),
     effective: effective ? toWireConfig(effective) : null,
     source: effective ? (hasStored ? 'db' : 'env') : 'none',
+    default_system_prompt: DEFAULT_SYSTEM_PROMPT,
   });
 }
 
@@ -74,7 +77,10 @@ export async function PUT(request: NextRequest) {
   const body = (await request.json().catch(() => ({}))) as Partial<StoredTranslationConfig>;
 
   // A fully blank payload means "clear the stored config" (env defaults take over).
-  const hasAnyField = Object.values(body).some((v) => typeof v === 'string' && v.trim() !== '');
+  // Note: an explicitly present system_prompt key (even blank) is a partial
+  // update — a blank prompt clears just that override, not the whole config.
+  const hasAnyField = Object.values(body).some((v) => typeof v === 'string' && v.trim() !== '')
+    || 'system_prompt' in body;
   if (!hasAnyField) {
     await clearStoredTranslationConfig(db);
   } else {
@@ -88,12 +94,23 @@ export async function PUT(request: NextRequest) {
       ['api_key', body.api_key],
       ['model', body.model],
       ['target_lang', body.target_lang],
+      ['system_prompt', body.system_prompt],
     ];
     for (const [key, value] of fieldMap) {
-      if (typeof value === 'string' && value.trim()) {
-        if (key === 'provider' && value !== 'openai' && value !== 'anthropic' && value !== 'workers-ai') {
-          return NextResponse.json({ error: 'invalid_provider' }, { status: 400 });
+      if (typeof value !== 'string') continue;
+      if (key === 'provider' && value !== 'openai' && value !== 'anthropic' && value !== 'workers-ai') {
+        return NextResponse.json({ error: 'invalid_provider' }, { status: 400 });
+      }
+      if (key === 'system_prompt') {
+        // Empty prompt = use the built-in default (explicitly cleared).
+        if (value.trim()) {
+          stored.system_prompt = value;
+        } else {
+          delete stored.system_prompt;
         }
+        continue;
+      }
+      if (value.trim()) {
         stored[key] = value.trim();
       }
     }
@@ -108,5 +125,6 @@ export async function PUT(request: NextRequest) {
     stored: toWireStored(reloaded),
     effective: effective ? toWireConfig(effective) : null,
     source: effective ? (hasStored ? 'db' : 'env') : 'none',
+    default_system_prompt: DEFAULT_SYSTEM_PROMPT,
   });
 }

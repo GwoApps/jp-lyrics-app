@@ -470,7 +470,10 @@
     "translationInvalidProvider": "Invalid provider",
     "translationLoadFailed": "Failed to load config",
     "translationApiKeyPlaceholder": "Enter a new key…",
-    "translationApiKeyHint": "Leave blank to keep the current key; keys are never echoed back, only masked"
+    "translationApiKeyHint": "Leave blank to keep the current key; keys are never echoed back, only masked",
+    "translationSystemPrompt": "Translation system prompt",
+    "translationSystemPromptReset": "Reset to default",
+    "translationSystemPromptHint": "Leave empty to use the built-in default prompt; fine-tune it here. The {{targetLang}}, {{songContext}} and {{glossary}} placeholders are filled in automatically."
   },
   "translation": {
     "title": "Edit translation",

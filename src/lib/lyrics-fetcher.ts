@@ -1,5 +1,5 @@
 import * as heModule from 'he';
-import { artistScore, titleScore } from './match';
+import { artistScore, titleScore } from './match.ts';
 
 const decodeHtmlEntity = (heModule as unknown as { default?: typeof heModule }).default?.decode ?? heModule.decode;
 

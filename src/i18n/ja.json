@@ -470,7 +470,10 @@
     "translationInvalidProvider": "無効なプロバイダーです",
     "translationLoadFailed": "設定の読み込みに失敗しました",
     "translationApiKeyPlaceholder": "新しいキーを入力…",
-    "translationApiKeyHint": "空欄の場合は変更しません。キーは表示されず、マスクされた形式のみ表示されます"
+    "translationApiKeyHint": "空欄の場合は変更しません。キーは表示されず、マスクされた形式のみ表示されます",
+    "translationSystemPrompt": "翻訳プロンプト（System Prompt）",
+    "translationSystemPromptReset": "デフォルトに戻す",
+    "translationSystemPromptHint": "空欄の場合は組み込みのデフォルトを使用します。ここで微調整できます。{{targetLang}}、{{songContext}}、{{glossary}} のプレースホルダーは自動的に置換されます。"
   },
   "translation": {
     "title": "翻訳の編集",

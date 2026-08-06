@@ -23,6 +23,8 @@ export interface TranslationConfig {
   apiKey: string;
   model: string;
   targetLang: string;
+  /** Admin-overridden system prompt template; falls back to the default when unset. */
+  systemPrompt?: string;
 }
 
 export class TranslationError extends Error {
@@ -58,6 +60,11 @@ export const RETRY_BASE_DELAY_MS = 1000;
 // of the completion budget on their chain of thought; 8k leaves zero room
 // for the actual translation on whole-song requests. 32k covers both.
 export const MAX_OUTPUT_TOKENS = 32768;
+
+// Lyric chunks are short; heavy reasoning only adds latency and tokens.
+// 'low' keeps only the minimal judgment calls (rhetoric mirroring, glossary
+// consistency) without a long chain of thought.
+export const REASONING_EFFORT = 'low' as const;
 
 export function getTranslationConfig(env: Record<string, string | undefined> = process.env): TranslationConfig | null {
   const provider: TranslationProvider = env.TRANSLATION_PROVIDER === 'anthropic'

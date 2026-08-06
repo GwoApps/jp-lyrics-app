@@ -3,7 +3,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Eye, EyeOff, Loader2, Plug, PlugZap, Trash2, Save, CheckCircle2, XCircle } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Plug, PlugZap, RotateCcw, Trash2, Save, CheckCircle2, XCircle } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import Toast from '@/components/Toast';
 import { useI18n } from '@/lib/i18n';
@@ -13,6 +13,7 @@ interface StoredConfig {
   base_url?: string;
   model?: string;
   target_lang?: string;
+  system_prompt?: string | null;
   has_api_key?: boolean;
   api_key_masked?: string | null;
 }
@@ -26,6 +27,7 @@ interface ConfigResponse {
   stored: StoredConfig | null;
   effective: StoredConfig | null;
   source: 'db' | 'env' | 'none';
+  default_system_prompt?: string;
 }
 
 interface TestResult {
@@ -34,13 +36,14 @@ interface TestResult {
   message: string;
 }
 
-const EMPTY_FORM: FormConfig = { provider: '', base_url: '', api_key: '', model: '', target_lang: '' };
+const EMPTY_FORM: FormConfig = { provider: '', base_url: '', api_key: '', model: '', target_lang: '', system_prompt: null };
 
 export default function TranslationConfigPanel() {
   const { t } = useI18n();
   const [form, setForm] = useState<FormConfig>(EMPTY_FORM);
   const [effective, setEffective] = useState<StoredConfig | null>(null);
   const [source, setSource] = useState<'db' | 'env' | 'none'>('none');
+  const [defaultPrompt, setDefaultPrompt] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -57,6 +60,7 @@ export default function TranslationConfigPanel() {
   const applyResponse = useCallback((data: ConfigResponse) => {
     setEffective(data.effective);
     setSource(data.source);
+    if (data.default_system_prompt !== undefined) setDefaultPrompt(data.default_system_prompt);
     // Never prefill the api_key field — the API does not return it; a blank
     // key keeps the current stored/env key (PUT only updates it when non-blank).
     setForm({
@@ -65,6 +69,7 @@ export default function TranslationConfigPanel() {
       api_key: '',
       model: data.stored?.model ?? '',
       target_lang: data.stored?.target_lang ?? '',
+      system_prompt: data.stored?.system_prompt ?? null,
     });
   }, []);
 
@@ -97,6 +102,10 @@ export default function TranslationConfigPanel() {
         target_lang: form.target_lang ?? '',
       };
       if (!payload.api_key?.trim()) delete payload.api_key;
+      // A prompt identical to the built-in default is stored as empty so the
+      // DB stays clean and future default improvements apply automatically.
+      const prompt = form.system_prompt?.trim() ?? '';
+      payload.system_prompt = prompt === defaultPrompt.trim() ? '' : prompt;
       const res = await fetch('/api/admin/translation-config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -113,7 +122,7 @@ export default function TranslationConfigPanel() {
     } finally {
       setSaving(false);
     }
-  }, [form, applyResponse, showToast, t]);
+  }, [form, defaultPrompt, applyResponse, showToast, t]);
 
   const handleClear = useCallback(async () => {
     setShowClearConfirm(false);
@@ -298,6 +307,32 @@ export default function TranslationConfigPanel() {
           </label>
           </>
           )}
+        </div>
+
+        {/* System prompt override — defaults fill the textarea; reset re-fills it. */}
+        <div className="mt-4">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <label className="text-xs text-[var(--muted-foreground)]">{t('admin.translationSystemPrompt')}</label>
+            <button
+              type="button"
+              onClick={() => {
+                setForm((prev) => ({ ...prev, system_prompt: defaultPrompt }));
+                setTestResult(null);
+              }}
+              className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--accent)] px-2.5 py-1 text-[11px] text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+            >
+              <RotateCcw className="h-3 w-3" />
+              {t('admin.translationSystemPromptReset')}
+            </button>
+          </div>
+          <textarea
+            value={form.system_prompt ?? defaultPrompt}
+            onChange={(e) => setField('system_prompt', e.target.value)}
+            rows={14}
+            spellCheck={false}
+            className={`${inputClass} w-full resize-y font-mono text-xs leading-relaxed`}
+          />
+          <p className="mt-1 text-[11px] text-[var(--muted-foreground)]/70">{t('admin.translationSystemPromptHint')}</p>
         </div>
 
         {/* Test result */}
