@@ -14,16 +14,16 @@ services:
       - traefik-net
     labels:
       - "traefik.enable=true"
-      - "traefik.http.services.jplrc.loadbalancer.server.port=3000"
+      - "traefik.http.services.jplrc.loadbalancer.server.port=${JPLRC_PORT}"
       # Main router (auth protected)
-      - "traefik.http.routers.jplrc.rule=Host(`jplrc.kazusa.feng.moe`)"
-      - "traefik.http.routers.jplrc.entrypoints=websecure"
-      - "traefik.http.routers.jplrc.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.jplrc.middlewares=kazusa-auth@docker"
+      - "traefik.http.routers.jplrc.rule=Host(`${JPLRC_DOMAIN}`)"
+      - "traefik.http.routers.jplrc.entrypoints=${TRAEFIK_ENTRYPOINT}"
+      - "traefik.http.routers.jplrc.tls.certresolver=${TRAEFIK_CERTRESOLVER}"
+      - "traefik.http.routers.jplrc.middlewares=${TRAEFIK_AUTH_MIDDLEWARE}"
       # Public router for PWA assets (no auth, higher priority)
-      - "traefik.http.routers.jplrc-public.rule=Host(`jplrc.kazusa.feng.moe`) && (Path(`/manifest.json`) || Path(`/sw.js`) || PathPrefix(`/icon-`) || Path(`/apple-touch-icon.png`))"
-      - "traefik.http.routers.jplrc-public.entrypoints=websecure"
-      - "traefik.http.routers.jplrc-public.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.jplrc-public.rule=Host(`${JPLRC_DOMAIN}`) && (Path(`/manifest.json`) || Path(`/sw.js`) || PathPrefix(`/icon-`) || Path(`/apple-touch-icon.png`))"
+      - "traefik.http.routers.jplrc-public.entrypoints=${TRAEFIK_ENTRYPOINT}"
+      - "traefik.http.routers.jplrc-public.tls.certresolver=${TRAEFIK_CERTRESOLVER}"
       - "traefik.http.routers.jplrc-public.service=jplrc"
       - "traefik.http.routers.jplrc-public.priority=100"
       # home portal labels
@@ -47,4 +47,4 @@ volumes:
 networks:
   traefik-net:
     external: true
-    name: traefik_traefik-net
+    name: ${TRAEFIK_NETWORK}
