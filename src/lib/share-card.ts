@@ -260,6 +260,12 @@ function renderLyricBlocks(
   const transFont = '20px sans-serif';
   const textColor = '#e2e8f0';
   const transColor = '#94a3b8';
+  // Baseline offsets (alphabetic): the translation hugs its source line
+  // (27px ≈ source descent 7 + 5px gap + translation ascent 15), while the
+  // next source line keeps a normal gap (40px ≈ translation descent 5 +
+  // 14px gap + source ascent 21) instead of the old cramped 26px step.
+  const TRANS_OFFSET = 27;
+  const NEXT_SOURCE_OFFSET = 40;
 
   ctx.textAlign = align;
   ctx.textBaseline = 'alphabetic';
@@ -269,7 +275,9 @@ function renderLyricBlocks(
     // Wrap the source line on its own (1 line when a translation follows, 2 otherwise).
     const textLines = wrapText(ctx, block.text, maxWidth, includeTranslation ? 1 : 2);
     const translation = includeTranslation ? block.translation : null;
-    const blockH = textLines.length * textH + (translation ? transH : 0);
+    const blockH = translation
+      ? (textLines.length - 1) * textH + TRANS_OFFSET + NEXT_SOURCE_OFFSET
+      : textLines.length * textH;
     if (cursorY + blockH > y + maxHeight) break;
 
     ctx.fillStyle = textColor;
@@ -279,12 +287,17 @@ function renderLyricBlocks(
       cursorY += textH;
     }
     if (translation) {
+      // Translation baseline sits just below the LAST source baseline.
+      const transLines = wrapText(ctx, translation, maxWidth, 1);
+      let baseline = cursorY - textH + TRANS_OFFSET;
       ctx.fillStyle = transColor;
       ctx.font = transFont;
-      for (const line of wrapText(ctx, translation, maxWidth, 1)) {
-        ctx.fillText(line, x, cursorY);
-        cursorY += transH;
+      for (const line of transLines) {
+        ctx.fillText(line, x, baseline);
+        baseline += transH;
       }
+      // Next block's first source baseline keeps a normal gap after the translation.
+      cursorY = baseline - transH + NEXT_SOURCE_OFFSET;
     }
     rendered += 1;
   }
