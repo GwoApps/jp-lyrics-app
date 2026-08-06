@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { CoverPaletteJson, FuriganaLine, ReadingMode, ReadingScheme } from '@/lib/types';
 import { mapTimelineTimestamps, parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
-import { readTranslationStream } from '@/lib/translation-stream';
+import { readTranslationStream, type TranslationProgress } from '@/lib/translation-stream';
 import { TRANSLATION_ERROR_KEYS } from '@/lib/translation-errors';
 import { useI18n } from '@/lib/i18n';
 import { buildManualCreateUrl } from '@/lib/song-prefill';
@@ -100,7 +100,7 @@ export interface UseSongDataReturn {
   setShowTranslation: React.Dispatch<React.SetStateAction<boolean>>;
   translating: boolean;
   translationError: string | null;
-  translationProgress: { done: number; total: number } | null;
+  translationProgress: TranslationProgress | null;
   translationReasoning: string;
   showTranslationReasoning: boolean;
   setShowTranslationReasoning: (show: boolean) => void;
@@ -173,7 +173,7 @@ export function useSongData(id: string): UseSongDataReturn {
   });
   const [translating, setTranslating] = useState(false);
   const [translationError, setTranslationError] = useState<string | null>(null);
-  const [translationProgress, setTranslationProgress] = useState<{ done: number; total: number } | null>(null);
+  const [translationProgress, setTranslationProgress] = useState<TranslationProgress | null>(null);
   const [translationReasoning, setTranslationReasoning] = useState('');
   const [showTranslationReasoning, setShowTranslationReasoning] = useState(false);
   // Auto-open the reasoning panel when the model starts emitting reasoning,
@@ -470,6 +470,7 @@ export function useSongData(id: string): UseSongDataReturn {
     setTranslating(true);
     setTranslationError(null);
     setTranslationReasoning('');
+    setTranslationProgress(null);
     try {
       // Whole song in ONE request, streamed via SSE: the model sees the full
       // lyrics (coherent context) and its live reasoning/translation deltas
@@ -485,12 +486,21 @@ export function useSongData(id: string): UseSongDataReturn {
         throw new Error((data as { error?: string }).error ?? 'translation_failed');
       }
 
-      const { translations, error: streamError } = await readTranslationStream(
+      // Live per-line progress while the model streams its translation array.
+      // The server reports { done, total } over the DISTINCT lines it still
+      // needs to translate (repeats reuse one translation), so show those
+      // numbers as-is — "done/total" reaches completion when the stream ends.
+      const onProgress = (progress: TranslationProgress) => {
+        setTranslationProgress(progress);
+      };
+      const { translations, error: streamError, progress: errorProgress } = await readTranslationStream(
         res.body,
         (delta) => setTranslationReasoning((prev) => prev + delta),
+        onProgress,
       );
 
       if (translations) {
+        setTranslationProgress(null);
         const seed: (string | null)[] = Array(total).fill(null);
         try {
           const parsed = JSON.parse(song?.lyrics_translation ?? '[]');
@@ -509,6 +519,16 @@ export function useSongData(id: string): UseSongDataReturn {
       const message = streamError && errorKey[streamError]
         ? t(errorKey[streamError])
         : t('song.translationFailed');
+      // On failure the server persists whatever lines streamed in before the
+      // error; report progress so the error pill shows the "continue" button
+      // and a real done/total count (断点续译入口). Refresh the song from the
+      // server so partial translations already persisted become visible.
+      if (errorProgress) {
+        setTranslationProgress(errorProgress);
+        if (errorProgress.done > 0) await refreshSong();
+      } else {
+        setTranslationProgress(null);
+      }
       setTranslationError(message);
       showToast('error', message);
     } catch {
@@ -518,7 +538,7 @@ export function useSongData(id: string): UseSongDataReturn {
     } finally {
       setTranslating(false);
     }
-  }, [id, song, furiganaLines, t, showToast, translating]);
+  }, [id, song, furiganaLines, t, showToast, translating, refreshSong]);
 
   // When the translation display is on but the song has no translation yet,
   // offer to translate it (once per page visit).
