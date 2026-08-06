@@ -211,7 +211,10 @@
     "coverTooLarge": "图片不能超过 1.5MB",
     "coverUnsupported": "不支持的图片格式",
     "coverHint": "支持 JPG / PNG / WebP / GIF；大图会自动压缩后上传",
-    "coverCreateHint": "可选；留空时若关联 Spotify 将自动获取封面"
+    "coverCreateHint": "可选；留空时若关联 Spotify 将自动获取封面",
+    "translationReasoningView": "查看翻译过程",
+    "copyReasoning": "复制思考",
+    "copyReasoningEmpty": "暂无思考内容"
   },
   "timeline": {
     "title": "LRC 时间轴编辑",

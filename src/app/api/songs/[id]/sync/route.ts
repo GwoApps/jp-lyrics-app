@@ -63,6 +63,7 @@ export async function POST(
     lyricsRaw: result.plain,
     lyricsFurigana: '[]',
     lyricsTranslation: '[]',
+    lyricsTranslationReasoning: null,
     readingSchemeConfirmed: 0,
     lyricsSynced: result.synced,
     lyricsSource: source,

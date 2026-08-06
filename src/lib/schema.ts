@@ -11,6 +11,7 @@ export const songs = sqliteTable('songs', {
   readingSchemeConfirmed: integer('reading_scheme_confirmed').notNull().default(0),
   lyricsSynced: text('lyrics_synced').notNull().default(''),
   lyricsTranslation: text('lyrics_translation').notNull().default('[]'),
+  lyricsTranslationReasoning: text('lyrics_translation_reasoning'),
   lyricsGlossary: text('lyrics_glossary'),
   coverUrl: text('cover_url'),
   coverPalette: text('cover_palette'),

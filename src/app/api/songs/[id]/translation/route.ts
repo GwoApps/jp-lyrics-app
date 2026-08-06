@@ -51,8 +51,11 @@ export async function PUT(
   // Empty source lines must never carry a translation.
   const normalized = expected.map((source, i) => (source.trim() ? translations[i].trim() : ''));
 
+  // Manual corrections replace the AI output — the stored reasoning from the
+  // original run no longer matches, so drop it.
   const updated = await db.update(schema.songs).set({
     lyricsTranslation: JSON.stringify(normalized),
+    lyricsTranslationReasoning: null,
     updatedAt: sql`(datetime('now', 'localtime'))`,
   }).where(and(
     eq(schema.songs.id, id),

@@ -59,6 +59,7 @@ interface SongData {
   reading_scheme_confirmed: number;
   lyrics_synced: string;
   lyrics_translation: string;
+  lyrics_translation_reasoning?: string | null;
   cover_url?: string | null;
   cover_palette?: CoverPaletteJson | null;
   spotify_track_id?: string | null;
@@ -105,6 +106,9 @@ export interface UseSongDataReturn {
   showTranslationReasoning: boolean;
   setShowTranslationReasoning: (show: boolean) => void;
   toggleTranslationReasoning: () => void;
+  hasSavedReasoning: boolean;
+  openSavedReasoning: () => void;
+  copyReasoning: () => Promise<void>;
   dismissTranslationError: () => void;
   clearFurigana: () => Promise<void>;
   clearTranslation: () => Promise<void>;
@@ -176,6 +180,10 @@ export function useSongData(id: string): UseSongDataReturn {
   const [translationProgress, setTranslationProgress] = useState<TranslationProgress | null>(null);
   const [translationReasoning, setTranslationReasoning] = useState('');
   const [showTranslationReasoning, setShowTranslationReasoning] = useState(false);
+  // Track whether any reasoning was persisted server-side for this song. When
+  // set, the 「查看翻译过程」 menu row re-opens the stored reasoning on demand
+  // (even after a reload / after the stream finished).
+  const [hasSavedReasoning, setHasSavedReasoning] = useState(false);
   // Auto-open the reasoning panel when the model starts emitting reasoning,
   // but never fight an explicit user collapse during the same session.
   const reasoningUserHiddenRef = useRef(false);
@@ -370,6 +378,13 @@ export function useSongData(id: string): UseSongDataReturn {
       .then((data) => {
         setSong(data);
         setLoading(false);
+        if (data.lyrics_translation_reasoning) {
+          setTranslationReasoning(data.lyrics_translation_reasoning);
+          setHasSavedReasoning(true);
+          // Persisted reasoning is reviewed on demand via the menu row — never
+          // auto-open it on page load (it would cover the lyrics).
+          reasoningUserHiddenRef.current = true;
+        }
         if (data.lyrics_synced) setSyncLines(parseLrc(data.lyrics_synced));
         if (!data.spotify_track_id && data.permissions?.can_edit) {
           fetch(`/api/songs/${id}/cover`)
@@ -470,6 +485,8 @@ export function useSongData(id: string): UseSongDataReturn {
     setTranslating(true);
     setTranslationError(null);
     setTranslationReasoning('');
+    setHasSavedReasoning(false);
+    reasoningUserHiddenRef.current = false;
     setTranslationProgress(null);
     try {
       // Whole song in ONE request, streamed via SSE: the model sees the full
@@ -493,14 +510,25 @@ export function useSongData(id: string): UseSongDataReturn {
       const onProgress = (progress: TranslationProgress) => {
         setTranslationProgress(progress);
       };
+      // Local accumulator mirrors the streamed reasoning so the error path
+      // below can check whether any reasoning was produced (state is async).
+      let streamedReasoning = '';
       const { translations, error: streamError, progress: errorProgress } = await readTranslationStream(
         res.body,
-        (delta) => setTranslationReasoning((prev) => prev + delta),
+        (delta) => {
+          streamedReasoning += delta;
+          setTranslationReasoning((prev) => prev + delta);
+        },
         onProgress,
       );
+      const reasoningStreamed = streamedReasoning.length > 0;
 
       if (translations) {
         setTranslationProgress(null);
+        // Only advertise the persisted-reasoning menu row when the model
+        // actually produced reasoning (cached hits stream none). The panel
+        // stays open on its own — don't fight an explicit collapse.
+        if (reasoningStreamed) setHasSavedReasoning(true);
         const seed: (string | null)[] = Array(total).fill(null);
         try {
           const parsed = JSON.parse(song?.lyrics_translation ?? '[]');
@@ -529,6 +557,9 @@ export function useSongData(id: string): UseSongDataReturn {
       } else {
         setTranslationProgress(null);
       }
+      // The server persists whatever reasoning streamed before the failure;
+      // keep the flag on so the menu can re-open it even after an error.
+      if (reasoningStreamed) setHasSavedReasoning(true);
       setTranslationError(message);
       showToast('error', message);
     } catch {
@@ -578,6 +609,14 @@ export function useSongData(id: string): UseSongDataReturn {
     });
   }, []);
 
+  // The menu row 「查看翻译过程」: open the persisted reasoning overlay. If a
+  // translate is currently running, show the live stream; otherwise show the
+  // stored reasoning from the last run.
+  const openSavedReasoning = useCallback(() => {
+    reasoningUserHiddenRef.current = false;
+    setShowTranslationReasoning(true);
+  }, []);
+
   const dismissTranslationError = useCallback(() => {
     setTranslationError(null);
     setTranslationProgress(null);
@@ -620,6 +659,9 @@ export function useSongData(id: string): UseSongDataReturn {
         return;
       }
       setSong(updated);
+      setTranslationReasoning('');
+      setHasSavedReasoning(false);
+      setShowTranslationReasoning(false);
       showToast('success', t('song.translationCleared'));
     } catch {
       showToast('error', t('song.clearFailed'));
@@ -660,6 +702,21 @@ export function useSongData(id: string): UseSongDataReturn {
       showToast('error', t('song.copyFailed'));
     }
   }, [song, furiganaLines, translations, t, showToast]);
+
+  /** Copy the translation reasoning (live or persisted) to the clipboard. */
+  const copyReasoning = useCallback(async () => {
+    const text = translationReasoning.trim();
+    if (!text) {
+      showToast('error', t('song.copyReasoningEmpty'));
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('success', t('share.copied'));
+    } catch {
+      showToast('error', t('song.copyFailed'));
+    }
+  }, [translationReasoning, t, showToast]);
 
   const handleImportPlaying = useCallback(async (spotify: SpotifyState | null) => {
     if (!spotify?.track) return;
@@ -854,6 +911,9 @@ export function useSongData(id: string): UseSongDataReturn {
     showTranslationReasoning,
     setShowTranslationReasoning,
     toggleTranslationReasoning,
+    hasSavedReasoning,
+    openSavedReasoning,
+    copyReasoning,
     dismissTranslationError,
     clearFurigana,
     clearTranslation,

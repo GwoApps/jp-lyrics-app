@@ -8,6 +8,7 @@ export interface Song {
   reading_scheme_confirmed: number;
   lyrics_synced: string;
   lyrics_translation: string;
+  lyrics_translation_reasoning?: string | null;
   cover_url?: string | null;
   cover_palette?: CoverPaletteJson | null;
   spotify_track_id?: string | null;

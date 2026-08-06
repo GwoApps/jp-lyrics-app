@@ -211,7 +211,10 @@
     "coverTooLarge": "圖片不能超過 1.5MB",
     "coverUnsupported": "不支援的圖片格式",
     "coverHint": "支援 JPG / PNG / WebP / GIF；大圖會自動壓縮後上傳",
-    "coverCreateHint": "可選；留空時若關聯 Spotify 將自動取得封面"
+    "coverCreateHint": "可選；留空時若關聯 Spotify 將自動取得封面",
+    "translationReasoningView": "查看翻譯過程",
+    "copyReasoning": "複製思考",
+    "copyReasoningEmpty": "尚無思考內容"
   },
   "timeline": {
     "title": "LRC 時間軸編輯",

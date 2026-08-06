@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDown, Brain, CircleAlert, Loader2, X } from 'lucide-react';
+import { ArrowDown, Brain, CircleAlert, Copy, Loader2, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
 interface TranslationStatusOverlayProps {
@@ -12,6 +12,8 @@ interface TranslationStatusOverlayProps {
   showTranslationReasoning: boolean;
   onToggleReasoning: () => void;
   onDismissError: () => void;
+  onCloseReasoning: () => void;
+  onCopyReasoning: () => void;
   onContinue: () => void;
 }
 
@@ -21,6 +23,11 @@ interface TranslationStatusOverlayProps {
  * flowing color edge, blink cursor and follow-scroll ("back to bottom").
  * Deliberately rendered at the page root so the lyrics panel's
  * overflow/transform cannot clip or reposition it.
+ *
+ * After the stream finishes (or when re-opened from the menu row), the
+ * reasoning panel stays visible with a close button so the user can read /
+ * copy the model's thinking — the content is persisted server-side and
+ * re-loaded with the song.
  */
 export default function TranslationStatusOverlay({
   translating,
@@ -30,6 +37,8 @@ export default function TranslationStatusOverlay({
   showTranslationReasoning,
   onToggleReasoning,
   onDismissError,
+  onCloseReasoning,
+  onCopyReasoning,
   onContinue,
 }: TranslationStatusOverlayProps) {
   const { t } = useI18n();
@@ -56,8 +65,71 @@ export default function TranslationStatusOverlay({
     setReasoningFollow(true);
   };
 
+  const reasoningPanel = translationReasoning && showTranslationReasoning ? (
+    <div className="reasoning-glow-wrap w-[min(94vw,560px)]">
+      <div aria-hidden="true" className="reasoning-glow-aura">
+        <div className="reasoning-glow-ring">
+          <div className="reasoning-glow-spin" />
+        </div>
+      </div>
+      <div className="reasoning-glow w-full overflow-hidden rounded-xl">
+        <div className="relative rounded-[11px] bg-[var(--card)]/95 backdrop-blur-sm">
+          <div className="flex items-center gap-1.5 border-b border-[var(--border)]/60 px-3 py-2 text-[11px] font-medium text-[var(--muted-foreground)]">
+            <Brain className="h-3 w-3 text-[var(--primary)]" />
+            <span className="min-w-0 flex-1 truncate">{t('song.translationReasoning')}</span>
+            <button
+              type="button"
+              onClick={onCopyReasoning}
+              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--background)]/80 px-2 py-0.5 text-[10px] font-medium text-[var(--muted-foreground)] transition-colors hover:bg-[var(--primary)]/10 hover:text-[var(--primary)]"
+              title={t('song.copyReasoning')}
+            >
+              <Copy className="h-3 w-3" />
+              {t('song.copyReasoning')}
+            </button>
+            {!translating && (
+              <button
+                type="button"
+                onClick={onCloseReasoning}
+                aria-label={t('common.close')}
+                title={t('common.close')}
+                className="shrink-0 rounded-full p-0.5 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+          <div className="px-1.5">
+            <div
+              ref={reasoningScrollRef}
+              onScroll={handleReasoningScroll}
+              className="reasoning-scroll max-h-[45vh] overflow-y-auto whitespace-pre-wrap break-words p-3 pr-4 font-mono text-[11px] leading-relaxed text-[var(--muted-foreground)]"
+            >
+              {translationReasoning}
+              {translating && <span className="reasoning-cursor" />}
+            </div>
+          </div>
+          {!reasoningFollow && (
+            <button
+              type="button"
+              onClick={scrollReasoningToBottom}
+              className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--background)]/95 px-2 py-1 text-[10px] font-medium text-[var(--primary)] shadow-sm backdrop-blur-sm hover:bg-[var(--primary)]/10"
+            >
+              <ArrowDown className="h-3 w-3" />
+              {t('song.translationReasoningBottom')}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  // While translating / on error, show the standard floating pill (+ live
+  // reasoning toggle). When the translation finished (or is idle), only the
+  // reasoning panel remains — so the persisted thinking can be read/copied
+  // even after the stream ended.
   const visible = translating || translationError
-    || (translationProgress && translationProgress.done < translationProgress.total);
+    || (translationProgress && translationProgress.done < translationProgress.total)
+    || reasoningPanel;
   if (!visible) return null;
 
   return (
@@ -80,72 +152,39 @@ export default function TranslationStatusOverlay({
               {showTranslationReasoning ? t('song.translationReasoningHide') : t('song.translationReasoningShow')}
             </button>
           )}
-          {showTranslationReasoning && translationReasoning && (
-            <div className="reasoning-glow-wrap w-[min(94vw,560px)]">
-              <div aria-hidden="true" className="reasoning-glow-aura">
-                <div className="reasoning-glow-ring">
-                  <div className="reasoning-glow-spin" />
-                </div>
-              </div>
-              <div className="reasoning-glow w-full overflow-hidden rounded-xl">
-              <div className="relative rounded-[11px] bg-[var(--card)]/95 backdrop-blur-sm">
-                <div className="flex items-center gap-1.5 border-b border-[var(--border)]/60 px-3 py-2 text-[11px] font-medium text-[var(--muted-foreground)]">
-                  <Brain className="h-3 w-3 text-[var(--primary)]" />
-                  {t('song.translationReasoning')}
-                </div>
-                <div className="px-1.5">
-                  <div
-                    ref={reasoningScrollRef}
-                    onScroll={handleReasoningScroll}
-                    className="reasoning-scroll max-h-[45vh] overflow-y-auto whitespace-pre-wrap break-words p-3 pr-4 font-mono text-[11px] leading-relaxed text-[var(--muted-foreground)]"
-                  >
-                  {translationReasoning}
-                  {translating && <span className="reasoning-cursor" />}
-                  </div>
-                </div>
-                {!reasoningFollow && (
-                  <button
-                    type="button"
-                    onClick={scrollReasoningToBottom}
-                    className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--background)]/95 px-2 py-1 text-[10px] font-medium text-[var(--primary)] shadow-sm backdrop-blur-sm hover:bg-[var(--primary)]/10"
-                  >
-                    <ArrowDown className="h-3 w-3" />
-                    {t('song.translationReasoningBottom')}
-                  </button>
-                )}
-              </div>
-              </div>
-            </div>
-          )}
+          {reasoningPanel}
         </>
-      ) : (
-        <span className="inline-flex items-center gap-2 rounded-full border border-[var(--warning)]/40 bg-[var(--background)]/90 px-3 py-1.5 text-xs text-[var(--warning)] shadow-sm backdrop-blur-sm">
-          <CircleAlert className="h-3.5 w-3.5 shrink-0" />
-          <span className="max-w-[200px] sm:max-w-[320px] truncate">
-            {translationError
-              ?? (translationProgress
-                ? t('song.translatingProgress', { done: translationProgress.done, total: translationProgress.total })
-                : '')}
-          </span>
-          {translationProgress && translationProgress.done < translationProgress.total && (
+      ) : translationError ? (
+        <>
+          <span className="inline-flex items-center gap-2 rounded-full border border-[var(--warning)]/40 bg-[var(--background)]/90 px-3 py-1.5 text-xs text-[var(--warning)] shadow-sm backdrop-blur-sm">
+            <CircleAlert className="h-3.5 w-3.5 shrink-0" />
+            <span className="max-w-[200px] sm:max-w-[320px] truncate">
+              {translationError
+                ?? (translationProgress
+                  ? t('song.translatingProgress', { done: translationProgress.done, total: translationProgress.total })
+                  : '')}
+            </span>
+            {translationProgress && translationProgress.done < translationProgress.total && (
+              <button
+                type="button"
+                onClick={onContinue}
+                className="rounded-full border border-[var(--warning)]/40 px-2 py-0.5 font-medium text-[var(--warning)] hover:bg-[var(--warning)]/10"
+              >
+                {t('song.translationContinue')}
+              </button>
+            )}
             <button
               type="button"
-              onClick={onContinue}
-              className="rounded-full border border-[var(--warning)]/40 px-2 py-0.5 font-medium text-[var(--warning)] hover:bg-[var(--warning)]/10"
+              onClick={onDismissError}
+              aria-label={t('common.close')}
+              className="rounded-full p-0.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
             >
-              {t('song.translationContinue')}
+              <X className="h-3.5 w-3.5" />
             </button>
-          )}
-          <button
-            type="button"
-            onClick={onDismissError}
-            aria-label={t('common.close')}
-            className="rounded-full p-0.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </span>
-      )}
+          </span>
+          {reasoningPanel}
+        </>
+      ) : reasoningPanel}
     </div>
   );
 }

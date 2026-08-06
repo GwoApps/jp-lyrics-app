@@ -67,6 +67,12 @@ export function buildReadingMenuItems(
       disabled: data.translating || (!canEdit && data.translations.length === 0),
       keepOpen: true,
     },
+    ...(data.hasSavedReasoning || data.translationReasoning ? [{
+      icon: <Brain className="h-3.5 w-3.5" />,
+      label: t('song.translationReasoningView'),
+      onClick: () => data.openSavedReasoning(),
+      keepOpen: true,
+    } as ToolbarMenuItem] : []),
   ];
 }
 

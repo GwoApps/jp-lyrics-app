@@ -885,6 +885,8 @@ export default function SongViewPage() {
         showTranslationReasoning={data.showTranslationReasoning}
         onToggleReasoning={data.toggleTranslationReasoning}
         onDismissError={data.dismissTranslationError}
+        onCloseReasoning={() => data.setShowTranslationReasoning(false)}
+        onCopyReasoning={() => void data.copyReasoning()}
         onContinue={() => void data.handleTranslate()}
       />
       {data.toast && <Toast type={data.toast.type} message={data.toast.msg} actionLabel={data.toast.actionLabel} onAction={data.toast.onAction} />}

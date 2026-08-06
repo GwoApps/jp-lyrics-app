@@ -211,7 +211,10 @@
     "coverTooLarge": "画像は1.5MB以下にしてください",
     "coverUnsupported": "対応していない画像形式です",
     "coverHint": "JPG / PNG / WebP / GIF 対応。大きな画像は自動で圧縮してアップロードします",
-    "coverCreateHint": "任意です。未設定の場合、Spotify 連携があれば自動で取得します"
+    "coverCreateHint": "任意です。未設定の場合、Spotify 連携があれば自動で取得します",
+    "translationReasoningView": "思考プロセスを見る",
+    "copyReasoning": "思考をコピー",
+    "copyReasoningEmpty": "思考内容がありません"
   },
   "timeline": {
     "title": "LRC タイムライン編集",

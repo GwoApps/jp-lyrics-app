@@ -51,6 +51,7 @@ export async function POST(
     artist: schema.songs.artist,
     lyricsRaw: schema.songs.lyricsRaw,
     lyricsTranslation: schema.songs.lyricsTranslation,
+    lyricsTranslationReasoning: schema.songs.lyricsTranslationReasoning,
     lyricsGlossary: schema.songs.lyricsGlossary,
   }).from(schema.songs).where(eq(schema.songs.id, id)).get();
   if (!existing) {
@@ -234,6 +235,10 @@ export async function POST(
           }
         };
         const total = uniqueLines.length;
+        // Reasoning text streamed so far — persisted on success AND on failure
+        // so the user can review what the model thought before it finished
+        // (or before it errored) from the song page later.
+        let reasoningBuffer = '';
         // Slice-relative indices that still need the model; entries are filled
         // in as complete lines stream in (used for partial-cache persistence).
         const pending: number[] = [...needTranslation];
@@ -250,10 +255,25 @@ export async function POST(
           const translations = total > 0
             ? await streamTranslateLyricLines(uniqueLines, config, (chunk) => {
               if (chunk.type === 'translation') emitProgress(chunk.text);
-              else send(chunk.type, { text: chunk.text });
+              else {
+                reasoningBuffer += chunk.text;
+                send(chunk.type, { text: chunk.text });
+              }
             }, fetch, ctx)
             : [];
           const finalSlice = expandAndMerge(translations);
+          // Persist the model's reasoning together with the completed
+          // translation so it survives a page reload / can be re-opened later.
+          if (reasoningBuffer.trim()) {
+            try {
+              await db.update(schema.songs).set({
+                lyricsTranslationReasoning: reasoningBuffer,
+                updatedAt: sql`(datetime('now', 'localtime'))`,
+              }).where(eq(schema.songs.id, id)).run();
+            } catch (reasoningError) {
+              console.warn('[translate] failed to persist reasoning:', reasoningError);
+            }
+          }
           send('done', { start, count: finalSlice.length, translations: finalSlice, cached: false });
         } catch (error) {
           let code = 'translation_failed';
@@ -262,6 +282,18 @@ export async function POST(
             console.error(`[translate] stream failed: ${error.code} — ${error.message}`);
           } else {
             console.error('[translate] stream error:', error);
+          }
+          // Persist the reasoning streamed before the failure so the user can
+          // see how far the model got (quota / network / output diagnostics).
+          if (reasoningBuffer.trim()) {
+            try {
+              await db.update(schema.songs).set({
+                lyricsTranslationReasoning: reasoningBuffer,
+                updatedAt: sql`(datetime('now', 'localtime'))`,
+              }).where(eq(schema.songs.id, id)).run();
+            } catch (reasoningMergeError) {
+              console.warn('[translate] failed to persist partial reasoning:', reasoningMergeError);
+            }
           }
           // Persist whatever complete lines streamed in before the failure so
           // a retry/continue skips them (partial-translation resume support).
