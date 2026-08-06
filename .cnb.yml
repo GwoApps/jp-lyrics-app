@@ -1,0 +1,15 @@
+# CNB cloud pipeline: mirror CNB main -> GitHub (GwoApps/jp-lyrics-app)
+# Triggered on every push to main; runs entirely on CNB cloud.
+# GitHub credentials come from the secret repo siubeng/secrets (secret-env.yml).
+main:
+  push:
+    - imports: https://cnb.cool/siubeng/secrets/-/blob/main/secret-env.yml
+      stages:
+        - name: sync to github
+          image: tencentcom/git-sync
+          settings:
+            target_url: https://github.com/GwoApps/jp-lyrics-app.git
+            auth_type: https
+            username: ${GIT_USERNAME}
+            password: ${GIT_ACCESS_TOKEN}
+            branch: main
