@@ -133,6 +133,9 @@ export interface UseSongDataReturn {
   toast: ToastState | null;
   allSongs: { id: string; title: string; artist: string; spotify_track_id?: string | null; created_by: string; is_public: number }[];
   handleSync: () => Promise<void>;
+  lowConfidenceSync: { source: string; confidence: number; lines: number; lrc: string } | null;
+  confirmLowConfidenceSync: () => void;
+  cancelLowConfidenceSync: () => void;
   handleDelete: () => void;
   confirmDelete: () => Promise<void>;
   handleCopy: (mode?: 'original' | 'translation') => Promise<void>;
@@ -182,6 +185,14 @@ export function useSongData(id: string): UseSongDataReturn {
   const [syncLines, setSyncLines] = useState<ReturnType<typeof parseLrc>>([]);
   const [syncing, setSyncing] = useState(false);
   const [importing, setImporting] = useState(false);
+  // Pending fuzzy-search sync result waiting for explicit user confirmation
+  // (server refuses to overwrite lyrics below the confidence threshold).
+  const [lowConfidenceSync, setLowConfidenceSync] = useState<{
+    source: string;
+    confidence: number;
+    lines: number;
+    lrc: string;
+  } | null>(null);
   const [allSongs, setAllSongs] = useState<{ id: string; title: string; artist: string; spotify_track_id?: string | null; created_by: string; is_public: number }[]>([]);
   const [copied, setCopied] = useState(false);
   const [fontSize, setFontSize] = useState(() => {
@@ -380,23 +391,47 @@ export function useSongData(id: string): UseSongDataReturn {
   }, [id]);
 
   // Handlers
-  const handleSync = useCallback(async () => {
+  const applySyncResult = useCallback(async (data: {
+    source: string;
+    lines: number;
+    lrc: string;
+  }) => {
+    const songRes = await fetch(`/api/songs/${id}`);
+    if (songRes.ok) {
+      const updated = await songRes.json();
+      setSong(updated);
+      setSyncLines(parseLrc(data.lrc));
+    }
+    const sourceKey = LYRICS_SOURCE_KEYS[data.source];
+    showToast('success', t('song.synced', {
+      source: sourceKey ? t(sourceKey) : data.source,
+      lines: String(data.lines),
+    }));
+  }, [id, t, showToast]);
+
+  const runSync = useCallback(async (force: boolean) => {
     setSyncing(true);
     try {
-      const res = await fetch(`/api/songs/${id}/sync`, { method: 'POST' });
+      const res = await fetch(`/api/songs/${id}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force }),
+      });
       const data = await res.json();
+      // Fuzzy search below the confidence threshold: the server keeps the
+      // current lyrics untouched — ask before overriding (furigana and
+      // translation would be reset too).
+      if (data.lowConfidence) {
+        setLowConfidenceSync({
+          source: data.source,
+          confidence: data.confidence,
+          lines: data.lines,
+          lrc: data.lrc,
+        });
+        return;
+      }
       if (data.synced) {
-        const songRes = await fetch(`/api/songs/${id}`);
-        if (songRes.ok) {
-          const updated = await songRes.json();
-          setSong(updated);
-          setSyncLines(parseLrc(data.lrc));
-        }
-        const sourceKey = LYRICS_SOURCE_KEYS[data.source];
-        showToast('success', t('song.synced', {
-          source: sourceKey ? t(sourceKey) : data.source,
-          lines: String(data.lines),
-        }));
+        await applySyncResult(data);
       } else {
         const errorKey: Record<string, string> = {
           lyrics_not_found: 'apiErrors.lyricsNotFound',
@@ -413,7 +448,16 @@ export function useSongData(id: string): UseSongDataReturn {
     } finally {
       setSyncing(false);
     }
-  }, [id, t, showToast]);
+  }, [id, t, showToast, applySyncResult]);
+
+  const handleSync = useCallback(() => runSync(false), [runSync]);
+
+  const confirmLowConfidenceSync = useCallback(() => {
+    setLowConfidenceSync(null);
+    void runSync(true);
+  }, [runSync]);
+
+  const cancelLowConfidenceSync = useCallback(() => setLowConfidenceSync(null), []);
 
 
   const handleTranslate = useCallback(async () => {
@@ -818,6 +862,9 @@ export function useSongData(id: string): UseSongDataReturn {
     toast,
     allSongs,
     handleSync,
+    lowConfidenceSync,
+    confirmLowConfidenceSync,
+    cancelLowConfidenceSync,
     handleDelete,
     confirmDelete,
     handleCopy,

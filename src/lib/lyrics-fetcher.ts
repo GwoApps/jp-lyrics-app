@@ -1,4 +1,5 @@
 import * as heModule from 'he';
+import { artistScore, titleScore } from './match';
 
 const decodeHtmlEntity = (heModule as unknown as { default?: typeof heModule }).default?.decode ?? heModule.decode;
 
@@ -78,15 +79,42 @@ export async function fetchFromLrclib(title: string, artist: string): Promise<Ly
   return null;
 }
 
-export async function searchLrclib(query: string): Promise<LyricsResult | null> {
+/**
+ * LRCLIB fuzzy search with candidate validation.
+ *
+ * Fuzzy search returns same-name-different-artist / cover / medley hits, so
+ * blindly taking the first synced entry can write another song's lyrics over
+ * the current one. Every candidate must clear a real title AND artist match
+ * (same thresholds as `isTitleMatch` / artist overlap in `match.ts`); the
+ * highest-scoring candidate wins instead of the first one. When nothing
+ * qualifies, null falls through to the next source in the chain.
+ */
+export async function searchLrclib(query: string, title: string, artist: string): Promise<LyricsResult | null> {
   const headers = { 'User-Agent': 'jp-lyrics-app/1.0' };
   try {
     const res = await fetchWithTimeout(`https://lrclib.net/api/search?q=${encodeURIComponent(query)}`, { headers });
     if (res.ok) {
       const results = await res.json();
+      let best: LyricsResult | null = null;
+      let bestScore = -1;
+      const hasRequestedArtist = artist.trim().length > 0;
       for (const item of results) {
-        if (item.syncedLyrics) return { synced: item.syncedLyrics, plain: item.plainLyrics || stripTimestamps(item.syncedLyrics) };
+        if (!item.syncedLyrics) continue;
+        const itemTitle = String(item.trackName ?? '');
+        const itemArtist = String(item.artistName ?? '');
+        const tScore = titleScore(title, itemTitle);
+        // Artist must exist and partially match when we have artist info to
+        // check against; without it, fall back to title-only matching.
+        const aScore = hasRequestedArtist ? artistScore(artist, itemArtist) : 0.5;
+        if (tScore < 0.55) continue;
+        if (hasRequestedArtist && (!itemArtist || aScore < 0.55)) continue;
+        const score = tScore * 0.7 + aScore * 0.3;
+        if (score > bestScore) {
+          bestScore = score;
+          best = { synced: item.syncedLyrics, plain: item.plainLyrics || stripTimestamps(item.syncedLyrics) };
+        }
       }
+      return best;
     }
   } catch { /* */ }
   return null;
@@ -328,12 +356,12 @@ export async function fetchLyrics(
   if (opts?.spotifyCanonical) {
     result = await fetchFromLrclib(opts.spotifyCanonical.name, opts.spotifyCanonical.artist);
     if (result) return fetchedResult(result, 'lrclib', 96);
-    result = await searchLrclib(`${opts.spotifyCanonical.name} ${opts.spotifyCanonical.artist}`);
+    result = await searchLrclib(`${opts.spotifyCanonical.name} ${opts.spotifyCanonical.artist}`, opts.spotifyCanonical.name, opts.spotifyCanonical.artist);
     if (result) return fetchedResult(result, 'lrclib-search', 82);
   }
 
   // 3. LRCLIB fuzzy search
-  result = await searchLrclib(`${title} ${artist}`);
+  result = await searchLrclib(`${title} ${artist}`, title, artist);
   if (result) return fetchedResult(result, 'lrclib-search', 78);
 
   // 4. PetitLyrics
