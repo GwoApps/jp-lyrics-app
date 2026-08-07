@@ -165,6 +165,8 @@
     "exportTranslationHint": "Pairs each lyric line with its translation below",
     "exportDownloadBtn": "Download",
     "exportLrcHint": "LRC is a timed format — synced lyrics only, no readings or translations",
+    "exportLrcUnavailable": "This song has no synced timeline, so the LRC export would be an empty file. LRC has been disabled.",
+    "exportLrcDisabledTitle": "LRC is unavailable — this song has no synced timeline",
     "requestPublic": "Request Public",
     "requestPublicTitle": "Make this lyrics public?",
     "requestPublicBody": "An admin will review your request. Once approved, it will be visible to other users.",

@@ -4,6 +4,8 @@ import {
   buildExport,
   buildHtmlExport,
   buildTextExport,
+  ExportError,
+  isEmptyAfterTrim,
   parseFuriganaLines,
   parseTranslations,
   renderFuriganaLineToHtml,
@@ -106,4 +108,24 @@ test('buildExport routes formats and extensions', () => {
   const html = buildExport(SONG, { format: 'html', includeTranslation: true, reading: 'furigana' });
   assert.equal(html.extension, 'html');
   assert.equal(html.contentType, 'text/html; charset=utf-8');
+});
+
+test('isEmptyAfterTrim treats invisible whitespace as empty', () => {
+  assert.equal(isEmptyAfterTrim(''), true);
+  assert.equal(isEmptyAfterTrim(null), true);
+  assert.equal(isEmptyAfterTrim(undefined), true);
+  assert.equal(isEmptyAfterTrim('   '), true);
+  assert.equal(isEmptyAfterTrim('\t\n\r'), true);
+  assert.equal(isEmptyAfterTrim('\u00a0\u3000\u200b\u200c\u200d\ufeff'), true);
+  assert.equal(isEmptyAfterTrim('  [00:01.00]桜が舞う\n  '), false);
+});
+
+test('buildExport LRC rejects blank synced lyrics (incl. invisible whitespace)', () => {
+  for (const blank of ['', '   ', '\t\n', '\u00a0\u200b\ufeff']) {
+    const song = { ...SONG, lyrics_synced: blank };
+    assert.throws(
+      () => buildExport(song, { format: 'lrc', includeTranslation: false }),
+      (error: unknown) => error instanceof ExportError && error.code === 'lrc_no_synced_lyrics',
+    );
+  }
 });

@@ -17,6 +17,7 @@ import TranslationStatusOverlay from '@/components/TranslationStatusOverlay';
 import { ToolbarMenu, buildReadingMenuItems, type ToolbarMenuItem } from '@/components/song/ToolbarMenu';
 import { MobileMenu } from '@/components/song/MobileMenu';
 import DownloadDialog from '@/components/song/DownloadDialog';
+import { isEmptyAfterTrim } from '@/lib/lyrics-export';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useI18n } from '@/lib/i18n';
 import { fmtMs, fmtTime, findActiveLine } from '@/lib/lrc';
@@ -856,6 +857,7 @@ export default function SongViewPage() {
           songId={id}
           hasReadingData={furiganaLines.length > 0}
           hasTranslation={data.translations.length > 0}
+          hasSynced={!isEmptyAfterTrim(data.song.lyrics_synced)}
           onClose={() => setShowDownloadDialog(false)}
         />
       )}

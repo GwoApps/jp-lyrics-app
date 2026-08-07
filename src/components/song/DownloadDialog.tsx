@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useState } from 'react';
-import { Download, FileText, FileClock, FileCode2, Check, X, AlertCircle } from 'lucide-react';
+import { Download, FileText, FileClock, FileCode2, Check, X, AlertCircle, Ban } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import type { ExportFormat, ExportReadingMode } from '@/lib/lyrics-export';
 
@@ -11,6 +11,8 @@ interface DownloadDialogProps {
   hasReadingData: boolean;
   /** True when the song has a stored translation that can be paired in exports. */
   hasTranslation: boolean;
+  /** True when the song has a non-empty synced timeline (whitespace-insensitive). */
+  hasSynced: boolean;
   onClose: () => void;
 }
 
@@ -24,6 +26,7 @@ export default function DownloadDialog({
   songId,
   hasReadingData,
   hasTranslation,
+  hasSynced,
   onClose,
 }: DownloadDialogProps) {
   const { t } = useI18n();
@@ -45,6 +48,11 @@ export default function DownloadDialog({
 
   const showReadingOptions = hasReadingData && format !== 'lrc';
   const showTranslationOption = hasTranslation && format !== 'lrc';
+  const lrcDisabled = !hasSynced;
+  // The dialog always mounts fresh with a clean selection (see above), and the
+  // LRC button is disabled when `lrcDisabled`, so `format` can never stay
+  // `'lrc'` while LRC is unavailable. `selectedFormat` is a defensive fallback.
+  const selectedFormat = lrcDisabled ? 'text' : format;
   const readingLabel = (mode: ExportReadingMode) => {
     switch (mode) {
       case 'furigana': return t('song.exportReadingFurigana');
@@ -64,11 +72,15 @@ export default function DownloadDialog({
   };
 
   const buildUrl = () => {
-    const params = new URLSearchParams({ format });
+    const params = new URLSearchParams({ format: selectedFormat });
     if (showReadingOptions && reading !== 'none') params.set('reading', reading);
     if (showTranslationOption && includeTranslation) params.set('include_translation', '1');
     return `/api/songs/${songId}/export?${params.toString()}`;
   };
+
+  const lrcOptionTitle = lrcDisabled
+    ? t('song.exportLrcDisabledTitle')
+    : t('song.exportLrcHint');
 
   return (
     <div
@@ -107,22 +119,36 @@ export default function DownloadDialog({
           <div>
             <div className="mb-2 text-xs font-medium text-[var(--muted-foreground)]">{t('song.exportFormatLabel')}</div>
             <div className="grid grid-cols-3 gap-2">
-              {FORMAT_OPTIONS.map(({ format: f, icon: Icon }) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setFormat(f)}
-                  aria-pressed={format === f}
-                  className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-xs font-medium transition-colors ${
-                    format === f
-                      ? 'song-editor-choice--active border'
-                      : 'border-[var(--border)] bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span>.{f === 'text' ? 'txt' : f}</span>
-                </button>
-              ))}
+              {FORMAT_OPTIONS.map(({ format: f, icon: Icon }) => {
+                const isLrc = f === 'lrc';
+                const disabled = isLrc && lrcDisabled;
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => {
+                      if (disabled) return;
+                      setFormat(f);
+                    }}
+                    aria-pressed={selectedFormat === f}
+                    aria-disabled={disabled}
+                    title={isLrc ? lrcOptionTitle : undefined}
+                    className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-xs font-medium transition-colors ${
+                      selectedFormat === f
+                        ? 'song-editor-choice--active border'
+                        : disabled
+                          ? 'cursor-not-allowed border-[var(--border)] bg-[var(--accent)] text-[var(--muted-foreground)]/50 opacity-60'
+                          : 'border-[var(--border)] bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span className="inline-flex items-center gap-1">
+                      .{f === 'text' ? 'txt' : f}
+                      {isLrc && disabled && <Ban className="h-3 w-3" />}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -191,10 +217,17 @@ export default function DownloadDialog({
             </label>
           )}
 
-          {!showReadingOptions && !showTranslationOption && format === 'lrc' && (
+          {!showReadingOptions && !showTranslationOption && format === 'lrc' && !lrcDisabled && (
             <div className="flex items-start gap-2 rounded-xl border border-[var(--warning)]/30 bg-[var(--warning-muted)] px-3 py-2.5 text-xs text-[var(--warning)]">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{t('song.exportLrcHint')}</span>
+            </div>
+          )}
+
+          {lrcDisabled && (
+            <div className="flex items-start gap-2 rounded-xl border border-[var(--warning)]/30 bg-[var(--warning-muted)] px-3 py-2.5 text-xs text-[var(--warning)]">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{t('song.exportLrcUnavailable')}</span>
             </div>
           )}
         </div>

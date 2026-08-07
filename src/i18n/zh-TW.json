@@ -165,6 +165,8 @@
     "exportTranslationHint": "在每行歌詞下方輸出對應的翻譯",
     "exportDownloadBtn": "下載",
     "exportLrcHint": "LRC 為時間軸格式，僅包含同步歌詞，不含注音與翻譯",
+    "exportLrcUnavailable": "此歌曲沒有同步時間軸，LRC 匯出將得到空檔案，因此已停用 LRC 格式",
+    "exportLrcDisabledTitle": "此歌曲沒有同步時間軸，LRC 不可用",
     "requestPublic": "申請公開",
     "requestPublicTitle": "公開這首歌詞？",
     "requestPublicBody": "提交後管理員將審核。批准後其他使用者也能看到這首歌詞。",

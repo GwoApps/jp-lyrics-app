@@ -3,7 +3,7 @@ import { getDB, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import { getAuthUser } from '@/lib/auth';
 import { normalizeReadingScheme } from '@/lib/lyrics-reading';
-import { buildExport, type ExportFormat, type ExportReadingMode } from '@/lib/lyrics-export';
+import { buildExport, ExportError, type ExportFormat, type ExportReadingMode, type ExportResult } from '@/lib/lyrics-export';
 
 export async function GET(
   request: NextRequest,
@@ -36,18 +36,28 @@ export async function GET(
   }
 
   const filename = `${song.title}${song.artist ? ` - ${song.artist}` : ''}`;
-  const { body, contentType, extension } = buildExport(
-    {
-      title: song.title,
-      artist: song.artist,
-      lyrics_raw: song.lyrics_raw,
-      lyrics_synced: song.lyrics_synced,
-      lyrics_furigana: song.lyrics_furigana,
-      lyrics_translation: song.lyrics_translation,
-      reading_scheme: normalizeReadingScheme(song.reading_scheme),
-    },
-    { format, includeTranslation, reading },
-  );
+  let result: ExportResult;
+  try {
+    result = buildExport(
+      {
+        title: song.title,
+        artist: song.artist,
+        lyrics_raw: song.lyrics_raw,
+        lyrics_synced: song.lyrics_synced,
+        lyrics_furigana: song.lyrics_furigana,
+        lyrics_translation: song.lyrics_translation,
+        reading_scheme: normalizeReadingScheme(song.reading_scheme),
+      },
+      { format, includeTranslation, reading },
+    );
+  } catch (error) {
+    if (error instanceof ExportError) {
+      return NextResponse.json({ error: error.code }, { status: 400 });
+    }
+    throw error;
+  }
+
+  const { body, contentType, extension } = result;
 
   const encodedFilename = encodeURIComponent(filename);
   // RFC 5987: filename*= 带 charset 才会被浏览器百分号解码为中文/日文名；

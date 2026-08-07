@@ -42,6 +42,15 @@ export interface ExportResult {
   extension: string;
 }
 
+/**
+ * True when a string contains no meaningful content. Trims invisible
+ * whitespace (regular spaces, Unicode spaces, zero-width characters, tabs,
+ * line breaks, …) so `'  '`, `'\u00a0'`, `'\u200b'` … are all treated as empty.
+ */
+export function isEmptyAfterTrim(value: string | null | undefined): boolean {
+  return !value || value.replace(/[\p{Z}\p{Cf}\s]/gu, '').length === 0;
+}
+
 const escapeHtml = (value: string) => value
   .replaceAll('&', '&amp;')
   .replaceAll('<', '&lt;')
@@ -183,13 +192,30 @@ ${bodyLines}
 </html>`;
 }
 
+/** Raised when an export cannot be produced (e.g. LRC requested without a synced timeline). */
+export class ExportError extends Error {
+  readonly code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = 'ExportError';
+    this.code = code;
+  }
+}
+
 /** Render the export for the given song + options. */
 export function buildExport(song: ExportSongData, options: ExportOptions): ExportResult {
   const { format, includeTranslation, reading = 'none' } = options;
 
   if (format === 'lrc') {
+    const body = song.lyrics_synced ?? '';
+    if (isEmptyAfterTrim(body)) {
+      throw new ExportError(
+        'lrc_no_synced_lyrics',
+        'This song has no synced timeline; the LRC export would be an empty file.',
+      );
+    }
     return {
-      body: song.lyrics_synced || '',
+      body,
       contentType: 'text/plain; charset=utf-8',
       extension: 'lrc',
     };

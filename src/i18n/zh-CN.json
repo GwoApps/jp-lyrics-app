@@ -165,6 +165,8 @@
     "exportTranslationHint": "在每行歌词下方输出对应的翻译",
     "exportDownloadBtn": "下载",
     "exportLrcHint": "LRC 为时间轴格式，仅包含同步歌词，不含注音与翻译",
+    "exportLrcUnavailable": "此歌曲没有同步时间轴，LRC 导出将得到空文件，因此已禁用 LRC 格式",
+    "exportLrcDisabledTitle": "此歌曲没有同步时间轴，LRC 不可用",
     "requestPublic": "申请公开",
     "requestPublicTitle": "公开这首歌词？",
     "requestPublicBody": "提交后管理员将审核。批准后其他用户也能看到这首歌词。",
