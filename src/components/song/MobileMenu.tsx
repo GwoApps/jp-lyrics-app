@@ -9,7 +9,7 @@ import { useSpotifySync } from '@/hooks/useSpotifySync';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { MobileIconButton, buildReadingMenuItems, type ToolbarMenuItem } from './ToolbarMenu';
 
-export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported, onOpenPiP, onShowSongInfo, onRecolorCover, onToggleDotParams, onOpenExperiments, canEdit }: {
+export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported, onOpenPiP, onShowSongInfo, onRecolorCover, onToggleDotParams, onOpenExperiments, onOpenDownload, canEdit }: {
   data: ReturnType<typeof useSongData>;
   sync: ReturnType<typeof useSpotifySync>;
   song: NonNullable<ReturnType<typeof useSongData>['song']>;
@@ -22,13 +22,13 @@ export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSup
   onOpenExperiments: () => void;
   onRecolorCover: () => void;
   onToggleDotParams: () => void;
+  onOpenDownload: () => void;
   canEdit: boolean;
 }) {
   const { t } = useI18n();
   const [showCopyMenu, setShowCopyMenu] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
-  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const [showEditMenu, setShowEditMenu] = useState(false);
   const [showSyncConfirm, setShowSyncConfirm] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -59,20 +59,14 @@ export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSup
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: t('song.pipBtn'), onClick: onOpenPiP }] : []),
     { icon: <Bug className="h-4 w-4" />, label: t('song.debug'), status: t(data.debug ? 'common.on' : 'common.off'), onClick: () => data.setDebug(!data.debug), keepOpen: true },
     { icon: <FlaskConical className="h-4 w-4" />, label: t('song.experimentsTitle'), onClick: () => onOpenExperiments() },
-    { icon: <Download className="h-4 w-4" />, label: t('song.download'), status: <ChevronDown className="h-3.5 w-3.5 -rotate-90" />, onClick: () => { setShowEditMenu(false); setShowDownloadMenu(true); }, keepOpen: true },
+    { icon: <Download className="h-4 w-4" />, label: t('song.downloadWithEllipsis'), onClick: onOpenDownload },
     ...(canEdit ? [{
       icon: <Pencil className="h-4 w-4" />,
       label: t('common.edit'),
       status: <ChevronDown className="h-3.5 w-3.5 -rotate-90" />,
-      onClick: () => { setShowDownloadMenu(false); setShowEditMenu(true); },
+      onClick: () => { setShowEditMenu(true); },
       keepOpen: true,
     }] : []),
-  ];
-
-  const downloadItems = [
-    { label: '.txt', format: 'text' },
-    { label: '.lrc', format: 'lrc' },
-    { label: `.html ${t('song.exportFurigana')}`, format: 'html' },
   ];
 
   return (
@@ -202,7 +196,6 @@ export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSup
               if (showMenu) {
                 setShowMenu(false);
               } else {
-                setShowDownloadMenu(false);
                 setShowEditMenu(false);
                 setShowLangMenu(false);
                 setShowCopyMenu(false);
@@ -222,36 +215,7 @@ export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSup
             data-open={showMenu}
             className="song-menu-popover song-menu-popover--mobile absolute right-0 bottom-full z-50 mb-2 min-w-[200px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)] py-1.5 shadow-xl"
           >
-            {showDownloadMenu ? (
-              <div key="download" className="song-menu-page song-menu-page--forward">
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-menu-item
-                  onClick={() => setShowDownloadMenu(false)}
-                  className="song-menu-item flex w-full items-center gap-3 border-b border-[var(--border)] px-4 py-2.5 text-left text-sm font-medium text-[var(--foreground)] hover:bg-[var(--accent)]"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  <span>{t('song.download')}</span>
-                </button>
-                {downloadItems.map((item) => (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    data-menu-item
-                    key={item.format}
-                    onClick={() => {
-                      setShowMenu(false);
-                      window.location.href = `/api/songs/${id}/export?format=${item.format}`;
-                    }}
-                    className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
-                  >
-                    <Download className="h-4 w-4" />
-                    <span>{item.label}</span>
-                  </button>
-                ))}
-              </div>
-            ) : showEditMenu ? (
+            {showEditMenu ? (
               <div key="edit" className="song-menu-page song-menu-page--forward">
                 <button
                   type="button"
