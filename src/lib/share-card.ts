@@ -401,7 +401,10 @@ async function drawPortrait(
   drawCover(ctx, song, coverImg, coverX, coverY, coverSize);
 
   // Title + artist (centered)
-  let textY = coverY + coverSize + 48;
+  // 64px from cover bottom to title baseline (~31px visual gap with the 44px
+  // bold font); artist baseline sits 49px after the LAST title baseline
+  // (~18px visual gap) instead of the old 62px (~31px, too far).
+  let textY = coverY + coverSize + 64;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#ffffff';
@@ -410,7 +413,7 @@ async function drawPortrait(
     ctx.fillText(line, centerX, textY);
     textY += 58;
   }
-  textY += 4;
+  textY -= 9;
   ctx.fillStyle = '#94a3b8';
   ctx.font = '26px sans-serif';
   for (const line of wrapText(ctx, song.artist || '', contentW, 1)) {
