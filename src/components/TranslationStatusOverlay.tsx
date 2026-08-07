@@ -15,6 +15,7 @@ interface TranslationStatusOverlayProps {
   onCloseReasoning: () => void;
   onCopyReasoning: () => void;
   onContinue: () => void;
+  onCancel: () => void;
 }
 
 /**
@@ -40,6 +41,7 @@ export default function TranslationStatusOverlay({
   onCloseReasoning,
   onCopyReasoning,
   onContinue,
+  onCancel,
 }: TranslationStatusOverlayProps) {
   const { t } = useI18n();
   const reasoningScrollRef = useRef<HTMLDivElement>(null);
@@ -141,6 +143,14 @@ export default function TranslationStatusOverlay({
             {translationProgress
               ? t('song.translatingProgress', { done: translationProgress.done, total: translationProgress.total })
               : t('song.translating')}
+            <button
+              type="button"
+              onClick={onCancel}
+              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--destructive)]/50 px-2 py-0.5 text-[11px] font-medium text-[var(--destructive)] transition-colors hover:bg-[var(--destructive)]/10"
+            >
+              <X className="h-3 w-3" />
+              {t('song.translationCancel')}
+            </button>
           </span>
           {translationReasoning && (
             <button

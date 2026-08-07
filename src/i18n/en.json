@@ -204,6 +204,8 @@
     "translate": "Translate",
     "translatingProgress": "Translating {done}/{total}",
     "translationContinue": "Continue translating",
+    "translationCancel": "Cancel",
+    "translationCancelled": "Cancelled — {done} translated line(s) saved",
     "clearFurigana": "Clear furigana",
     "clearTranslation": "Clear translation",
     "recolorCover": "Re-extract cover colors",

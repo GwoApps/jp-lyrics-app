@@ -113,6 +113,7 @@ export interface UseSongDataReturn {
   clearFurigana: () => Promise<void>;
   clearTranslation: () => Promise<void>;
   handleTranslate: () => Promise<void>;
+  cancelTranslate: () => void;
   furiganaLoading: boolean;
   furiganaError: string;
   lineTimestamps: (number | null)[];
@@ -179,6 +180,12 @@ export function useSongData(id: string): UseSongDataReturn {
   const [translationError, setTranslationError] = useState<string | null>(null);
   const [translationProgress, setTranslationProgress] = useState<TranslationProgress | null>(null);
   const [translationReasoning, setTranslationReasoning] = useState('');
+  // Tracks the in-flight translate request so the user can cancel a long
+  // whole-song translation (or stop an accidental one) without reloading.
+  const translateAbortRef = useRef<AbortController | null>(null);
+  // Mirrors the latest streamed done-count so the cancellation path can
+  // report the real number of saved lines (state reads are async/stale).
+  const translationDoneRef = useRef(0);
   const [showTranslationReasoning, setShowTranslationReasoning] = useState(false);
   // Track whether any reasoning was persisted server-side for this song. When
   // set, the 「查看翻译过程」 menu row re-opens the stored reasoning on demand
@@ -488,6 +495,11 @@ export function useSongData(id: string): UseSongDataReturn {
     setHasSavedReasoning(false);
     reasoningUserHiddenRef.current = false;
     setTranslationProgress(null);
+    translationDoneRef.current = 0;
+    // Own the cancellation signal for this request — the user can abort a
+    // long/accidental whole-song translation via the overlay's cancel button.
+    const controller = new AbortController();
+    translateAbortRef.current = controller;
     try {
       // Whole song in ONE request, streamed via SSE: the model sees the full
       // lyrics (coherent context) and its live reasoning/translation deltas
@@ -497,6 +509,7 @@ export function useSongData(id: string): UseSongDataReturn {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stream: true }),
+        signal: controller.signal,
       });
       if (!res.ok || !res.body) {
         const data = await res.json().catch(() => ({}));
@@ -508,6 +521,7 @@ export function useSongData(id: string): UseSongDataReturn {
       // needs to translate (repeats reuse one translation), so show those
       // numbers as-is — "done/total" reaches completion when the stream ends.
       const onProgress = (progress: TranslationProgress) => {
+        translationDoneRef.current = progress.done;
         setTranslationProgress(progress);
       };
       // Local accumulator mirrors the streamed reasoning so the error path
@@ -544,9 +558,13 @@ export function useSongData(id: string): UseSongDataReturn {
       }
 
       const errorKey = TRANSLATION_ERROR_KEYS;
-      const message = streamError && errorKey[streamError]
-        ? t(errorKey[streamError])
-        : t('song.translationFailed');
+      // A server-reported cancellation carries its own done/total — fill the
+      // placeholder so the notice shows how many lines were saved.
+      const message = streamError === 'translation_cancelled'
+        ? t('song.translationCancelled', { done: String(errorProgress?.done ?? 0) })
+        : streamError && errorKey[streamError]
+          ? t(errorKey[streamError])
+          : t('song.translationFailed');
       // On failure the server persists whatever lines streamed in before the
       // error; report progress so the error pill shows the "continue" button
       // and a real done/total count (断点续译入口). Refresh the song from the
@@ -561,15 +579,44 @@ export function useSongData(id: string): UseSongDataReturn {
       // keep the flag on so the menu can re-open it even after an error.
       if (reasoningStreamed) setHasSavedReasoning(true);
       setTranslationError(message);
-      showToast('error', message);
+      // Cancellation is informational (partial progress was saved), not an error.
+      showToast(streamError === 'translation_cancelled' ? 'info' : 'error', message);
     } catch {
+      // User pressed cancel (or the request was aborted): the server has
+      // already persisted whatever complete lines streamed in, so refresh
+      // the song and show a friendly cancellation notice instead of a
+      // generic network error. The error pill keeps the resume entry
+      // (「继续翻译」) alive with the real done/total counts.
+      if (controller.signal.aborted) {
+        const doneCount = translationDoneRef.current;
+        const message = t('song.translationCancelled', { done: String(doneCount) });
+        // Keep the error pill's 「继续翻译」 resume entry alive with the real
+        // done/total counts (断点续译) — cancellation is not destructive.
+        setTranslationProgress({ done: doneCount, total });
+        setTranslationError(message);
+        showToast('info', message);
+        if (doneCount > 0) {
+          // The server persists the completed lines asynchronously after it
+          // detects the disconnect — pull once now and once more after a beat
+          // so the partial translations show up even if the first fetch races.
+          await refreshSong();
+          setTimeout(() => { void refreshSong(); }, 400);
+        }
+        return;
+      }
       const message = t('song.networkErrorAlert');
       setTranslationError(message);
       showToast('error', message);
     } finally {
+      translateAbortRef.current = null;
       setTranslating(false);
     }
   }, [id, song, furiganaLines, t, showToast, translating, refreshSong]);
+
+  /** Abort the in-flight translation request (cancel button on the overlay). */
+  const cancelTranslate = useCallback(() => {
+    translateAbortRef.current?.abort();
+  }, []);
 
   // When the translation display is on but the song has no translation yet,
   // offer to translate it (once per page visit).
@@ -918,6 +965,7 @@ export function useSongData(id: string): UseSongDataReturn {
     clearFurigana,
     clearTranslation,
     handleTranslate,
+    cancelTranslate,
     furiganaLoading,
     furiganaError,
     lineTimestamps,

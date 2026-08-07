@@ -204,6 +204,8 @@
     "translate": "翻译",
     "translatingProgress": "翻译中 {done}/{total}",
     "translationContinue": "继续翻译",
+    "translationCancel": "取消",
+    "translationCancelled": "已取消，已完成的 {done} 行翻译已保存",
     "clearFurigana": "清除假名",
     "clearTranslation": "清除翻译",
     "recolorCover": "重新取色",

@@ -204,6 +204,8 @@
     "translate": "翻訳",
     "translatingProgress": "翻訳中 {done}/{total}",
     "translationContinue": "翻訳を続ける",
+    "translationCancel": "キャンセル",
+    "translationCancelled": "キャンセルしました。完了した {done} 行の翻訳は保存されています",
     "clearFurigana": "ふりがなをクリア",
     "clearTranslation": "翻訳をクリア",
     "recolorCover": "色を取り直す",

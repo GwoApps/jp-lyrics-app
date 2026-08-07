@@ -259,7 +259,7 @@ export async function POST(
                 reasoningBuffer += chunk.text;
                 send(chunk.type, { text: chunk.text });
               }
-            }, fetch, ctx)
+            }, fetch, ctx, request.signal)
             : [];
           const finalSlice = expandAndMerge(translations);
           // Persist the model's reasoning together with the completed
@@ -276,12 +276,19 @@ export async function POST(
           }
           send('done', { start, count: finalSlice.length, translations: finalSlice, cached: false });
         } catch (error) {
-          let code = 'translation_failed';
-          if (error instanceof TranslationError) {
+          // Client cancelled (cancel button or closed the page): the upstream
+          // fetch was aborted via request.signal, so no AI quota is wasted.
+          // Everything below reuses the failure path — persist streamed
+          // reasoning + completed lines, then report done/total so the
+          // client can offer the resume entry with real numbers.
+          const cancelled = request.signal.aborted;
+          let code = cancelled ? 'translation_cancelled' : 'translation_failed';
+          if (error instanceof TranslationError && !cancelled) {
             code = error.code;
             console.error(`[translate] stream failed: ${error.code} — ${error.message}`);
           } else {
-            console.error('[translate] stream error:', error);
+            if (cancelled) console.warn('[translate] stream cancelled by client');
+            else console.error('[translate] stream error:', error);
           }
           // Persist the reasoning streamed before the failure so the user can
           // see how far the model got (quota / network / output diagnostics).
@@ -334,7 +341,9 @@ export async function POST(
           }
           send('error', { error: code, done: partialDone, total });
         } finally {
-          controller.close();
+          // After a client disconnect (or a normal close) the stream may
+          // already be closed — closing again throws, so swallow it.
+          try { controller.close(); } catch { /* already closed */ }
         }
       },
     });

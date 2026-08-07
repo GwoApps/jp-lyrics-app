@@ -217,3 +217,40 @@ test('OpenAI payload requests low reasoning effort', async () => {
   const body = openAIBody(captured.current);
   assert.equal(body.reasoning_effort, 'low');
 });
+
+test('streaming translation aborts the upstream fetch when the external signal fires', async () => {
+  const { streamTranslateLyricLines } = await import('./translation/index.ts');
+  const controller = new AbortController();
+  let signalSeen: AbortSignal | undefined;
+  let resolveIssued: () => void;
+  const issued = new Promise<void>((resolve) => { resolveIssued = resolve; });
+  const streamFetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    signalSeen = init?.signal as AbortSignal | undefined;
+    resolveIssued();
+    // Simulate an upstream that keeps streaming until aborted.
+    const stream = new ReadableStream<Uint8Array>({
+      start(streamController) {
+        const encoder = new TextEncoder();
+        const push = () => {
+          if (init?.signal?.aborted) {
+            streamController.error(new DOMException('aborted', 'AbortError'));
+            return;
+          }
+          streamController.enqueue(encoder.encode(`data: {"choices":[{"delta":{"content":"[\"译\"]"}}]}\n\n`));
+          setTimeout(push, 5);
+        };
+        push();
+      },
+      cancel() { /* upstream cancelled */ },
+    });
+    return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+  }) as typeof fetch;
+
+  const run = streamTranslateLyricLines(['a'], CFG, () => {}, streamFetch, undefined, controller.signal);
+  await issued; // upstream request is in flight
+  assert.ok(signalSeen, 'upstream fetch received a signal');
+  assert.ok(!signalSeen!.aborted, 'upstream not aborted yet');
+  controller.abort(); // client cancels → the fetch's signal must abort
+  await assert.rejects(run, (error: unknown) => error instanceof Error);
+  assert.ok(signalSeen!.aborted, 'upstream fetch signal aborted after cancel');
+});

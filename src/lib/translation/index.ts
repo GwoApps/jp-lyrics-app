@@ -391,6 +391,7 @@ export async function streamTranslateLyricLines(
   onDelta: (chunk: { type: 'reasoning' | 'translation'; text: string }) => void,
   fetchImpl: typeof fetch = fetch,
   ctx?: TranslationContext,
+  signal?: AbortSignal,
 ): Promise<string[]> {
   let text: string;
   if (cfg.provider === 'workers-ai') {
@@ -418,9 +419,9 @@ export async function streamTranslateLyricLines(
     await recordAiUsage(neuronsForTokens(inputTokens, outputTokens));
     onDelta({ type: 'translation', text });
   } else if (cfg.provider === 'anthropic') {
-    text = await streamAnthropic(lines, cfg, onDelta, fetchImpl, ctx);
+    text = await streamAnthropic(lines, cfg, onDelta, fetchImpl, ctx, signal);
   } else {
-    text = await streamOpenAI(lines, cfg, onDelta, fetchImpl, ctx);
+    text = await streamOpenAI(lines, cfg, onDelta, fetchImpl, ctx, signal);
   }
 
   const parsed = extractJsonArray(text);
@@ -436,11 +437,18 @@ async function streamOpenAI(
   onDelta: (chunk: { type: 'reasoning' | 'translation'; text: string }) => void,
   fetchImpl: typeof fetch,
   ctx?: TranslationContext,
+  externalSignal?: AbortSignal,
 ): Promise<string> {
   const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
   const controller = new AbortController();
+  // 5-minute safety timeout, plus an optional external signal (client
+  // disconnect) so an aborted request stops the upstream call immediately
+  // instead of burning quota until the timeout fires.
+  const onExternalAbort = () => controller.abort();
+  externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
   const timer = setTimeout(() => controller.abort(), 300_000);
   try {
+    if (externalSignal?.aborted) controller.abort();
     const response = await fetchImpl(url, {
       method: 'POST',
       headers: {
@@ -497,6 +505,7 @@ async function streamOpenAI(
     return content;
   } finally {
     clearTimeout(timer);
+    externalSignal?.removeEventListener('abort', onExternalAbort);
   }
 }
 
@@ -507,12 +516,19 @@ async function streamAnthropic(
   onDelta: (chunk: { type: 'reasoning' | 'translation'; text: string }) => void,
   fetchImpl: typeof fetch,
   ctx?: TranslationContext,
+  externalSignal?: AbortSignal,
 ): Promise<string> {
   const base = cfg.baseUrl.replace(/\/+$/, '');
   const url = base.endsWith('/v1') ? `${base}/messages` : `${base}/v1/messages`;
   const controller = new AbortController();
+  // 5-minute safety timeout, plus an optional external signal (client
+  // disconnect) so an aborted request stops the upstream call immediately
+  // instead of burning quota until the timeout fires.
+  const onExternalAbort = () => controller.abort();
+  externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
   const timer = setTimeout(() => controller.abort(), 300_000);
   try {
+    if (externalSignal?.aborted) controller.abort();
     const response = await fetchImpl(url, {
       method: 'POST',
       headers: {
@@ -565,6 +581,7 @@ async function streamAnthropic(
     return content;
   } finally {
     clearTimeout(timer);
+    externalSignal?.removeEventListener('abort', onExternalAbort);
   }
 }
 

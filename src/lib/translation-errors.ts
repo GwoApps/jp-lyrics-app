@@ -9,5 +9,6 @@ export const TRANSLATION_ERROR_KEYS: Record<string, string> = {
   empty_lyrics: 'song.translationEmptyLyrics',
   translation_failed: 'song.translationFailed',
   translation_invalid_response: 'song.translationFailed',
+  translation_cancelled: 'song.translationCancelled',
   ai_quota_exceeded: 'song.translationQuotaExceeded',
 };
