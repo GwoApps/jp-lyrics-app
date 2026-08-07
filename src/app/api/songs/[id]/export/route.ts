@@ -49,10 +49,15 @@ export async function GET(
     { format, includeTranslation, reading },
   );
 
+  const encodedFilename = encodeURIComponent(filename);
+  // RFC 5987: filename*= 带 charset 才会被浏览器百分号解码为中文/日文名；
+  // filename= 保留固定 ASCII 名，作为不支持 filename* 的旧浏览器兜底。
+  const contentDisposition = `attachment; filename="download.${extension}"; filename*=UTF-8''${encodedFilename}.${extension}`;
+
   return new NextResponse(body, {
     headers: {
       'Content-Type': contentType,
-      'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}.${extension}"`,
+      'Content-Disposition': contentDisposition,
     },
   });
 }
