@@ -110,8 +110,7 @@ export interface UseSongDataReturn {
   openSavedReasoning: () => void;
   copyReasoning: () => Promise<void>;
   dismissTranslationError: () => void;
-  clearFurigana: () => Promise<void>;
-  clearTranslation: () => Promise<void>;
+  clearReasoning: () => Promise<void>;
   handleTranslate: () => Promise<void>;
   cancelTranslate: () => void;
   furiganaLoading: boolean;
@@ -669,39 +668,17 @@ export function useSongData(id: string): UseSongDataReturn {
     setTranslationProgress(null);
   }, []);
 
-  /** Debug tooling: wipe the furigana cache so annotations regenerate. */
-  const clearFurigana = useCallback(async () => {
+  /** Clear the persisted translation reasoning so stale thinking can be removed. */
+  const clearReasoning = useCallback(async () => {
     if (!song) return;
     try {
       const res = await fetch(`/api/songs/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clear_furigana: true }),
+        body: JSON.stringify({ clear_reasoning: true }),
       });
       const updated = await res.json();
-      if (!res.ok || !updated?.lyrics_furigana) {
-        showToast('error', t('song.clearFailed'));
-        return;
-      }
-      requestedLyricsRef.current = '';
-      setSong(updated);
-      showToast('success', t('song.furiganaCleared'));
-    } catch {
-      showToast('error', t('song.clearFailed'));
-    }
-  }, [id, song, t, showToast]);
-
-  /** Debug tooling: wipe the translation cache so it can be regenerated. */
-  const clearTranslation = useCallback(async () => {
-    if (!song) return;
-    try {
-      const res = await fetch(`/api/songs/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clear_translation: true }),
-      });
-      const updated = await res.json();
-      if (!res.ok || !updated?.lyrics_translation) {
+      if (!res.ok) {
         showToast('error', t('song.clearFailed'));
         return;
       }
@@ -709,7 +686,7 @@ export function useSongData(id: string): UseSongDataReturn {
       setTranslationReasoning('');
       setHasSavedReasoning(false);
       setShowTranslationReasoning(false);
-      showToast('success', t('song.translationCleared'));
+      showToast('success', t('song.reasoningCleared'));
     } catch {
       showToast('error', t('song.clearFailed'));
     }
@@ -962,8 +939,7 @@ export function useSongData(id: string): UseSongDataReturn {
     openSavedReasoning,
     copyReasoning,
     dismissTranslationError,
-    clearFurigana,
-    clearTranslation,
+    clearReasoning,
     handleTranslate,
     cancelTranslate,
     furiganaLoading,

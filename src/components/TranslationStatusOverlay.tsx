@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDown, Brain, CircleAlert, Copy, Loader2, X } from 'lucide-react';
+import { ArrowDown, Brain, CircleAlert, Copy, Eraser, Loader2, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
 interface TranslationStatusOverlayProps {
@@ -14,6 +14,7 @@ interface TranslationStatusOverlayProps {
   onDismissError: () => void;
   onCloseReasoning: () => void;
   onCopyReasoning: () => void;
+  onClearReasoning?: () => void;
   onContinue: () => void;
   onCancel: () => void;
 }
@@ -40,6 +41,7 @@ export default function TranslationStatusOverlay({
   onDismissError,
   onCloseReasoning,
   onCopyReasoning,
+  onClearReasoning,
   onContinue,
   onCancel,
 }: TranslationStatusOverlayProps) {
@@ -88,6 +90,17 @@ export default function TranslationStatusOverlay({
               <Copy className="h-3 w-3" />
               {t('song.copyReasoning')}
             </button>
+            {!translating && onClearReasoning && (
+              <button
+                type="button"
+                onClick={onClearReasoning}
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--background)]/80 px-2 py-0.5 text-[10px] font-medium text-[var(--muted-foreground)] transition-colors hover:bg-[var(--destructive)]/10 hover:text-[var(--destructive)]"
+                title={t('song.clearReasoning')}
+              >
+                <Eraser className="h-3 w-3" />
+                {t('song.clearReasoning')}
+              </button>
+            )}
             {!translating && (
               <button
                 type="button"

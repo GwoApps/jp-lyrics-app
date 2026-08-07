@@ -232,7 +232,11 @@
     "coverCreateHint": "可選；留空時若關聯 Spotify 將自動取得封面",
     "translationReasoningView": "查看翻譯過程",
     "copyReasoning": "複製思考",
-    "copyReasoningEmpty": "尚無思考內容"
+    "copyReasoningEmpty": "尚無思考內容",
+    "clearReasoning": "清除思考",
+    "reasoningCleared": "思考已清除",
+    "clearGlossary": "清除術語表",
+    "glossaryCleared": "術語表已清除"
   },
   "timeline": {
     "title": "LRC 時間軸編輯",
@@ -320,7 +324,11 @@
     "readingSchemeHint": "切換注音方案後，現有注音會被清除並按新方案重新產生。",
     "cantoneseDetected": "偵測到粵語用詞，改用粵拼注音",
     "titlePlaceholder": "例如：殘酷天使的行動綱領",
-    "artistPlaceholder": "例如：高橋洋子"
+    "artistPlaceholder": "例如：高橋洋子",
+    "subDataTitle": "清除歌詞相關資料",
+    "subDataHint": "刪除由歌詞衍生的注音、翻譯、思考過程與術語表。歌詞內容變更時會自動失效，這裡可隨時手動清除。",
+    "subDataPresent": "有資料",
+    "subDataEmpty": "無資料"
   },
   "new": {
     "title": "新增歌曲",

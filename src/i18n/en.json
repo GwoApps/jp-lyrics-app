@@ -232,7 +232,11 @@
     "coverCreateHint": "Optional; if left empty and linked to Spotify, artwork is fetched automatically",
     "translationReasoningView": "View reasoning",
     "copyReasoning": "Copy reasoning",
-    "copyReasoningEmpty": "No reasoning available"
+    "copyReasoningEmpty": "No reasoning available",
+    "clearReasoning": "Clear reasoning",
+    "reasoningCleared": "Reasoning cleared",
+    "clearGlossary": "Clear glossary",
+    "glossaryCleared": "Glossary cleared"
   },
   "timeline": {
     "title": "LRC Timeline Editor",
@@ -320,7 +324,11 @@
     "readingSchemeHint": "Changing the scheme clears existing annotations and regenerates them with the selected scheme.",
     "cantoneseDetected": "Cantonese wording detected — use Jyutping annotations",
     "titlePlaceholder": "e.g. A Cruel Angel's Thesis",
-    "artistPlaceholder": "e.g. Yoko Takahashi"
+    "artistPlaceholder": "e.g. Yoko Takahashi",
+    "subDataTitle": "Clear lyrics-derived data",
+    "subDataHint": "Remove the furigana, translation, reasoning and glossary derived from these lyrics. They are invalidated automatically when the lyrics change; you can also clear them manually here.",
+    "subDataPresent": "Has data",
+    "subDataEmpty": "Empty"
   },
   "new": {
     "title": "Add New Song",

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Download, Loader2, PictureInPicture, Copy, Check, MoreVertical, Languages, ChevronDown, Info, X, Eraser, Palette, SlidersHorizontal, FlaskConical, Share2 } from 'lucide-react';
+import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Download, Loader2, PictureInPicture, Copy, Check, MoreVertical, Languages, ChevronDown, Info, X, Palette, SlidersHorizontal, FlaskConical, Share2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useI18n } from '@/lib/i18n';
 import { useSongData } from '@/hooks/useSongData';
@@ -285,34 +285,6 @@ export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSup
                 </button>
                 {data.debug && (
                   <>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-menu-item
-                      onClick={() => {
-                        setShowEditMenu(false);
-                        void data.clearFurigana();
-                      }}
-                      disabled={!canEdit}
-                      className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)] disabled:opacity-50"
-                    >
-                      <Eraser className="h-4 w-4" />
-                      <span>{t('song.clearFurigana')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-menu-item
-                      onClick={() => {
-                        setShowEditMenu(false);
-                        void data.clearTranslation();
-                      }}
-                      disabled={!canEdit}
-                      className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)] disabled:opacity-50"
-                    >
-                      <Eraser className="h-4 w-4" />
-                      <span>{t('song.clearTranslation')}</span>
-                    </button>
                     <button
                       type="button"
                       role="menuitem"

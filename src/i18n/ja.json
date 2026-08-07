@@ -232,7 +232,11 @@
     "coverCreateHint": "任意です。未設定の場合、Spotify 連携があれば自動で取得します",
     "translationReasoningView": "思考プロセスを見る",
     "copyReasoning": "思考をコピー",
-    "copyReasoningEmpty": "思考内容がありません"
+    "copyReasoningEmpty": "思考内容がありません",
+    "clearReasoning": "思考をクリア",
+    "reasoningCleared": "思考をクリアしました",
+    "clearGlossary": "用語集をクリア",
+    "glossaryCleared": "用語集をクリアしました"
   },
   "timeline": {
     "title": "LRC タイムライン編集",
@@ -320,7 +324,11 @@
     "readingSchemeHint": "注音方式を切り替えると、既存の注音は消去され、新しい方式で再生成されます。",
     "cantoneseDetected": "広東語表現を検出しました。粤拼注音に切り替える",
     "titlePlaceholder": "例：残酷な天使のテーゼ",
-    "artistPlaceholder": "例：高橋洋子"
+    "artistPlaceholder": "例：高橋洋子",
+    "subDataTitle": "歌詞関連データをクリア",
+    "subDataHint": "歌詞から生成されたふりがな・翻訳・思考プロセス・用語集を削除します。歌詞が変わると自動的に無効化されますが、ここで手動でクリアすることもできます。",
+    "subDataPresent": "データあり",
+    "subDataEmpty": "データなし"
   },
   "new": {
     "title": "新しい曲を追加",

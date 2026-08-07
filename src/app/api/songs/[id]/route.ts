@@ -109,7 +109,7 @@ export async function PUT(
   const db = getDB();
   const { id } = await params;
   const body = await request.json();
-  const { title, artist, lyrics_raw, lyrics_synced, reading_scheme, reading_scheme_confirmed, clear_furigana, clear_translation, cover_palette } = body;
+  const { title, artist, lyrics_raw, lyrics_synced, reading_scheme, reading_scheme_confirmed, clear_furigana, clear_translation, clear_reasoning, clear_glossary, cover_palette } = body;
 
   if (cover_palette !== undefined && cover_palette !== null && !isCoverPaletteShape(cover_palette)) {
     return NextResponse.json({ error: 'invalid_cover_palette' }, { status: 400 });
@@ -152,12 +152,14 @@ export async function PUT(
     ? '[]'
     : lyricsContentChanged ? '[]' : existing.lyrics_translation;
   // Reasoning is tied to the translation run; wipe it whenever the translation
-  // cache is cleared or the lyrics content changes.
-  const lyricsTranslationReasoning = (clear_translation === true || lyricsContentChanged)
+  // cache is cleared, the lyrics content changes, or explicitly on request
+  // (the clear entry lives on the song editor page).
+  const lyricsTranslationReasoning = (clear_translation === true || lyricsContentChanged || clear_reasoning === true)
     ? null
     : existing.lyrics_translation_reasoning;
-  // The terminology glossary is tied to the lyrics content; invalidate it on change.
-  const lyricsGlossary = lyricsContentChanged ? null : existing.lyrics_glossary;
+  // The terminology glossary is tied to the lyrics content; invalidate it on
+  // change, or explicitly on request (the clear entry lives on the editor).
+  const lyricsGlossary = (lyricsContentChanged || clear_glossary === true) ? null : existing.lyrics_glossary;
   await db.update(schema.songs).set({
     title: title !== undefined ? title : existing.title,
     artist: artist !== undefined ? artist : existing.artist,

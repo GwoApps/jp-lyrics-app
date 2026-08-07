@@ -232,7 +232,11 @@
     "coverCreateHint": "可选；留空时若关联 Spotify 将自动获取封面",
     "translationReasoningView": "查看翻译过程",
     "copyReasoning": "复制思考",
-    "copyReasoningEmpty": "暂无思考内容"
+    "copyReasoningEmpty": "暂无思考内容",
+    "clearReasoning": "清除思考",
+    "reasoningCleared": "思考已清除",
+    "clearGlossary": "清除术语表",
+    "glossaryCleared": "术语表已清除"
   },
   "timeline": {
     "title": "LRC 时间轴编辑",
@@ -320,7 +324,11 @@
     "readingSchemeHint": "切换注音方案后，现有注音会被清除并按新方案重新生成。",
     "cantoneseDetected": "检测到粤语用词，改用粤拼注音",
     "titlePlaceholder": "例如：残酷天使的行动纲领",
-    "artistPlaceholder": "例如：高桥洋子"
+    "artistPlaceholder": "例如：高桥洋子",
+    "subDataTitle": "清除歌词相关数据",
+    "subDataHint": "删除由歌词派生的注音、翻译、思考过程与术语表。歌词内容变化时会自动失效，这里可随时手动清除。",
+    "subDataPresent": "有数据",
+    "subDataEmpty": "无数据"
   },
   "new": {
     "title": "添加新歌曲",

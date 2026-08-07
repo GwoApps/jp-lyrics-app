@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useCallback
 import { useRouter, useParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
 import Link from 'next/link';
-import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, ArrowDown, Minus, Plus, Music, Download, Loader2, ExternalLink, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2, Info, X, CircleAlert, Eraser, Palette, SlidersHorizontal, Brain, FlaskConical } from 'lucide-react';
+import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, ArrowDown, Minus, Plus, Music, Download, Loader2, ExternalLink, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2, Info, X, CircleAlert, Palette, SlidersHorizontal, Brain, FlaskConical } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import FuriganaLineView from '@/components/FuriganaLine';
@@ -585,18 +585,6 @@ export default function SongViewPage() {
                 },
                 ...(data.debug ? [
                   {
-                    icon: <Eraser className="h-3.5 w-3.5" />,
-                    label: t('song.clearFurigana'),
-                    onClick: () => void data.clearFurigana(),
-                    disabled: !canEdit,
-                  },
-                  {
-                    icon: <Eraser className="h-3.5 w-3.5" />,
-                    label: t('song.clearTranslation'),
-                    onClick: () => void data.clearTranslation(),
-                    disabled: !canEdit,
-                  },
-                  {
                     icon: <Palette className="h-3.5 w-3.5" />,
                     label: t('song.recolorCover'),
                     onClick: () => {
@@ -890,6 +878,7 @@ export default function SongViewPage() {
         onDismissError={data.dismissTranslationError}
         onCloseReasoning={() => data.setShowTranslationReasoning(false)}
         onCopyReasoning={() => void data.copyReasoning()}
+        onClearReasoning={() => void data.clearReasoning()}
         onContinue={() => void data.handleTranslate()}
         onCancel={data.cancelTranslate}
       />
