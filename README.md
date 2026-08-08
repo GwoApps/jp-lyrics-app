@@ -13,6 +13,7 @@ auto-scroll, and more:
 - AI lyric translation with a live reasoning panel and pluggable LLM providers
 - Spotify real-time sync (SSE or polling) with line-by-line eased follow-scroll
 - Timeline workspace for marking lyrics against live playback
+- Per-line actions via context menu — right-click on desktop, long-press on mobile
 - Share-card generator (QR + selected lines → PNG), admin console
 - PWA, dark/light theme, 4 UI languages, favorites & collections
 

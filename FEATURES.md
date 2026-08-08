@@ -19,6 +19,10 @@ deployment see [README.md](README.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
 - **Apple-style Follow Scroll** — While syncing, the active line is
   centered with an eased scroll animation (fast start, graceful deceleration).
 - **Copy Lyrics** — Strip furigana, copy clean text to clipboard.
+- **Per-Line Actions (Context Menu)** — Each lyric line has a
+  per-line context menu (copy original, copy translation, share the
+  line, correct furigana). **Right-click** a line on desktop, or
+  **long-press** a line on mobile / touch devices, to open it.
 - **Export** — Download lyrics as plain text, LRC (timestamped), or HTML.
 - **PiP (Picture-in-Picture)** — Floating lyrics window over other apps
   (desktop Chrome).
