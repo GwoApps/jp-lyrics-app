@@ -48,7 +48,10 @@ export async function POST(
   // wrong song despite candidate validation. Keep the user's current lyrics
   // untouched until they explicitly confirm overriding them.
   const LOW_CONFIDENCE_THRESHOLD = 80;
-  const { force } = await request.json().catch(() => ({})) as { force?: boolean };
+  const { force, confirmPlain } = await request.json().catch(() => ({})) as {
+    force?: boolean;
+    confirmPlain?: boolean;
+  };
   if (!force && source === 'lrclib-search' && confidence < LOW_CONFIDENCE_THRESHOLD) {
     const parsed = result.synced ? parseLrc(result.synced) : [];
     return NextResponse.json({
@@ -58,6 +61,21 @@ export async function POST(
       confidence,
       lines: parsed.length,
       lrc: result.synced,
+    });
+  }
+
+  // Plain-text hit (no LRC timeline): do NOT silently overwrite the stored
+  // lyrics/timeline. Unless the user explicitly confirms, keep the current
+  // lyrics untouched and ask — otherwise an existing LRC timeline, manual
+  // furigana and consumed AI translation quota would be lost without notice.
+  const isPlainHit = !result.synced.trim();
+  if (isPlainHit && !confirmPlain) {
+    return NextResponse.json({
+      synced: false,
+      plainHit: true,
+      source,
+      confidence,
+      plain: result.plain,
     });
   }
 
@@ -99,6 +117,7 @@ export async function POST(
   const parsed = result.synced ? parseLrc(result.synced) : [];
   return NextResponse.json({
     synced: parsed.length > 0,
+    plainUpdated: isPlainHit,
     source,
     confidence,
     lines: parsed.length,

@@ -140,6 +140,9 @@ export interface UseSongDataReturn {
   lowConfidenceSync: { source: string; confidence: number; lines: number; lrc: string } | null;
   confirmLowConfidenceSync: () => void;
   cancelLowConfidenceSync: () => void;
+  plainHitSync: { source: string; confidence: number; plain: string } | null;
+  confirmPlainSync: () => void;
+  cancelPlainSync: () => void;
   handleDelete: () => void;
   confirmDelete: () => Promise<void>;
   handleCopy: (mode?: 'original' | 'translation') => Promise<void>;
@@ -207,6 +210,13 @@ export function useSongData(id: string): UseSongDataReturn {
     confidence: number;
     lines: number;
     lrc: string;
+  } | null>(null);
+  // Pending plain-text sync result (no LRC timeline) waiting for explicit user
+  // confirmation (server refuses to overwrite lyrics/timeline without it).
+  const [plainHitSync, setPlainHitSync] = useState<{
+    source: string;
+    confidence: number;
+    plain: string;
   } | null>(null);
   const [allSongs, setAllSongs] = useState<{ id: string; title: string; artist: string; spotify_track_id?: string | null; created_by: string; is_public: number }[]>([]);
   const [copied, setCopied] = useState(false);
@@ -440,13 +450,13 @@ export function useSongData(id: string): UseSongDataReturn {
     }));
   }, [id, t, showToast]);
 
-  const runSync = useCallback(async (force: boolean) => {
+  const runSync = useCallback(async (force: boolean, confirmPlain = false) => {
     setSyncing(true);
     try {
       const res = await fetch(`/api/songs/${id}/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ force }),
+        body: JSON.stringify({ force, confirmPlain }),
       });
       const data = await res.json();
       // Fuzzy search below the confidence threshold: the server keeps the
@@ -459,6 +469,27 @@ export function useSongData(id: string): UseSongDataReturn {
           lines: data.lines,
           lrc: data.lrc,
         });
+        return;
+      }
+      // Plain-text hit (no LRC timeline): nothing was written yet — ask the
+      // user whether to replace the current lyrics with this plain text.
+      if (data.plainHit) {
+        setPlainHitSync({
+          source: data.source,
+          confidence: data.confidence,
+          plain: data.plain,
+        });
+        return;
+      }
+      // Confirmed plain-text overwrite succeeded (no timeline remains).
+      if (data.plainUpdated) {
+        const updated = await fetch(`/api/songs/${id}`, { cache: 'no-store' });
+        if (updated.ok) setSong(await updated.json());
+        setSyncLines([]);
+        const sourceKey = LYRICS_SOURCE_KEYS[data.source];
+        showToast('success', t('song.plainUpdated', {
+          source: sourceKey ? t(sourceKey) : data.source,
+        }));
         return;
       }
       if (data.synced) {
@@ -489,6 +520,16 @@ export function useSongData(id: string): UseSongDataReturn {
   }, [runSync]);
 
   const cancelLowConfidenceSync = useCallback(() => setLowConfidenceSync(null), []);
+
+  // Re-run sync with the plain-text overwrite confirmed. The server writes the
+  // plain lyrics and clears the timeline (LRC) — the user has explicitly accepted
+  // losing the old timed lyrics in exchange for the newly fetched plain text.
+  const confirmPlainSync = useCallback(() => {
+    setPlainHitSync(null);
+    void runSync(true, true);
+  }, [runSync]);
+
+  const cancelPlainSync = useCallback(() => setPlainHitSync(null), []);
 
 
   const handleTranslate = useCallback(async () => {
@@ -979,6 +1020,9 @@ export function useSongData(id: string): UseSongDataReturn {
     lowConfidenceSync,
     confirmLowConfidenceSync,
     cancelLowConfidenceSync,
+    plainHitSync,
+    confirmPlainSync,
+    cancelPlainSync,
     handleDelete,
     confirmDelete,
     handleCopy,

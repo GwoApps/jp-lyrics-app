@@ -995,6 +995,21 @@ export default function SongViewPage() {
         onConfirm={data.confirmLowConfidenceSync}
         onCancel={data.cancelLowConfidenceSync}
       />
+      <ConfirmDialog
+        open={!!data.plainHitSync}
+        title={t('song.plainHitTitle')}
+        body={t('song.plainHitBody', {
+          source: data.plainHitSync
+            ? (LYRICS_SOURCE_KEYS[data.plainHitSync.source]
+              ? t(LYRICS_SOURCE_KEYS[data.plainHitSync.source])
+              : data.plainHitSync.source)
+            : '',
+        })}
+        confirmLabel={t('song.plainHitConfirm')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={data.confirmPlainSync}
+        onCancel={data.cancelPlainSync}
+      />
     </div>
   );
 }
