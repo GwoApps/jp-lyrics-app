@@ -162,25 +162,43 @@ export async function POST(
   // Only the distinct lines actually hit the model.
   const uniqueLines = needTranslation.map((i) => slice[i]);
 
-  // Terminology: reuse a stored glossary, or extract one from the full song
-  // (best-effort; failure just means translation without terminology).
+  // Terminology: reuse a stored glossary, or extract one from the full song.
+  // Three distinguishable states (see extractLyricsGlossary): a stored array
+  // (possibly empty = genuinely no terms) is reused as-is; a stored `null`
+  // means the last extraction FAILED, so it is retried on the next whole-song
+  // request instead of being pinned to "no terms" forever.
   let glossary: GlossaryEntry[] | null = null;
   if (existing.lyricsGlossary) {
     try {
       const parsed = JSON.parse(existing.lyricsGlossary);
-      if (Array.isArray(parsed)) glossary = parsed as GlossaryEntry[];
+      if (Array.isArray(parsed)) {
+        glossary = parsed as GlossaryEntry[];
+      } else if (parsed === null) {
+        // Last extraction failed — fall through and retry below.
+        console.warn(`[translate] retrying glossary extraction for "${existing.title}" (previous attempt failed)`);
+      }
     } catch (error) {
       // Damaged glossary — ignore and translate without terminology.
       console.warn(`[translate] stored glossary unparseable for "${existing.title}" — ${error instanceof Error ? error.message : String(error)}`);
       /* ignored */
     }
   }
-  if (!glossary && !isSlice) {
-    glossary = await extractLyricsGlossary(existing.title, existing.artist, lines, config);
-    await db.update(schema.songs).set({
-      lyricsGlossary: JSON.stringify(glossary),
-      updatedAt: sql`(datetime('now', 'localtime'))`,
-    }).where(eq(schema.songs.id, id)).run();
+  if (glossary === null && !isSlice) {
+    const extracted = await extractLyricsGlossary(existing.title, existing.artist, lines, config);
+    if (extracted !== null) {
+      // Only persist a SUCCESSFUL extraction. A failure returns null and is
+      // left unwritten, so the next whole-song translation retries it instead
+      // of permanently pinning this song to an empty glossary.
+      glossary = extracted;
+      await db.update(schema.songs).set({
+        lyricsGlossary: JSON.stringify(glossary),
+        updatedAt: sql`(datetime('now', 'localtime'))`,
+      }).where(eq(schema.songs.id, id)).run();
+    } else {
+      // Degrade to "no terminology" for THIS run only; extraction is retried
+      // on the next request. Still observable in the logs for triage.
+      console.warn(`[translate] glossary extraction failed for "${existing.title}" — translating without terminology; will retry next time`);
+    }
   }
 
   const ctx = { title: existing.title, artist: existing.artist, glossary: glossary ?? undefined };

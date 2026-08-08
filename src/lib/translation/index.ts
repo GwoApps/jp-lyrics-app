@@ -298,15 +298,24 @@ async function requestWorkersAI(lines: string[], cfg: TranslationConfig, ctx?: T
 }
 
 /**
- * Extract a terminology table from the full song. Returns [] on any
- * failure so translation can proceed without it (best-effort feature).
+ * Extract a terminology table from the full song.
+ *
+ * Return contract — three distinguishable states:
+ *  - `GlossaryEntry[]` — extraction succeeded; may be an EMPTY array when the
+ *    song genuinely has no terms worth pinning (the caller may persist it to
+ *    remember that and skip future extractions);
+ *  - `null` — extraction FAILED (upstream error / malformed response). The
+ *    caller must treat this run as "no terminology" but must NOT persist it,
+ *    otherwise a transient failure would permanently pin the song to empty
+ *    and never retry.
  */
 export async function extractLyricsGlossary(
   title: string,
   artist: string,
   lines: string[],
   cfg: TranslationConfig,
-): Promise<GlossaryEntry[]> {
+  fetchImpl: typeof fetch = fetch,
+): Promise<GlossaryEntry[] | null> {
   const input = JSON.stringify({ title, artist, lyrics: lines });
   try {
     const text = await withRetry(async () => {
@@ -324,7 +333,7 @@ export async function extractLyricsGlossary(
         return data?.response ?? '';
       }
       const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
-      const res = await fetch(url, {
+      const res = await fetchImpl(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
         body: JSON.stringify({ model: cfg.model, messages, max_tokens: 4096, temperature: 0 }),
@@ -335,7 +344,11 @@ export async function extractLyricsGlossary(
     }, RETRY_ATTEMPTS, RETRY_BASE_DELAY_MS);
 
     const parsed = extractJsonArray(text);
-    if (!Array.isArray(parsed)) return [];
+    // A compliant model always answers with a JSON array (empty `[]` when
+    // there is genuinely nothing to extract). Anything else — prose, a JSON
+    // object, an empty body — is a malformed/unsuccessful response, so we
+    // return null instead of pinning the song to "no terms" forever.
+    if (!Array.isArray(parsed)) return null;
     return parsed
       .filter((item): item is GlossaryEntry =>
         typeof item === 'object' && item !== null
@@ -345,7 +358,7 @@ export async function extractLyricsGlossary(
   } catch (error) {
     // Terminology is best-effort — but a silent failure hides provider/network issues.
     console.warn(`[translation] glossary extraction failed — ${error instanceof Error ? error.message : String(error)}`);
-    return [];
+    return null;
   }
 }
 

@@ -218,6 +218,34 @@ test('OpenAI payload requests low reasoning effort', async () => {
   assert.equal(body.reasoning_effort, 'low');
 });
 
+test('glossary extraction returns an array on success (possibly empty = genuinely no terms)', async () => {
+  const { extractLyricsGlossary } = await import('./translation/index.ts');
+  const found = await extractLyricsGlossary('花火', 'AAA', ['花火'], CFG, mockFetch(200, {
+    choices: [{ message: { content: '[{"original":"花火","translation":"烟花"}]' } }],
+  }));
+  assert.deepEqual(found, [{ original: '花火', translation: '烟花' }]);
+
+  const none = await extractLyricsGlossary('花火', 'AAA', ['花火'], CFG, mockFetch(200, {
+    choices: [{ message: { content: '[]' } }],
+  }));
+  assert.deepEqual(none, []); // empty array: extraction succeeded, no terms
+});
+
+test('glossary extraction returns null on upstream failure so callers retry instead of pinning empty', async () => {
+  const { extractLyricsGlossary } = await import('./translation/index.ts');
+  // 5xx upstream → null (never retried internally once RETRY_ATTEMPTS exhausted).
+  const failed = await extractLyricsGlossary('花火', 'AAA', ['花火'], CFG, mockFetch(503, { error: 'boom' }));
+  assert.equal(failed, null);
+});
+
+test('glossary extraction returns null on a malformed (non-array) response', async () => {
+  const { extractLyricsGlossary } = await import('./translation/index.ts');
+  const malformed = await extractLyricsGlossary('花火', 'AAA', ['花火'], CFG, mockFetch(200, {
+    choices: [{ message: { content: 'no json array here' } }],
+  }));
+  assert.equal(malformed, null);
+});
+
 test('streaming translation aborts the upstream fetch when the external signal fires', async () => {
   const { streamTranslateLyricLines } = await import('./translation/index.ts');
   const controller = new AbortController();
