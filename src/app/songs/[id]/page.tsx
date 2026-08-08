@@ -813,14 +813,50 @@ export default function SongViewPage() {
                 <span>{t('song.loadingFurigana')}</span>
               </div>
             ) : data.furiganaError ? (
-              <div className="flex flex-col gap-3 py-8">
+              <div className="flex flex-col gap-4 py-8">
                 <div className="flex items-center gap-2 text-sm text-[var(--warning)]">
                   <span>{data.furiganaError}</span>
                 </div>
                 <pre className="whitespace-pre-wrap font-sans leading-relaxed text-[var(--muted-foreground)]" style={{ fontSize: `${data.fontSize}px` }}>{song.lyrics_raw}</pre>
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={data.retryFurigana}
+                    disabled={data.furiganaLoading}
+                    className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium song-accent-button self-start disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${data.furiganaLoading ? 'animate-spin' : ''}`} />
+                    {t('song.furiganaRetry')}
+                  </button>
+                )}
               </div>
             ) : (
-              <p className="text-sm text-[var(--muted-foreground)]">{t('song.noLyricsSimple')}</p>
+              <div className="flex flex-col items-center gap-3 py-10 text-center">
+                <p className="text-sm text-[var(--muted-foreground)]">{t('song.noLyricsSimple')}</p>
+                {canEdit ? (
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowSyncConfirm(true)}
+                      disabled={data.syncing}
+                      className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium song-editor-primary-button disabled:opacity-50"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${data.syncing ? 'animate-spin' : ''}`} />
+                      {data.syncing ? t('song.syncing') : t('song.noLyricsSync')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/songs/${id}/edit`)}
+                      className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium song-accent-button"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      {t('song.noLyricsEdit')}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-[var(--muted-foreground)]/80">{t('song.noLyricsWaiting')}</p>
+                )}
+              </div>
             )}
           </div>
         </div>

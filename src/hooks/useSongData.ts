@@ -115,6 +115,7 @@ export interface UseSongDataReturn {
   cancelTranslate: () => void;
   furiganaLoading: boolean;
   furiganaError: string;
+  retryFurigana: () => void;
   lineTimestamps: (number | null)[];
   syncing: boolean;
   importing: boolean;
@@ -285,6 +286,7 @@ export function useSongData(id: string): UseSongDataReturn {
   }, [serverFurigana, clientFuriganaState, readingSourceKey, plainFuriganaLines]);
 
   // Client-side furigana conversion: only once per lyrics value when server data is absent.
+  const [furiganaRetryTick, setFuriganaRetryTick] = useState(0);
   useEffect(() => {
     if (!lyricsRaw.trim() || serverFurigana.length > 0 || !hasHanCharacters || cantoneseSuggestion) return;
     const requestKey = `${id}\u0000${readingSourceKey}`;
@@ -328,7 +330,14 @@ export function useSongData(id: string): UseSongDataReturn {
       cancelled = true;
       if (!settled && requestedLyricsRef.current === requestKey) requestedLyricsRef.current = '';
     };
-  }, [lyricsRaw, serverFurigana.length, hasHanCharacters, cantoneseSuggestion, id, readingScheme, readingSourceKey, song?.permissions?.can_edit, t]);
+  }, [lyricsRaw, serverFurigana.length, hasHanCharacters, cantoneseSuggestion, id, readingScheme, readingSourceKey, song?.permissions?.can_edit, t, furiganaRetryTick]);
+
+  // Retry a failed client-side furigana conversion: the effect only runs once
+  // per lyrics value, so clear the guard and bump the tick to re-run it.
+  const retryFurigana = useCallback(() => {
+    requestedLyricsRef.current = '';
+    setFuriganaRetryTick((n) => n + 1);
+  }, []);
 
   const lineTimestamps = useMemo(() => {
     if (!song || !furiganaLines.length) return [] as (number | null)[];
@@ -995,6 +1004,7 @@ export function useSongData(id: string): UseSongDataReturn {
     cancelTranslate,
     furiganaLoading,
     furiganaError,
+    retryFurigana,
     lineTimestamps,
     syncing,
     importing,
