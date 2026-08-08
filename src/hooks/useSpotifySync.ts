@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { FuriganaLine } from '@/lib/types';
 import { isTitleMatch, findBestMatch } from '@/lib/match';
-import { useNowPlaying } from './useNowPlaying';
+import { useNowPlaying, type SyncState } from './useNowPlaying';
 import { animateSmoothScroll } from '@/lib/scroll-ease';
 
 export interface SpotifyState {
@@ -40,6 +40,8 @@ export interface SyncRefs {
 
 export interface UseSpotifySyncReturn {
   spotify: SpotifyState | null;
+  syncState: SyncState;
+  resumeSync: () => void;
   activeLine: number;
   followPlaying: boolean;
   setFollowPlaying: React.Dispatch<React.SetStateAction<boolean>>;
@@ -52,7 +54,7 @@ export function useSpotifySync(
   lyricsRef: React.RefObject<HTMLDivElement | null>,
   enabled = true,
 ): UseSpotifySyncReturn {
-  const nowPlayingData = useNowPlaying(enabled);
+  const { data: nowPlayingData, syncState, resumeSync } = useNowPlaying(enabled);
   const spotify = nowPlayingData as SpotifyState | null;
   const [activeLine, setActiveLine] = useState(-1);
   const [followPlaying, setFollowPlaying] = useState(() => {
@@ -189,6 +191,8 @@ export function useSpotifySync(
 
   return {
     spotify,
+    syncState,
+    resumeSync,
     activeLine,
     followPlaying,
     setFollowPlaying,

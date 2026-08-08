@@ -1,19 +1,21 @@
 'use client';
 
-import { AlertTriangle, Headphones } from 'lucide-react';
+import { AlertTriangle, Headphones, Loader2, RefreshCw } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { fmtMs, fmtTime } from '@/lib/lrc';
-import type { NowPlayingData } from '@/hooks/useNowPlaying';
+import type { NowPlayingData, SyncState } from '@/hooks/useNowPlaying';
 
 interface SpotifyStatusCardProps {
   nowPlaying: NowPlayingData | null;
   liveProgress: number;
   canUseSpotifyTime: boolean;
   spotifyMatches: boolean;
+  syncState?: SyncState;
+  onResume?: () => void;
 }
 
 /** Current Spotify playback card with a live progress bar. */
-export default function SpotifyStatusCard({ nowPlaying, liveProgress, canUseSpotifyTime, spotifyMatches }: SpotifyStatusCardProps) {
+export default function SpotifyStatusCard({ nowPlaying, liveProgress, canUseSpotifyTime, spotifyMatches, syncState = 'connected', onResume }: SpotifyStatusCardProps) {
   const { t } = useI18n();
   const durationMs = nowPlaying?.duration_ms || 0;
 
@@ -40,6 +42,23 @@ export default function SpotifyStatusCard({ nowPlaying, liveProgress, canUseSpot
       {nowPlaying?.track && !spotifyMatches && (
         <div className="mt-3 flex items-start gap-2 rounded-md bg-[var(--warning)]/10 px-3 py-2 text-xs text-[var(--warning)]">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{t('timelineWorkspace.trackMismatch')}
+        </div>
+      )}
+      {syncState === 'stopped' && (
+        <div className="mt-3 flex items-center justify-between gap-2 rounded-md bg-[var(--warning)]/15 px-3 py-2 text-xs text-[var(--warning)]">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span className="truncate">{t('song.syncStopped')}</span>
+          </span>
+          <button onClick={onResume} className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--warning)]/20 px-2 py-1 text-[10px] font-medium text-[var(--warning)] transition-colors hover:bg-[var(--warning)]/30">
+            <RefreshCw className="h-3 w-3" /><span>{t('song.resumeSync')}</span>
+          </button>
+        </div>
+      )}
+      {syncState === 'retrying' && (
+        <div className="mt-3 flex items-center gap-2 rounded-md bg-[var(--warning)]/10 px-3 py-2 text-xs text-[var(--warning)]">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+          <span className="truncate">{t('song.syncRetrying')}</span>
         </div>
       )}
     </div>

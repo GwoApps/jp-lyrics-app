@@ -80,7 +80,8 @@ export default function TimelineEditorPage() {
   const [liveProgress, setLiveProgress] = useState(0);
   const rowRefs = useRef<Array<HTMLDivElement | null>>([]);
   const progressAnchor = useRef({ progressMs: 0, receivedAt: 0, playing: false });
-  const nowPlaying = useNowPlaying(true);
+  const nowPlayingHook = useNowPlaying(true);
+  const nowPlaying = nowPlayingHook.data;
   const coverTheme = useCoverTheme(song?.cover_url ?? null);
 
   useEffect(() => {
@@ -338,6 +339,8 @@ export default function TimelineEditorPage() {
           liveProgress={liveProgress}
           canUseSpotifyTime={canUseSpotifyTime}
           spotifyMatches={spotifyMatches}
+          syncState={nowPlayingHook.syncState}
+          onResume={() => void nowPlayingHook.resumeSync()}
         />
 
         <OffsetControls

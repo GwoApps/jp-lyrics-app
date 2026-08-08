@@ -240,7 +240,10 @@
     "clearReasoning": "Clear reasoning",
     "reasoningCleared": "Reasoning cleared",
     "clearGlossary": "Clear glossary",
-    "glossaryCleared": "Glossary cleared"
+    "glossaryCleared": "Glossary cleared",
+    "syncRetrying": "Sync paused — retrying…",
+    "syncStopped": "Sync stopped — resume manually",
+    "resumeSync": "Resume sync"
   },
   "timeline": {
     "title": "LRC Timeline Editor",

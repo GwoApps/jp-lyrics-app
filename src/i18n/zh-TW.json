@@ -240,7 +240,10 @@
     "clearReasoning": "清除思考",
     "reasoningCleared": "思考已清除",
     "clearGlossary": "清除術語表",
-    "glossaryCleared": "術語表已清除"
+    "glossaryCleared": "術語表已清除",
+    "syncRetrying": "同步已暫停，正在重試…",
+    "syncStopped": "同步已停止，請手動恢復",
+    "resumeSync": "恢復同步"
   },
   "timeline": {
     "title": "LRC 時間軸編輯",

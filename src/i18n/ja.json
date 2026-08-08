@@ -240,7 +240,10 @@
     "clearReasoning": "思考をクリア",
     "reasoningCleared": "思考をクリアしました",
     "clearGlossary": "用語集をクリア",
-    "glossaryCleared": "用語集をクリアしました"
+    "glossaryCleared": "用語集をクリアしました",
+    "syncRetrying": "同期を一時停止、再試行中…",
+    "syncStopped": "同期を停止しました。手動で再開してください",
+    "resumeSync": "同期を再開"
   },
   "timeline": {
     "title": "LRC タイムライン編集",

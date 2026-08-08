@@ -295,7 +295,7 @@ export default function SongViewPage() {
   const canEdit = song?.permissions?.can_edit === true;
   const lyricsSourceKey = song ? LYRICS_SOURCE_KEYS[song.lyrics_source] : undefined;
   const lyricsSourceLabel = song ? (lyricsSourceKey ? t(lyricsSourceKey) : song.lyrics_source) : '';
-  const { spotify, activeLine, followPlaying, setFollowPlaying, pipWindowRef } = sync;
+  const { spotify, syncState, resumeSync, activeLine, followPlaying, setFollowPlaying, pipWindowRef } = sync;
   const handleOpenPiP = () => data.openPiP(furiganaLines, song, activeLine, pipWindowRef, lineTimestamps);
   const isSameSong = !!(spotify?.is_playing && spotify.track && song && (
     song.spotify_track_id && spotify.track.id
@@ -641,7 +641,20 @@ export default function SongViewPage() {
 
         {/* Spotify playback status stays mounted so loading/resolved state cannot move the lyrics layout. */}
         <div className="mt-2 sm:mt-4 flex min-h-7 items-center gap-2">
-            {spotifyConnected === null || !spotify ? (
+            {syncState === 'stopped' ? (
+              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--warning-muted)] border border-[var(--warning)]/40 px-2 sm:px-3 py-1">
+                <span className="inline-block h-2 w-2 rounded-full bg-[var(--warning)]" />
+                <span className="text-xs text-[var(--warning)]">{t('song.syncStopped')}</span>
+                <button onClick={() => void resumeSync()} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--warning)]/20 text-[var(--warning)] hover:bg-[var(--warning)]/30 transition-colors shrink-0">
+                  <RefreshCw className="h-3 w-3" /><span>{t('song.resumeSync')}</span>
+                </button>
+              </div>
+            ) : syncState === 'retrying' ? (
+              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--warning-muted)] border border-[var(--warning)]/30 px-2 sm:px-3 py-1">
+                <Loader2 className="h-3 w-3 animate-spin text-[var(--warning)]" />
+                <span className="text-xs text-[var(--warning)]">{t('song.syncRetrying')}</span>
+              </div>
+            ) : spotifyConnected === null || !spotify ? (
               <div className="song-playing-surface flex items-center gap-1.5 sm:gap-2 rounded-full px-2 sm:px-3 py-1">
                 {spotifyConnected === null ? <Loader2 className="h-3 w-3 animate-spin text-[var(--muted-foreground)]" /> : <span className="inline-block h-2 w-2 rounded-full bg-[var(--muted-foreground)]" />}
                 <span className="text-xs text-[var(--muted-foreground)] truncate max-w-[180px] sm:max-w-none">

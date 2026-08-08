@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
-import { Music, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User, Star, FolderPlus, Trash, LayoutGrid, List, Disc3 } from 'lucide-react';
+import { Music, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User, Star, FolderPlus, Trash, LayoutGrid, List, Disc3, RefreshCw } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import SongItemCard from '@/components/SongItemCard';
 import NowPlayingMetadata from '@/components/NowPlayingMetadata';
@@ -49,7 +49,7 @@ export default function HomePage() {
   // A cached session renders immediately; the hook revalidates it on every page entry.
   const spotify = session?.spotify ?? null;
   const currentUser = session?.user ?? null;
-  const nowPlaying = useNowPlaying(!!spotify?.connected);
+  const { data: nowPlaying, syncState: nowPlayingSync, resumeSync: resumeNowPlaying } = useNowPlaying(!!spotify?.connected);
   const [importing, setImporting] = useState(false);
   const [toast, setToast] = useState<ToastState>(() => {
     const error = searchParams.get('spotify_error');
@@ -461,6 +461,27 @@ export default function HomePage() {
           )}
         </div>
       </div>
+
+      {/* Degraded sync banner (always visible, outside the collapsing now-playing slot) */}
+      {nowPlayingSync === 'stopped' && (
+        <div className="mb-5 rounded-lg bg-[var(--card)] border border-[var(--warning)]/40 p-3 sm:p-4 flex items-center gap-3">
+          <span className="inline-block h-2 w-2 rounded-full bg-[var(--warning)]" />
+          <span className="text-xs text-[var(--warning)] truncate">{t('song.syncStopped')}</span>
+          <button
+            onClick={() => void resumeNowPlaying()}
+            className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium bg-[var(--primary)] text-[var(--primary-foreground)] transition-opacity hover:opacity-90 shrink-0"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            <span>{t('song.resumeSync')}</span>
+          </button>
+        </div>
+      )}
+      {nowPlayingSync === 'retrying' && (
+        <div className="mb-5 rounded-lg bg-[var(--card)] border border-[var(--warning)]/30 p-3 sm:p-4 flex items-center gap-3">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--warning)]" />
+          <span className="text-xs text-[var(--warning)] truncate">{t('song.syncRetrying')}</span>
+        </div>
+      )}
 
       {/* Song list */}
       {loading ? (

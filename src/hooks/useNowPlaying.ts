@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { MAX_CONSECUTIVE_ERRORS, backoffDelay } from '@/lib/retry-backoff';
 
 export interface NowPlayingData {
   connected: boolean;
@@ -11,11 +12,14 @@ export interface NowPlayingData {
   error?: number;
 }
 
+export type SyncState = 'connected' | 'retrying' | 'stopped';
+
 interface DiffMessage {
   seq: number;
   c: number;   // checksum of full data
   d: Partial<NowPlayingData>; // changed fields only
   _full?: boolean; // true when server sends full data
+  _sync?: SyncState; // degraded-state flag pushed by the server poller
 }
 
 const EMPTY: NowPlayingData = { connected: false, is_playing: false, progress_ms: 0, duration_ms: 0, track: null };
@@ -58,22 +62,89 @@ const CLIENT_POLL_INTERVAL_MS = 3000;
  */
 export function useNowPlaying(enabled = true) {
   const [data, setData] = useState<NowPlayingData | null>(null);
+  const [syncState, setSyncState] = useState<SyncState>('connected');
   const [pollMode, setPollMode] = useState<string | null>(null); // null = loading config
   const esRef = useRef<EventSource | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gotMessageRef = useRef(false);
   const localDataRef = useRef<NowPlayingData>(EMPTY);
   const localSeqRef = useRef(0);
   const checksumErrRef = useRef(0);
   const mountedRef = useRef(true);
   const lastMessageTimeRef = useRef(0);
+  const clientErrorsRef = useRef(0);
+  // Mirrors syncState so event handlers (visibility change) can read the latest
+  // value without re-subscribing; never rendered from.
+  const syncStateRef = useRef<SyncState>('connected');
+  // Holds the latest connectSSE so requestFullRefresh can re-establish the
+  // stream without a circular dependency. Updated in an effect, never during render.
+  const connectSSERef = useRef<() => void>(() => {});
 
   const stopClientPolling = useCallback(() => {
     if (pollRef.current) {
-      clearInterval(pollRef.current);
+      clearTimeout(pollRef.current);
       pollRef.current = null;
     }
   }, []);
+
+  /** A successful fetch/poll resets the failure counter and the degraded state. */
+  const handlePollSuccess = useCallback((d: NowPlayingData) => {
+    if (!mountedRef.current) return;
+    clientErrorsRef.current = 0;
+    setSyncState('connected');
+    setData(d);
+    lastMessageTimeRef.current = Date.now();
+  }, []);
+
+  // Holds the latest scheduler so the error path can re-schedule itself (backoff)
+  // without a circular dependency. Updated in an effect, never during render.
+  const scheduleClientPollRef = useRef<(delayMs: number) => void>(() => {});
+
+  const scheduleClientPoll = useCallback((delayMs: number) => {
+    if (!mountedRef.current) return;
+    stopClientPolling();
+    const run = async () => {
+      if (!mountedRef.current) return;
+      try {
+        const res = await fetch('/api/spotify/now-playing');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const d = await res.json();
+        handlePollSuccess(d);
+        // Success → back to the normal poll cadence.
+        scheduleClientPollRef.current(CLIENT_POLL_INTERVAL_MS);
+      } catch {
+        const count = ++clientErrorsRef.current;
+        if (count >= MAX_CONSECUTIVE_ERRORS) {
+          // Permanently stop — sync can only resume via user action (resumeSync).
+          setSyncState('stopped');
+          return;
+        }
+        setSyncState('retrying');
+        scheduleClientPollRef.current(backoffDelay(count));
+      }
+    };
+    // Delay 0 → run immediately; otherwise schedule with backoff.
+    if (delayMs <= 0) {
+      void run();
+    } else {
+      pollRef.current = setTimeout(() => { void run(); }, delayMs);
+    }
+  }, [handlePollSuccess, stopClientPolling]);
+
+  useEffect(() => {
+    scheduleClientPollRef.current = scheduleClientPoll;
+  });
+
+  // Keep the syncState mirror up to date (for event handlers).
+  useEffect(() => {
+    syncStateRef.current = syncState;
+  }, [syncState]);
+
+  // ─── Client mode: polling with exponential backoff ───
+  const startClientPolling = useCallback(() => {
+    if (pollRef.current) return;
+    scheduleClientPoll(0);
+  }, [scheduleClientPoll]);
 
   // ─── Fetch poll mode config on mount (only when enabled) ───
   useEffect(() => {
@@ -92,46 +163,14 @@ export function useNowPlaying(enabled = true) {
     return () => { mountedRef.current = false; };
   }, [enabled, stopClientPolling]);
 
-  // ─── Client mode: simple polling ───
-  const startClientPolling = useCallback(() => {
-    if (pollRef.current) return;
-
-    const poll = async () => {
-      if (!mountedRef.current) return;
-      try {
-        const res = await fetch('/api/spotify/now-playing');
-        const d = await res.json();
-        if (mountedRef.current) {
-          setData(d);
-          lastMessageTimeRef.current = Date.now();
-        }
-      } catch { /* */ }
-    };
-
-    poll();
-    pollRef.current = setInterval(poll, CLIENT_POLL_INTERVAL_MS);
-  }, []);
-
   // ─── Server mode: SSE with diff protocol ───
   const startFallback = useCallback((reason: string) => {
     // In server mode, fall back to REST polling if SSE fails
     if (pollRef.current) return;
     console.warn(`[now-playing] SSE ${reason}, falling back to polling`);
 
-    const poll = async () => {
-      try {
-        const res = await fetch('/api/spotify/now-playing');
-        const d = await res.json();
-        if (mountedRef.current) {
-          setData(d);
-          lastMessageTimeRef.current = Date.now();
-        }
-      } catch { /* */ }
-    };
-
-    poll();
-    pollRef.current = setInterval(poll, 3000);
-  }, []);
+    scheduleClientPoll(0);
+  }, [scheduleClientPoll]);
 
   /** Request full refresh from SSE endpoint */
   const requestFullRefresh = useCallback(() => {
@@ -152,12 +191,12 @@ export function useNowPlaying(enabled = true) {
         if (fullData && typeof fullData.connected === 'boolean') {
           localDataRef.current = fullData;
           localSeqRef.current = msg.seq;
-          setData(fullData);
+          handlePollSuccess(fullData);
+          if (msg._sync) setSyncState(msg._sync);
           gotMessageRef.current = true;
-          lastMessageTimeRef.current = Date.now();
           stopClientPolling();
           es.close();
-          if (mountedRef.current) connectSSE();
+          if (mountedRef.current) connectSSERef.current();
         }
       } catch { /* */ }
     };
@@ -166,7 +205,7 @@ export function useNowPlaying(enabled = true) {
       es.close();
       if (!gotMessageRef.current) startFallback('full refresh failed');
     };
-  }, [startFallback, stopClientPolling]);
+  }, [handlePollSuccess, startFallback, stopClientPolling]);
 
   const connectSSE = useCallback(() => {
     if (!mountedRef.current) return;
@@ -197,6 +236,7 @@ export function useNowPlaying(enabled = true) {
         if (msg.d && typeof msg.d.connected === 'boolean' && msg.d.progress_ms !== undefined) {
           localDataRef.current = msg.d as unknown as NowPlayingData;
           localSeqRef.current = msg.seq;
+          setSyncState(msg._sync ?? 'connected');
           setData(localDataRef.current);
           return;
         }
@@ -219,6 +259,7 @@ export function useNowPlaying(enabled = true) {
         localDataRef.current = candidate;
         localSeqRef.current = msg.seq;
         checksumErrRef.current = 0;
+        if (msg._sync) setSyncState(msg._sync);
         setData(candidate);
       } catch { /* ignore parse errors */ }
     };
@@ -249,6 +290,30 @@ export function useNowPlaying(enabled = true) {
     };
   }, [startFallback, stopClientPolling, requestFullRefresh]);
 
+  useEffect(() => {
+    connectSSERef.current = connectSSE;
+  });
+
+  /** Manually resume a permanently-stopped sync (user action only). */
+  const resumeSync = useCallback(async () => {
+    if (!mountedRef.current) return;
+    clientErrorsRef.current = 0;
+    setSyncState('connected');
+    stopClientPolling();
+    if (pollMode === 'client') {
+      scheduleClientPoll(0);
+    } else {
+      // Server mode: ask the server poller to resume, then reconnect SSE.
+      try { await fetch('/api/spotify/now-playing/resume', { method: 'POST' }); } catch { /* ignore */ }
+      gotMessageRef.current = false;
+      esRef.current?.close();
+      esRef.current = null;
+      localSeqRef.current = 0;
+      checksumErrRef.current = 0;
+      connectSSE();
+    }
+  }, [pollMode, scheduleClientPoll, stopClientPolling, connectSSE]);
+
   // ─── Start appropriate mode once config is loaded ───
   useEffect(() => {
     if (!enabled || pollMode === null) return; // disabled or still loading config
@@ -275,6 +340,9 @@ export function useNowPlaying(enabled = true) {
     const handleVisibility = () => {
       if (!mountedRef.current) return;
       if (document.visibilityState !== 'visible') return;
+
+      // Sync was manually stopped — do NOT auto-resume; only the user can resume it.
+      if (clientErrorsRef.current >= MAX_CONSECUTIVE_ERRORS || syncStateRef.current === 'stopped') return;
 
       const lastMsg = lastMessageTimeRef.current;
       const stale = !lastMsg || (Date.now() - lastMsg > STALE_THRESHOLD_MS);
@@ -307,5 +375,5 @@ export function useNowPlaying(enabled = true) {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [enabled, pollMode, connectSSE, startClientPolling, stopClientPolling]);
 
-  return enabled ? data : null;
+  return { data: enabled ? data : null, syncState: enabled ? syncState : 'connected', resumeSync };
 }
