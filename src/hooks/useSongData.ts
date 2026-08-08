@@ -194,6 +194,7 @@ export function useSongData(id: string): UseSongDataReturn {
   // but never fight an explicit user collapse during the same session.
   const reasoningUserHiddenRef = useRef(false);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [importAlert, setImportAlert] = useState<ImportAlertState | null>(null);
   const [syncLines, setSyncLines] = useState<ReturnType<typeof parseLrc>>([]);
@@ -326,9 +327,18 @@ export function useSongData(id: string): UseSongDataReturn {
   }, [song, furiganaLines]);
 
   const showToast = useCallback((type: 'success' | 'error' | 'info', msg: string, actionLabel?: string, onAction?: () => void) => {
+    // Clear any pending timer from a previous toast so it cannot dismiss the new one early.
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ type, msg, actionLabel, onAction });
     // Action toasts stay longer so the user has time to react.
-    setTimeout(() => setToast(null), actionLabel ? 8000 : 3000);
+    toastTimerRef.current = setTimeout(() => {
+      toastTimerRef.current = null;
+      setToast(null);
+    }, actionLabel ? 8000 : 3000);
+  }, []);
+
+  useEffect(() => () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
   }, []);
 
   const updateReadingPreference = useCallback(async (payload: {

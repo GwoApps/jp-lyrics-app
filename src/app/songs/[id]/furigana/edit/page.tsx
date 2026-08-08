@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, RotateCcw, Sparkles } from 'lucide-react';
@@ -51,10 +51,20 @@ export default function FuriganaEditPage() {
   const [saving, setSaving] = useState(false);
   const [reconverting, setReconverting] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((type: 'success' | 'error', msg: string) => {
+    // Clear any pending timer from a previous toast so it cannot dismiss the new one early.
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ type, msg });
-    setTimeout(() => setToast(null), 3000);
+    toastTimerRef.current = setTimeout(() => {
+      toastTimerRef.current = null;
+      setToast(null);
+    }, 3000);
+  }, []);
+
+  useEffect(() => () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
   }, []);
 
   const parseFurigana = useCallback((str: string): FuriganaLine[] => {

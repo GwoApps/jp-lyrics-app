@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Eraser } from 'lucide-react';
@@ -41,15 +41,25 @@ export default function EditSongPage() {
   const [loading, setLoading] = useState(true);
   const [clearingKey, setClearingKey] = useState<SubDataKey | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const coverTheme = useCoverTheme(song?.cover_url);
   const coverColor = coverTheme.palette;
   const songThemeStyle = coverTheme.style;
 
   const showToast = (type: 'success' | 'error', msg: string) => {
+    // Clear any pending timer from a previous toast so it cannot dismiss the new one early.
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ type, msg });
-    setTimeout(() => setToast(null), 3000);
+    toastTimerRef.current = setTimeout(() => {
+      toastTimerRef.current = null;
+      setToast(null);
+    }, 3000);
   };
+
+  useEffect(() => () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (!id) return;
