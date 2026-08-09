@@ -326,6 +326,14 @@
     "clearTime": "清除时间",
     "unsavedStatus": "有尚未保存的时间轴修改",
     "savedStatus": "当前进度已保存",
+    "timestampsNotOrdered": "第 {line} 行必须晚于第 {previousLine} 行",
+    "saveBlockedServer": "服务器拒绝保存：时间戳不是严格递增的。",
+    "conflictBanner": "发现 {count} 处时间顺序问题",
+    "conflictHint": "歌词行的时间不得早于或等于前一行已标注时间，否则播放高亮会跳行。",
+    "sortByTime": "按时间排序",
+    "sortConfirmTitle": "按时间戳对歌词行排序？",
+    "sortConfirmBody": "这会按时间戳重新排列歌词行且无法自动撤销；未标注时间的行会移到末尾。仅当当前顺序确实有误时才执行。",
+    "sortConfirmApply": "按时间排序",
     "staleTitle": "歌词已在其他位置修改",
     "staleBody": "打开此时间轴后，歌词已在其他页面被更新。保存会覆盖新歌词，因此未保存当前时间轴。",
     "reload": "重新载入新歌词",
@@ -371,7 +379,8 @@
     "subDataTitle": "清除歌词相关数据",
     "subDataHint": "删除由歌词派生的注音、翻译、思考过程与术语表。歌词内容变化时会自动失效，这里可随时手动清除。",
     "subDataPresent": "有数据",
-    "subDataEmpty": "无数据"
+    "subDataEmpty": "无数据",
+    "timestampsNotOrdered": "LRC 时间戳必须严格递增。请检查时间相同或非递增的行。"
   },
   "new": {
     "title": "添加新歌曲",
@@ -414,7 +423,8 @@
     "linkcore_fetch_failed": "无法获取 Linkcore 歌词页面，请稍后重试",
     "linkcore_invalid_content_type": "该 Linkcore 链接不是歌词页面",
     "lyrics_not_found": "该 Linkcore 页面没有可导入的歌词",
-    "linkcoreImportFailed": "导入 Linkcore 歌词失败"
+    "linkcoreImportFailed": "导入 Linkcore 歌词失败",
+    "timestampsNotOrdered": "LRC 时间戳必须严格递增。请检查时间相同或非递增的行。"
   },
   "furigana": {
     "title": "纠正注音",

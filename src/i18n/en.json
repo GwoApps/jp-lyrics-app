@@ -326,6 +326,14 @@
     "clearTime": "Clear timestamp",
     "unsavedStatus": "Timeline changes have not been saved",
     "savedStatus": "Current progress is saved",
+    "timestampsNotOrdered": "Line {line} must be later than line {previousLine}",
+    "saveBlockedServer": "The server rejected the save: timestamps are not strictly ordered.",
+    "conflictBanner": "{count} timestamp order issue(s) found",
+    "conflictHint": "A line must not be earlier than or equal to the previous timed line, otherwise playback highlighting skips lines.",
+    "sortByTime": "Sort by time",
+    "sortConfirmTitle": "Sort lines by timestamp?",
+    "sortConfirmBody": "This reorders lyric lines by their timestamps and cannot be undone automatically. Lines without a timestamp move to the bottom. Only do this if the current order is wrong.",
+    "sortConfirmApply": "Sort by time",
     "staleTitle": "Lyrics were changed in another view",
     "staleBody": "The lyrics were updated elsewhere after this timeline was opened. Saving would overwrite the newer lyrics, so the timeline was not saved.",
     "reload": "Reload new lyrics",
@@ -371,7 +379,8 @@
     "subDataTitle": "Clear lyrics-derived data",
     "subDataHint": "Remove the furigana, translation, reasoning and glossary derived from these lyrics. They are invalidated automatically when the lyrics change; you can also clear them manually here.",
     "subDataPresent": "Has data",
-    "subDataEmpty": "Empty"
+    "subDataEmpty": "Empty",
+    "timestampsNotOrdered": "LRC timestamps must be strictly increasing. Check lines with identical or non-increasing timestamps."
   },
   "new": {
     "title": "Add New Song",
@@ -414,7 +423,8 @@
     "linkcore_invalid_content_type": "This Linkcore link is not a lyrics page",
     "lyrics_not_found": "No importable lyrics were found on this Linkcore page",
     "linkcoreImportFailed": "Could not import Linkcore lyrics",
-    "readingSchemeHint": "Changing the scheme clears existing annotations and regenerates them with the selected scheme."
+    "readingSchemeHint": "Changing the scheme clears existing annotations and regenerates them with the selected scheme.",
+    "timestampsNotOrdered": "LRC timestamps must be strictly increasing. Check lines with identical or non-increasing timestamps."
   },
   "furigana": {
     "title": "Correct Annotations",

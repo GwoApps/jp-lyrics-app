@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowUpDown,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -33,6 +34,7 @@ import { useNowPlaying } from '@/hooks/useNowPlaying';
 import { useI18n } from '@/lib/i18n';
 import {
   createTimelineDraft,
+  findTimelineConflicts,
   fmtMs,
   fmtTime,
   parseLrcTimestamp,
@@ -76,6 +78,7 @@ export default function TimelineEditorPage() {
   const [saving, setSaving] = useState(false);
   const [offsetDraft, setOffsetDraft] = useState('0');
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [confirmSort, setConfirmSort] = useState(false);
   const [staleConflict, setStaleConflict] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const sourceLyricsRef = useRef('');
@@ -137,6 +140,15 @@ export default function TimelineEditorPage() {
   const dirty = serialized !== initialDraft;
   const markedCount = useMemo(() => lines.filter((line) => line.timeMs != null).length, [lines]);
   const progressPercent = lines.length ? Math.round(markedCount / lines.length * 100) : 0;
+  const conflicts = useMemo(() => findTimelineConflicts(lines), [lines]);
+  const conflictLines = useMemo(() => {
+    const set = new Set<number>();
+    for (const conflict of conflicts) {
+      set.add(conflict.index);
+      set.add(conflict.previousIndex);
+    }
+    return set;
+  }, [conflicts]);
   const currentLine = lines[currentIndex];
 
   const spotifyMatches = !!(song && nowPlaying?.track
@@ -156,7 +168,7 @@ export default function TimelineEditorPage() {
 
   const showToast = useCallback((type: 'success' | 'error', msg: string) => {
     setToast({ type, msg });
-    window.setTimeout(() => setToast(null), 2500);
+    window.setTimeout(() => setToast(null), 3000);
   }, []);
 
   const selectLine = useCallback((index: number) => {
@@ -198,6 +210,16 @@ export default function TimelineEditorPage() {
     })));
     setOffsetDraft('0');
   };
+
+  /** Sort marked rows by timestamp; only invoked after explicit user confirmation. */
+  const applySortByTime = useCallback(() => {
+    setLines((current) => [...current].sort((a, b) => {
+      if (a.timeMs == null) return b.timeMs == null ? 0 : 1;
+      if (b.timeMs == null) return -1;
+      return a.timeMs - b.timeMs;
+    }));
+    setConfirmSort(false);
+  }, []);
 
   const resetDraft = () => {
     if (!song) return;
@@ -266,6 +288,15 @@ export default function TimelineEditorPage() {
 
   const save = useCallback(async () => {
     if (!song || lines.length === 0) return;
+    if (conflicts.length > 0) {
+      const first = conflicts[0];
+      selectLine(first.index);
+      showToast('error', t('timelineWorkspace.timestampsNotOrdered', {
+        line: String(first.line),
+        previousLine: String(first.previousLine),
+      }));
+      return;
+    }
     setSaving(true);
     try {
       const response = await fetch(`/api/songs/${id}`, {
@@ -274,6 +305,11 @@ export default function TimelineEditorPage() {
         body: JSON.stringify({ lyrics_synced: serializeTimelineDraft(lines), source_lyrics: sourceLyricsRef.current }),
       });
       if (!response.ok) {
+        const data = await response.json().catch(() => null) as { error?: string } | null;
+        if (data?.error === 'timestamps_not_ordered') {
+          showToast('error', t('timelineWorkspace.saveBlockedServer'));
+          return;
+        }
         if (response.status === 409) {
           setStaleConflict(true);
           return;
@@ -296,7 +332,7 @@ export default function TimelineEditorPage() {
     } finally {
       setSaving(false);
     }
-  }, [id, lines, markedCount, showToast, song, t]);
+  }, [conflicts, id, lines, markedCount, selectLine, showToast, song, t]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -413,6 +449,20 @@ export default function TimelineEditorPage() {
           <h2 className="text-sm font-medium">{t('timelineWorkspace.lyricLines')}</h2>
           <p className="mt-1 text-[11px] text-[var(--muted-foreground)]">{t('timelineWorkspace.listHint')}</p>
         </div>
+        {conflicts.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-[var(--destructive)]/20 bg-[var(--destructive)]/5 px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="flex items-start gap-2 text-xs font-medium text-[var(--destructive)]">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{t('timelineWorkspace.conflictBanner', { count: String(conflicts.length) })}</span>
+              </p>
+              <p className="mt-1 text-[11px] text-[var(--muted-foreground)]">{t('timelineWorkspace.conflictHint')}</p>
+            </div>
+            <button type="button" onClick={() => setConfirmSort(true)} className="song-accent-button inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium">
+              <ArrowUpDown className="h-3.5 w-3.5" />{t('timelineWorkspace.sortByTime')}
+            </button>
+          </div>
+        )}
         <div className="max-h-[58vh] overflow-y-auto p-2 sm:p-3">
           {lines.map((line, index) => (
             <TimelineLineRow
@@ -420,6 +470,7 @@ export default function TimelineEditorPage() {
               line={line}
               index={index}
               selected={index === currentIndex}
+              conflicted={conflictLines.has(index)}
               canSeek={!!nowPlaying?.connected}
               registerRow={(el) => { rowRefs.current[index] = el; }}
               onSelect={() => selectLine(index)}
@@ -447,6 +498,7 @@ export default function TimelineEditorPage() {
 
       {toast && <Toast type={toast.type} message={toast.msg} />}
       <ConfirmDialog open={confirmLeave} title={t('timeline.unsavedTitle')} body={t('timeline.unsavedBody')} confirmLabel={t('timeline.discard')} cancelLabel={t('common.cancel')} variant="danger" onConfirm={() => router.push(`/songs/${id}`)} onCancel={() => setConfirmLeave(false)} />
+      <ConfirmDialog open={confirmSort} title={t('timelineWorkspace.sortConfirmTitle')} body={t('timelineWorkspace.sortConfirmBody')} confirmLabel={t('timelineWorkspace.sortConfirmApply')} cancelLabel={t('common.cancel')} onConfirm={applySortByTime} onCancel={() => setConfirmSort(false)} />
       <ConfirmDialog open={staleConflict} title={t('timelineWorkspace.staleTitle')} body={t('timelineWorkspace.staleBody')} confirmLabel={t('timelineWorkspace.reload')} cancelLabel={t('timelineWorkspace.exportDraft')} variant="default" onConfirm={() => void reloadFromServer()} onCancel={() => { exportDraft(); setStaleConflict(false); }} />
     </div>
   );

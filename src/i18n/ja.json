@@ -326,6 +326,14 @@
     "clearTime": "時刻を消去",
     "unsavedStatus": "保存していないタイムライン変更があります",
     "savedStatus": "現在の進捗は保存済みです",
+    "timestampsNotOrdered": "{line} 行目は {previousLine} 行目より後の時刻にしてください",
+    "saveBlockedServer": "サーバーが保存を拒否しました：タイムスタンプが厳密に昇順ではありません。",
+    "conflictBanner": "時間順序の問題が {count} 件あります",
+    "conflictHint": "各行の時刻は前の時刻指定行より遅く（等しくない）必要があります。そうでないと再生ハイライトが行を飛ばします。",
+    "sortByTime": "時刻順に並べ替え",
+    "sortConfirmTitle": "歌詞行をタイムスタンプ順に並べ替えますか？",
+    "sortConfirmBody": "タイムスタンプに従って歌詞行を並べ替えます（自動では元に戻せません）。時刻未設定の行は末尾に移動します。現在の順序が誤っている場合のみ実行してください。",
+    "sortConfirmApply": "時刻順に並べ替え",
     "staleTitle": "歌詞が別の場所で変更されました",
     "staleBody": "このタイムラインを開いた後に、歌詞が別のページで更新されました。保存すると新しい歌詞を上書きしてしまうため、保存していません。",
     "reload": "新しい歌詞を再読み込み",
@@ -371,7 +379,8 @@
     "subDataTitle": "歌詞関連データをクリア",
     "subDataHint": "歌詞から生成されたふりがな・翻訳・思考プロセス・用語集を削除します。歌詞が変わると自動的に無効化されますが、ここで手動でクリアすることもできます。",
     "subDataPresent": "データあり",
-    "subDataEmpty": "データなし"
+    "subDataEmpty": "データなし",
+    "timestampsNotOrdered": "LRC のタイムスタンプは厳密に昇順である必要があります。同一または非昇順の行を確認してください。"
   },
   "new": {
     "title": "新しい曲を追加",
@@ -414,7 +423,8 @@
     "linkcore_invalid_content_type": "このLinkcore URLは歌詞ページではありません",
     "lyrics_not_found": "このLinkcoreページに取り込める歌詞がありません",
     "linkcoreImportFailed": "Linkcoreの歌詞の取り込みに失敗しました",
-    "readingSchemeHint": "注音方式を切り替えると、既存の注音は消去され、新しい方式で再生成されます。"
+    "readingSchemeHint": "注音方式を切り替えると、既存の注音は消去され、新しい方式で再生成されます。",
+    "timestampsNotOrdered": "LRC のタイムスタンプは厳密に昇順である必要があります。同一または非昇順の行を確認してください。"
   },
   "furigana": {
     "title": "注音を修正",

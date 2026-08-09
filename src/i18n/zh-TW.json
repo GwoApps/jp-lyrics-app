@@ -326,6 +326,14 @@
     "clearTime": "清除時間",
     "unsavedStatus": "有尚未儲存的時間軸修改",
     "savedStatus": "目前進度已儲存",
+    "timestampsNotOrdered": "第 {line} 行必須晚於第 {previousLine} 行",
+    "saveBlockedServer": "伺服器拒絕儲存：時間戳不是嚴格遞增的。",
+    "conflictBanner": "發現 {count} 處時間順序問題",
+    "conflictHint": "歌詞行的時間不得早於或等於前一行已標註時間，否則播放高亮會跳行。",
+    "sortByTime": "依時間排序",
+    "sortConfirmTitle": "依時間戳對歌詞行排序？",
+    "sortConfirmBody": "這會依時間戳重新排列歌詞行且無法自動復原；未標註時間的行會移到末尾。僅在目前順序確實有誤時才執行。",
+    "sortConfirmApply": "依時間排序",
     "staleTitle": "歌詞已在其他位置修改",
     "staleBody": "開啟此時間軸後，歌詞已在其他頁面被更新。儲存會覆蓋新歌詞，因此未儲存目前時間軸。",
     "reload": "重新載入新歌詞",
@@ -371,7 +379,8 @@
     "subDataTitle": "清除歌詞相關資料",
     "subDataHint": "刪除由歌詞衍生的注音、翻譯、思考過程與術語表。歌詞內容變更時會自動失效，這裡可隨時手動清除。",
     "subDataPresent": "有資料",
-    "subDataEmpty": "無資料"
+    "subDataEmpty": "無資料",
+    "timestampsNotOrdered": "LRC 時間戳必須嚴格遞增。請檢查時間相同或非遞增的行。"
   },
   "new": {
     "title": "新增歌曲",
@@ -414,7 +423,8 @@
     "linkcore_invalid_content_type": "此 Linkcore 連結不是歌詞頁面",
     "lyrics_not_found": "此 Linkcore 頁面沒有可匯入的歌詞",
     "linkcoreImportFailed": "匯入 Linkcore 歌詞失敗",
-    "readingSchemeHint": "切換注音方案後，現有注音會被清除並按新方案重新產生。"
+    "readingSchemeHint": "切換注音方案後，現有注音會被清除並按新方案重新產生。",
+    "timestampsNotOrdered": "LRC 時間戳必須嚴格遞增。請檢查時間相同或非遞增的行。"
   },
   "furigana": {
     "title": "糾正注音",

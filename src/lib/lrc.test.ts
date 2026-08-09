@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createTimelineDraft, extractLrcMetadata, getLrcTextLines, hasSameLrcText, isLrcMetadataLine, mapTimelineTimestamps, offsetLrcLines, parseLrc, resolveLrcTextUpdate, resolveTimelineSave, serializeLrc, serializeTimelineDraft, updateLrcLineTime } from './lrc.ts';
+import { createTimelineDraft, extractLrcMetadata, findLrcConflicts, findTimelineConflicts, getLrcTextLines, hasSameLrcText, isLrcMetadataLine, mapTimelineTimestamps, offsetLrcLines, parseLrc, resolveLrcTextUpdate, resolveTimelineSave, serializeLrc, serializeTimelineDraft, updateLrcLineTime } from './lrc.ts';
 
 test('offsetLrcLines shifts timestamps and clamps at zero', () => {
   const lines = parseLrc('[00:00.250]first\n[01:02.345]second');
@@ -155,6 +155,59 @@ test('first partial annotation preserves the original plain lyric formatting', (
     resolveLrcTextUpdate('first\n\nsecond\nthird', '', '[00:01.000]first\nsecond\nthird'),
     { lyricsRaw: 'first\n\nsecond\nthird', contentChanged: false },
   );
+});
+
+test('findTimelineConflicts reports every non-increasing timestamp', () => {
+  const draft = [
+    { text: 'a', timeMs: 3000 },
+    { text: 'b', timeMs: 2500 },
+    { text: 'c', timeMs: 2500 },
+    { text: 'd', timeMs: null },
+    { text: 'e', timeMs: 2400 },
+    { text: 'f', timeMs: 9000 },
+  ];
+  assert.deepEqual(findTimelineConflicts(draft), [
+    { index: 1, line: 2, previousIndex: 0, previousLine: 1, timeMs: 2500, previousTimeMs: 3000 },
+    { index: 2, line: 3, previousIndex: 1, previousLine: 2, timeMs: 2500, previousTimeMs: 2500 },
+    { index: 4, line: 5, previousIndex: 2, previousLine: 3, timeMs: 2400, previousTimeMs: 2500 },
+  ]);
+});
+
+test('findTimelineConflicts skips untimed rows and accepts a monotonic draft', () => {
+  const draft = [
+    { text: 'a', timeMs: null },
+    { text: 'b', timeMs: 1000 },
+    { text: 'c', timeMs: null },
+    { text: 'd', timeMs: 2000 },
+  ];
+  assert.deepEqual(findTimelineConflicts(draft), []);
+  assert.deepEqual(findTimelineConflicts([{ text: 'x', timeMs: null }]), []);
+  assert.deepEqual(findTimelineConflicts([]), []);
+});
+
+test('findTimelineConflicts can ignore equal timestamps (offset/clamp noise)', () => {
+  const draft = [
+    { text: 'a', timeMs: 0 },
+    { text: 'b', timeMs: 0 },
+    { text: 'c', timeMs: 1000 },
+  ];
+  assert.deepEqual(findTimelineConflicts(draft), [
+    { index: 1, line: 2, previousIndex: 0, previousLine: 1, timeMs: 0, previousTimeMs: 0 },
+  ]);
+  assert.deepEqual(findTimelineConflicts(draft, true), []);
+});
+
+test('findLrcConflicts validates a serialized LRC string like the highlight engine', () => {
+  const lrc = '[00:03.000]a\n[00:02.500]b\n[00:02.500]c\n[00:09.000]d';
+  assert.deepEqual(findLrcConflicts(lrc), [
+    { index: 1, line: 2, previousIndex: 0, previousLine: 1, timeMs: 2500, previousTimeMs: 3000 },
+    { index: 2, line: 3, previousIndex: 1, previousLine: 2, timeMs: 2500, previousTimeMs: 2500 },
+  ]);
+  assert.deepEqual(findLrcConflicts('[00:01.000]a\n[00:02.000]b'), []);
+  // Untimed rows and metadata tags are tolerated and ignored.
+  assert.deepEqual(findLrcConflicts('[00:02.000]b\nplain line\n[00:01.000]a'), [
+    { index: 2, line: 3, previousIndex: 0, previousLine: 1, timeMs: 1000, previousTimeMs: 2000 },
+  ]);
 });
 
 test('timeline timestamps stay aligned when rendered lyrics preserve blank separator rows', () => {

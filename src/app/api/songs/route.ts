@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { getDB, schema, sql } from '@/lib/db';
-import { parseLrc } from '@/lib/lrc';
+import { parseLrc, findLrcConflicts } from '@/lib/lrc';
 import { getAuthUser } from '@/lib/auth';
 import { getSpotifyTrack } from '@/lib/spotify';
 import type { SongListItem } from '@/lib/types';
@@ -102,6 +102,11 @@ export async function POST(request: NextRequest) {
   }
   if (reading_scheme !== undefined && reading_scheme !== 'ja-kana' && reading_scheme !== 'yue-jyutping') {
     return NextResponse.json({ error: 'invalid_reading_scheme' }, { status: 400 });
+  }
+  // Reject LRC whose timestamps are not strictly increasing so the playback
+  // highlight engine can rely on monotonic ordering.
+  if (lyrics_synced !== undefined && (typeof lyrics_synced !== 'string' || findLrcConflicts(lyrics_synced).length > 0)) {
+    return NextResponse.json({ error: 'timestamps_not_ordered' }, { status: 400 });
   }
 
   const id = uuidv4();
