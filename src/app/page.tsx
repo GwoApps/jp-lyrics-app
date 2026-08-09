@@ -26,6 +26,17 @@ import { groupSongsByAlbum } from '@/lib/song-albums';
 
 type ToastState = { type: 'success' | 'error'; msg: string } | null;
 type ImportAlertState = { message: string; manualCreateUrl?: string } | null;
+/** Pending low-confidence import candidate waiting for explicit user confirmation. */
+interface ImportReviewState {
+  title: string;
+  artist: string;
+  spotifyTrackId?: string;
+  source: string;
+  confidence: number;
+  lines: number;
+  preview: string;
+  synced: boolean;
+}
 const EMPTY_SONG_IDS = new Set<string>();
 
 const SONG_VIEW_MODE_KEY = 'jplrc:songs:view-mode';
@@ -72,6 +83,7 @@ export default function HomePage() {
   });
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [importAlert, setImportAlert] = useState<ImportAlertState>(null);
+  const [importReview, setImportReview] = useState<ImportReviewState | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [songViewMode, setSongViewMode] = useState<SongViewMode>(getSongViewMode);
@@ -213,6 +225,20 @@ export default function HomePage() {
         body: JSON.stringify({ title: nowPlaying.track.name, artist: nowPlaying.track.artist, spotify_track_id: nowPlaying.track.id }),
       });
       const data = await res.json();
+      if (data.needsReview) {
+        // Low-confidence candidate — show the summary and ask before saving.
+        setImportReview({
+          title: nowPlaying.track.name,
+          artist: nowPlaying.track.artist,
+          spotifyTrackId: nowPlaying.track.id,
+          source: data.source,
+          confidence: data.confidence,
+          lines: data.lines,
+          preview: data.preview,
+          synced: data.synced,
+        });
+        return;
+      }
       if (!res.ok || data.error) {
         setImportAlert({
           message: importErrorMsg(t, data.error, 'home.importErrorDefault'),
@@ -225,6 +251,33 @@ export default function HomePage() {
       showToast('error', t('home.importFailed'));
     } finally {
       setImporting(false);
+    }
+  };
+
+  /** Re-run the import with `confirm_review` after the user accepted the candidate. */
+  const confirmImportReview = async () => {
+    if (!importReview || !nowPlaying?.track) return;
+    setImporting(true);
+    try {
+      const res = await fetch('/api/songs/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: importReview.title, artist: importReview.artist, spotify_track_id: importReview.spotifyTrackId ?? nowPlaying.track.id, confirm_review: true }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setImportAlert({
+          message: importErrorMsg(t, data.error, 'home.importErrorDefault'),
+          manualCreateUrl: buildManualCreateUrl(data),
+        });
+        return;
+      }
+      router.push(`/songs/${data.id}`);
+    } catch {
+      showToast('error', t('home.importFailed'));
+    } finally {
+      setImporting(false);
+      setImportReview(null);
     }
   };
 
@@ -605,6 +658,22 @@ export default function HomePage() {
           if (url) router.push(url);
         }}
         onCancel={() => setImportAlert(null)}
+      />
+
+      <ConfirmDialog
+        open={!!importReview}
+        title={t('home.importReviewTitle')}
+        body={importReview ? t('home.importReviewBody', {
+          title: importReview.title,
+          source: importReview.source,
+          confidence: String(importReview.confidence),
+          lines: String(importReview.lines),
+          preview: importReview.preview,
+        }) : ''}
+        confirmLabel={t('home.importReviewConfirm')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={() => void confirmImportReview()}
+        onCancel={() => setImportReview(null)}
       />
     </div>
   );

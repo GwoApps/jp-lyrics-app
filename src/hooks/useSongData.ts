@@ -70,6 +70,7 @@ interface SongData {
   spotify_canonical_artist?: string | null;
   lyrics_source: string;
   lyrics_confidence: number;
+  lyrics_needs_review: number;
   lyrics_fetched_at: string | null;
   permissions?: { can_edit: boolean };
   is_public: number;
@@ -88,6 +89,18 @@ interface ToastState {
 export interface ImportAlertState {
   message: string;
   manualCreateUrl?: string;
+}
+
+/** Pending low-confidence import candidate waiting for explicit user confirmation. */
+export interface ImportReviewState {
+  title: string;
+  artist: string;
+  spotifyTrackId?: string;
+  source: string;
+  confidence: number;
+  lines: number;
+  preview: string;
+  synced: boolean;
 }
 
 export interface UseSongDataReturn {
@@ -133,6 +146,9 @@ export interface UseSongDataReturn {
   setDeleteConfirm: React.Dispatch<React.SetStateAction<boolean>>;
   importAlert: ImportAlertState | null;
   setImportAlert: React.Dispatch<React.SetStateAction<ImportAlertState | null>>;
+  importReview: ImportReviewState | null;
+  setImportReview: React.Dispatch<React.SetStateAction<ImportReviewState | null>>;
+  confirmImportReview: () => Promise<void>;
   fontSize: number;
   setFontSize: React.Dispatch<React.SetStateAction<number>>;
   toast: ToastState | null;
@@ -201,6 +217,7 @@ export function useSongData(id: string): UseSongDataReturn {
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [importAlert, setImportAlert] = useState<ImportAlertState | null>(null);
+  const [importReview, setImportReview] = useState<ImportReviewState | null>(null);
   const [syncLines, setSyncLines] = useState<ReturnType<typeof parseLrc>>([]);
   const [syncing, setSyncing] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -812,6 +829,20 @@ export function useSongData(id: string): UseSongDataReturn {
         body: JSON.stringify({ title: spotify.track.name, artist: spotify.track.artist, spotify_track_id: spotify.track.id }),
       });
       const data = await res.json();
+      if (data.needsReview) {
+        // Low-confidence candidate — show the summary and ask before saving.
+        setImportReview({
+          title: spotify.track.name,
+          artist: spotify.track.artist,
+          spotifyTrackId: spotify.track.id,
+          source: data.source,
+          confidence: data.confidence,
+          lines: data.lines,
+          preview: data.preview,
+          synced: data.synced,
+        });
+        return;
+      }
       if (!res.ok || data.error) {
         const errorKey: Record<string, string> = {
           title_required: 'home.importTitleRequired',
@@ -833,6 +864,33 @@ export function useSongData(id: string): UseSongDataReturn {
       setImporting(false);
     }
   }, [router, t, showToast]);
+
+  /** Re-run the import with `confirm_review` after the user accepted the candidate. */
+  const confirmImportReview = useCallback(async () => {
+    if (!importReview) return;
+    setImporting(true);
+    try {
+      const res = await fetch('/api/songs/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: importReview.title, artist: importReview.artist, spotify_track_id: importReview.spotifyTrackId ?? '', confirm_review: true }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setImportAlert({
+          message: t('song.importFailed'),
+          manualCreateUrl: buildManualCreateUrl(data),
+        });
+        return;
+      }
+      router.push(`/songs/${data.id}`);
+    } catch {
+      showToast('error', t('song.importFailed'));
+    } finally {
+      setImporting(false);
+      setImportReview(null);
+    }
+  }, [importReview, router, t, showToast]);
 
   // PiP is complex and needs external refs, so it's a callback the page calls with context
   const openPiP = useCallback(async (
@@ -1022,6 +1080,9 @@ export function useSongData(id: string): UseSongDataReturn {
     setDeleteConfirm,
     importAlert,
     setImportAlert,
+    importReview,
+    setImportReview,
+    confirmImportReview,
     fontSize,
     setFontSize,
     toast,

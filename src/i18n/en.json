@@ -90,6 +90,11 @@
     "importSpotifyNotConnected": "Please connect Spotify first",
     "importPlaylistFetchFailed": "Failed to fetch playlist",
     "importPlaylistEmpty": "Playlist is empty",
+    "importReviewTitle": "Low-confidence lyrics found",
+    "importReviewBody": "No exact match was found for “{title}”. The candidate (source {source}, {confidence}% confidence, {lines} lines) may not be the original song:\n\n{preview}\n\nSave this song with these lyrics anyway?",
+    "importReviewConfirm": "Save anyway",
+    "playlistImportReviewHeader": "{count} track(s) need review",
+    "playlistImportReviewHint": "These tracks were imported with a low-confidence lyrics match. Open them in the song list to verify and re-sync.",
     "loadFailed": "Failed to load songs. Please check your connection and try again.",
     "retry": "Retry",
     "cachedData": "Showing cached data — refresh failed"
@@ -252,7 +257,8 @@
     "glossaryCleared": "Glossary cleared",
     "syncRetrying": "Sync paused — retrying…",
     "syncStopped": "Sync stopped — resume manually",
-    "resumeSync": "Resume sync"
+    "resumeSync": "Resume sync",
+    "lyricsNeedsReview": "Pending review — this lyrics match was low-confidence"
   },
   "timeline": {
     "title": "LRC Timeline Editor",

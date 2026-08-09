@@ -42,7 +42,9 @@ export function buildNewSongUrl(prefill: SongPrefill): string {
 }
 
 export function buildManualCreateUrl(payload: ImportErrorPayload): string | undefined {
-  if (payload.error !== 'lyrics_not_found' || !payload.manual_create) return undefined;
+  // No candidate at all, or the only candidate fell below the quality floor —
+  // either way let the user create the song manually instead of being stuck.
+  if ((payload.error !== 'lyrics_not_found' && payload.error !== 'lyrics_rejected') || !payload.manual_create) return undefined;
   const data = payload.manual_create;
   const title = typeof data.title === 'string' ? data.title.trim() : '';
   if (!title) return undefined;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, Loader2 } from 'lucide-react';
+import { Download, Loader2, AlertTriangle } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { importErrorMsg } from '@/lib/import-errors';
 import type { SongItem } from '@/lib/types';
@@ -15,6 +15,13 @@ interface PlaylistImportDialogProps {
   onImported: (songs: SongItem[]) => void;
 }
 
+interface PlaylistTrackResult {
+  title: string;
+  artist: string;
+  status: 'imported' | 'skipped' | 'failed';
+  needsReview?: boolean;
+}
+
 /**
  * Spotify playlist URL importer. Owns its URL/result/error state; the page
  * only receives the refreshed song list on success.
@@ -23,7 +30,7 @@ export default function PlaylistImportDialog({ open, onClose, onImported }: Play
   const { t } = useI18n();
   const [url, setUrl] = useState('');
   const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState<{ total: number; imported: number; skipped: number; failed: number } | null>(null);
+  const [result, setResult] = useState<{ total: number; imported: number; skipped: number; failed: number; tracks: PlaylistTrackResult[] } | null>(null);
   const [alert, setAlert] = useState<{ message: string } | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
@@ -55,6 +62,8 @@ export default function PlaylistImportDialog({ open, onClose, onImported }: Play
       setImporting(false);
     }
   };
+
+  const reviewTracks = result?.tracks.filter((track) => track.needsReview) ?? [];
 
   return (
     <>
@@ -90,6 +99,22 @@ export default function PlaylistImportDialog({ open, onClose, onImported }: Play
                 skipped: String(result.skipped),
                 failed: String(result.failed),
               })}
+              {reviewTracks.length > 0 && (
+                <div className="mt-2 rounded-md border border-[var(--border)] bg-[var(--accent)] p-2">
+                  <div className="flex items-center gap-1.5 font-medium text-[var(--warning)]">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    <span>{t('home.playlistImportReviewHeader', { count: String(reviewTracks.length) })}</span>
+                  </div>
+                  <ul className="mt-1.5 space-y-1">
+                    {reviewTracks.map((track, index) => (
+                      <li key={`${track.title}-${index}`} className="truncate">
+                        {track.title}{track.artist ? ` — ${track.artist}` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-1.5 text-[var(--muted-foreground)]">{t('home.playlistImportReviewHint')}</p>
+                </div>
+              )}
             </div>
           )}
         </div>

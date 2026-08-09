@@ -982,6 +982,11 @@ export default function SongViewPage() {
               <div className={`rounded-lg bg-[var(--accent)] px-3 py-2.5 ${(song.lyrics_confidence ?? 100) >= 90 ? 'text-[var(--success)]' : (song.lyrics_confidence ?? 100) >= 75 ? 'text-[var(--warning)]' : 'text-[var(--destructive)]'}`}>
                 {t('song.lyricsConfidence', { confidence: String(song.lyrics_confidence ?? 100) })}
               </div>
+              {song.lyrics_needs_review === 1 && (
+                <div className="rounded-lg bg-[var(--accent)] px-3 py-2.5 text-[var(--warning)]">
+                  {t('song.lyricsNeedsReview')}
+                </div>
+              )}
               {song.spotify_track_id && (
                 <div className="break-all rounded-lg bg-[var(--accent)] px-3 py-2.5 text-[var(--muted-foreground)]">
                   {t('song.spotifyTrackId', { id: song.spotify_track_id })}
@@ -1033,6 +1038,21 @@ export default function SongViewPage() {
           if (url) router.push(url);
         }}
         onCancel={() => data.setImportAlert(null)}
+      />
+      <ConfirmDialog
+        open={!!data.importReview}
+        title={t('home.importReviewTitle')}
+        body={data.importReview ? t('home.importReviewBody', {
+          title: data.importReview.title,
+          source: data.importReview.source,
+          confidence: String(data.importReview.confidence),
+          lines: String(data.importReview.lines),
+          preview: data.importReview.preview,
+        }) : ''}
+        confirmLabel={t('home.importReviewConfirm')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={() => void data.confirmImportReview()}
+        onCancel={() => data.setImportReview(null)}
       />
       <ConfirmDialog
         open={!!data.lowConfidenceSync}

@@ -90,6 +90,11 @@
     "importSpotifyNotConnected": "请先连接 Spotify",
     "importPlaylistFetchFailed": "播放列表获取失败",
     "importPlaylistEmpty": "播放列表为空",
+    "importReviewTitle": "发现低可信度歌词",
+    "importReviewBody": "未找到“{title}”的精确匹配。候选结果（来源 {source}，可信度 {confidence}%，共 {lines} 行）可能不是原曲：\n\n{preview}\n\n仍要保存这首歌并使用这些歌词吗？",
+    "importReviewConfirm": "仍要保存",
+    "playlistImportReviewHeader": "{count} 首曲目待审核",
+    "playlistImportReviewHint": "这些曲目以低可信度歌词匹配导入。请在歌曲列表中打开它们，核对后重新同步。",
     "loadFailed": "歌曲列表加载失败，请检查网络后重试",
     "retry": "重试",
     "cachedData": "当前显示缓存数据，刷新失败"
@@ -252,7 +257,8 @@
     "glossaryCleared": "术语表已清除",
     "syncRetrying": "同步已暂停，正在重试…",
     "syncStopped": "同步已停止，请手动恢复",
-    "resumeSync": "恢复同步"
+    "resumeSync": "恢复同步",
+    "lyricsNeedsReview": "待审核 — 歌词匹配可信度较低"
   },
   "timeline": {
     "title": "LRC 时间轴编辑",

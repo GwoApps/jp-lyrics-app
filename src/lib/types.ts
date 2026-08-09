@@ -19,6 +19,7 @@ export interface Song {
   spotify_canonical_artist?: string | null;
   lyrics_source: string;
   lyrics_confidence: number;
+  lyrics_needs_review: number;
   lyrics_fetched_at?: string | null;
   created_by: string;
   created_by_name: string;
