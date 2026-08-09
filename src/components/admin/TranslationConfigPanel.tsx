@@ -41,8 +41,8 @@ const EMPTY_FORM: FormConfig = { provider: '', base_url: '', api_key: '', model:
 /** Common target-language presets offered in the combobox; admins may still type a custom code. */
 const TARGET_LANG_PRESETS = [
   { value: 'zh-CN', label: '简体中文 (zh-CN)' },
-  { value: 'zh-TW', label: '繁體中文 (zh-TW)' },
-  { value: 'zh-HK', label: '繁體中文（香港）(zh-HK)' },
+  { value: 'zh-TW', label: '繁体中文（中国台湾）(zh-TW)' },
+  { value: 'zh-HK', label: '繁体中文（中国香港）(zh-HK)' },
   { value: 'en-US', label: 'English (en-US)' },
 ] as const;
 
