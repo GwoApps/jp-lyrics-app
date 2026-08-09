@@ -5,6 +5,7 @@ import { and, eq, or } from 'drizzle-orm';
 import { getAuthUser } from '@/lib/auth';
 import { getSpotifyTokenForUser } from '@/lib/spotify';
 import { fetchLyrics } from '@/lib/lyrics-fetcher';
+import { classifyLyricsHit } from '@/lib/lyrics-hit';
 
 interface SpotifyTrack {
   id: string;
@@ -35,6 +36,8 @@ interface TrackResult {
   status: 'imported' | 'skipped' | 'failed';
   source?: string;
   synced?: boolean;
+  /** Set when the candidate was saved but is a low-confidence / non-exact match awaiting review. */
+  needsReview?: boolean;
 }
 
 // POST /api/songs/import-playlist — batch import from Spotify playlist
@@ -126,11 +129,31 @@ export async function POST(request: NextRequest) {
     let lyrics: { synced: string; plain: string } | null = null;
     let source = '';
     let confidence = 0;
+    let needsReview = false;
     try {
       const r = await fetchLyrics(track.title, track.artist);
       lyrics = r.result;
       source = r.source;
       confidence = r.confidence;
+      if (lyrics) {
+        const verdict = classifyLyricsHit({
+          source,
+          confidence,
+          synced: !!lyrics.synced.trim(),
+          hasExistingTimeline: false,
+        });
+        if (verdict === 'rejected') {
+          // Below the hard quality floor — treat as a miss rather than saving a
+          // likely-wrong candidate as if it were a success.
+          lyrics = null;
+          source = '';
+          confidence = 0;
+        } else if (verdict === 'needs_review') {
+          // Keep the batch import moving, but flag the track so the user can
+          // review (and if needed re-sync) it later instead of silently trusting it.
+          needsReview = true;
+        }
+      }
     } catch (error) {
       // Individual track failure — continue to next
       console.warn(`[import-playlist] lyrics fetch failed for "${track.title}" — ${error instanceof Error ? error.message : String(error)}`);
@@ -154,13 +177,14 @@ export async function POST(request: NextRequest) {
         spotifyCanonicalArtist: track.artist,
         lyricsSource: lyrics ? source : 'none',
         lyricsConfidence: lyrics ? confidence : 0,
+        lyricsNeedsReview: needsReview ? 1 : 0,
         lyricsFetchedAt: lyrics ? new Date().toISOString() : null,
         createdBy: user.email,
         createdByName,
       });
 
       const synced = !!(lyrics?.synced);
-      results.push({ title: track.title, artist: track.artist, status: 'imported', source, synced });
+      results.push({ title: track.title, artist: track.artist, status: 'imported', source, synced, ...(needsReview ? { needsReview } : {}) });
       imported++;
     } catch (error) {
       console.warn(`[import-playlist] failed to save "${track.title}" — ${error instanceof Error ? error.message : String(error)}`);

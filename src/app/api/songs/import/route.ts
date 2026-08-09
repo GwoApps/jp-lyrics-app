@@ -4,6 +4,8 @@ import { and, eq, or } from 'drizzle-orm';
 import { getDB, schema } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { fetchLyrics } from '@/lib/lyrics-fetcher';
+import { classifyLyricsHit } from '@/lib/lyrics-hit';
+import { parseLrc } from '@/lib/lrc';
 import { getSpotifyTrack, searchSpotifyTrack } from '@/lib/spotify';
 
 // POST /api/songs/import — import the current/canonical Spotify track through the shared source chain
@@ -17,6 +19,9 @@ export async function POST(request: NextRequest) {
   const title = typeof body.title === 'string' ? body.title.trim() : '';
   const artist = typeof body.artist === 'string' ? body.artist.trim() : '';
   const spotifyTrackId = typeof body.spotify_track_id === 'string' ? body.spotify_track_id.trim() : '';
+  // The first attempt returns a `needs_review` candidate summary; the user must
+  // explicitly opt in (e.g. from the review dialog) before the lyrics are saved.
+  const confirmReview = body.confirm_review === true;
   if (!title) {
     return NextResponse.json({ error: 'title_required' }, { status: 400 });
   }
@@ -65,6 +70,47 @@ export async function POST(request: NextRequest) {
     }, { status: 404 });
   }
 
+  // Same unified quality gate as sync — a low-confidence / non-exact hit must
+  // not be persisted silently. Return the candidate summary and require the
+  // user to confirm before creating the song with these lyrics.
+  const isPlainHit = !result.synced.trim();
+  const verdict = classifyLyricsHit({
+    source,
+    confidence,
+    synced: !isPlainHit,
+    hasExistingTimeline: false,
+  });
+  if (verdict === 'rejected') {
+    return NextResponse.json({
+      error: 'lyrics_rejected',
+      hasLyrics: false,
+      source,
+      confidence,
+      manual_create: {
+        title: spotifyTrack?.title || title,
+        artist: spotifyTrack?.artist || artist,
+        spotify_track_id: spotifyTrack?.id ?? null,
+        spotify_uri: spotifyTrack?.uri ?? null,
+        spotify_album: spotifyTrack?.album ?? null,
+        spotify_duration_ms: spotifyTrack?.durationMs ?? null,
+        cover_url: spotifyTrack?.coverUrl ?? null,
+      },
+    }, { status: 404 });
+  }
+  if (verdict === 'needs_review' && !confirmReview) {
+    return NextResponse.json({
+      error: 'lyrics_needs_review',
+      needsReview: true,
+      hasLyrics: true,
+      source,
+      confidence,
+      synced: !isPlainHit,
+      lines: isPlainHit ? 0 : parseLrc(result.synced).length,
+      preview: result.plain.split('\n').filter((line) => line.trim()).slice(0, 5).join('\n'),
+      spotify_track_id: spotifyTrack?.id ?? null,
+    }, { status: 202 });
+  }
+
   const nameRow = await db.select({ displayName: schema.spotifyAuth.displayName })
     .from(schema.spotifyAuth)
     .where(eq(schema.spotifyAuth.userEmail, user.email))
@@ -86,6 +132,9 @@ export async function POST(request: NextRequest) {
     spotifyCanonicalArtist: spotifyTrack?.artist ?? null,
     lyricsSource: source,
     lyricsConfidence: confidence,
+    // Imported candidates are either accepted outright or explicitly confirmed
+    // by the user via confirm_review — never mark them as pending review.
+    lyricsNeedsReview: 0,
     lyricsFetchedAt: new Date().toISOString(),
     createdBy: user.email,
     createdByName: nameRow?.displayName || '',

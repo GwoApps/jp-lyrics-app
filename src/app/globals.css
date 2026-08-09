@@ -338,7 +338,7 @@ textarea {
 .confirm-dialog-icon { font-size: 36px; text-align: center; margin-bottom: 12px; }
 .confirm-dialog-title { font-size: 15px; font-weight: 600; text-align: center; margin-bottom: 12px; }
 .confirm-dialog-body { font-size: 13px; line-height: 1.75; color: var(--muted-foreground); margin-bottom: 20px; }
-.confirm-dialog-body p { margin-bottom: 8px; }
+.confirm-dialog-body p { margin-bottom: 8px; white-space: pre-line; }
 .confirm-dialog-body p:last-child { margin-bottom: 0; }
 .confirm-dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .confirm-dialog-btn {

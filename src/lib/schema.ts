@@ -23,6 +23,9 @@ export const songs = sqliteTable('songs', {
   spotifyCanonicalArtist: text('spotify_canonical_artist'),
   lyricsSource: text('lyrics_source').notNull().default('manual'),
   lyricsConfidence: integer('lyrics_confidence').notNull().default(100),
+  // 1 when the lyrics came from a low-confidence / non-exact match that the
+  // user has not explicitly accepted yet (see lib/lyrics-hit.ts).
+  lyricsNeedsReview: integer('lyrics_needs_review').notNull().default(0),
   lyricsFetchedAt: text('lyrics_fetched_at'),
   createdBy: text('created_by').notNull().default(''),
   createdByName: text('created_by_name').notNull().default(''),

@@ -88,7 +88,12 @@
     "importInvalidPlaylistUrl": "有効なSpotifyプレイリストURLを入力してください",
     "importSpotifyNotConnected": "Spotifyの接続が必要です",
     "importPlaylistFetchFailed": "プレイリストの取得に失敗しました",
-    "importPlaylistEmpty": "プレイリストが空です"
+    "importPlaylistEmpty": "プレイリストが空です",
+    "importReviewTitle": "信頼度の低い歌詞が見つかりました",
+    "importReviewBody": "「{title}」の完全一致が見つかりませんでした。候補（ソース {source}、信頼度 {confidence}%、{lines} 行）は別の曲の可能性があります：\n\n{preview}\n\nこの歌詞のまま曲を保存しますか？",
+    "importReviewConfirm": "このまま保存",
+    "playlistImportReviewHeader": "{count} 曲は要確認",
+    "playlistImportReviewHint": "これらの曲は信頼度の低い歌詞マッチで取り込まれました。曲一覧で開いて確認し、再同期してください。"
   },
   "song": {
     "notFound": "曲が見つかりません",
@@ -248,7 +253,8 @@
     "glossaryCleared": "用語集をクリアしました",
     "syncRetrying": "同期を一時停止、再試行中…",
     "syncStopped": "同期を停止しました。手動で再開してください",
-    "resumeSync": "同期を再開"
+    "resumeSync": "同期を再開",
+    "lyricsNeedsReview": "要確認 — 歌詞のマッチ信頼度が低い"
   },
   "timeline": {
     "title": "LRC タイムライン編集",

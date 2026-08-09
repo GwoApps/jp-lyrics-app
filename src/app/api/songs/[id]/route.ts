@@ -63,6 +63,7 @@ const songFields = {
   spotify_canonical_artist: schema.songs.spotifyCanonicalArtist,
   lyrics_source: schema.songs.lyricsSource,
   lyrics_confidence: schema.songs.lyricsConfidence,
+  lyrics_needs_review: schema.songs.lyricsNeedsReview,
   lyrics_fetched_at: schema.songs.lyricsFetchedAt,
   created_by: schema.songs.createdBy,
   created_by_name: schema.songs.createdByName,
@@ -185,6 +186,8 @@ export async function PUT(
     ...(lyricsContentChanged ? {
       lyricsSource: 'manual',
       lyricsConfidence: 100,
+      // A manual edit is an explicit human review — clear any pending flag.
+      lyricsNeedsReview: 0,
       lyricsFetchedAt: null,
     } : {}),
     updatedAt: sql`(datetime('now', 'localtime'))`,

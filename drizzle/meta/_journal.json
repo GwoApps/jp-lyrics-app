@@ -64,6 +64,13 @@
       "when": 1786032696311,
       "tag": "0012_add_lyrics_translation_reasoning",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1786040000000,
+      "tag": "0013_add_lyrics_needs_review",
+      "breakpoints": true
     }
   ]
 }
