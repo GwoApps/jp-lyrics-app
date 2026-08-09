@@ -729,6 +729,14 @@ textarea {
   border-color: var(--border);
   transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
 }
+.song-item-card:focus-within {
+  background: color-mix(in srgb, var(--card) 94%, var(--song-card-accent));
+  border-color: color-mix(in srgb, var(--border) 70%, var(--song-card-accent));
+}
+.song-item-card__main:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
 .song-item-card:hover,
 .song-item-card[data-touching="true"] {
   background: color-mix(in srgb, var(--card) 94%, var(--song-card-accent));
@@ -780,6 +788,12 @@ textarea {
   gap: 0.75rem;
   padding: 0.75rem;
 }
+.song-item-card--grid .song-item-card__main {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.75rem;
+  flex: initial;
+}
 .song-item-card--grid .song-item-card__cover {
   width: 100%;
   height: auto;
@@ -796,12 +810,19 @@ textarea {
   .song-item-card--grid { padding: 0.875rem; }
   .song-item-card--grid .song-item-card__cover { border-radius: 0.75rem; }
 }
+.song-item-card:focus-within .song-item-card__pointer-glow {
+  opacity: 0.5;
+}
+.song-item-card:focus-within::after {
+  opacity: 0.42;
+}
 .song-item-card--playing {
   border-color: color-mix(in srgb, var(--success) 50%, var(--border));
   background: var(--success-muted);
 }
 .song-item-card--playing:hover,
-.song-item-card--playing[data-touching="true"] {
+.song-item-card--playing[data-touching="true"],
+.song-item-card--playing:focus-within {
   border-color: color-mix(in srgb, var(--success) 50%, var(--song-card-accent));
   background: color-mix(in srgb, var(--success-muted) 90%, var(--song-card-accent));
 }
@@ -816,6 +837,8 @@ textarea {
 .song-item-card[data-touching="true"] .song-item-card__pointer-glow { opacity: 0.5; }
   .song-item-card:hover::after,
 .song-item-card[data-touching="true"]::after { opacity: 0.42; }
+  .song-item-card:focus-within .song-item-card__pointer-glow { opacity: 0.5; }
+  .song-item-card:focus-within::after { opacity: 0.42; }
 }
 .song-view {
   --song-accent: var(--border);
