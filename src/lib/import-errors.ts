@@ -10,6 +10,10 @@ const importErrorKeyMap: Record<string, string> = {
   spotify_not_connected: 'home.importSpotifyNotConnected',
   playlist_fetch_failed: 'home.importPlaylistFetchFailed',
   playlist_empty: 'home.importPlaylistEmpty',
+  invalid_job: 'home.playlistImportInvalidJob',
+  job_not_found: 'home.playlistImportJobNotFound',
+  job_cancelled: 'home.playlistImportCancelled',
+  job_failed: 'home.playlistImportJobFailed',
 };
 
 export function importErrorMsg(t: (k: string) => string, error?: string, fallbackKey?: string): string {

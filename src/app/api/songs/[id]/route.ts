@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB, schema, sql } from '@/lib/db';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { CoverPaletteJson, Song } from '@/lib/types';
 import { getAuthUser } from '@/lib/auth';
 import { isSongVisibleToUser } from '@/lib/song-visibility';
-import { resolveLrcTextUpdate } from '@/lib/lrc';
+import { resolveLrcTextUpdate, resolveTimelineSave } from '@/lib/lrc';
 import type { ReadingScheme } from '@/lib/types';
 
 /** Strip internal email while exposing server-authoritative capabilities. */
@@ -111,7 +111,7 @@ export async function PUT(
   const db = getDB();
   const { id } = await params;
   const body = await request.json();
-  const { title, artist, lyrics_raw, lyrics_synced, reading_scheme, reading_scheme_confirmed, clear_furigana, clear_translation, clear_reasoning, clear_glossary, cover_palette } = body;
+  const { title, artist, lyrics_raw, lyrics_synced, reading_scheme, reading_scheme_confirmed, clear_furigana, clear_translation, clear_reasoning, clear_glossary, cover_palette, source_lyrics } = body;
 
   if (cover_palette !== undefined && cover_palette !== null && !isCoverPaletteShape(cover_palette)) {
     return NextResponse.json({ error: 'invalid_cover_palette' }, { status: 400 });
@@ -130,6 +130,24 @@ export async function PUT(
   }
   if (!user.isAdmin && existing.created_by !== user.id) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+
+  // Concurrency guard for the timeline workspace: the client loads the song
+  // once and may edit for a long time. If it submits a synced timeline while
+  // another tab/session already rewrote the plain lyrics, the submitted LRC
+  // would otherwise be reverse-written into lyrics_raw, silently clobbering
+  // the newer lyrics text. Refuse instead of overwriting (mirrors the
+  // stale-source protection in the furigana/translation save endpoints).
+  // Opt-in: the guard only applies when the client submits the `source_lyrics`
+  // snapshot it was built from — the timeline workspace always does. Other
+  // callers that intentionally replace lyrics (e.g. the song editor's LRC
+  // mode) keep their previous behaviour.
+  const timelineGuarded = lyrics_synced !== undefined && typeof source_lyrics === 'string';
+  if (timelineGuarded) {
+    const guard = resolveTimelineSave(existing.lyrics_raw, existing.lyrics_synced, lyrics_synced, source_lyrics);
+    if (!guard.ok) {
+      return NextResponse.json({ error: guard.error }, { status: guard.error === 'stale_timeline_source' ? 409 : 400 });
+    }
   }
 
   const newSynced = lyrics_synced !== undefined ? lyrics_synced : existing.lyrics_synced;
@@ -162,7 +180,7 @@ export async function PUT(
   // The terminology glossary is tied to the lyrics content; invalidate it on
   // change, or explicitly on request (the clear entry lives on the editor).
   const lyricsGlossary = (lyricsContentChanged || clear_glossary === true) ? null : existing.lyrics_glossary;
-  await db.update(schema.songs).set({
+  const updatedRow = await db.update(schema.songs).set({
     title: title !== undefined ? title : existing.title,
     artist: artist !== undefined ? artist : existing.artist,
     lyricsRaw: newRaw,
@@ -192,7 +210,19 @@ export async function PUT(
       lyricsFetchedAt: null,
     } : {}),
     updatedAt: sql`(datetime('now', 'localtime'))`,
-  }).where(eq(schema.songs.id, id));
+  }).where(timelineGuarded
+    ? and(eq(schema.songs.id, id), eq(schema.songs.lyricsRaw, source_lyrics))
+    : eq(schema.songs.id, id))
+    .returning({ id: schema.songs.id }).get();
+
+  // Atomicity backstop: the UPDATE above matched `id + lyrics_raw` at execution
+  // time, so when it updated no row the source snapshot is already stale —
+  // nothing was written and we surface the conflict (mirrors the
+  // furigana/translation stale-source pattern). This closes the race between
+  // the pre-check and the write that a plain `WHERE id` update cannot see.
+  if (timelineGuarded && !updatedRow) {
+    return NextResponse.json({ error: 'stale_timeline_source' }, { status: 409 });
+  }
 
   const updated = await findSong(id);
   if (!updated) {

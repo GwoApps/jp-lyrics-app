@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createTimelineDraft, hasSameLrcText, mapTimelineTimestamps, offsetLrcLines, parseLrc, resolveLrcTextUpdate, serializeLrc, serializeTimelineDraft, updateLrcLineTime } from './lrc.ts';
+import { createTimelineDraft, extractLrcMetadata, getLrcTextLines, hasSameLrcText, isLrcMetadataLine, mapTimelineTimestamps, offsetLrcLines, parseLrc, resolveLrcTextUpdate, resolveTimelineSave, serializeLrc, serializeTimelineDraft, updateLrcLineTime } from './lrc.ts';
 
 test('offsetLrcLines shifts timestamps and clamps at zero', () => {
   const lines = parseLrc('[00:00.250]first\n[01:02.345]second');
@@ -23,6 +23,84 @@ test('serializeLrc emits stable millisecond timestamps', () => {
     serializeLrc([{ timeMs: 62345, text: 'hello' }]),
     '[01:02.345]hello',
   );
+});
+
+test('metadata tags are recognised case-insensitively', () => {
+  assert.equal(isLrcMetadataLine('[ar:YOASOBI]'), true);
+  assert.equal(isLrcMetadataLine('[ti:アイドル]'), true);
+  assert.equal(isLrcMetadataLine('[al:THE BOOK 3]'), true);
+  assert.equal(isLrcMetadataLine('[by:editor]'), true);
+  assert.equal(isLrcMetadataLine('[offset:120]'), true);
+  assert.equal(isLrcMetadataLine('[re:lrc generator]'), true);
+  assert.equal(isLrcMetadataLine('[ve:2.0]'), true);
+  assert.equal(isLrcMetadataLine('[length:03:24]'), true);
+  // Case-insensitive tag names.
+  assert.equal(isLrcMetadataLine('[AR:YOASOBI]'), true);
+  assert.equal(isLrcMetadataLine('[Ti:アイドル]'), true);
+  // Unknown / extension tags and real lyric lines are NOT metadata.
+  assert.equal(isLrcMetadataLine('[xx:custom]'), false);
+  assert.equal(isLrcMetadataLine('普通歌词行'), false);
+  assert.equal(isLrcMetadataLine('[00:12.34]普通歌词'), false);
+});
+
+test('extractLrcMetadata parses standard tags and the offset value', () => {
+  const metadata = extractLrcMetadata(
+    '[ar:YOASOBI]\n[ti:アイドル]\n[al:THE BOOK 3]\n[by:editor]\n[offset:120]\n[00:01.000]line',
+  );
+  assert.deepEqual(metadata, {
+    offsetMs: 120,
+    tags: { ar: 'YOASOBI', ti: 'アイドル', al: 'THE BOOK 3', by: 'editor', offset: '120' },
+  });
+  // Case-insensitive tag names and negative offset values.
+  assert.deepEqual(extractLrcMetadata('[Ar:YOASOBI]\n[OFFSET:-50]'), {
+    offsetMs: -50,
+    tags: { ar: 'YOASOBI', offset: '-50' },
+  });
+  // Missing metadata → empty result.
+  assert.deepEqual(extractLrcMetadata('[00:01.000]a'), { offsetMs: null, tags: {} });
+});
+
+test('getLrcTextLines excludes standard metadata tags', () => {
+  const lrc = '[ar:YOASOBI]\n[ti:アイドル]\n[al:THE BOOK 3]\n[by:editor]\n[offset:120]\n[00:01.000]first\n[00:02.000]second';
+  assert.deepEqual(getLrcTextLines(lrc), ['first', 'second']);
+  // Only a metadata change must not count as lyric content.
+  assert.equal(
+    hasSameLrcText('[ar:A]\n[00:01.000]a', '[ar:B]\n[offset:120]\n[00:01.000]a'),
+    true,
+  );
+});
+
+test('parseLrc ignores metadata-only lines', () => {
+  const lines = parseLrc('[ar:YOASOBI]\n[offset:120]\n[00:01.000]first\n[00:02.000]second');
+  assert.deepEqual(lines, [
+    { timeMs: 1000, text: 'first' },
+    { timeMs: 2000, text: 'second' },
+  ]);
+});
+
+test('resolveLrcTextUpdate ignores metadata-only changes', () => {
+  const existingRaw = 'a\nb';
+  assert.deepEqual(
+    resolveLrcTextUpdate(existingRaw, '', '[ar:YOASOBI]\n[offset:120]\n[00:01.000]a\n[00:02.000]b'),
+    { lyricsRaw: existingRaw, contentChanged: false },
+  );
+  // Changing only the offset metadata must not clear derived data.
+  assert.deepEqual(
+    resolveLrcTextUpdate(existingRaw, '[00:01.000]a\n[00:02.000]b', '[offset:-80]\n[00:01.000]a\n[00:02.000]b'),
+    { lyricsRaw: existingRaw, contentChanged: false },
+  );
+});
+
+test('createTimelineDraft drops metadata from both plain and synced input', () => {
+  const draft = createTimelineDraft(
+    '[ar:YOASOBI]\nfirst\nsecond',
+    '[ti:アイドル]\n[00:01.000]first\n[offset:120]\nsecond',
+  );
+  assert.deepEqual(draft, [
+    { text: 'first', timeMs: 1000 },
+    { text: 'second', timeMs: null },
+  ]);
+  assert.equal(serializeTimelineDraft(draft), '[00:01.000]first\nsecond');
 });
 
 test('parseLrcTimestamp accepts editor timestamps and rejects invalid values', async () => {
@@ -85,4 +163,32 @@ test('timeline timestamps stay aligned when rendered lyrics preserve blank separ
   const rendered = ['first\r', 'second\r', '', 'third\r', '', 'fourth'];
 
   assert.deepEqual(mapTimelineTimestamps(rendered, plain, synced), [1000, 2000, null, 3000, null, 4000]);
+});
+
+test('resolveTimelineSave accepts a timeline save matching the current plain lyrics', () => {
+  const result = resolveTimelineSave(
+    'first\nsecond',
+    '[00:01.000]first\n[00:02.000]second',
+    '[00:03.000]first\n[00:04.000]second',
+    'first\nsecond',
+  );
+  assert.deepEqual(result, { ok: true, lyricsRaw: 'first\nsecond', contentChanged: false });
+});
+
+test('resolveTimelineSave refuses when plain lyrics were rewritten in another tab', () => {
+  // Tab A loaded `first\nsecond` and marks a timeline; tab B saved a new
+  // lyric text `first\nnew second` in the meantime. A's stale snapshot must
+  // never be reverse-written back into lyrics_raw.
+  const result = resolveTimelineSave(
+    'first\nnew second',
+    '[00:05.000]first\n[00:06.000]new second',
+    '[00:01.000]first\n[00:02.000]second',
+    'first\nsecond',
+  );
+  assert.deepEqual(result, { ok: false, error: 'stale_timeline_source' });
+});
+
+test('resolveTimelineSave refuses submissions that omit the source snapshot', () => {
+  const result = resolveTimelineSave('first', '[00:01.000]first', '[00:02.000]first', undefined as unknown as string);
+  assert.deepEqual(result, { ok: false, error: 'missing_source_lyrics' });
 });

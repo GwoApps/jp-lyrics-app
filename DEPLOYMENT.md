@@ -240,6 +240,7 @@ ls .open-next/worker.js  # must exist before deploy
 # Apply release migrations before sending traffic to the new Worker.
 # D1 intentionally does not run the Node/local startup migrator.
 wrangler d1 execute jplrc-db --remote --file=./drizzle/0004_lovely_doctor_faustus.sql
+wrangler d1 execute jplrc-db --remote --file=./drizzle/0014_add_playlist_import_jobs.sql
 
 # Deploy
 wrangler deploy
