@@ -71,6 +71,13 @@
       "when": 1786040000000,
       "tag": "0013_add_lyrics_needs_review",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1786255800000,
+      "tag": "0014_add_ai_usage_reservations",
+      "breakpoints": true
     }
   ]
 }

@@ -100,3 +100,17 @@ export const aiUsage = sqliteTable('ai_usage', {
   neurons: integer('neurons').notNull().default(0),
   requests: integer('requests').notNull().default(0),
 });
+
+// In-flight reservations for the daily Workers AI budget. A request
+// atomically reserves an estimated budget *before* calling the model and
+// settles it (多退少补) afterwards, so concurrent requests can never
+// collectively exceed the daily limit. Entries that outlive
+// AI_RESERVATION_TTL_MS are reclaimed by the next reservation.
+export const aiUsageReservations = sqliteTable('ai_usage_reservations', {
+  requestId: text('request_id').primaryKey(),
+  usageDate: text('usage_date').notNull(),
+  estimatedNeurons: integer('estimated_neurons').notNull(),
+  status: text('status', { enum: ['reserved', 'settled', 'released'] }).notNull().default('reserved'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
