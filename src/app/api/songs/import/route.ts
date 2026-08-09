@@ -49,10 +49,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ id: existing.id, alreadyExists: true });
   }
 
-  const { result, source, confidence } = await fetchLyrics(title, artist, {
+  const { result, source, confidence, durationMismatch } = await fetchLyrics(title, artist, {
     spotifyCanonical: spotifyTrack
       ? { name: spotifyTrack.title, artist: spotifyTrack.artist }
       : null,
+    spotify: spotifyTrack
+      ? { durationMs: spotifyTrack.durationMs, album: spotifyTrack.album }
+      : undefined,
   });
   if (!result) {
     return NextResponse.json({
@@ -79,6 +82,7 @@ export async function POST(request: NextRequest) {
     confidence,
     synced: !isPlainHit,
     hasExistingTimeline: false,
+    durationMismatch,
   });
   if (verdict === 'rejected') {
     return NextResponse.json({

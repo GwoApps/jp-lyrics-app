@@ -131,7 +131,15 @@ export async function POST(request: NextRequest) {
     let confidence = 0;
     let needsReview = false;
     try {
-      const r = await fetchLyrics(track.title, track.artist);
+      const r = await fetchLyrics(track.title, track.artist, {
+        // The playlist item already IS the Spotify canonical name — passing it
+        // again would just re-run the exact LRCLIB query. Only hand over the
+        // album + duration evidence for version disambiguation.
+        spotify: {
+          durationMs: track.durationMs,
+          album: track.album || undefined,
+        },
+      });
       lyrics = r.result;
       source = r.source;
       confidence = r.confidence;
@@ -141,6 +149,7 @@ export async function POST(request: NextRequest) {
           confidence,
           synced: !!lyrics.synced.trim(),
           hasExistingTimeline: false,
+          durationMismatch: r.durationMismatch,
         });
         if (verdict === 'rejected') {
           // Below the hard quality floor — treat as a miss rather than saving a

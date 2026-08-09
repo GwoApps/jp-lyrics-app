@@ -30,6 +30,13 @@ export interface LyricsHitInput {
   synced: boolean;
   /** True when the target song already has a timed timeline a plain candidate would erase. */
   hasExistingTimeline: boolean;
+  /**
+   * True when the candidate's recorded duration clearly conflicts with the
+   * Spotify duration (LRCLIB exact hit of a TV-size / live / remaster).
+   * Overrides the confidence-derived verdict so the conflicting version is
+   * never silently accepted. (see lib/lyrics-fetcher.ts `durationMismatch`)
+   */
+  durationMismatch?: boolean;
 }
 
 /**
@@ -38,10 +45,15 @@ export interface LyricsHitInput {
  * the call sites.
  */
 export function classifyLyricsHit(input: LyricsHitInput): LyricsHitVerdict {
-  const { confidence, synced, hasExistingTimeline } = input;
+  const { confidence, synced, hasExistingTimeline, durationMismatch } = input;
 
   // Below the hard floor → treat as a wrong candidate regardless of source.
   if (confidence < LYRICS_REJECT_THRESHOLD) return 'rejected';
+
+  // A high-confidence exact hit whose recorded duration clearly conflicts with
+  // the Spotify track is another recording (TV size / live / remaster) — never
+  // accept it silently, regardless of the confidence number.
+  if (durationMismatch) return 'needs_review';
 
   // Below the review threshold → the match may still be the wrong song.
   if (confidence < LYRICS_REVIEW_THRESHOLD) return 'needs_review';

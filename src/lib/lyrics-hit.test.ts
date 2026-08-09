@@ -43,6 +43,33 @@ test('classifyLyricsHit protects an existing timeline from plain-text overwrite'
   }), 'needs_review');
 });
 
+test('classifyLyricsHit never accepts an exact hit whose duration conflicts with Spotify', () => {
+  // Same title + artist, but the candidate is a TV-size / live / remaster
+  // recording — even at 98 confidence it must not be silently accepted.
+  assert.equal(classifyLyricsHit({
+    source: 'lrclib',
+    confidence: 98,
+    synced: true,
+    hasExistingTimeline: false,
+    durationMismatch: true,
+  }), 'needs_review');
+  assert.equal(classifyLyricsHit({
+    source: 'lrclib',
+    confidence: 99,
+    synced: true,
+    hasExistingTimeline: false,
+    durationMismatch: true,
+  }), 'needs_review');
+  // When the duration agrees there is no mismatch flag → accepted as before.
+  assert.equal(classifyLyricsHit({
+    source: 'lrclib',
+    confidence: 98,
+    synced: true,
+    hasExistingTimeline: false,
+    durationMismatch: false,
+  }), 'accepted');
+});
+
 test('classifyLyricsHit accepts high-confidence synced hits', () => {
   assert.equal(classifyLyricsHit({
     source: 'lrclib',
@@ -85,6 +112,22 @@ test('classifyLyricsHit threshold matrix matches the documented source scores', 
       classifyLyricsHit({ source, confidence, synced, hasExistingTimeline: false }),
       expected,
       `${source}@${confidence} (synced=${synced}) should be ${expected}`,
+    );
+  }
+});
+
+test('classifyLyricsHit routes duration-conflict exact hits to review in the threshold matrix', () => {
+  // 98/96 exact hits that conflict with the Spotify duration are downgraded by
+  // lrclibConfidence to 78/76 — both must land on needs_review, never accepted.
+  const cases: Array<[string, number, boolean]> = [
+    ['lrclib', 78, true],
+    ['lrclib', 76, true],
+  ];
+  for (const [source, confidence, synced] of cases) {
+    assert.equal(
+      classifyLyricsHit({ source, confidence, synced, hasExistingTimeline: false }),
+      'needs_review',
+      `${source}@${confidence} (duration conflict) should be needs_review`,
     );
   }
 });

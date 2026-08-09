@@ -40,7 +40,12 @@ export async function POST(
   const spotifyCanonical = spotifyTrack
     ? { name: spotifyTrack.title, artist: spotifyTrack.artist }
     : null;
-  const { result, source, confidence } = await fetchLyrics(song.title, song.artist, { spotifyCanonical });
+  const { result, source, confidence, durationMismatch } = await fetchLyrics(song.title, song.artist, {
+    spotifyCanonical,
+    spotify: spotifyTrack
+      ? { durationMs: spotifyTrack.durationMs, album: spotifyTrack.album }
+      : undefined,
+  });
 
   if (!result) {
     return NextResponse.json({ synced: false, error: 'lyrics_not_found' }, { status: 404 });
@@ -64,6 +69,7 @@ export async function POST(
     confidence,
     synced: !isPlainHit,
     hasExistingTimeline: hasExistingLyrics,
+    durationMismatch,
   });
 
   // Below the hard floor → wrong candidate; never persist it silently.
