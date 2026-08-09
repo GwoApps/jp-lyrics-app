@@ -2,12 +2,13 @@
 
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
-  Activity, CheckCircle2, CircleAlert, Clock, Loader2, Plug, ServerCrash, Settings2, XCircle,
+  Activity, CheckCircle2, CircleAlert, Clock, Loader2, Plug, ServerCrash, Settings2, X, XCircle,
 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { localeToBCP47 } from './admin-types';
+import TranslationConfigPanel from './TranslationConfigPanel';
 
 interface SystemData {
   translation: {
@@ -66,24 +67,50 @@ export default function AdminSystemPanel() {
   const [data, setData] = useState<SystemData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
+  const configTitleId = useId();
+  const configTriggerRef = useRef<HTMLButtonElement>(null);
+  const configCloseRef = useRef<HTMLButtonElement>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(false);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError(false);
+    }
     try {
       const res = await fetch('/api/admin/system');
       if (!res.ok) throw new Error();
       setData(await res.json());
     } catch {
-      setError(true);
+      if (!silent) setError(true);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!configOpen) return;
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    const trigger = configTriggerRef.current;
+    configCloseRef.current?.focus({ preventScroll: true });
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setConfigOpen(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      requestAnimationFrame(() => {
+        window.scrollTo(scrollX, scrollY);
+        trigger?.focus({ preventScroll: true });
+      });
+    };
+  }, [configOpen]);
 
   if (loading) {
     return (
@@ -130,15 +157,26 @@ export default function AdminSystemPanel() {
     <div className="space-y-4">
       {/* Translation service */}
       <section className={cardCls}>
-        <div className="mb-3 flex items-center gap-2">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
           <Plug className="h-4 w-4 text-[var(--primary)]" />
           <h2 className="text-sm font-semibold">{t('admin.systemTranslation')}</h2>
-          <span className={`ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-            tr.source === 'none' ? 'bg-[var(--muted-foreground)]/10 text-[var(--muted-foreground)]' : 'bg-[var(--success)]/10 text-[var(--success)]'
-          }`}>
-            {tr.source === 'none' ? <XCircle className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
-            {sourceLabel}
-          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              ref={configTriggerRef}
+              type="button"
+              onClick={() => setConfigOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--muted)]"
+            >
+              <Settings2 className="h-3.5 w-3.5" />
+              {t('admin.translationEditConfig')}
+            </button>
+            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+              tr.source === 'none' ? 'bg-[var(--muted-foreground)]/10 text-[var(--muted-foreground)]' : 'bg-[var(--success)]/10 text-[var(--success)]'
+            }`}>
+              {tr.source === 'none' ? <XCircle className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
+              {sourceLabel}
+            </span>
+          </div>
         </div>
         <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
           <div className="flex items-center gap-2">
@@ -245,6 +283,40 @@ export default function AdminSystemPanel() {
           </ul>
         )}
       </section>
+
+      {configOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center overscroll-contain bg-black/45 p-4 backdrop-blur-sm"
+          onMouseDown={() => setConfigOpen(false)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={configTitleId}
+            className="flex max-h-[calc(100dvh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background)] shadow-2xl"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] px-5 py-4">
+              <div className="min-w-0">
+                <h2 id={configTitleId} className="text-sm font-semibold">{t('admin.translationConfigTitle')}</h2>
+                <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">{t('admin.translationEnvFallback')}</p>
+              </div>
+              <button
+                ref={configCloseRef}
+                type="button"
+                onClick={() => setConfigOpen(false)}
+                className="ml-auto rounded-md p-2 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+                aria-label={t('common.close')}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5">
+              <TranslationConfigPanel onConfigChange={() => { void load(true); }} />
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

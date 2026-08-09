@@ -2,13 +2,12 @@
 
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import Toast from '@/components/Toast';
-import TranslationConfigPanel from '@/components/admin/TranslationConfigPanel';
 import AdminTabs from '@/components/admin/AdminTabs';
 import AdminUserList, { type UserRoleFilter, type UserStatusFilter } from '@/components/admin/AdminUserList';
 import AdminSongList, { type SongOrder, type SongReviewFilter, type SongSort, type SongStatusFilter } from '@/components/admin/AdminSongList';
@@ -97,6 +96,7 @@ export default function AdminPage() {
   const [blockUserTarget, setBlockUserTarget] = useState<AdminUser | null>(null);
   const [blockReason, setBlockReason] = useState('');
   const [previewSong, setPreviewSong] = useState<AdminSong | null>(null);
+  const previewScrollPosition = useRef({ x: 0, y: 0 });
 
   const { session } = useAuthSession();
   const isAdmin = session?.user?.isAdmin === true;
@@ -106,6 +106,26 @@ export default function AdminPage() {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 3000);
   }, []);
+
+  const handleOpenPreview = useCallback((song: AdminSong) => {
+    previewScrollPosition.current = { x: window.scrollX, y: window.scrollY };
+    setPreviewSong(song);
+  }, []);
+
+  const handleClosePreview = useCallback(() => {
+    const { x, y } = previewScrollPosition.current;
+    setPreviewSong(null);
+    requestAnimationFrame(() => window.scrollTo(x, y));
+  }, []);
+
+  // Opening the fixed dialog must not move the content list underneath it.
+  // This defensive restore happens before paint; AdminTabs separately avoids
+  // vertically scrolling the page when unrelated parent state changes.
+  useLayoutEffect(() => {
+    if (!previewSong) return;
+    const { x, y } = previewScrollPosition.current;
+    window.scrollTo(x, y);
+  }, [previewSong]);
 
   // --- URL helpers -----------------------------------------------------------
 
@@ -568,7 +588,7 @@ export default function AdminPage() {
             onOrderChange={(o) => applySongFilters({ order: o })}
             onNext={songNext}
             onPrev={songPrev}
-            onPreview={setPreviewSong}
+            onPreview={handleOpenPreview}
             onPublish={handlePublish}
             onUnpublish={handleUnpublish}
             onDelete={setDeleteSongTarget}
@@ -624,9 +644,6 @@ export default function AdminPage() {
         <AdminSystemPanel />
       )}
 
-      {/* Translation configuration (kept under the System view for now; detailed
-          prompt editing may move to advanced settings later). */}
-      {view === 'system' && <TranslationConfigPanel />}
 
       {/* Delete User Confirmation */}
       <ConfirmDialog
@@ -663,7 +680,7 @@ export default function AdminPage() {
         key={previewSong?.id ?? 'none'}
         song={previewSong}
         locale={locale}
-        onClose={() => setPreviewSong(null)}
+        onClose={handleClosePreview}
       />
 
       {/* Block/Unblock User Dialog */}

@@ -98,9 +98,9 @@ export default function SongPreviewDialog({ song, locale, onClose }: SongPreview
   const lineCount = rawLines.length > 0 ? rawLines.length : (song.lyric_line_count ?? 0);
 
   return (
-    <div className="confirm-overlay" onClick={onClose}>
+    <div className="confirm-overlay overscroll-contain" onClick={onClose}>
       <div
-        className="confirm-dialog"
+        className="confirm-dialog max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain"
         style={{ maxWidth: '560px' }}
         role="dialog"
         aria-modal="true"
@@ -117,6 +117,7 @@ export default function SongPreviewDialog({ song, locale, onClose }: SongPreview
             )}
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="rounded p-1.5 text-[var(--muted-foreground)] hover:bg-[var(--muted)] transition-colors"
             aria-label={t('common.close')}

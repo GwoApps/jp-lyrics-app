@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { Activity, ListChecks, ListMusic, Users } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import type { AdminView } from './admin-types';
@@ -19,6 +20,25 @@ interface AdminTabsProps {
  */
 export default function AdminTabs({ view, onViewChange, pendingCount }: AdminTabsProps) {
   const { t } = useI18n();
+  const navRef = useRef<HTMLElement>(null);
+  const tabRefs = useRef<Partial<Record<AdminView, HTMLButtonElement>>>({});
+
+  // Scroll only the horizontal tab strip, and only when the active view really
+  // changes. The old inline ref callback ran scrollIntoView() on every parent
+  // render, so opening a preview dialog pulled the whole page back to the tabs.
+  useEffect(() => {
+    const nav = navRef.current;
+    const tab = tabRefs.current[view];
+    if (!nav || !tab) return;
+
+    const left = tab.offsetLeft;
+    const right = left + tab.offsetWidth;
+    if (left < nav.scrollLeft) {
+      nav.scrollTo({ left, behavior: 'smooth' });
+    } else if (right > nav.scrollLeft + nav.clientWidth) {
+      nav.scrollTo({ left: right - nav.clientWidth, behavior: 'smooth' });
+    }
+  }, [view]);
 
   const tabCls = (active: boolean, activeColor = 'border-[var(--primary)] text-[var(--primary)]') =>
     `inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors ${
@@ -34,6 +54,7 @@ export default function AdminTabs({ view, onViewChange, pendingCount }: AdminTab
 
   return (
     <nav
+      ref={navRef}
       className="mb-6 border-b border-[var(--border)] overflow-x-auto scrollbar-thin"
       aria-label={t('admin.title')}
       role="tablist"
@@ -47,13 +68,8 @@ export default function AdminTabs({ view, onViewChange, pendingCount }: AdminTab
           return (
             <button
               key={item.key}
-              ref={(el) => {
-                if (active && el) {
-                  requestAnimationFrame(() => {
-                    el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-                  });
-                }
-              }}
+              ref={(el) => { if (el) tabRefs.current[item.key] = el; }}
+              type="button"
               role="tab"
               aria-selected={active}
               onClick={() => onViewChange(item.key)}

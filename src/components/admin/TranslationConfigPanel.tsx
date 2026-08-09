@@ -49,7 +49,11 @@ const TARGET_LANG_PRESETS = [
 /** Sentinel option value for the "custom target language" branch of the select. */
 const CUSTOM_LANG_OPTION = '__custom__';
 
-export default function TranslationConfigPanel() {
+interface TranslationConfigPanelProps {
+  onConfigChange?: () => void;
+}
+
+export default function TranslationConfigPanel({ onConfigChange }: TranslationConfigPanelProps) {
   const { t } = useI18n();
   const [form, setForm] = useState<FormConfig>(EMPTY_FORM);
   const [effective, setEffective] = useState<StoredConfig | null>(null);
@@ -129,12 +133,13 @@ export default function TranslationConfigPanel() {
       }
       applyResponse(await res.json());
       showToast('success', t('admin.translationSaved'));
+      onConfigChange?.();
     } catch (e) {
       showToast('error', e instanceof Error ? e.message : t('admin.translationSaveFailed'));
     } finally {
       setSaving(false);
     }
-  }, [form, defaultPrompt, applyResponse, showToast, t]);
+  }, [form, defaultPrompt, applyResponse, showToast, t, onConfigChange]);
 
   const handleClear = useCallback(async () => {
     setShowClearConfirm(false);
@@ -149,12 +154,13 @@ export default function TranslationConfigPanel() {
       applyResponse(await res.json());
       setTestResult(null);
       showToast('success', t('admin.translationCleared'));
+      onConfigChange?.();
     } catch {
       showToast('error', t('admin.translationSaveFailed'));
     } finally {
       setSaving(false);
     }
-  }, [applyResponse, showToast, t]);
+  }, [applyResponse, showToast, t, onConfigChange]);
 
   const handleTest = useCallback(async () => {
     setTesting(true);
