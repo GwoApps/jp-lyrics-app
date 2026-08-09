@@ -166,6 +166,7 @@
     "translationEmptyLyrics": "歌詞が空のため翻訳できません",
     "translationFailed": "翻訳に失敗しました",
     "translationQuotaExceeded": "本日の AI 翻訳枠を使い切りました。明日またお試しください",
+    "translationStaleSource": "翻訳中に歌詞が別の画面で更新されました。再読み込みしてやり直してください",
     "spotify": "Spotify連携",
     "spotifyLoading": "Spotifyの再生状態を読み込み中…",
     "spotifyDisconnected": "Spotifyは未接続です",

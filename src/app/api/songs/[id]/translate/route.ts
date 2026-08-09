@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDB, schema, sql } from '@/lib/db';
+import { getDB, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import { getAuthUser } from '@/lib/auth';
 import { extractLyricsGlossary, getTranslationConfig, streamTranslateLyricLines, translateLyricLines, TranslationError, type GlossaryEntry } from '@/lib/translation';
 import { getStoredTranslationConfig, resolveTranslationConfig } from '@/lib/translation-settings';
 import { extractCompletedArrayItems } from '@/lib/translation-progress';
+import { mergeSliceIntoCache, writeSongField } from '@/lib/translation-cache';
 
 const SSE_HEADERS = {
   'Content-Type': 'text/event-stream',
@@ -27,6 +28,15 @@ const SSE_HEADERS = {
 // content — copies reuse the first occurrence's translation from the cache
 // or from within the same batch. A terminology glossary extracted from the
 // full song is attached to the prompt for consistent proper-noun rendering.
+//
+// Persistence consistency (see lib/translation-cache.ts):
+//   - Every `done`/JSON response is emitted ONLY after the merged cache has
+//     been awaited and committed — no void-dropped write promise.
+//   - Every write is compare-and-set on `lyrics_raw` from the request start,
+//     so a song edited mid-flight is never overwritten with stale output
+//     (`stale_annotation_source` instead).
+//   - Concurrent slice merges re-read + CAS under an optimistic lock, so two
+//     overlapping requests never last-write-wins each other's lines.
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -189,11 +199,23 @@ export async function POST(
       // Only persist a SUCCESSFUL extraction. A failure returns null and is
       // left unwritten, so the next whole-song translation retries it instead
       // of permanently pinning this song to an empty glossary.
+      // CAS on the request-start lyrics so a mid-flight lyrics edit can never
+      // be pinned to a glossary derived from the OLD text.
       glossary = extracted;
-      await db.update(schema.songs).set({
-        lyricsGlossary: JSON.stringify(glossary),
-        updatedAt: sql`(datetime('now', 'localtime'))`,
-      }).where(eq(schema.songs.id, id)).run();
+      const glossaryWrite = await writeSongField(db, {
+        id,
+        sourceLyrics: existing.lyricsRaw,
+        patch: { lyricsGlossary: JSON.stringify(glossary) },
+      });
+      if (!glossaryWrite.ok) {
+        // Lyrics were edited while we extracted the glossary — the source the
+        // user is now looking at no longer matches this request. Persisting
+        // the translation would resurrect stale output; abort instead.
+        const error = glossaryWrite.reason === 'stale_source'
+          ? 'stale_annotation_source'
+          : 'song_not_found';
+        return NextResponse.json({ error }, { status: glossaryWrite.reason === 'stale_source' ? 409 : 404 });
+      }
     } else {
       // Degrade to "no terminology" for THIS run only; extraction is retried
       // on the next request. Still observable in the logs for triage.
@@ -203,9 +225,16 @@ export async function POST(
 
   const ctx = { title: existing.title, artist: existing.artist, glossary: glossary ?? undefined };
 
-  // Expand duplicates from their first occurrence's result, merge into the
-  // stored cache, persist, and return the final line-aligned slice.
-  const expandAndMerge = (translations: string[]): string[] => {
+  /**
+   * Expand duplicates from their first occurrence's result and PERSIST the
+   * merged cache (compare-and-set on the source lyrics + optimistic-lock
+   * re-merge). Resolves only after the write has actually committed, so the
+   * caller can safely emit `done` immediately after `await`ing it.
+   */
+  const expandAndMerge = async (translations: string[]): Promise<{
+    finalSlice: string[];
+    result: Awaited<ReturnType<typeof mergeSliceIntoCache>>;
+  }> => {
     const bySliceIndex = new Map<number, string>();
     needTranslation.forEach((sliceIndex, j) => { bySliceIndex.set(sliceIndex, translations[j] ?? ''); });
     slice.forEach((line, i) => {
@@ -218,21 +247,14 @@ export async function POST(
     });
     const finalSlice = resolved.map((v) => v ?? '');
 
-    let merged: string[] = [];
-    if (cache.length > 0) {
-      merged = [...cache];
-    }
-    if (merged.length < lines.length) {
-      merged = [...merged, ...Array(lines.length - merged.length).fill('')];
-    }
-    finalSlice.forEach((translation, i) => { merged[start + i] = translation; });
-
-    void db.update(schema.songs).set({
-      lyricsTranslation: JSON.stringify(merged),
-      updatedAt: sql`(datetime('now', 'localtime'))`,
-    }).where(eq(schema.songs.id, id)).run();
-
-    return finalSlice;
+    const result = await mergeSliceIntoCache(db, {
+      id,
+      sourceLyrics: existing.lyricsRaw,
+      totalLines: lines.length,
+      start,
+      resolved,
+    });
+    return { finalSlice, result };
   };
 
   // Streaming mode: forward the provider's reasoning/translation deltas live,
@@ -279,17 +301,41 @@ export async function POST(
               }
             }, fetch, ctx, request.signal)
             : [];
-          const finalSlice = expandAndMerge(translations);
+          const { finalSlice, result } = await expandAndMerge(translations);
+          if (!result.ok) {
+            if (result.reason === 'stale_source') {
+              // Lyrics were edited while the model was running — never write
+              // stale output back. Report it so the client can reload/retry.
+              send('error', { error: 'stale_annotation_source', done: 0, total });
+            } else if (result.reason === 'contention') {
+              // The optimistic-lock merge never got a clean commit (extreme
+              // concurrent load). Don't claim success — surface a retryable
+              // failure so the client can retry the merge.
+              console.warn('[translate] cache merge lost to contention — reporting retryable failure');
+              send('error', { error: 'translation_failed', done: 0, total });
+            } else {
+              // Song deleted mid-flight.
+              send('error', { error: 'song_not_found', done: 0, total });
+            }
+            return;
+          }
           // Persist the model's reasoning together with the completed
           // translation so it survives a page reload / can be re-opened later.
+          // Guarded by the same source-lyrics CAS: a lyrics edit mid-flight
+          // clears reasoning + translation, and this must not resurrect them.
           if (reasoningBuffer.trim()) {
-            try {
-              await db.update(schema.songs).set({
-                lyricsTranslationReasoning: reasoningBuffer,
-                updatedAt: sql`(datetime('now', 'localtime'))`,
-              }).where(eq(schema.songs.id, id)).run();
-            } catch (reasoningError) {
-              console.warn('[translate] failed to persist reasoning:', reasoningError);
+            const reasoningWrite = await writeSongField(db, {
+              id,
+              sourceLyrics: existing.lyricsRaw,
+              patch: { lyricsTranslationReasoning: reasoningBuffer },
+            });
+            if (!reasoningWrite.ok) {
+              // The translation cache itself is already committed (CAS-merged);
+              // the reasoning write raced a lyrics edit. Report the conflict —
+              // the translation is safe but stale relative to the current
+              // lyrics, so the client should reload before trusting it.
+              send('error', { error: 'stale_annotation_source', done: 0, total });
+              return;
             }
           }
           send('done', { start, count: finalSlice.length, translations: finalSlice, cached: false });
@@ -310,14 +356,16 @@ export async function POST(
           }
           // Persist the reasoning streamed before the failure so the user can
           // see how far the model got (quota / network / output diagnostics).
+          // Source-CAS guarded so a mid-flight lyrics edit can't be pinned
+          // with reasoning derived from the old text.
           if (reasoningBuffer.trim()) {
-            try {
-              await db.update(schema.songs).set({
-                lyricsTranslationReasoning: reasoningBuffer,
-                updatedAt: sql`(datetime('now', 'localtime'))`,
-              }).where(eq(schema.songs.id, id)).run();
-            } catch (reasoningMergeError) {
-              console.warn('[translate] failed to persist partial reasoning:', reasoningMergeError);
+            const reasoningWrite = await writeSongField(db, {
+              id,
+              sourceLyrics: existing.lyricsRaw,
+              patch: { lyricsTranslationReasoning: reasoningBuffer },
+            });
+            if (!reasoningWrite.ok) {
+              console.warn('[translate] reasoning not persisted (source lyrics changed mid-flight)');
             }
           }
           // Persist whatever complete lines streamed in before the failure so
@@ -326,7 +374,7 @@ export async function POST(
           if (partial.length > 0) {
             try {
               // Map partial line translations to their slice indices, then
-              // merge into the stored cache through the same path as success.
+              // merge into the stored cache through the same CAS path as success.
               pending.forEach((sliceIndex, j) => {
                 if (j < partial.length) resolved[sliceIndex] = partial[j];
               });
@@ -342,17 +390,20 @@ export async function POST(
                   ? (partial[fromPartial] ?? '')
                   : (first < cache.length ? cache[first] : '');
               });
-              let merged: string[] = [];
-              if (cache.length > 0) merged = [...cache];
-              if (merged.length < lines.length) {
-                merged = [...merged, ...Array(lines.length - merged.length).fill('')];
+              const result = await mergeSliceIntoCache(db, {
+                id,
+                sourceLyrics: existing.lyricsRaw,
+                totalLines: lines.length,
+                start,
+                resolved,
+              });
+              if (result.ok) {
+                partialDone = partial.length;
+              } else if (result.reason === 'stale_source') {
+                // Lyrics were edited mid-flight — the partial lines were
+                // generated from the OLD text and must not be written.
+                console.warn('[translate] partial translation not persisted (source lyrics changed mid-flight)');
               }
-              resolved.forEach((translation, i) => { if (translation) merged[start + i] = translation; });
-              await db.update(schema.songs).set({
-                lyricsTranslation: JSON.stringify(merged),
-                updatedAt: sql`(datetime('now', 'localtime'))`,
-              }).where(eq(schema.songs.id, id)).run();
-              partialDone = partial.length;
             } catch (mergeError) {
               console.warn('[translate] failed to persist partial translation:', mergeError);
             }
@@ -391,6 +442,20 @@ export async function POST(
     return NextResponse.json({ error: 'translation_failed' }, { status: 502 });
   }
 
-  const finalSlice = expandAndMerge(translations);
+  const { finalSlice, result } = await expandAndMerge(translations);
+  if (!result.ok) {
+    if (result.reason === 'stale_source') {
+      // Lyrics were edited while the model ran — never return (or persist) a
+      // translation derived from the old source. The client refreshes and the
+      // fresh lyrics will be translated on the next request.
+      return NextResponse.json({ error: 'stale_annotation_source' }, { status: 409 });
+    }
+    if (result.reason === 'contention') {
+      // Optimistic-lock merge never got a clean commit — retryable.
+      console.warn('[translate] cache merge lost to contention — reporting retryable failure');
+      return NextResponse.json({ error: 'translation_failed' }, { status: 502 });
+    }
+    return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
+  }
   return NextResponse.json({ start, count: finalSlice.length, translations: finalSlice, cached: false });
 }

@@ -11,4 +11,5 @@ export const TRANSLATION_ERROR_KEYS: Record<string, string> = {
   translation_invalid_response: 'song.translationFailed',
   translation_cancelled: 'song.translationCancelled',
   ai_quota_exceeded: 'song.translationQuotaExceeded',
+  stale_annotation_source: 'song.translationStaleSource',
 };

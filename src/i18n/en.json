@@ -166,6 +166,7 @@
     "translationEmptyLyrics": "No lyrics to translate",
     "translationFailed": "Translation failed",
     "translationQuotaExceeded": "Daily AI translation quota reached — try again tomorrow",
+    "translationStaleSource": "Lyrics were updated elsewhere during translation. Reload and retry.",
     "spotify": "Spotify",
     "spotifyLoading": "Loading Spotify playback status…",
     "spotifyDisconnected": "Spotify is not connected",
