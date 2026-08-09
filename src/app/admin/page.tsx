@@ -65,6 +65,7 @@ export default function AdminPage() {
   const [queueLoading, setQueueLoading] = useState(true);
   const [queueError, setQueueError] = useState(false);
   const [selectedSongId, setSelectedSongId] = useState<string | null>(null);
+  const queueLoaded = useRef(false);
 
   // Content library (view=content).
   const songFilters = useMemo(() => songFiltersFromParams(searchParams), [searchParams]);
@@ -77,6 +78,7 @@ export default function AdminPage() {
   const [songHasPrev, setSongHasPrev] = useState(false);
   const [songNextCursor, setSongNextCursor] = useState<string | null>(null);
   const songPrevStack = useRef<string[]>([]);
+  const loadedSongQuery = useRef<string | null>(null);
 
   // People (view=people).
   const userFilters = useMemo(() => userFiltersFromParams(searchParams), [searchParams]);
@@ -89,6 +91,8 @@ export default function AdminPage() {
   const [userHasPrev, setUserHasPrev] = useState(false);
   const [userNextCursor, setUserNextCursor] = useState<string | null>(null);
   const userPrevStack = useRef<string[]>([]);
+  const loadedUserQuery = useRef<string | null>(null);
+  const [systemVisited, setSystemVisited] = useState(view === 'system');
 
   // Dialogs / confirmations.
   const [deleteUserTarget, setDeleteUserTarget] = useState<AdminUser | null>(null);
@@ -136,8 +140,9 @@ export default function AdminPage() {
       else params.set(key, value);
     }
     // Changing filters resets pagination unless explicitly preserved.
-    router.replace(`/admin?${params.toString()}`, { scroll: false });
-  }, [router, searchParams]);
+    const query = params.toString();
+    window.history.replaceState(window.history.state, '', query ? `/admin?${query}` : '/admin');
+  }, [searchParams]);
 
   const setView = useCallback((next: AdminView) => {
     // Wipe the previous view's filters so shared query keys never leak across
@@ -165,6 +170,7 @@ export default function AdminPage() {
       if (!res.ok) throw new Error('queue_load_failed');
       const data = (await res.json()) as AdminPage<AdminSong>;
       setQueueSongs(data.items);
+      queueLoaded.current = true;
       if (typeof data.total === 'number') setQueueTotal(data.total);
       if (data.items.length > 0) {
         setSelectedSongId((prev) => prev ?? data.items[0]!.id);
@@ -182,8 +188,12 @@ export default function AdminPage() {
       router.replace('/');
       return;
     }
-    if (view === 'queue') void loadQueue();
+    if (view === 'queue' && !queueLoaded.current) void loadQueue();
   }, [session, isAdmin, router, view, loadQueue]);
+
+  useEffect(() => {
+    if (view === 'system') setSystemVisited(true);
+  }, [view]);
 
   const advanceQueue = useCallback((doneSong: AdminSong, opts?: { keep?: boolean }) => {
     if (opts?.keep) {
@@ -244,8 +254,6 @@ export default function AdminPage() {
   useEffect(() => {
     if (session === null || !isAdmin || view !== 'content') return;
     let cancelled = false;
-    setSongsLoading(true);
-    setSongsError(false);
     const params = new URLSearchParams({
       mode: 'content',
       limit: String(PAGE_LIMIT),
@@ -257,14 +265,19 @@ export default function AdminPage() {
     if (songFilters.status !== 'all') params.set('status', songFilters.status);
     if (songFilters.review !== 'all') params.set('review', songFilters.review);
     if (songCursor) params.set('cursor', songCursor);
+    const requestKey = params.toString();
+    if (loadedSongQuery.current === requestKey) return;
+    setSongsLoading(true);
+    setSongsError(false);
 
-    fetch(`/api/admin/songs?${params.toString()}`)
+    fetch(`/api/admin/songs?${requestKey}`)
       .then(async (res) => {
         if (!res.ok) throw new Error('songs_load_failed');
         return (await res.json()) as AdminPage<AdminSong>;
       })
       .then((data) => {
         if (cancelled) return;
+        loadedSongQuery.current = requestKey;
         setSongs(data.items);
         setSongsTotal(data.total);
         setSongNextCursor(data.next_cursor);
@@ -302,8 +315,8 @@ export default function AdminPage() {
     params.set('cursor', next);
     params.delete('prev');
     stack.forEach((c) => params.append('prev', c));
-    router.replace(`/admin?${params.toString()}`, { scroll: false });
-  }, [songNextCursor, songCursor, searchParams, router]);
+    window.history.replaceState(window.history.state, '', `/admin?${params.toString()}`);
+  }, [songNextCursor, songCursor, searchParams]);
 
   const songPrev = useCallback(() => {
     const stack = [...songPrevStack.current];
@@ -314,29 +327,32 @@ export default function AdminPage() {
     else params.delete('cursor');
     params.delete('prev');
     stack.forEach((c) => params.append('prev', c));
-    router.replace(`/admin?${params.toString()}`, { scroll: false });
-  }, [searchParams, router]);
+    window.history.replaceState(window.history.state, '', `/admin?${params.toString()}`);
+  }, [searchParams]);
 
   // --- People ----------------------------------------------------------------
 
   useEffect(() => {
     if (session === null || !isAdmin || view !== 'people') return;
     let cancelled = false;
-    setUsersLoading(true);
-    setUsersError(false);
     const params = new URLSearchParams({ limit: String(PAGE_LIMIT), total: '1' });
     if (userFilters.q) params.set('q', userFilters.q);
     if (userFilters.role !== 'all') params.set('role', userFilters.role);
     if (userFilters.status !== 'all') params.set('status', userFilters.status);
     if (userCursor) params.set('cursor', userCursor);
+    const requestKey = params.toString();
+    if (loadedUserQuery.current === requestKey) return;
+    setUsersLoading(true);
+    setUsersError(false);
 
-    fetch(`/api/admin/users?${params.toString()}`)
+    fetch(`/api/admin/users?${requestKey}`)
       .then(async (res) => {
         if (!res.ok) throw new Error('users_load_failed');
         return (await res.json()) as AdminPage<AdminUser>;
       })
       .then((data) => {
         if (cancelled) return;
+        loadedUserQuery.current = requestKey;
         setUsers(data.items);
         setUsersTotal(data.total);
         setUserNextCursor(data.next_cursor);
@@ -373,8 +389,8 @@ export default function AdminPage() {
     params.set('cursor', cursor);
     params.delete('prev');
     stack.forEach((c) => params.append('prev', c));
-    router.replace(`/admin?${params.toString()}`, { scroll: false });
-  }, [userNextCursor, userCursor, searchParams, router]);
+    window.history.replaceState(window.history.state, '', `/admin?${params.toString()}`);
+  }, [userNextCursor, userCursor, searchParams]);
 
   const userPrev = useCallback(() => {
     const stack = [...userPrevStack.current];
@@ -385,8 +401,8 @@ export default function AdminPage() {
     else params.delete('cursor');
     params.delete('prev');
     stack.forEach((c) => params.append('prev', c));
-    router.replace(`/admin?${params.toString()}`, { scroll: false });
-  }, [searchParams, router]);
+    window.history.replaceState(window.history.state, '', `/admin?${params.toString()}`);
+  }, [searchParams]);
 
   // --- User actions ----------------------------------------------------------
 
@@ -639,9 +655,12 @@ export default function AdminPage() {
         )
       )}
 
-      {/* System */}
-      {view === 'system' && (
-        <AdminSystemPanel />
+      {/* System stays mounted after its first visit, so switching tabs preserves
+          loaded status and an open configuration dialog without another request. */}
+      {(view === 'system' || systemVisited) && (
+        <div hidden={view !== 'system'}>
+          <AdminSystemPanel />
+        </div>
       )}
 
 
