@@ -97,7 +97,11 @@ if (_d1) {
     });
     _db = drizzle(client, { schema });
   } else {
-    const client = libsql.createClient({ url: 'file:data/local.db' });
+    // timeout = SQLite busy timeout (ms): concurrent route modules all import this
+    // file and run migrations against the same local DB during `next build`
+    // ("Collecting page data" spawns multiple workers). Without it they race and
+    // fail with SQLITE_BUSY / duplicate column errors.
+    const client = libsql.createClient({ url: 'file:data/local.db', timeout: 15_000 });
     _db = drizzle(client, { schema });
   }
 }
@@ -127,48 +131,91 @@ async function runMigrations() {
     `CREATE TABLE IF NOT EXISTS "__drizzle_migrations" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "hash" TEXT NOT NULL, "created_at" NUMERIC NOT NULL)`
   ));
 
-  // Check which migrations have been applied
-  const applied = await db.all(sql`SELECT hash FROM "__drizzle_migrations"`);
-  const appliedSet = new Set(applied.map((r: any) => r.hash));
-
-  // Find pending migrations
-  const pending = entries.filter(e => !appliedSet.has(e.tag + '.sql'));
-
-  if (pending.length === 0) return;
-
-  // If this is an existing DB (has tables besides __drizzle_migrations) and the
-  // first pending migration is 0000 (baseline), mark it as applied without executing
-  const tables = await db.all(
-    sql`SELECT name FROM sqlite_master WHERE type='table' AND name != '__drizzle_migrations' AND name NOT LIKE 'sqlite_%'`
-  );
-
   const now = Date.now();
-  for (const entry of pending) {
-    const tag = entry.tag + '.sql';
-    const sqlPath = path.join(migrationsDir, tag);
 
-    if (entry.idx === 0 && tables.length > 0) {
-      // Baseline: existing DB already has tables, just mark as applied
-      console.log(`[db] Baseline: marking ${tag} as applied (existing DB)`);
-      await db.run(sql`INSERT INTO "__drizzle_migrations" ("hash", "created_at") VALUES (${tag}, ${now})`);
-      continue;
+  // Run the whole check-and-apply flow inside a single write transaction.
+  // `next build` loads every route module in parallel workers and each one runs
+  // this code. Without a transaction the per-statement autocommits interleave
+  // across workers and leave a half-migrated DB (column added but journal row
+  // missing) or duplicate journal rows. "write" mode issues BEGIN IMMEDIATE;
+  // combined with the client busy timeout it serialises the workers, so the
+  // second worker re-reads the journal inside the lock, sees the migrations
+  // already recorded and applies nothing.
+  const tx: import('@libsql/client').Transaction = await db.$client.transaction('write');
+  try {
+    // Check which migrations have been applied (inside the lock)
+    const applied = await tx.execute('SELECT hash FROM "__drizzle_migrations"');
+    const appliedSet = new Set(applied.rows.map(r => r.hash as string));
+
+    // Find pending migrations
+    const pending = entries.filter(e => !appliedSet.has(e.tag + '.sql'));
+
+    if (pending.length === 0) {
+      // Nothing to do — close without commit (rolls back the empty transaction).
+      return;
     }
 
-    // Apply migration SQL
-    if (!fs.existsSync(sqlPath)) {
-      console.warn(`[db] Migration file not found: ${tag}, skipping`);
-      continue;
+    // If this is an existing DB (has tables besides __drizzle_migrations) and the
+    // first pending migration is 0000 (baseline), mark it as applied without executing
+    const tables = await tx.execute(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name != '__drizzle_migrations' AND name NOT LIKE 'sqlite_%'`
+    );
+
+    for (const entry of pending) {
+      const tag = entry.tag + '.sql';
+      const sqlPath = path.join(migrationsDir, tag);
+
+      if (entry.idx === 0 && tables.rows.length > 0) {
+        // Baseline: existing DB already has tables, just mark as applied
+        console.log(`[db] Baseline: marking ${tag} as applied (existing DB)`);
+        await tx.execute({ sql: `INSERT INTO "__drizzle_migrations" ("hash", "created_at") VALUES (?, ?)`, args: [tag, now] });
+        continue;
+      }
+
+      // Apply migration SQL
+      if (!fs.existsSync(sqlPath)) {
+        console.warn(`[db] Migration file not found: ${tag}, skipping`);
+        continue;
+      }
+      const migrationSQL = fs.readFileSync(sqlPath, 'utf-8');
+      // Split by statement-breakpoint (drizzle-kit convention)
+      const statements = migrationSQL.split('--> statement-breakpoint').map(s => s.trim()).filter(Boolean);
+      console.log(`[db] Applying ${tag} (${statements.length} statements)`);
+      for (const stmt of statements) {
+        // Idempotent DDL: skip if the column/table already exists. This lets a
+        // DB left in a half-migrated state by a previous crashed build self-heal
+        // instead of failing with "duplicate column name".
+        const normalized = stmt.replace(/\s+/g, ' ').trim();
+        const alterMatch = /^ALTER\s+TABLE\s+`?([^\s`]+)`?\s+ADD(?:\s+COLUMN)?\s+`?([^\s`]+)`?/i.exec(normalized);
+        if (alterMatch) {
+          const [, table, column] = alterMatch;
+          const tableInfo = await tx.execute(`PRAGMA table_info(\`${table}\`)`);
+          if (tableInfo.rows.some(c => c.name === column)) {
+            console.log(`[db] ${tag}: column ${table}.${column} already exists, skipping`);
+            continue;
+          }
+        }
+        const createMatch = /^CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+`?([^\s`]+)`?/i.exec(normalized);
+        if (createMatch && !/IF\s+NOT\s+EXISTS/i.test(normalized)) {
+          const tableName = createMatch[1];
+          const existing = await tx.execute(`SELECT name FROM sqlite_master WHERE type='table' AND name = '${tableName}'`);
+          if (existing.rows.length > 0) {
+            console.log(`[db] ${tag}: table ${tableName} already exists, skipping`);
+            continue;
+          }
+        }
+        await tx.execute(stmt);
+      }
+      await tx.execute({ sql: `INSERT INTO "__drizzle_migrations" ("hash", "created_at") VALUES (?, ?)`, args: [tag, now] });
     }
-    const migrationSQL = fs.readFileSync(sqlPath, 'utf-8');
-    // Split by statement-breakpoint (drizzle-kit convention)
-    const statements = migrationSQL.split('--> statement-breakpoint').map(s => s.trim()).filter(Boolean);
-    console.log(`[db] Applying ${tag} (${statements.length} statements)`);
-    for (const stmt of statements) {
-      await db.run(sql.raw(stmt));
-    }
-    await db.run(sql`INSERT INTO "__drizzle_migrations" ("hash", "created_at") VALUES (${tag}, ${now})`);
+    await tx.commit();
+    console.log('[db] Migrations applied');
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  } finally {
+    tx.close();
   }
-  console.log('[db] Migrations applied');
 }
 
 // Block module initialisation until schema is ready; route handlers must never race migrations.
