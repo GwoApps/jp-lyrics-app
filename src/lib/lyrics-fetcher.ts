@@ -76,7 +76,13 @@ export function lrclibConfidence(
 }
 
 function stripTimestamps(lrc: string): string {
-  return lrc.replace(/^\[\d{2}:\d{2}\.\d{2,3}\]\s*/gm, '').trim();
+  return lrc
+    // Drop standard metadata tags ([ar:], [ti:], [al:], [by:], [offset:], …)
+    // so they never leak into plain lyrics.
+    .replace(/^\[[a-z]+:[^\]]*\]\s*$/gim, '')
+    // Drop timestamp tags, keeping any lyric text after them.
+    .replace(/^\[\d{2}:\d{2}\.\d{2,3}\]\s*/gm, '')
+    .trim();
 }
 
 function msToLrcTime(ms: number): string {

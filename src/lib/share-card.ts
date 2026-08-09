@@ -144,7 +144,11 @@ function drawCardBackground(ctx: CanvasRenderingContext2D, width: number, height
 }
 
 function stripLrcTags(line: string): string {
-  return line.replace(/\[\d{2}:\d{2}(\.\d+)?\]/g, '').trim();
+  const trimmed = line.trim();
+  // Skip standard metadata tags ([ar:], [ti:], [al:], [by:], [offset:], …) so
+  // they never appear as lyric lines on the share card.
+  if (/^\[[a-z]+:[^\]]*\]$/i.test(trimmed)) return '';
+  return trimmed.replace(/\[\d{2}:\d{2}(\.\d+)?\]/g, '').trim();
 }
 
 function parseTranslations(song: ShareSong): string[] {

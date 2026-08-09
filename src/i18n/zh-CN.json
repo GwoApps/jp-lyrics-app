@@ -97,7 +97,11 @@
     "playlistImportReviewHint": "这些曲目以低可信度歌词匹配导入。请在歌曲列表中打开它们，核对后重新同步。",
     "loadFailed": "歌曲列表加载失败，请检查网络后重试",
     "retry": "重试",
-    "cachedData": "当前显示缓存数据，刷新失败"
+    "cachedData": "当前显示缓存数据，刷新失败",
+    "openSong": "打开歌曲「{title}」",
+    "addToFavorites": "添加到收藏「{title}」",
+    "removeFromFavorites": "取消收藏「{title}」",
+    "deleteSongLabel": "删除歌曲「{title}」"
   },
   "song": {
     "notFound": "找不到歌曲",

@@ -97,7 +97,11 @@
     "playlistImportReviewHint": "These tracks were imported with a low-confidence lyrics match. Open them in the song list to verify and re-sync.",
     "loadFailed": "Failed to load songs. Please check your connection and try again.",
     "retry": "Retry",
-    "cachedData": "Showing cached data — refresh failed"
+    "cachedData": "Showing cached data — refresh failed",
+    "openSong": "Open song {title}",
+    "addToFavorites": "Add {title} to favorites",
+    "removeFromFavorites": "Remove {title} from favorites",
+    "deleteSongLabel": "Delete song {title}"
   },
   "song": {
     "notFound": "Song not found",
