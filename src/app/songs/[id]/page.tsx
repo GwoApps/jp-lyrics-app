@@ -430,26 +430,7 @@ export default function SongViewPage() {
               ) : (
                 <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--muted)] text-[var(--muted-foreground)]">
                   {t('admin.private')}
-                  {isAdmin ? (
-                    <button
-                      onClick={async () => {
-                        try {
-                          const res = await fetch(`/api/admin/songs/${id}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ is_public: 1 }),
-                          });
-                          if (res.ok) {
-                            data.refreshSong();
-                            data.showToast('success', t('admin.approved'));
-                          }
-                        } catch {}
-                      }}
-                      className="text-[var(--song-accent)] hover:text-[var(--song-accent)]/80 underline transition-colors"
-                    >
-                      {t('admin.setPublic')}
-                    </button>
-                  ) : canEdit && song.public_requested !== 1 ? (
+                  {canEdit && song.public_requested !== 1 ? (
                     <button
                       onClick={async () => {
                         try {

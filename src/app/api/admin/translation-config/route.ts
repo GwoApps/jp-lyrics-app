@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { writeAuditLog } from '@/lib/admin';
 import { getTranslationConfig } from '@/lib/translation';
 import { DEFAULT_SYSTEM_PROMPT } from '@/lib/translation/prompts';
 import {
@@ -83,6 +84,16 @@ export async function PUT(request: NextRequest) {
     || 'system_prompt' in body;
   if (!hasAnyField) {
     await clearStoredTranslationConfig(db);
+    // Audit the clear (secrets are never included).
+    await writeAuditLog(db, {
+      actorUserId: user.id,
+      action: 'clear_translation_config',
+      targetType: 'translation_config',
+      targetId: 'translation_config',
+      beforeJson: null,
+      afterJson: null,
+      reason: '',
+    });
   } else {
     // Partial update: start from the current stored values so untouched fields
     // (notably api_key, which the API never echoes back) are preserved.
@@ -115,6 +126,23 @@ export async function PUT(request: NextRequest) {
       }
     }
     await setStoredTranslationConfig(db, stored);
+    // Audit the config change. Only whitelisted metadata is stored — the API
+    // key, if provided, is deliberately NOT written into the audit trail.
+    await writeAuditLog(db, {
+      actorUserId: user.id,
+      action: 'update_translation_config',
+      targetType: 'translation_config',
+      targetId: 'translation_config',
+      beforeJson: null,
+      afterJson: JSON.stringify({
+        provider: stored.provider ?? null,
+        base_url: stored.base_url ?? null,
+        model: stored.model ?? null,
+        target_lang: stored.target_lang ?? null,
+        has_system_prompt: typeof stored.system_prompt === 'string' && stored.system_prompt.length > 0,
+      }),
+      reason: '',
+    });
   }
 
   const reloaded = await getStoredTranslationConfig(db);

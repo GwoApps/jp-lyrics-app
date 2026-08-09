@@ -12,8 +12,6 @@ interface SongPreviewDialogProps {
   song: AdminSong | null;
   locale: string;
   onClose: () => void;
-  onApprove: (song: AdminSong) => void;
-  onReject: (song: AdminSong) => void;
 }
 
 interface SongDetail {
@@ -30,11 +28,6 @@ interface SongDetail {
   reading_scheme?: string;
 }
 
-/**
- * Full song-content preview for admin approval. The admin list only carries a
- * lightweight summary; this dialog fetches the complete lyrics on demand via
- * the public song endpoint and keeps the approve/reject actions at hand.
- */
 interface MetaBadgeProps {
   ok: boolean;
   label: string;
@@ -52,22 +45,27 @@ function MetaBadge({ ok, label }: MetaBadgeProps) {
   );
 }
 
-export default function SongPreviewDialog({ song, locale, onClose, onApprove, onReject }: SongPreviewDialogProps) {
+/**
+ * Read-only song-content preview for the "内容" view (ISSUE #82). Fetches the
+ * complete lyrics on demand and shows full raw content — not just the list
+ * summary. Approve/reject intentionally lives only in the 待办 workflow, so
+ * this dialog is view + open-in-song-page only.
+ */
+export default function SongPreviewDialog({ song, locale, onClose }: SongPreviewDialogProps) {
   const { t } = useI18n();
   const bcp47 = localeToBCP47(locale);
   const [detail, setDetail] = useState<SongDetail | null>(null);
-  // The dialog is keyed by song id in the parent, so it remounts per song and
-  // starts in the loading state until the on-demand fetch resolves.
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadDetail = useCallback(async () => {
     if (!song) return;
+    setLoading(true);
+    setError(null);
     try {
       const res = await fetch(`/api/songs/${encodeURIComponent(song.id)}`);
       if (!res.ok) throw new Error('load_failed');
       setDetail(await res.json());
-      setError(null);
     } catch {
       setError(t('admin.previewLoadFailed'));
     } finally {
@@ -92,8 +90,6 @@ export default function SongPreviewDialog({ song, locale, onClose, onApprove, on
   if (!song) return null;
 
   const rawLines = detail?.lyrics_raw?.split('\n').map((l) => l.trim()).filter(Boolean) ?? [];
-  const previewLines = song.lyrics_preview?.split('\n').filter(Boolean) ?? rawLines.slice(0, 6);
-
   const hasTimeline = detail?.lyrics_synced
     ? /\[\d{2}:\d{2}(\.\d+)?\]/.test(detail.lyrics_synced)
     : (song.has_synced_timeline ?? false) === true || song.has_synced_timeline === 1;
@@ -101,10 +97,8 @@ export default function SongPreviewDialog({ song, locale, onClose, onApprove, on
   const needsReview = detail?.lyrics_needs_review === 1 || song.lyrics_needs_review === 1;
   const lineCount = rawLines.length > 0 ? rawLines.length : (song.lyric_line_count ?? 0);
 
-  const handleOverlayClick = () => onClose();
-
   return (
-    <div className="confirm-overlay" onClick={handleOverlayClick}>
+    <div className="confirm-overlay" onClick={onClose}>
       <div
         className="confirm-dialog"
         style={{ maxWidth: '560px' }}
@@ -142,31 +136,34 @@ export default function SongPreviewDialog({ song, locale, onClose, onApprove, on
               {t('admin.previewNeedsReview')}
             </span>
           )}
+          {song.public_requested === 1 && song.is_public === 0 && (
+            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--warning)]/20 text-[var(--warning)]">
+              {t('admin.pendingApproval')}
+            </span>
+          )}
         </div>
 
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 p-3 mb-4 max-h-56 overflow-y-auto">
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 p-3 mb-4 max-h-72 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-[var(--muted-foreground)]" />
             </div>
           ) : error ? (
             <p className="text-xs text-[var(--destructive)] text-center py-4">{error}</p>
-          ) : previewLines.length === 0 ? (
+          ) : rawLines.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 text-center text-[var(--muted-foreground)]">
               <Music className="h-5 w-5 mb-1.5 opacity-40" />
               <p className="text-xs">{t('admin.previewNoLyrics')}</p>
             </div>
           ) : (
-            <pre className="text-xs leading-relaxed whitespace-pre-wrap font-sans text-[var(--foreground)]">{previewLines.join('\n')}</pre>
-          )}
-          {!loading && !error && lineCount > previewLines.length && (
-            <p className="text-[10px] text-[var(--muted-foreground)] mt-2">
-              {t('admin.previewMoreLines', { count: String(lineCount - previewLines.length) })}
-            </p>
+            <pre className="text-xs leading-relaxed whitespace-pre-wrap font-sans text-[var(--foreground)]">{rawLines.join('\n')}</pre>
           )}
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex items-center justify-end gap-2">
+          {song.public_requested === 1 && song.is_public === 0 && (
+            <p className="mr-auto text-[11px] text-[var(--warning)]">{t('admin.pendingInQueueHint')}</p>
+          )}
           <Link
             href={`/songs/${song.id}`}
             target="_blank"
@@ -176,21 +173,6 @@ export default function SongPreviewDialog({ song, locale, onClose, onApprove, on
             <ExternalLink className="h-3.5 w-3.5" />
             {t('admin.previewOpenInNewTab')}
           </Link>
-          <div className="flex-1" />
-          <button
-            onClick={() => onReject(song)}
-            className="inline-flex items-center justify-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium bg-[var(--destructive)]/10 text-[var(--destructive)] hover:bg-[var(--destructive)]/20 transition-colors"
-          >
-            <X className="h-3.5 w-3.5" />
-            {t('admin.reject')}
-          </button>
-          <button
-            onClick={() => onApprove(song)}
-            className="inline-flex items-center justify-center gap-1 rounded-md px-3 py-1.5 text-xs font-medium bg-[var(--success)]/20 text-[var(--success)] hover:bg-[var(--success)]/30 transition-colors"
-          >
-            <Check className="h-3.5 w-3.5" />
-            {t('admin.approve')}
-          </button>
         </div>
       </div>
     </div>

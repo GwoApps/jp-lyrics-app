@@ -7,13 +7,24 @@ import {
   resolveTranslationConfig,
   type StoredTranslationConfig,
 } from '@/lib/translation-settings';
+import { rateLimitTest, validateTranslationBaseUrl } from '@/lib/ssrf-guard';
 
 // POST /api/admin/translation-config/test — connectivity check (admin only).
 // Body: optional config snapshot to test BEFORE saving; when omitted, tests the effective config.
+//
+// Safety (ISSUE #82): HTTPS-only, known-provider host allowlist, custom hosts
+// must resolve to public addresses only (loopback / RFC1918 / link-local /
+// metadata / DNS-rebinding refused), short timeout + low-frequency rate limit.
+// GET responses never echo the API key, and the test body's api_key is only
+// used transiently for the connection attempt.
 export async function POST(request: NextRequest) {
   const user = await getAuthUser(request);
   if (!user?.isAdmin) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+
+  if (rateLimitTest(user.id)) {
+    return NextResponse.json({ ok: false, latencyMs: 0, message: 'rate_limited' }, { status: 429 });
   }
 
   const db = getDB();
@@ -37,5 +48,12 @@ export async function POST(request: NextRequest) {
   if (!config) {
     return NextResponse.json({ ok: false, latencyMs: 0, message: 'missing_api_key' }, { status: 200 });
   }
+
+  // SSRF guard before any network call.
+  const urlError = await validateTranslationBaseUrl(config.baseUrl, config.provider);
+  if (urlError) {
+    return NextResponse.json({ ok: false, latencyMs: 0, message: urlError }, { status: 200 });
+  }
+
   return NextResponse.json(await testTranslationConnection(config));
 }

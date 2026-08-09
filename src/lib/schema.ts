@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey, blob } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, primaryKey, blob, index as sqliteIndex } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
 export const songs = sqliteTable('songs', {
@@ -134,6 +134,34 @@ export const playlistImportJobs = sqliteTable('playlist_import_jobs', {
   createdAt: text('created_at').notNull().default(sql`(datetime('now', 'localtime'))`),
   updatedAt: text('updated_at').notNull().default(sql`(datetime('now', 'localtime'))`),
 });
+
+/**
+ * Append-only admin audit trail (see ISSUE #82). Every high-risk admin write
+ * (promote/demote/block/unblock/delete user, approve/reject/publish/unpublish/
+ * delete song, translation-config change/clear) is recorded atomically with
+ * the business update.
+ *
+ * Privacy rules:
+ *  - before_json/after_json only keep the whitelisted, non-secret fields;
+ *  - never store API keys, Spotify tokens, cookies, full lyrics or full prompts;
+ *  - the table is append-only: no DELETE/UPDATE path is exposed by the app.
+ */
+export const adminAuditLog = sqliteTable('admin_audit_log', {
+  id: text('id').primaryKey(),
+  actorUserId: text('actor_user_id').notNull(),
+  action: text('action').notNull(),
+  targetType: text('target_type').notNull(), // 'user' | 'song' | 'translation_config'
+  targetId: text('target_id').notNull(),
+  beforeJson: text('before_json'),
+  afterJson: text('after_json'),
+  reason: text('reason').notNull().default(''),
+  result: text('result').notNull().default('success'), // success | failure
+  occurredAt: text('occurred_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+}, (t) => [
+  sqliteIndex('admin_audit_log_occurred_at_idx').on(t.occurredAt),
+  sqliteIndex('admin_audit_log_actor_occurred_idx').on(t.actorUserId, t.occurredAt),
+  sqliteIndex('admin_audit_log_target_idx').on(t.targetType, t.targetId, t.occurredAt),
+]);
 
 /** One row per track with its final outcome (idempotent by Spotify track id). */
 export const playlistImportTrackResults = sqliteTable('playlist_import_track_results', {
