@@ -105,11 +105,11 @@ export async function verifySession(token: string, secret: string = resolveSecre
   const payload = `${userIdField}.${ts}`;
   const key = await getSigningKey(secret);
 
-  let sigBytes: Uint8Array;
+  let sigBytes: ArrayBuffer;
   try {
     const base64 = sigB64.replace(/-/g, '+').replace(/_/g, '/')
       + '==='.slice((sigB64.length + 3) % 4);
-    sigBytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+    sigBytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0)).buffer;
   } catch {
     return null;
   }

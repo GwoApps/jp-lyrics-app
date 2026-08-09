@@ -39,44 +39,43 @@ export function useCoverPalette(
     palette: CoverPalette | null;
   }>(() => ({ url: coverUrl, palette: serverPalette }));
   const palette = paletteState.url === coverUrl ? paletteState.palette : null;
-  // Mirror for effect logic without re-render loops.
-  const paletteRef = useRef<CoverPalette | null>(serverPalette);
-  if (paletteState.url === coverUrl && paletteState.palette !== paletteRef.current) {
-    paletteRef.current = paletteState.palette;
-  }
   const onExtractedRef = useRef(onExtracted);
-  onExtractedRef.current = onExtracted;
 
-  // 1/2. Seed from server palette (initial state) and localStorage cache.
   useEffect(() => {
-    if (!coverUrl) return;
+    onExtractedRef.current = onExtracted;
+  }, [onExtracted]);
+
+  // Resolve the server/local cache first, then extract only when no usable
+  // palette exists (or refreshKey explicitly forces a fresh extraction).
+  useEffect(() => {
+    let cancelled = false;
+    if (!coverUrl) {
+      queueMicrotask(() => {
+        if (!cancelled) setPaletteState({ url: coverUrl, palette: null });
+      });
+      return () => { cancelled = true; };
+    }
+
     const local = cacheKey ? getCachedSongPalette(cacheKey, coverUrl) : null;
     const seed = local ?? serverPalette;
-    if (seed) {
-      paletteRef.current = seed;
-      setPaletteState({ url: coverUrl, palette: seed });
+    if (seed && refreshKey === 0) {
+      queueMicrotask(() => {
+        if (!cancelled) setPaletteState({ url: coverUrl, palette: seed });
+      });
+      return () => { cancelled = true; };
     }
-  }, [coverUrl, cacheKey, serverPalette]);
 
-  // 3. Live extraction: only when nothing usable is known, or forced (refreshKey > 0).
-  useEffect(() => {
-    if (!coverUrl) return;
-    if (paletteRef.current && refreshKey === 0) return;
-
-    let cancelled = false;
     const image = new Image();
     image.crossOrigin = 'anonymous';
     image.onload = () => {
       const nextPalette = extractMaterialCoverPalette(image);
       if (cancelled) return;
-      paletteRef.current = nextPalette;
       setPaletteState({ url: coverUrl, palette: nextPalette });
       if (cacheKey) cacheSongPalette(cacheKey, coverUrl, nextPalette);
       onExtractedRef.current?.(nextPalette);
     };
     image.onerror = () => {
       if (cancelled) return;
-      paletteRef.current = null;
       setPaletteState({ url: coverUrl, palette: null });
     };
     image.src = coverUrl;
@@ -84,7 +83,7 @@ export function useCoverPalette(
     return () => {
       cancelled = true;
     };
-  }, [coverUrl, refreshKey, cacheKey]);
+  }, [coverUrl, refreshKey, cacheKey, serverPalette]);
 
   return palette;
 }

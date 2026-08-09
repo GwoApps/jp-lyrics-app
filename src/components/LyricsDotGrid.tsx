@@ -77,7 +77,10 @@ export default function LyricsDotGrid({ accent, params, spectrumRef }: LyricsDot
   // keep reading the initial `undefined` forever, so the mic spectrum would
   // never draw after the capture is toggled on.
   const spectrumRefLive = useRef(spectrumRef);
-  spectrumRefLive.current = spectrumRef;
+
+  useEffect(() => {
+    spectrumRefLive.current = spectrumRef;
+  }, [spectrumRef]);
 
   useEffect(() => {
     if (accent) accentRef.current = accent;

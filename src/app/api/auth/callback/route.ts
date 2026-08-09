@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
   const oldId = profile.email ? null : `spotify:${profile.id}`;
   if (oldId && oldId !== userId) {
     try {
-      const oldUser = await db.get(sql`SELECT 1 FROM users WHERE id = ${oldId}`) as any;
+      const oldUser = await db.get(sql`SELECT 1 FROM users WHERE id = ${oldId}`) as unknown;
       if (oldUser) {
         // Migrate all user-associated data to new identity
         await db.run(sql`UPDATE users SET id = ${userId} WHERE id = ${oldId}`);
