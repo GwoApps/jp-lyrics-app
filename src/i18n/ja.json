@@ -324,7 +324,13 @@
     "seekToLine": "この行の位置へ移動",
     "clearTime": "時刻を消去",
     "unsavedStatus": "保存していないタイムライン変更があります",
-    "savedStatus": "現在の進捗は保存済みです"
+    "savedStatus": "現在の進捗は保存済みです",
+    "staleTitle": "歌詞が別の場所で変更されました",
+    "staleBody": "このタイムラインを開いた後に、歌詞が別のページで更新されました。保存すると新しい歌詞を上書きしてしまうため、保存していません。",
+    "reload": "新しい歌詞を再読み込み",
+    "exportDraft": "自分の下書きをエクスポート",
+    "reloaded": "最新の歌詞を読み込みました",
+    "reloadFailed": "最新の歌詞を再読み込みできませんでした"
   },
   "lyricsSources": {
     "manual": "手動入力",

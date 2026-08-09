@@ -324,7 +324,13 @@
     "seekToLine": "Seek to this line",
     "clearTime": "Clear timestamp",
     "unsavedStatus": "Timeline changes have not been saved",
-    "savedStatus": "Current progress is saved"
+    "savedStatus": "Current progress is saved",
+    "staleTitle": "Lyrics were changed in another view",
+    "staleBody": "The lyrics were updated elsewhere after this timeline was opened. Saving would overwrite the newer lyrics, so the timeline was not saved.",
+    "reload": "Reload new lyrics",
+    "exportDraft": "Export my draft",
+    "reloaded": "Loaded the latest lyrics",
+    "reloadFailed": "Could not reload the latest lyrics"
   },
   "lyricsSources": {
     "manual": "Manual",

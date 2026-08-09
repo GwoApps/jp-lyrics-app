@@ -195,6 +195,38 @@ export function resolveLrcTextUpdate(existingRaw: string, existingSynced: string
   return { lyricsRaw, contentChanged: lyricsRaw !== existingRaw };
 }
 
+/** Result of guarding a timeline-save submission against stale plain lyrics. */
+export type TimelineSaveGuard =
+  | { ok: true; lyricsRaw: string; contentChanged: boolean }
+  | { ok: false; error: 'missing_source_lyrics' | 'stale_timeline_source' };
+
+/**
+ * Guard a timeline-save submission against silent lost updates.
+ *
+ * The timeline editor loads `lyrics_raw` once and lets the user edit for a
+ * long time. When it finally saves, another tab/session may have already
+ * rewritten the plain lyrics — writing the submitted LRC back would
+ * reverse-fill stale text into `lyrics_raw` and clobber the newer lyrics.
+ * The client submits the `lyrics_raw` snapshot it was built from
+ * (`sourceLyrics`); when it no longer matches the current database value the
+ * submission is refused instead of overwriting (mirrors the stale-source
+ * protection used by the furigana/translation save endpoints).
+ */
+export function resolveTimelineSave(
+  existingRaw: string,
+  existingSynced: string,
+  submittedSynced: string,
+  sourceLyrics: string,
+): TimelineSaveGuard {
+  if (typeof sourceLyrics !== 'string') {
+    return { ok: false, error: 'missing_source_lyrics' };
+  }
+  if (sourceLyrics !== existingRaw) {
+    return { ok: false, error: 'stale_timeline_source' };
+  }
+  return { ok: true, ...resolveLrcTextUpdate(existingRaw, existingSynced, submittedSynced) };
+}
+
 /** Parse an editor timestamp in M:SS, M:SS.d, M:SS.dd or M:SS.ddd form. */
 export function parseLrcTimestamp(value: string): number | null {
   const match = value.trim().match(/^(\d+):(\d{2})(?:\.(\d{1,3}))?$/);

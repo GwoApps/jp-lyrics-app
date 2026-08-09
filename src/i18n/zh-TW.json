@@ -324,7 +324,13 @@
     "seekToLine": "跳轉到這一行",
     "clearTime": "清除時間",
     "unsavedStatus": "有尚未儲存的時間軸修改",
-    "savedStatus": "目前進度已儲存"
+    "savedStatus": "目前進度已儲存",
+    "staleTitle": "歌詞已在其他位置修改",
+    "staleBody": "開啟此時間軸後，歌詞已在其他頁面被更新。儲存會覆蓋新歌詞，因此未儲存目前時間軸。",
+    "reload": "重新載入新歌詞",
+    "exportDraft": "匯出我的草稿",
+    "reloaded": "已載入最新歌詞",
+    "reloadFailed": "無法重新載入最新歌詞"
   },
   "lyricsSources": {
     "manual": "手動輸入",
