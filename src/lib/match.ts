@@ -104,6 +104,37 @@ export function artistScore(rawA: string, rawB: string): number {
   return bigramDice(a, b);
 }
 
+/**
+ * Strict incompatibility check: are two artist strings clearly different people /
+ * bands? Used by `songMatchScore` to reject same-title different-artist tracks
+ * (covers / remixes / homonyms) while keeping the loose fuzzy matching for
+ * genuine variations and typos.
+ *
+ * Returns false when either side has no artist info (unknown → don't reject).
+ */
+function artistsClearlyDifferent(rawA: string, rawB: string): boolean {
+  const a = normalize(rawA);
+  const b = normalize(rawB);
+  if (!a || !b) return false;
+  if (a === b) return false;
+
+  const splitArtist = (s: string) =>
+    s.split(/[,、&／/]/).map((p) => p.trim()).filter(Boolean);
+  const aParts = splitArtist(a);
+  const bParts = splitArtist(b);
+
+  for (const ap of aParts) {
+    for (const bp of bParts) {
+      if (ap === bp) return false;
+      // Substring containment, or near-identical bigrams (typos / diacritics),
+      // still count as the same artist.
+      if (ap.includes(bp) || bp.includes(ap)) return false;
+      if (bigramDice(ap, bp) >= 0.9) return false;
+    }
+  }
+  return true;
+}
+
 // ─── Composite song matching ──────────────────────────────────
 
 export interface SongCandidate {
@@ -137,7 +168,28 @@ export function songMatchScore(
   if (tScore < 0.55) return 0; // Title must pass threshold
 
   const aScore = artistScore(song.artist, track.artist);
+  // Same title from a clearly different artist must NOT count as the same song
+  // (covers / remixes / homonyms). `artistsClearlyDifferent` only rejects when
+  // both sides carry real artist info that doesn't overlap at all.
+  if (artistsClearlyDifferent(song.artist, track.artist)) return 0;
   return tScore * 0.7 + aScore * 0.3;
+}
+
+/**
+ * Boolean: is a DB song the same as the currently-playing Spotify track?
+ *
+ * Mirrors `songMatchScore` semantics so every consumer (home list, detail page
+ * highlight/seek/share, follow-playing navigation) agrees on identity:
+ *  - When both sides carry a Spotify Track ID, the ID is the single source of
+ *    truth — a different ID is never the same song, even with identical titles.
+ *  - Legacy songs without a Track ID fall back to title + artist scoring.
+ */
+export function isSameSpotifyTrack(
+  song: SongCandidate,
+  track: PlayingTrack | null | undefined,
+): boolean {
+  if (!track) return false;
+  return songMatchScore(song, track) >= 0.5;
 }
 
 /**
