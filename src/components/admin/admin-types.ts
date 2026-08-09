@@ -22,6 +22,15 @@ export interface AdminSong {
   public_requested: number;
   created_at: string;
   updated_at: string;
+  // Lightweight quality summary returned by GET /api/admin/songs.
+  lyric_line_count?: number;
+  has_synced_timeline?: number | boolean;
+  has_furigana?: number | boolean;
+  has_translation?: number | boolean;
+  lyrics_preview?: string;
+  lyrics_needs_review?: number;
+  lyrics_confidence?: number;
+  lyrics_source?: string;
 }
 
 export type AdminTab = 'users' | 'songs' | 'pending' | 'translation';

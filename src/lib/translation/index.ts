@@ -259,42 +259,84 @@ async function getWorkersAiBinding(): Promise<{ run: (model: string, inputs: unk
   }
 }
 
+/**
+ * Run a Workers AI call under the atomic daily-budget guard.
+ *
+ * Reserves an estimated budget fail-closed (refuses to call the model when
+ * the cap is exhausted), then settles with ACTUAL usage (多退少补). Any
+ * failure/cancellation releases the reservation; if even the release fails,
+ * the stale reservation is folded into used budget by the TTL reclaim in
+ * ai-usage.ts, so the hard cap is never silently widened.
+ */
+async function runWithAiQuota<T>(
+  estimatedNeurons: number,
+  execute: () => Promise<{ value: T; actualNeurons: number }>,
+): Promise<T> {
+  const { reserveAiBudget, settleAiBudget, releaseAiBudget } = await import('@/lib/ai-usage');
+  const reservation = await reserveAiBudget(estimatedNeurons);
+  if (!reservation.ok) {
+    throw new TranslationError(
+      'ai_quota_exceeded',
+      `Daily AI quota reached (${reservation.used + reservation.reserved}/${reservation.limit} neurons)`,
+    );
+  }
+  try {
+    const { value, actualNeurons } = await execute();
+    try {
+      await settleAiBudget(reservation.requestId, actualNeurons);
+    } catch (error) {
+      // Accounting failed after the model already ran — the reservation is
+      // left 'reserved' and the TTL reclaim converts it into used budget
+      // (fail-closed). Surface loudly instead of silently swallowing it.
+      console.error(
+        `[ai-usage] settlement failed for ${reservation.requestId} — ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    return value;
+  } catch (error) {
+    try {
+      await releaseAiBudget(reservation.requestId);
+    } catch (releaseError) {
+      console.warn(
+        `[ai-usage] release failed for ${reservation.requestId} — ${releaseError instanceof Error ? releaseError.message : String(releaseError)}`,
+      );
+    }
+    throw error;
+  }
+}
+
 async function requestWorkersAI(lines: string[], cfg: TranslationConfig, ctx?: TranslationContext): Promise<string> {
   const ai = await getWorkersAiBinding();
   if (!ai) {
     throw new TranslationError('translation_failed', 'Workers AI binding unavailable');
   }
-  // Daily Neurons guard: refuse up-front if this request would bust the
-  // budget (estimated from input size), then record actual usage after.
-  // Dynamic import keeps the node test runner (no @ alias) from resolving
-  // the DB-backed usage module unless the workers-ai path is actually used.
-  const { checkAiQuota, estimateTokens, neuronsForTokens, recordAiUsage } = await import('@/lib/ai-usage');
+  const { estimateTokens, neuronsForTokens } = await import('@/lib/ai-usage');
   const prompt = systemPromptFor(cfg, ctx);
   const inputText = `${prompt}\n${JSON.stringify(lines)}`;
-  const quota = await checkAiQuota(neuronsForTokens(estimateTokens(inputText), 0));
-  if (!quota.ok) {
-    throw new TranslationError(
-      'ai_quota_exceeded',
-      `Daily AI quota reached (${quota.used}/${quota.limit} neurons)`,
-    );
-  }
-  const data = await ai.run(cfg.model, {
-    messages: [
-      { role: 'system', content: prompt },
-      { role: 'user', content: JSON.stringify(lines) },
-    ],
-    temperature: 0.2,
+  // Daily Neurons guard: atomically reserve an estimated budget BEFORE the
+  // model runs so concurrent requests can never collectively exceed the hard
+  // cap, then settle with actual usage (多退少补) afterwards. Dynamic import
+  // keeps the node test runner (no @ alias) from resolving the DB-backed
+  // usage module unless the workers-ai path is actually used.
+  const estimate = neuronsForTokens(estimateTokens(inputText), 0);
+  return await runWithAiQuota(estimate, async () => {
+    const data = await ai.run(cfg.model, {
+      messages: [
+        { role: 'system', content: prompt },
+        { role: 'user', content: JSON.stringify(lines) },
+      ],
+      temperature: 0.2,
+    });
+    const text = data?.response;
+    if (typeof text !== 'string' || !text.trim()) {
+      throw new TranslationError('translation_invalid_response', 'empty model response');
+    }
+    // Prefer the model's own token usage; fall back to estimates.
+    const usage = (data as unknown as { usage?: { input_tokens?: number; output_tokens?: number } }).usage;
+    const inputTokens = usage?.input_tokens ?? estimateTokens(inputText);
+    const outputTokens = usage?.output_tokens ?? estimateTokens(text);
+    return { value: text, actualNeurons: neuronsForTokens(inputTokens, outputTokens) };
   });
-  const text = data?.response;
-  if (typeof text !== 'string' || !text.trim()) {
-    throw new TranslationError('translation_invalid_response', 'empty model response');
-  }
-  // Prefer the model's own token usage; fall back to estimates.
-  const usage = (data as unknown as { usage?: { input_tokens?: number; output_tokens?: number } }).usage;
-  const inputTokens = usage?.input_tokens ?? estimateTokens(inputText);
-  const outputTokens = usage?.output_tokens ?? estimateTokens(text);
-  await recordAiUsage(neuronsForTokens(inputTokens, outputTokens));
-  return text;
 }
 
 /**
@@ -327,10 +369,21 @@ export async function extractLyricsGlossary(
         return await requestAnthropicRaw(messages, cfg);
       }
       if (cfg.provider === 'workers-ai') {
-        const ai = await getWorkersAiBinding();
-        if (!ai) throw new TranslationError('translation_failed', 'Workers AI binding unavailable');
-        const data = await ai.run(cfg.model, { messages, max_tokens: 4096, temperature: 0 });
-        return data?.response ?? '';
+        const { estimateTokens, neuronsForTokens } = await import('@/lib/ai-usage');
+        // Glossary extraction is also a billed Workers AI call and MUST go
+        // through the same atomic reservation guard (it can otherwise burn
+        // the daily budget without being counted).
+        const estimate = neuronsForTokens(estimateTokens(input), 4096);
+        return await runWithAiQuota(estimate, async () => {
+          const ai = await getWorkersAiBinding();
+          if (!ai) throw new TranslationError('translation_failed', 'Workers AI binding unavailable');
+          const data = await ai.run(cfg.model, { messages, max_tokens: 4096, temperature: 0 });
+          const response = data?.response ?? '';
+          const usage = (data as unknown as { usage?: { input_tokens?: number; output_tokens?: number } }).usage;
+          const inputTokens = usage?.input_tokens ?? estimateTokens(input);
+          const outputTokens = usage?.output_tokens ?? estimateTokens(response);
+          return { value: response, actualNeurons: neuronsForTokens(inputTokens, outputTokens) };
+        });
       }
       const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
       const res = await fetchImpl(url, {
@@ -408,28 +461,27 @@ export async function streamTranslateLyricLines(
 ): Promise<string[]> {
   let text: string;
   if (cfg.provider === 'workers-ai') {
-    const { checkAiQuota, estimateTokens, neuronsForTokens, recordAiUsage } = await import('@/lib/ai-usage');
+    const { estimateTokens, neuronsForTokens } = await import('@/lib/ai-usage');
     const prompt = systemPromptFor(cfg, ctx);
     const inputText = `${prompt}\n${JSON.stringify(lines)}`;
-    const quota = await checkAiQuota(neuronsForTokens(estimateTokens(inputText), 0));
-    if (!quota.ok) {
-      throw new TranslationError('ai_quota_exceeded', `Daily AI quota reached (${quota.used}/${quota.limit} neurons)`);
-    }
-    const ai = await getWorkersAiBinding();
-    if (!ai) throw new TranslationError('translation_failed', 'Workers AI binding unavailable');
-    const data = await ai.run(cfg.model, {
-      messages: [
-        { role: 'system', content: prompt },
-        { role: 'user', content: JSON.stringify(lines) },
-      ],
-      temperature: 0.2,
+    const estimate = neuronsForTokens(estimateTokens(inputText), 0);
+    text = await runWithAiQuota(estimate, async () => {
+      const ai = await getWorkersAiBinding();
+      if (!ai) throw new TranslationError('translation_failed', 'Workers AI binding unavailable');
+      const data = await ai.run(cfg.model, {
+        messages: [
+          { role: 'system', content: prompt },
+          { role: 'user', content: JSON.stringify(lines) },
+        ],
+        temperature: 0.2,
+      });
+      const response = data?.response ?? '';
+      if (!response.trim()) throw new TranslationError('translation_invalid_response', 'empty model response');
+      const usage = (data as unknown as { usage?: { input_tokens?: number; output_tokens?: number } }).usage;
+      const inputTokens = usage?.input_tokens ?? estimateTokens(inputText);
+      const outputTokens = usage?.output_tokens ?? estimateTokens(response);
+      return { value: response, actualNeurons: neuronsForTokens(inputTokens, outputTokens) };
     });
-    text = data?.response ?? '';
-    if (!text.trim()) throw new TranslationError('translation_invalid_response', 'empty model response');
-    const usage = (data as unknown as { usage?: { input_tokens?: number; output_tokens?: number } }).usage;
-    const inputTokens = usage?.input_tokens ?? estimateTokens(inputText);
-    const outputTokens = usage?.output_tokens ?? estimateTokens(text);
-    await recordAiUsage(neuronsForTokens(inputTokens, outputTokens));
     onDelta({ type: 'translation', text });
   } else if (cfg.provider === 'anthropic') {
     text = await streamAnthropic(lines, cfg, onDelta, fetchImpl, ctx, signal);

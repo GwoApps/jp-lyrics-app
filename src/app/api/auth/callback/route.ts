@@ -2,18 +2,49 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDB, sql } from '@/lib/db';
 import { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI, base64Encode } from '@/lib/spotify';
 import { signSession } from '@/lib/auth';
+import {
+  OAUTH_STATE_COOKIE,
+  OAUTH_STATE_PATH,
+  safeStateEqual,
+} from '@/lib/oauth-state';
 
 const APP_ORIGIN = new URL(SPOTIFY_REDIRECT_URI).origin;
 const COOKIE_NAME = 'jplrc_session';
 const COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
 
+/** Clear the one-time OAuth state cookie on both success and failure paths. */
+function clearOAuthStateCookie(response: NextResponse): NextResponse {
+  response.cookies.set(OAUTH_STATE_COOKIE, '', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 0,
+    path: OAUTH_STATE_PATH,
+  });
+  return response;
+}
+
 export async function GET(request: NextRequest) {
   const db = getDB();
   const code = request.nextUrl.searchParams.get('code');
   const error = request.nextUrl.searchParams.get('error');
+  const queryState = request.nextUrl.searchParams.get('state');
+  const cookieState = request.cookies.get(OAUTH_STATE_COOKIE)?.value;
+
+  // CSRF guard: the state in the callback query must match the one stored in
+  // the initiating browser's cookie, otherwise an attacker's callback URL
+  // could log a victim into the wrong identity. Missing, mismatched, or
+  // replayed state is rejected before any token exchange.
+  if (!safeStateEqual(queryState, cookieState)) {
+    return clearOAuthStateCookie(
+      NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=state_mismatch`),
+    );
+  }
 
   if (error || !code) {
-    return NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=denied`);
+    return clearOAuthStateCookie(
+      NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=denied`),
+    );
   }
 
   // Exchange code for tokens
@@ -31,7 +62,9 @@ export async function GET(request: NextRequest) {
   });
 
   if (!tokenRes.ok) {
-    return NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=token_failed`);
+    return clearOAuthStateCookie(
+      NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=token_failed`),
+    );
   }
 
   const tokenData = await tokenRes.json();
@@ -45,7 +78,9 @@ export async function GET(request: NextRequest) {
 
   // Reject if we couldn't get a valid profile — token is likely scoped wrong
   if (!profile.account_id && !profile.id) {
-    return NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=invalid_profile`);
+    return clearOAuthStateCookie(
+      NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=invalid_profile`),
+    );
   }
 
   // Determine user identifier:
@@ -53,7 +88,9 @@ export async function GET(request: NextRequest) {
   //   2. From Spotify account_id (always available, e.g. "spotify:abc123")
   const userId = profile.email || `spotify:${profile.account_id}`;
   if (!userId) {
-    return NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=no_identity`);
+    return clearOAuthStateCookie(
+      NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=no_identity`),
+    );
   }
 
   // Migrate from deprecated profile.id to account_id
@@ -82,7 +119,9 @@ export async function GET(request: NextRequest) {
       sql`SELECT is_blocked FROM users WHERE id = ${userId}`
     ) as { is_blocked: number } | undefined;
     if (existingUser?.is_blocked === 1) {
-      return NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=blocked`);
+      return clearOAuthStateCookie(
+        NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=blocked`),
+      );
     }
   } catch (error) {
     // users table may not exist yet — but on CF a missing table is a deploy problem worth logging.
@@ -128,7 +167,9 @@ export async function GET(request: NextRequest) {
 
   // Set signed session cookie (used when no gateway auth headers)
   const token = await signSession(userId);
-  const response = NextResponse.redirect(`${APP_ORIGIN}/?spotify=connected`);
+  const response = clearOAuthStateCookie(
+    NextResponse.redirect(`${APP_ORIGIN}/?spotify=connected`),
+  );
   response.cookies.set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: true,

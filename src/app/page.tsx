@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useTransitionRouter } from 'next-view-transitions';
 import { Music, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User, Star, FolderPlus, Trash, LayoutGrid, List, Disc3, RefreshCw } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import SongItemCard from '@/components/SongItemCard';
@@ -76,6 +75,7 @@ export default function HomePage() {
         blocked: 'home.spotifyBlocked',
         invalid_profile: 'home.spotifyInvalidProfile',
         passphrase_required: 'home.spotifyPassphraseRequired',
+        state_mismatch: 'home.spotifyStateMismatch',
       };
       return { type: 'error', msg: t(keyMap[error] || 'home.spotifyTokenFailed') };
     }
@@ -95,7 +95,6 @@ export default function HomePage() {
   const [filterCollection, setFilterCollection] = useState<string | null>(null);
   const [collectionSongs, setCollectionSongs] = useState<Set<string>>(new Set());
   const router = useRouter();
-  const transitionRouter = useTransitionRouter();
   const nowPlayingCardRef = useRef<HTMLDivElement>(null);
   const updateNowPlayingPointer = (event: React.PointerEvent<HTMLDivElement>) => {
     const card = nowPlayingCardRef.current;
@@ -404,7 +403,9 @@ export default function HomePage() {
         unknownArtistLabel={t('common.unknownArtist')}
         createdByLabel={t('home.createdBy')}
         shareLabel={t('song.share')}
-        onOpen={() => transitionRouter.push(`/songs/${song.id}`)}
+        openSongLabel={(title) => t('home.openSong', { title })}
+        favoriteLabel={(title, fav) => t(fav ? 'home.removeFromFavorites' : 'home.addToFavorites', { title })}
+        deleteLabel={(title) => t('home.deleteSongLabel', { title })}
         onPrefetch={() => {
           if ('connection' in navigator && (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData !== true) {
             fetch(`/api/songs/${song.id}`).catch(() => {});

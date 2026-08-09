@@ -100,3 +100,50 @@ export const aiUsage = sqliteTable('ai_usage', {
   neurons: integer('neurons').notNull().default(0),
   requests: integer('requests').notNull().default(0),
 });
+
+// In-flight reservations for the daily Workers AI budget. A request
+// atomically reserves an estimated budget *before* calling the model and
+// settles it (多退少补) afterwards, so concurrent requests can never
+// collectively exceed the daily limit. Entries that outlive
+// AI_RESERVATION_TTL_MS are reclaimed by the next reservation.
+export const aiUsageReservations = sqliteTable('ai_usage_reservations', {
+  requestId: text('request_id').primaryKey(),
+  usageDate: text('usage_date').notNull(),
+  estimatedNeurons: integer('estimated_neurons').notNull(),
+  status: text('status', { enum: ['reserved', 'settled', 'released'] }).notNull().default('reserved'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+/**
+ * Long-running Spotify playlist imports (job-based so a single Worker request
+ * never has to fetch lyrics for the whole list). One row per import; the
+ * client drives it with chunked `PUT` requests and can resume after a timeout.
+ * Track statuses are persisted separately in `playlist_import_track_results`.
+ */
+export const playlistImportJobs = sqliteTable('playlist_import_jobs', {
+  id: text('id').primaryKey(),
+  userEmail: text('user_email').notNull(),
+  playlistId: text('playlist_id').notNull(),
+  status: text('status').notNull().default('pending'), // pending | running | completed | failed | cancelled
+  total: integer('total').notNull().default(0),
+  processed: integer('processed').notNull().default(0),
+  imported: integer('imported').notNull().default(0),
+  skipped: integer('skipped').notNull().default(0),
+  failed: integer('failed').notNull().default(0),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+  updatedAt: text('updated_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+});
+
+/** One row per track with its final outcome (idempotent by Spotify track id). */
+export const playlistImportTrackResults = sqliteTable('playlist_import_track_results', {
+  jobId: text('job_id').notNull().references(() => playlistImportJobs.id, { onDelete: 'cascade' }),
+  spotifyTrackId: text('spotify_track_id').notNull(),
+  title: text('title').notNull(),
+  artist: text('artist').notNull(),
+  status: text('status').notNull(), // imported | skipped | failed
+  needsReview: integer('needs_review').notNull().default(0),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+}, (t) => [
+  primaryKey({ columns: [t.jobId, t.spotifyTrackId] }),
+]);

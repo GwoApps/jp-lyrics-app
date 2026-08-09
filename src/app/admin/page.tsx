@@ -11,6 +11,7 @@ import AdminTabs from '@/components/admin/AdminTabs';
 import AdminUserList from '@/components/admin/AdminUserList';
 import AdminSongList from '@/components/admin/AdminSongList';
 import AdminPendingList from '@/components/admin/AdminPendingList';
+import SongPreviewDialog from '@/components/admin/SongPreviewDialog';
 import BlockUserDialog from '@/components/admin/BlockUserDialog';
 import { adminErrorMessage, type AdminSong, type AdminTab, type AdminUser } from '@/components/admin/admin-types';
 import { useI18n } from '@/lib/i18n';
@@ -28,6 +29,9 @@ export default function AdminPage() {
   const [deleteSongTarget, setDeleteSongTarget] = useState<AdminSong | null>(null);
   const [blockUserTarget, setBlockUserTarget] = useState<AdminUser | null>(null);
   const [blockReason, setBlockReason] = useState('');
+  const [previewSong, setPreviewSong] = useState<AdminSong | null>(null);
+  const [approveTarget, setApproveTarget] = useState<AdminSong | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<AdminSong | null>(null);
   const { session } = useAuthSession();
   const isAdmin = session?.user?.isAdmin === true;
   const currentUserId = session?.user?.email || '';
@@ -153,6 +157,7 @@ export default function AdminPage() {
   };
 
   const handleApprovePublic = async (song: AdminSong) => {
+    setApproveTarget(null);
     try {
       const res = await fetch(`/api/admin/songs/${song.id}`, {
         method: 'PUT',
@@ -173,6 +178,7 @@ export default function AdminPage() {
   };
 
   const handleRejectPublic = async (song: AdminSong) => {
+    setRejectTarget(null);
     try {
       const res = await fetch(`/api/admin/songs/${song.id}`, {
         method: 'PUT',
@@ -252,17 +258,19 @@ export default function AdminPage() {
         <AdminSongList
           songs={songs}
           locale={locale}
+          onPreview={setPreviewSong}
           onToggleVisibility={handleToggleVisibility}
-          onApprove={handleApprovePublic}
-          onReject={handleRejectPublic}
+          onApprove={(song) => setApproveTarget(song)}
+          onReject={(song) => setRejectTarget(song)}
           onDelete={setDeleteSongTarget}
         />
       ) : tab === 'pending' ? (
         <AdminPendingList
           songs={pendingSongs}
           locale={locale}
-          onApprove={handleApprovePublic}
-          onReject={handleRejectPublic}
+          onPreview={setPreviewSong}
+          onApprove={(song) => setApproveTarget(song)}
+          onReject={(song) => setRejectTarget(song)}
         />
       ) : (
         <TranslationConfigPanel />
@@ -289,6 +297,39 @@ export default function AdminPage() {
         variant="danger"
         onConfirm={handleDeleteSong}
         onCancel={() => setDeleteSongTarget(null)}
+      />
+
+      {/* Approve Public Confirmation */}
+      <ConfirmDialog
+        open={!!approveTarget}
+        title={t('admin.confirmApproveTitle', { title: approveTarget?.title || '' })}
+        body={t('admin.confirmApproveBody', { title: approveTarget?.title || '' })}
+        confirmLabel={t('admin.approve')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={() => approveTarget && handleApprovePublic(approveTarget)}
+        onCancel={() => setApproveTarget(null)}
+      />
+
+      {/* Reject Public Confirmation */}
+      <ConfirmDialog
+        open={!!rejectTarget}
+        title={t('admin.confirmRejectTitle', { title: rejectTarget?.title || '' })}
+        body={t('admin.confirmRejectBody', { title: rejectTarget?.title || '' })}
+        confirmLabel={t('admin.reject')}
+        cancelLabel={t('common.cancel')}
+        variant="danger"
+        onConfirm={() => rejectTarget && handleRejectPublic(rejectTarget)}
+        onCancel={() => setRejectTarget(null)}
+      />
+
+      {/* Song content preview */}
+      <SongPreviewDialog
+        key={previewSong?.id ?? 'none'}
+        song={previewSong}
+        locale={locale}
+        onClose={() => setPreviewSong(null)}
+        onApprove={(song) => { setPreviewSong(null); setApproveTarget(song); }}
+        onReject={(song) => { setPreviewSong(null); setRejectTarget(song); }}
       />
 
       {/* Block/Unblock User Dialog */}
