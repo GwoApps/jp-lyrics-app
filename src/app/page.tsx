@@ -75,6 +75,7 @@ export default function HomePage() {
         blocked: 'home.spotifyBlocked',
         invalid_profile: 'home.spotifyInvalidProfile',
         passphrase_required: 'home.spotifyPassphraseRequired',
+        state_mismatch: 'home.spotifyStateMismatch',
       };
       return { type: 'error', msg: t(keyMap[error] || 'home.spotifyTokenFailed') };
     }

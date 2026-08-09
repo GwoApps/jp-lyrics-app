@@ -92,6 +92,7 @@
     "spotifyBlocked": "Your account has been blocked",
     "spotifyInvalidProfile": "This Spotify account cannot be used with this app. Please contact the site developer for details.",
     "spotifyPassphraseRequired": "Enter the login passphrase first",
+    "spotifyStateMismatch": "Login session expired or invalid. Please try again",
     "importTitleRequired": "Please enter a song title",
     "importLyricsNotFound": "Lyrics not found — please paste manually",
     "createManually": "Create song manually",

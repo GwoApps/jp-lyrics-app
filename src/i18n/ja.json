@@ -92,6 +92,7 @@
     "spotifyBlocked": "アカウントがブロックされています",
     "spotifyInvalidProfile": "このSpotifyアカウントはご利用いただけません。サイト開発者にお問い合わせください",
     "spotifyPassphraseRequired": "先にログイン用の合言葉を入力してください",
+    "spotifyStateMismatch": "ログインセッションが期限切れか無効です。もう一度お試しください",
     "importTitleRequired": "曲名を入力してください",
     "importLyricsNotFound": "歌詞が見つかりませんでした — 手動で貼り付けてください",
     "createManually": "曲の作成へ進む",
