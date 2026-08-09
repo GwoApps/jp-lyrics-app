@@ -3,7 +3,7 @@ import { getDB, schema, sql } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import type { CoverPaletteJson, Song } from '@/lib/types';
 import { getAuthUser } from '@/lib/auth';
-import { resolveLrcTextUpdate } from '@/lib/lrc';
+import { resolveLrcTextUpdate, findLrcConflicts } from '@/lib/lrc';
 import type { ReadingScheme } from '@/lib/types';
 
 /** Strip internal email while exposing server-authoritative capabilities. */
@@ -131,6 +131,12 @@ export async function PUT(
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
+  // Reject LRC whose timestamps are not strictly increasing (including duplicate
+  // timestamps). The editor and the playback highlight engine both rely on
+  // monotonic ordering; silently storing broken data causes skipped highlights.
+  if (lyrics_synced !== undefined && (typeof lyrics_synced !== 'string' || findLrcConflicts(lyrics_synced).length > 0)) {
+    return NextResponse.json({ error: 'timestamps_not_ordered' }, { status: 400 });
+  }
   const newSynced = lyrics_synced !== undefined ? lyrics_synced : existing.lyrics_synced;
   const syncedUpdate = lyrics_synced !== undefined
     ? resolveLrcTextUpdate(existing.lyrics_raw, existing.lyrics_synced, lyrics_synced)

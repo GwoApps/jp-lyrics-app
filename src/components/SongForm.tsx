@@ -269,7 +269,12 @@ export default function SongForm({
       showToast('success', t(`${ns}.saved`));
       setTimeout(() => router.push(`/songs/${song.id}`), 800);
     } catch (error: unknown) {
-      showToast('error', error instanceof Error ? error.message : t(`${ns}.error`));
+      const message = error instanceof Error && error.message === 'timestamps_not_ordered'
+        ? t(`${ns}.timestampsNotOrdered`)
+        : error instanceof Error
+          ? error.message
+          : t(`${ns}.error`);
+      showToast('error', message);
     } finally {
       setSaving(false);
     }

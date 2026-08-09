@@ -18,7 +18,11 @@ export default function NewSongPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(t('new.saveFailed'));
+    if (!res.ok) {
+      const data = await res.json().catch(() => null) as { error?: string } | null;
+      if (data?.error === 'timestamps_not_ordered') throw new Error('timestamps_not_ordered');
+      throw new Error(t('new.saveFailed'));
+    }
     return res.json() as Promise<{ id: string }>;
   };
 

@@ -8,6 +8,7 @@ interface TimelineLineRowProps {
   line: TimelineDraftLine;
   index: number;
   selected: boolean;
+  conflicted?: boolean;
   canSeek: boolean;
   /** Ref callback to register the row for scroll-into-view. */
   registerRow: (el: HTMLDivElement | null) => void;
@@ -22,6 +23,7 @@ export default function TimelineLineRow({
   line,
   index,
   selected,
+  conflicted = false,
   canSeek,
   registerRow,
   onSelect,
@@ -31,8 +33,14 @@ export default function TimelineLineRow({
 }: TimelineLineRowProps) {
   const { t } = useI18n();
 
+  const rowCls = selected
+    ? 'border-[var(--song-accent)] bg-[var(--song-accent)]/8'
+    : conflicted
+      ? 'border-[var(--destructive)]/40 bg-[var(--destructive)]/5 hover:bg-[var(--destructive)]/10'
+      : 'border-transparent hover:bg-[var(--accent)]';
+
   return (
-    <div ref={registerRow} onClick={onSelect} className={`mb-1 grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_72px] items-center gap-2 rounded-lg border px-2 py-2 transition-colors sm:grid-cols-[32px_112px_minmax(0,1fr)_72px] sm:gap-3 sm:px-3 ${selected ? 'border-[var(--song-accent)] bg-[var(--song-accent)]/8' : 'border-transparent hover:bg-[var(--accent)]'}`}>
+    <div ref={registerRow} onClick={onSelect} className={`mb-1 grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_72px] items-center gap-2 rounded-lg border px-2 py-2 transition-colors sm:grid-cols-[32px_112px_minmax(0,1fr)_72px] sm:gap-3 sm:px-3 ${rowCls}`}>
       <div className="flex justify-center">{line.timeMs == null ? <Circle className="h-4 w-4 text-[var(--muted-foreground)]/50" /> : <CheckCircle2 className="h-4 w-4 text-[var(--success)]" />}</div>
       <div className="hidden sm:block">
         <input key={`${index}-${line.timeMs ?? 'empty'}`} defaultValue={line.timeMs == null ? '' : fmtMs(line.timeMs)} placeholder="--:--.---" onClick={(event) => event.stopPropagation()} onBlur={(event) => {

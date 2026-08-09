@@ -163,7 +163,88 @@ export function findActiveLine(syncLines: SyncLine[], progressMs: number): numbe
   return 0;
 }
 
-/** Format milliseconds as MM:SS.mmm (for debug display) */
+/**
+ * A monotonicity conflict in a timeline: `index` must not be earlier than
+ * `previousIndex` (1-based `line` is reported to the user for display).
+ */
+export interface TimelineConflict {
+  /** 0-based index of the offending line in the draft. */
+  index: number;
+  /** 1-based line number shown to the user. */
+  line: number;
+  /** 0-based index of the previous timed line this line violates. */
+  previousIndex: number;
+  /** 1-based line number of the previous timed line. */
+  previousLine: number;
+  /** Offending timestamp in milliseconds. */
+  timeMs: number;
+  /** Timestamp of the previous timed line in milliseconds. */
+  previousTimeMs: number;
+}
+
+/**
+ * Validate that all non-null timestamps are strictly increasing.
+ * Returns every violation (a line earlier than or equal to the previous
+ * timed line); an empty array means the draft is monotonic. Untimed rows are
+ * skipped and never reported. When `ignoreDuplicates` is set, equal timestamps
+ * are tolerated so the same timeline can be offset/clamped without noise.
+ */
+export function findTimelineConflicts(
+  lines: TimelineDraftLine[],
+  ignoreDuplicates = false,
+): TimelineConflict[] {
+  const conflicts: TimelineConflict[] = [];
+  let previousIndex = -1;
+  let previousTimeMs = -1;
+  for (let index = 0; index < lines.length; index += 1) {
+    const timeMs = lines[index]?.timeMs;
+    if (timeMs == null) continue;
+    if (previousIndex >= 0) {
+      const violates = ignoreDuplicates ? timeMs < previousTimeMs : timeMs <= previousTimeMs;
+      if (violates) {
+        conflicts.push({
+          index,
+          line: index + 1,
+          previousIndex,
+          previousLine: previousIndex + 1,
+          timeMs,
+          previousTimeMs,
+        });
+      }
+    }
+    previousIndex = index;
+    previousTimeMs = timeMs;
+  }
+  return conflicts;
+}
+
+/**
+ * Validate an LRC string against the same strict monotonic rule used by the
+ * editor and the highlight engine. Used by the write API to stop invalid data
+ * from bypassing the UI. Returns an empty array when valid.
+ */
+export function findLrcConflicts(lrc: string): TimelineConflict[] {
+  const lines: TimelineDraftLine[] = [];
+  for (const raw of lrc.split('\n')) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const match = trimmed.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\]\s*(.*)$/);
+    if (!match) {
+      // Untimed rows are kept in timeline drafts; they are ignored by the check.
+      lines.push({ timeMs: null, text: trimmed });
+      continue;
+    }
+    const text = match[4].trim();
+    if (!text) continue;
+    lines.push({
+      timeMs: Number.parseInt(match[1], 10) * 60000
+        + Number.parseInt(match[2], 10) * 1000
+        + Number.parseInt(match[3].padEnd(3, '0'), 10),
+      text,
+    });
+  }
+  return findTimelineConflicts(lines);
+}
 export function fmtMs(ms: number): string {
   const m = Math.floor(ms / 60000);
   const s = Math.floor((ms % 60000) / 1000);
