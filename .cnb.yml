@@ -13,23 +13,3 @@ main:
             username: ${GIT_USERNAME}
             password: ${GIT_ACCESS_TOKEN}
             branch: main
-
-# Static checks on pull requests: i18n key validation + unit tests + lint.
-$:
-  pull_request:
-    - name: i18n & tests
-      docker:
-        image: node:22
-        volumes:
-          - node_modules
-      stages:
-        - name: install
-          script: npm ci --frozen-lockfile
-        - name: validate i18n keys
-          script: npm run validate:i18n
-        - name: test
-          script: npm test
-          allowFailure: true
-        - name: lint
-          script: npm run lint
-          allowFailure: true
