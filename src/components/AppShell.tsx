@@ -35,12 +35,12 @@ function Nav() {
             {t('common.list')}
           </Link>
           {spotifyConnected && isAdmin && (
-            <a
-              href="/admin"
+            <Link
+              href="/admin/todo"
               className="rounded-md px-2.5 sm:px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)]"
             >
               {t('admin.title')}
-            </a>
+            </Link>
           )}
           <a
             href="https://github.com/GwoApps/jp-lyrics-app"
