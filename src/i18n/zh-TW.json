@@ -89,7 +89,10 @@
     "importInvalidPlaylistUrl": "請輸入有效的 Spotify 播放清單連結",
     "importSpotifyNotConnected": "請先連接 Spotify",
     "importPlaylistFetchFailed": "播放清單取得失敗",
-    "importPlaylistEmpty": "播放清單為空"
+    "importPlaylistEmpty": "播放清單為空",
+    "loadFailed": "歌曲列表載入失敗，請檢查網路後重試",
+    "retry": "重試",
+    "cachedData": "目前顯示快取資料，重新整理失敗"
   },
   "song": {
     "notFound": "找不到歌曲",

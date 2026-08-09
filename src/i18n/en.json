@@ -89,7 +89,10 @@
     "importInvalidPlaylistUrl": "Please enter a valid Spotify playlist URL",
     "importSpotifyNotConnected": "Please connect Spotify first",
     "importPlaylistFetchFailed": "Failed to fetch playlist",
-    "importPlaylistEmpty": "Playlist is empty"
+    "importPlaylistEmpty": "Playlist is empty",
+    "loadFailed": "Failed to load songs. Please check your connection and try again.",
+    "retry": "Retry",
+    "cachedData": "Showing cached data — refresh failed"
   },
   "song": {
     "notFound": "Song not found",
