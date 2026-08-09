@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ImageOff, ImagePlus, LinkIcon, Music, Upload } from 'lucide-react';
 import Toast from '@/components/Toast';
@@ -45,6 +45,10 @@ interface SongFormProps {
   onSave: (body: Record<string, string | boolean>) => Promise<{ id: string }>;
   cancelHref: string;
   saveLabel?: string;
+  /** Reports whether the form currently holds unsaved changes (host page guard). */
+  onDirtyChange?: (dirty: boolean) => void;
+  /** Navigation guard from the host page; falls back to router.push when absent. */
+  guardNavigate?: (href: string) => boolean;
 }
 
 export default function SongForm({
@@ -65,6 +69,8 @@ export default function SongForm({
   onSave,
   cancelHref,
   saveLabel,
+  onDirtyChange,
+  guardNavigate,
 }: SongFormProps) {
   const { t } = useI18n();
   const router = useRouter();
@@ -92,6 +98,27 @@ export default function SongForm({
   const [coverUploading, setCoverUploading] = useState(false);
   const [pendingCoverFile, setPendingCoverFile] = useState<File | null>(null);
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
+
+  // Unsaved-change tracking: the form is dirty when any field that is
+  // submitted (or a pending cover) differs from its initial value. The
+  // baseline is refreshed after a successful save so the guard stops asking
+  // until the user edits again.
+  const serializeFields = () => JSON.stringify({
+    title, artist, lyrics, lyricsMode, readingScheme, readingSchemeConfirmed,
+    coverUrl, hasPendingCover: !!pendingCoverFile,
+  });
+  const [baseline, setBaseline] = useState(serializeFields);
+  const dirty = serializeFields() !== baseline;
+
+  // Expose dirty to the host page so it can arm its unsaved-changes guard
+  // (cancel, breadcrumbs, browser back/forward and unload are all guarded
+  // there). Only report on actual changes to avoid redundant re-renders.
+  const lastReportedDirtyRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (lastReportedDirtyRef.current === dirty) return;
+    lastReportedDirtyRef.current = dirty;
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverFileRef = useRef<HTMLInputElement>(null);
@@ -253,6 +280,8 @@ export default function SongForm({
         }
       }
       const song = await onSave(body);
+      // Saving succeeded — the submitted fields are now the new baseline.
+      setBaseline(serializeFields());
       // Create mode: upload the pending cover now that the song exists.
       // Leaving the cover empty keeps whatever the server resolved (e.g.
       // Spotify artwork) — a failed upload never blocks navigation.
@@ -506,7 +535,7 @@ export default function SongForm({
           >
             {saving ? t(`${ns}.converting`) : (saveLabel ?? t(`${ns}.save`))}
           </button>
-          <button onClick={() => router.push(cancelHref)} className="rounded-md px-5 py-2.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
+          <button onClick={() => (guardNavigate ? guardNavigate(cancelHref) : router.push(cancelHref))} className="rounded-md px-5 py-2.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
             {t('common.cancel')}
           </button>
         </div>

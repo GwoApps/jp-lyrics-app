@@ -22,7 +22,10 @@
     "lightMode": "Light mode",
     "darkMode": "Dark mode",
     "language": "Language",
-    "notNow": "Not now"
+    "notNow": "Not now",
+    "unsavedTitle": "Discard unsaved changes?",
+    "unsavedBody": "Your unsaved changes will be lost.",
+    "discard": "Discard changes"
   },
   "loginGate": {
     "title": "Spotify login is restricted",

@@ -5,12 +5,21 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import SongForm from '@/components/SongForm';
 import { useI18n } from '@/lib/i18n';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { readSongPrefill } from '@/lib/song-prefill';
 
 export default function NewSongPage() {
   const { t } = useI18n();
   const searchParams = useSearchParams();
   const [prefill] = useState(() => readSongPrefill(searchParams));
+
+  // Form dirty state drives the unsaved-changes guard for the breadcrumb,
+  // cancel button, browser back/forward and unload.
+  const [formDirty, setFormDirty] = useState(false);
+  const { dialog: unsavedDialog, guard: guardNavigate } = useUnsavedChangesGuard({
+    confirmHref: '/',
+    dirty: formDirty,
+  });
 
   const handleSave = async (body: Record<string, string | boolean>) => {
     const res = await fetch('/api/songs', {
@@ -48,9 +57,12 @@ export default function NewSongPage() {
         showCantonesePlaceholders
         spotifyTrackId={prefill.spotifyTrackId}
         onSave={handleSave}
+        onDirtyChange={setFormDirty}
+        guardNavigate={guardNavigate}
         cancelHref="/"
         saveLabel={t('new.saveAndView')}
       />
+      {unsavedDialog}
     </div>
   );
 }

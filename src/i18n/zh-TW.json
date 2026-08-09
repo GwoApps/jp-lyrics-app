@@ -22,7 +22,10 @@
     "lightMode": "淺色模式",
     "darkMode": "深色模式",
     "language": "語言",
-    "notNow": "暫不轉換"
+    "notNow": "暫不轉換",
+    "unsavedTitle": "放棄未儲存的修改？",
+    "unsavedBody": "你未儲存的修改將會遺失。",
+    "discard": "放棄修改"
   },
   "loginGate": {
     "title": "Spotify 登入受限",

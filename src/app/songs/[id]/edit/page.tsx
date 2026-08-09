@@ -8,6 +8,7 @@ import SongForm from '@/components/SongForm';
 import Toast from '@/components/Toast';
 import { useI18n } from '@/lib/i18n';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import type { ReadingScheme } from '@/lib/types';
 
 interface SongData {
@@ -42,6 +43,15 @@ export default function EditSongPage() {
   const [clearingKey, setClearingKey] = useState<SubDataKey | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Form dirty state, reported by <SongForm>; drives the unsaved-changes guard
+  // for breadcrumbs, cancel, browser back/forward and unload. The dialog is
+  // rendered at the bottom of this page.
+  const [formDirty, setFormDirty] = useState(false);
+  const { dialog: unsavedDialog, guard: guardNavigate } = useUnsavedChangesGuard({
+    confirmHref: `/songs/${id}`,
+    dirty: formDirty,
+  });
 
   const coverTheme = useCoverTheme(song?.cover_url);
   const coverColor = coverTheme.palette;
@@ -164,6 +174,8 @@ export default function EditSongPage() {
         initialCoverUrl={song.cover_url ?? null}
         canManageCover
         onSave={handleSave}
+        onDirtyChange={setFormDirty}
+        guardNavigate={guardNavigate}
         cancelHref={`/songs/${id}`}
       />
 
@@ -200,6 +212,7 @@ export default function EditSongPage() {
       </section>
 
       {toast && <Toast type={toast.type} message={toast.msg} />}
+      {unsavedDialog}
     </div>
   );
 }

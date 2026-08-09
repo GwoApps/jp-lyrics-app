@@ -22,7 +22,10 @@
     "lightMode": "ライトモード",
     "darkMode": "ダークモード",
     "language": "言語",
-    "notNow": "今は変換しない"
+    "notNow": "今は変換しない",
+    "unsavedTitle": "未保存の変更を破棄しますか？",
+    "unsavedBody": "未保存の変更は失われます。",
+    "discard": "変更を破棄"
   },
   "loginGate": {
     "title": "Spotify ログインは制限されています",
