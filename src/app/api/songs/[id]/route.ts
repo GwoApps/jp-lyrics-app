@@ -3,6 +3,7 @@ import { getDB, schema, sql } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import type { CoverPaletteJson, Song } from '@/lib/types';
 import { getAuthUser } from '@/lib/auth';
+import { isSongVisibleToUser } from '@/lib/song-visibility';
 import { resolveLrcTextUpdate } from '@/lib/lrc';
 import type { ReadingScheme } from '@/lib/types';
 
@@ -90,7 +91,7 @@ export async function GET(
   const user = await getAuthUser(request);
   const { id } = await params;
   const song = await findSong(id);
-  if (!song || (song.is_public !== 1 && !user?.isAdmin && song.created_by !== user?.id)) {
+  if (!song || !isSongVisibleToUser(song, user)) {
     return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
   }
   const canEdit = !!user && (user.isAdmin || song.created_by === user.id);

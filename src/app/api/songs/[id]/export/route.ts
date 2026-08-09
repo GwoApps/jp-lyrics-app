@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDB, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import { getAuthUser } from '@/lib/auth';
+import { isSongVisibleToUser } from '@/lib/song-visibility';
 import { normalizeReadingScheme } from '@/lib/lyrics-reading';
 import { buildExport, ExportError, type ExportFormat, type ExportReadingMode, type ExportResult } from '@/lib/lyrics-export';
 
@@ -31,7 +32,7 @@ export async function GET(
     is_public: schema.songs.isPublic,
   }).from(schema.songs).where(eq(schema.songs.id, id)).get();
 
-  if (!song || (song.is_public !== 1 && !user?.isAdmin && song.created_by !== user?.id)) {
+  if (!song || !isSongVisibleToUser(song, user)) {
     return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
   }
 
