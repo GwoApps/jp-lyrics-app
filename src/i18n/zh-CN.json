@@ -11,6 +11,7 @@
     "more": "更多",
     "edit": "编辑",
     "close": "关闭",
+    "clear": "清除",
     "on": "开启",
     "off": "关闭",
     "loading": "加载中...",
@@ -93,7 +94,10 @@
     "importReviewBody": "未找到“{title}”的精确匹配。候选结果（来源 {source}，可信度 {confidence}%，共 {lines} 行）可能不是原曲：\n\n{preview}\n\n仍要保存这首歌并使用这些歌词吗？",
     "importReviewConfirm": "仍要保存",
     "playlistImportReviewHeader": "{count} 首曲目待审核",
-    "playlistImportReviewHint": "这些曲目以低可信度歌词匹配导入。请在歌曲列表中打开它们，核对后重新同步。"
+    "playlistImportReviewHint": "这些曲目以低可信度歌词匹配导入。请在歌曲列表中打开它们，核对后重新同步。",
+    "loadFailed": "歌曲列表加载失败，请检查网络后重试",
+    "retry": "重试",
+    "cachedData": "当前显示缓存数据，刷新失败"
   },
   "song": {
     "notFound": "找不到歌曲",

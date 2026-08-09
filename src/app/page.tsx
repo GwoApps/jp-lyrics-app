@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
 import { Music, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User, Star, FolderPlus, Trash, LayoutGrid, List, Disc3, RefreshCw } from 'lucide-react';
@@ -21,6 +21,7 @@ import { useAuthSession } from '@/lib/auth-session';
 import { cacheSongCovers } from '@/lib/song-cover-cache';
 import { buildManualCreateUrl } from '@/lib/song-prefill';
 import { getCachedSongs, setCachedSongs } from '@/lib/song-list-cache';
+import { requestSongList } from '@/lib/song-list-fetch';
 import { groupSongsByAlbum } from '@/lib/song-albums';
 
 type ToastState = { type: 'success' | 'error'; msg: string } | null;
@@ -56,6 +57,8 @@ export default function HomePage() {
   const [initialSongs] = useState(() => getCachedSongs<SongItem>());
   const [songs, setSongs] = useState<SongItem[]>(() => initialSongs ?? []);
   const [loading, setLoading] = useState(() => initialSongs === null);
+  const [loadError, setLoadError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const { session, updateSession } = useAuthSession();
   // A cached session renders immediately; the hook revalidates it on every page entry.
   const spotify = session?.spotify ?? null;
@@ -120,6 +123,32 @@ export default function HomePage() {
     setToast({ type, msg });
   };
 
+  const applySongListResult = useCallback((result: { songs: SongItem[]; ok: boolean }) => {
+    // setState only happens inside a .then() callback (never synchronously in an
+    // effect body), so react-hooks/set-state-in-effect stays satisfied.
+    const { songs: data, ok } = result;
+    if (ok) {
+      setSongs(data);
+      cacheSongCovers(data);
+      setCachedSongs(data);
+      setLoadError(false);
+    } else {
+      // Network / HTTP / invalid-body failure: keep current list & cache.
+      setLoadError(true);
+    }
+    setLoading(false);
+    setRefreshing(false);
+  }, []);
+
+  const retryLoad = (mode: 'all' | 'mine') => {
+    // Event-handler path: safe to set in-flight state synchronously.
+    // With cached data present keep the list visible (refreshing); without it,
+    // fall back to the full loading skeleton.
+    if (songs.length === 0) setLoading(true);
+    setRefreshing(true);
+    void requestSongList(mode).then(applySongListResult);
+  };
+
   useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(null), 3000);
@@ -142,12 +171,8 @@ export default function HomePage() {
 
   useEffect(() => {
     if (initialSongs) cacheSongCovers(initialSongs);
-
-    fetch('/api/songs')
-      .then((r) => r.json())
-      .then((data) => { setSongs(data); cacheSongCovers(data); setCachedSongs(data); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [initialSongs]);
+    void requestSongList('all').then(applySongListResult);
+  }, [initialSongs, applySongListResult]);
 
   useEffect(() => {
     if (!currentUser?.email) return;
@@ -160,12 +185,8 @@ export default function HomePage() {
 
   // Re-fetch songs when "my songs" toggle changes
   useEffect(() => {
-    const params = mySongsOnly ? '?mine=1' : '';
-    fetch(`/api/songs${params}`)
-      .then((r) => r.json())
-      .then((data) => { setSongs(data); cacheSongCovers(data); })
-      .catch(() => {});
-  }, [mySongsOnly]);
+    void requestSongList(mySongsOnly ? 'mine' : 'all').then(applySongListResult);
+  }, [mySongsOnly, applySongListResult]);
 
   useEffect(() => {
     if (!filterCollection) return;
@@ -536,10 +557,38 @@ export default function HomePage() {
         </div>
       )}
 
+      {/* Degraded cache banner: current list is cached/stale because refresh failed */}
+      {loadError && !loading && songs.length > 0 && (
+        <div className="mb-5 rounded-lg bg-[var(--card)] border border-[var(--warning)]/40 p-3 sm:p-4 flex items-center gap-3">
+          <span className="inline-block h-2 w-2 rounded-full bg-[var(--warning)]" />
+          <span className="text-xs text-[var(--warning)] truncate">{t('home.cachedData')}</span>
+          <button
+            onClick={() => retryLoad(mySongsOnly ? 'mine' : 'all')}
+            disabled={refreshing}
+            className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium bg-[var(--primary)] text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-60 shrink-0"
+          >
+            {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            <span>{t('home.retry')}</span>
+          </button>
+        </div>
+      )}
+
       {/* Song list */}
       {loading ? (
         <div className="space-y-2">
           {[...Array(3)].map((_, i) => <div key={i} className="h-16 rounded-lg bg-[var(--muted)] animate-pulse" />)}
+        </div>
+      ) : loadError && songs.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <RefreshCw className="h-10 w-10 mb-4 text-[var(--muted-foreground)] opacity-20" />
+          <p className="text-sm text-[var(--muted-foreground)]">{t('home.loadFailed')}</p>
+          <button
+            onClick={() => retryLoad(mySongsOnly ? 'mine' : 'all')}
+            disabled={refreshing}
+            className="mt-5 inline-flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-4 py-2 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} {t('home.retry')}
+          </button>
         </div>
       ) : songs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">

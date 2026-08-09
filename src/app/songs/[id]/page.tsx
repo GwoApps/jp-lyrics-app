@@ -21,7 +21,7 @@ import { isEmptyAfterTrim } from '@/lib/lyrics-export';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useI18n } from '@/lib/i18n';
 import { fmtMs, fmtTime, findActiveLine } from '@/lib/lrc';
-import { isTitleMatch, findBestMatch } from '@/lib/match';
+import { findBestMatch } from '@/lib/match';
 import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
 import { animateSmoothScroll } from '@/lib/scroll-ease';
@@ -125,6 +125,8 @@ export default function SongViewPage() {
   // Mutable ref bag for the rAF sync loop (avoids stale closures)
   const syncRefs = useRef<SyncRefs>({
     songTitle: '',
+    songArtist: '',
+    spotifyTrackId: null,
     furiganaLines: [],
     lineTimestamps: [],
     debug: false,
@@ -145,6 +147,8 @@ export default function SongViewPage() {
 
   // Keep syncRefs in sync with state
   useEffect(() => { syncRefs.current.songTitle = data.song?.title || ''; }, [data.song?.title]);
+  useEffect(() => { syncRefs.current.songArtist = data.song?.artist || ''; }, [data.song?.artist]);
+  useEffect(() => { syncRefs.current.spotifyTrackId = data.song?.spotify_track_id || null; }, [data.song?.spotify_track_id]);
   useEffect(() => { syncRefs.current.furiganaLines = data.furiganaLines; }, [data.furiganaLines]);
   useEffect(() => { syncRefs.current.lineTimestamps = data.lineTimestamps; }, [data.lineTimestamps]);
   useEffect(() => { syncRefs.current.debug = data.debug; }, [data.debug]);
@@ -295,13 +299,8 @@ export default function SongViewPage() {
   const canEdit = song?.permissions?.can_edit === true;
   const lyricsSourceKey = song ? LYRICS_SOURCE_KEYS[song.lyrics_source] : undefined;
   const lyricsSourceLabel = song ? (lyricsSourceKey ? t(lyricsSourceKey) : song.lyrics_source) : '';
-  const { spotify, syncState, resumeSync, activeLine, followPlaying, setFollowPlaying, pipWindowRef } = sync;
+  const { spotify, syncState, resumeSync, activeLine, isSameSong, followPlaying, setFollowPlaying, pipWindowRef } = sync;
   const handleOpenPiP = () => data.openPiP(furiganaLines, song, activeLine, pipWindowRef, lineTimestamps);
-  const isSameSong = !!(spotify?.is_playing && spotify.track && song && (
-    song.spotify_track_id && spotify.track.id
-      ? song.spotify_track_id === spotify.track.id
-      : isTitleMatch(spotify.track.name, song.title)
-  ));
   const isSynced = isSameSong && activeLine >= 0;
   const hasSyncData = syncLines.length > 0;
   const debugSyncActive = spotify?.is_playing && syncLines.length > 0 ? findActiveLine(syncLines, spotify.progress_ms) : -1;

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import type { FuriganaLine } from '@/lib/types';
-import { isTitleMatch, findBestMatch } from '@/lib/match';
+import { isSameSpotifyTrack, findBestMatch } from '@/lib/match';
 import { useNowPlaying, type SyncState } from './useNowPlaying';
 import { animateSmoothScroll } from '@/lib/scroll-ease';
 
@@ -20,6 +20,8 @@ interface InterpAnchor {
   pollTime: number;
   isPlaying: boolean;
   trackName: string;
+  trackId: string;
+  trackArtist: string;
   durationMs: number;
 }
 
@@ -29,11 +31,13 @@ interface InterpAnchor {
  */
 export interface SyncRefs {
   songTitle: string;
+  songArtist: string;
+  spotifyTrackId: string | null;
   furiganaLines: FuriganaLine[];
   lineTimestamps: (number | null)[];
   debug: boolean;
   followPlaying: boolean;
-  allSongs: { id: string; title: string; artist: string; created_by: string; is_public: number }[];
+  allSongs: { id: string; title: string; artist: string; spotify_track_id?: string | null; created_by: string; is_public: number }[];
   currentSongId: string;
   currentUserEmail: string;
 }
@@ -43,9 +47,26 @@ export interface UseSpotifySyncReturn {
   syncState: SyncState;
   resumeSync: () => void;
   activeLine: number;
+  /** Whether the currently-playing Spotify track is the song rendered on this page. */
+  isSameSong: boolean;
   followPlaying: boolean;
   setFollowPlaying: React.Dispatch<React.SetStateAction<boolean>>;
   pipWindowRef: React.MutableRefObject<Window | null>;
+}
+
+/** Shape used for identity checks against the song rendered on this page. */
+function currentSongRef(refs: SyncRefs): {
+  id: string;
+  title: string;
+  artist: string;
+  spotify_track_id?: string | null;
+} {
+  return {
+    id: refs.currentSongId,
+    title: refs.songTitle,
+    artist: refs.songArtist,
+    spotify_track_id: refs.spotifyTrackId || undefined,
+  };
 }
 
 export function useSpotifySync(
@@ -62,10 +83,17 @@ export function useSpotifySync(
     return true;
   });
 
-  const interpRef = useRef<InterpAnchor>({ progressMs: 0, pollTime: 0, isPlaying: false, trackName: '', durationMs: 0 });
+  // Derived identity: is the song rendered on this page the one currently
+  // playing on Spotify? ID-authoritative when both sides have a Track ID;
+  // falls back to title + artist scoring for legacy songs. The page badge,
+  // seek, share and highlight all consume this single result.
+  const isSameSong = !!spotify?.is_playing && !!spotify?.track
+    && isSameSpotifyTrack(currentSongRef(syncRefs.current), spotify.track);
+
+  const interpRef = useRef<InterpAnchor>({ progressMs: 0, pollTime: 0, isPlaying: false, trackName: '', trackId: '', trackArtist: '', durationMs: 0 });
   const rafRef = useRef<number>(0);
   const highlightRef = useRef(-1);
-  const prevTrackRef = useRef<string>('');
+  const prevTrackKeyRef = useRef('');
   const navigatingRef = useRef(false);
   const pipWindowRef = useRef<Window | null>(null);
 
@@ -84,35 +112,42 @@ export function useSpotifySync(
     if (!nowPlayingData) return;
 
     const refs = syncRefs.current;
+    const track = nowPlayingData.track;
 
-    if (nowPlayingData.is_playing && nowPlayingData.track) {
+    if (nowPlayingData.is_playing && track) {
       interpRef.current = {
         progressMs: nowPlayingData.progress_ms,
         pollTime: performance.now(),
         isPlaying: true,
-        trackName: nowPlayingData.track.name,
+        trackName: track.name,
+        trackId: track.id || '',
+        trackArtist: track.artist,
         durationMs: nowPlayingData.duration_ms || 0,
       };
 
-      // Follow now-playing: detect track change and auto-navigate
-      const trackKey = nowPlayingData.track.name;
+      // Follow now-playing: detect track change and auto-navigate.
+      // The key includes the Spotify ID/URI + title + artist, so switching to a
+      // same-name track (different version / artist / cover) always triggers a move.
+      const trackKey = track.id || track.uri || `${track.name}||${track.artist}`;
       if (
         refs.followPlaying &&
         !navigatingRef.current &&
-        prevTrackRef.current &&
-        prevTrackRef.current !== trackKey
+        prevTrackKeyRef.current &&
+        prevTrackKeyRef.current !== trackKey
       ) {
-        const match = findBestMatch(refs.allSongs, nowPlayingData.track, refs.currentUserEmail);
+        const match = findBestMatch(refs.allSongs, track, refs.currentUserEmail);
         if (match && match.id !== refs.currentSongId) {
           navigatingRef.current = true;
           window.location.assign(`/songs/${match.id}`);
           return;
         }
       }
-      prevTrackRef.current = trackKey;
+      prevTrackKeyRef.current = trackKey;
     } else {
       interpRef.current.isPlaying = false;
-      if (!nowPlayingData.track) prevTrackRef.current = '';
+      if (!track) {
+        prevTrackKeyRef.current = '';
+      }
     }
   }, [nowPlayingData, syncRefs]);
 
@@ -120,12 +155,16 @@ export function useSpotifySync(
   // Reads from refs to avoid stale closures; no React re-render per frame
   useEffect(() => {
     const tick = () => {
-      const { progressMs, pollTime, isPlaying, trackName } = interpRef.current;
+      const { progressMs, pollTime, isPlaying, trackName, trackId, trackArtist } = interpRef.current;
       const refs = syncRefs.current;
       const songTitle = refs.songTitle;
 
-      // Not playing or song mismatch → clear highlight
-      if (!isPlaying || !songTitle || !isTitleMatch(trackName, songTitle)) {
+      // Not playing or song mismatch → clear highlight. Identity reuses the same
+      // matching rule as the page badge / seek / share (ID-authoritative).
+      if (!isPlaying || !songTitle || !isSameSpotifyTrack(
+        currentSongRef(refs),
+        { id: trackId || undefined, name: trackName, artist: trackArtist },
+      )) {
         if (highlightRef.current !== -1) {
           highlightRef.current = -1;
           setActiveLine(-1);
@@ -194,6 +233,7 @@ export function useSpotifySync(
     syncState,
     resumeSync,
     activeLine,
+    isSameSong,
     followPlaying,
     setFollowPlaying,
     pipWindowRef,
