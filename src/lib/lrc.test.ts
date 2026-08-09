@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createTimelineDraft, hasSameLrcText, mapTimelineTimestamps, offsetLrcLines, parseLrc, resolveLrcTextUpdate, serializeLrc, serializeTimelineDraft, updateLrcLineTime } from './lrc.ts';
+import { createTimelineDraft, hasSameLrcText, mapTimelineTimestamps, offsetLrcLines, parseLrc, resolveLrcTextUpdate, resolveTimelineSave, serializeLrc, serializeTimelineDraft, updateLrcLineTime } from './lrc.ts';
 
 test('offsetLrcLines shifts timestamps and clamps at zero', () => {
   const lines = parseLrc('[00:00.250]first\n[01:02.345]second');
@@ -85,4 +85,32 @@ test('timeline timestamps stay aligned when rendered lyrics preserve blank separ
   const rendered = ['first\r', 'second\r', '', 'third\r', '', 'fourth'];
 
   assert.deepEqual(mapTimelineTimestamps(rendered, plain, synced), [1000, 2000, null, 3000, null, 4000]);
+});
+
+test('resolveTimelineSave accepts a timeline save matching the current plain lyrics', () => {
+  const result = resolveTimelineSave(
+    'first\nsecond',
+    '[00:01.000]first\n[00:02.000]second',
+    '[00:03.000]first\n[00:04.000]second',
+    'first\nsecond',
+  );
+  assert.deepEqual(result, { ok: true, lyricsRaw: 'first\nsecond', contentChanged: false });
+});
+
+test('resolveTimelineSave refuses when plain lyrics were rewritten in another tab', () => {
+  // Tab A loaded `first\nsecond` and marks a timeline; tab B saved a new
+  // lyric text `first\nnew second` in the meantime. A's stale snapshot must
+  // never be reverse-written back into lyrics_raw.
+  const result = resolveTimelineSave(
+    'first\nnew second',
+    '[00:05.000]first\n[00:06.000]new second',
+    '[00:01.000]first\n[00:02.000]second',
+    'first\nsecond',
+  );
+  assert.deepEqual(result, { ok: false, error: 'stale_timeline_source' });
+});
+
+test('resolveTimelineSave refuses submissions that omit the source snapshot', () => {
+  const result = resolveTimelineSave('first', '[00:01.000]first', '[00:02.000]first', undefined as unknown as string);
+  assert.deepEqual(result, { ok: false, error: 'missing_source_lyrics' });
 });

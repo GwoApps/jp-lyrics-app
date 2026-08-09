@@ -76,7 +76,9 @@ export default function TimelineEditorPage() {
   const [saving, setSaving] = useState(false);
   const [offsetDraft, setOffsetDraft] = useState('0');
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [staleConflict, setStaleConflict] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const sourceLyricsRef = useRef('');
   const [liveProgress, setLiveProgress] = useState(0);
   const rowRefs = useRef<Array<HTMLDivElement | null>>([]);
   const progressAnchor = useRef({ progressMs: 0, receivedAt: 0, playing: false });
@@ -98,6 +100,7 @@ export default function TimelineEditorPage() {
         setSong(data);
         setLines(draft);
         setInitialDraft(serialized);
+        sourceLyricsRef.current = data.lyrics_raw || '';
         const firstUnmarked = draft.findIndex((line) => line.timeMs == null);
         setCurrentIndex(firstUnmarked >= 0 ? firstUnmarked : 0);
       })
@@ -201,8 +204,45 @@ export default function TimelineEditorPage() {
     const draft = createTimelineDraft(song.lyrics_raw || '', song.lyrics_synced || '');
     setLines(draft);
     setHistory([]);
+    setInitialDraft(serializeTimelineDraft(draft));
     const firstUnmarked = draft.findIndex((line) => line.timeMs == null);
     setCurrentIndex(firstUnmarked >= 0 ? firstUnmarked : 0);
+  };
+
+  const reloadFromServer = useCallback(async () => {
+    if (!id) return;
+    try {
+      const response = await fetch(`/api/songs/${id}`);
+      if (!response.ok) throw new Error('reload_failed');
+      const data = await response.json() as TimelineSong;
+      if (!data.permissions?.can_edit) throw new Error('forbidden');
+      const draft = createTimelineDraft(data.lyrics_raw || '', data.lyrics_synced || '');
+      const serialized = serializeTimelineDraft(draft);
+      setSong(data);
+      setLines(draft);
+      setInitialDraft(serialized);
+      sourceLyricsRef.current = data.lyrics_raw || '';
+      setHistory([]);
+      const firstUnmarked = draft.findIndex((line) => line.timeMs == null);
+      setCurrentIndex(firstUnmarked >= 0 ? firstUnmarked : 0);
+      setStaleConflict(false);
+      showToast('success', t('timelineWorkspace.reloaded'));
+    } catch {
+      showToast('error', t('timelineWorkspace.reloadFailed'));
+    }
+  }, [id, showToast, t]);
+
+  const exportDraft = () => {
+    const text = serializeTimelineDraft(lines);
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${song?.title || 'timeline'}-draft.lrc`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
   };
 
   const seekSpotify = async (positionMs: number) => {
@@ -231,15 +271,22 @@ export default function TimelineEditorPage() {
       const response = await fetch(`/api/songs/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lyrics_synced: serializeTimelineDraft(lines) }),
+        body: JSON.stringify({ lyrics_synced: serializeTimelineDraft(lines), source_lyrics: sourceLyricsRef.current }),
       });
-      if (!response.ok) throw new Error('save_failed');
+      if (!response.ok) {
+        if (response.status === 409) {
+          setStaleConflict(true);
+          return;
+        }
+        throw new Error('save_failed');
+      }
       const updated = await response.json() as TimelineSong;
       const nextDraft = createTimelineDraft(updated.lyrics_raw || song.lyrics_raw, updated.lyrics_synced || '');
       const nextSerialized = serializeTimelineDraft(nextDraft);
       setSong(updated);
       setLines(nextDraft);
       setInitialDraft(nextSerialized);
+      sourceLyricsRef.current = updated.lyrics_raw || song.lyrics_raw;
       setHistory([]);
       showToast('success', markedCount === lines.length
         ? t('timelineWorkspace.savedComplete')
@@ -400,6 +447,7 @@ export default function TimelineEditorPage() {
 
       {toast && <Toast type={toast.type} message={toast.msg} />}
       <ConfirmDialog open={confirmLeave} title={t('timeline.unsavedTitle')} body={t('timeline.unsavedBody')} confirmLabel={t('timeline.discard')} cancelLabel={t('common.cancel')} variant="danger" onConfirm={() => router.push(`/songs/${id}`)} onCancel={() => setConfirmLeave(false)} />
+      <ConfirmDialog open={staleConflict} title={t('timelineWorkspace.staleTitle')} body={t('timelineWorkspace.staleBody')} confirmLabel={t('timelineWorkspace.reload')} cancelLabel={t('timelineWorkspace.exportDraft')} variant="default" onConfirm={() => void reloadFromServer()} onCancel={() => { exportDraft(); setStaleConflict(false); }} />
     </div>
   );
 }

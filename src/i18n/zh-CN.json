@@ -310,7 +310,13 @@
     "seekToLine": "跳转到这一行",
     "clearTime": "清除时间",
     "unsavedStatus": "有尚未保存的时间轴修改",
-    "savedStatus": "当前进度已保存"
+    "savedStatus": "当前进度已保存",
+    "staleTitle": "歌词已在其他位置修改",
+    "staleBody": "打开此时间轴后，歌词已在其他页面被更新。保存会覆盖新歌词，因此未保存当前时间轴。",
+    "reload": "重新载入新歌词",
+    "exportDraft": "导出我的草稿",
+    "reloaded": "已载入最新歌词",
+    "reloadFailed": "无法重新载入最新歌词"
   },
   "lyricsSources": {
     "manual": "手动录入",
