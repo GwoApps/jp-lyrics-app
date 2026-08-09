@@ -7,6 +7,7 @@ import { localeToBCP47, type AdminSong } from './admin-types';
 interface AdminSongListProps {
   songs: AdminSong[];
   locale: string;
+  onPreview: (song: AdminSong) => void;
   onToggleVisibility: (song: AdminSong) => void;
   onApprove: (song: AdminSong) => void;
   onReject: (song: AdminSong) => void;
@@ -14,7 +15,7 @@ interface AdminSongListProps {
 }
 
 /** Admin song management: visibility toggle, pending approval actions, delete. */
-export default function AdminSongList({ songs, locale, onToggleVisibility, onApprove, onReject, onDelete }: AdminSongListProps) {
+export default function AdminSongList({ songs, locale, onPreview, onToggleVisibility, onApprove, onReject, onDelete }: AdminSongListProps) {
   const { t } = useI18n();
   const bcp47 = localeToBCP47(locale);
 
@@ -58,6 +59,13 @@ export default function AdminSongList({ songs, locale, onToggleVisibility, onApp
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={() => onPreview(s)}
+                className="rounded p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
+                title={t('admin.preview')}
+              >
+                <Eye className="h-4 w-4" />
+              </button>
               {s.public_requested === 1 && s.is_public === 0 && (
                 <>
                   <button
