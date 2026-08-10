@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { getAuthUser } from '@/lib/auth';
 import { extractLyricsGlossary, getTranslationConfig, streamTranslateLyricLines, translateLyricLines, TranslationError, type GlossaryEntry } from '@/lib/translation';
 import { getStoredTranslationConfig, resolveTranslationConfig } from '@/lib/translation-settings';
+import { getUserSettings, applyUserTargetLang } from '@/lib/user-settings';
 import { extractCompletedArrayItems } from '@/lib/translation-progress';
 import { mergeSliceIntoCache, writeSongField } from '@/lib/translation-cache';
 import { parseTranslationCache } from '@/lib/translation/parse';
@@ -78,6 +79,10 @@ export async function POST(
   if (!config) {
     return NextResponse.json({ error: 'translation_not_configured' }, { status: 503 });
   }
+
+  // Per-user target-language override wins over the admin/global config.
+  const userSettings = await getUserSettings(user.id);
+  config.targetLang = applyUserTargetLang(config, userSettings);
 
   const lines: string[] = existing.lyricsRaw.split('\n');
   if (!lines.some((line) => line.trim())) {

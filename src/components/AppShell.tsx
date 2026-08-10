@@ -7,7 +7,7 @@ import { I18nProvider, useI18n } from '@/lib/i18n';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useAuthSession } from '@/lib/auth-session';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
-import { Sun, Moon } from 'lucide-react';
+import { Sun, Moon, Settings } from 'lucide-react';
 
 function Nav() {
   const { t } = useI18n();
@@ -16,6 +16,7 @@ function Nav() {
   const { session } = useAuthSession();
   const spotifyConnected = session?.spotify.connected === true;
   const isAdmin = session?.user?.isAdmin === true;
+  const isLoggedIn = !!session?.user;
 
   return (
     <nav className="app-topbar sticky top-0 z-50 border-b border-[var(--border)] bg-[var(--background)]/80 backdrop-blur-sm">
@@ -34,6 +35,16 @@ function Nav() {
           >
             {t('common.list')}
           </Link>
+          {isLoggedIn && (
+            <Link
+              href="/settings"
+              className="rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)]"
+              title={t('settings.title')}
+              aria-label={t('settings.title')}
+            >
+              <Settings className="h-4 w-4" />
+            </Link>
+          )}
           {spotifyConnected && isAdmin && (
             <Link
               href="/admin/todo"
