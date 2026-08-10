@@ -384,7 +384,16 @@
     "subDataHint": "刪除由歌詞衍生的注音、翻譯、思考過程與術語表。歌詞內容變更時會自動失效，這裡可隨時手動清除。",
     "subDataPresent": "有資料",
     "subDataEmpty": "無資料",
-    "timestampsNotOrdered": "LRC 時間戳必須嚴格遞增。請檢查時間相同或非遞增的行。"
+    "timestampsNotOrdered": "LRC 時間戳必須嚴格遞增。請檢查時間相同或非遞增的行。",
+    "metadataTitle": "歌曲資訊",
+    "metadataHint": "此歌曲的唯讀中繼資料，包含同步歌詞中內嵌的 LRC offset。",
+    "metadataSource": "歌詞來源",
+    "metadataConfidence": "可信度",
+    "metadataSyncedCount": "同步行數",
+    "metadataOffset": "LRC 偏移量",
+    "metadataNone": "無",
+    "metadataNeedsReview": "審核狀態",
+    "metadataSpotify": "Spotify"
   },
   "new": {
     "title": "新增歌曲",

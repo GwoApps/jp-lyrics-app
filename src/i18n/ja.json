@@ -384,7 +384,16 @@
     "subDataHint": "歌詞から生成されたふりがな・翻訳・思考プロセス・用語集を削除します。歌詞が変わると自動的に無効化されますが、ここで手動でクリアすることもできます。",
     "subDataPresent": "データあり",
     "subDataEmpty": "データなし",
-    "timestampsNotOrdered": "LRC のタイムスタンプは厳密に昇順である必要があります。同一または非昇順の行を確認してください。"
+    "timestampsNotOrdered": "LRC のタイムスタンプは厳密に昇順である必要があります。同一または非昇順の行を確認してください。",
+    "metadataTitle": "楽曲情報",
+    "metadataHint": "この楽曲の読み取り専用メタデータ。同期済み歌詞に埋め込まれた LRC offset も含みます。",
+    "metadataSource": "歌詞ソース",
+    "metadataConfidence": "信頼度",
+    "metadataSyncedCount": "同期行数",
+    "metadataOffset": "LRC オフセット",
+    "metadataNone": "なし",
+    "metadataNeedsReview": "レビュー状態",
+    "metadataSpotify": "Spotify"
   },
   "new": {
     "title": "新しい曲を追加",

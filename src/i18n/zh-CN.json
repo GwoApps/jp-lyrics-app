@@ -384,7 +384,16 @@
     "subDataHint": "删除由歌词派生的注音、翻译、思考过程与术语表。歌词内容变化时会自动失效，这里可随时手动清除。",
     "subDataPresent": "有数据",
     "subDataEmpty": "无数据",
-    "timestampsNotOrdered": "LRC 时间戳必须严格递增。请检查时间相同或非递增的行。"
+    "timestampsNotOrdered": "LRC 时间戳必须严格递增。请检查时间相同或非递增的行。",
+    "metadataTitle": "歌曲信息",
+    "metadataHint": "本歌曲的只读元数据，包含同步歌词中内嵌的 LRC offset。",
+    "metadataSource": "歌词来源",
+    "metadataConfidence": "可信度",
+    "metadataSyncedCount": "同步行数",
+    "metadataOffset": "LRC 偏移量",
+    "metadataNone": "无",
+    "metadataNeedsReview": "审核状态",
+    "metadataSpotify": "Spotify"
   },
   "new": {
     "title": "添加新歌曲",

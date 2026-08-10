@@ -384,7 +384,16 @@
     "subDataHint": "Remove the furigana, translation, reasoning and glossary derived from these lyrics. They are invalidated automatically when the lyrics change; you can also clear them manually here.",
     "subDataPresent": "Has data",
     "subDataEmpty": "Empty",
-    "timestampsNotOrdered": "LRC timestamps must be strictly increasing. Check lines with identical or non-increasing timestamps."
+    "timestampsNotOrdered": "LRC timestamps must be strictly increasing. Check lines with identical or non-increasing timestamps.",
+    "metadataTitle": "Song information",
+    "metadataHint": "Read-only metadata for this song, including the LRC offset embedded in the synced timeline.",
+    "metadataSource": "Lyrics source",
+    "metadataConfidence": "Confidence",
+    "metadataSyncedCount": "Synced lines",
+    "metadataOffset": "LRC offset",
+    "metadataNone": "None",
+    "metadataNeedsReview": "Review status",
+    "metadataSpotify": "Spotify"
   },
   "new": {
     "title": "Add New Song",

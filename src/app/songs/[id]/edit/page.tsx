@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Eraser } from 'lucide-react';
+import { Eraser, Info } from 'lucide-react';
 import SongForm from '@/components/SongForm';
 import Toast from '@/components/Toast';
 import { useI18n } from '@/lib/i18n';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
+import { extractLrcMetadata } from '@/lib/lrc';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import type { ReadingScheme } from '@/lib/types';
 
@@ -23,7 +24,26 @@ interface SongData {
   lyrics_glossary?: string | null;
   cover_url?: string | null;
   reading_scheme: ReadingScheme;
+  lyrics_source: string;
+  lyrics_confidence: number;
+  lyrics_needs_review: number;
+  created_at: string;
+  updated_at: string;
+  spotify_track_id?: string | null;
+  spotify_album?: string | null;
 }
+
+/** Map a stored lyrics source key onto an i18n label under the `lyricsSources` namespace. */
+const LYRICS_SOURCE_KEYS: Record<string, string> = {
+  manual: 'lyricsSources.manual',
+  none: 'lyricsSources.none',
+  'lrclib-exact': 'lyricsSources.lrclibExact',
+  'lrclib-canonical': 'lyricsSources.lrclibCanonical',
+  'lrclib-search': 'lyricsSources.lrclibSearch',
+  petitlyrics: 'lyricsSources.petitlyrics',
+  utanet: 'lyricsSources.utanet',
+  ytmusic: 'lyricsSources.ytmusic',
+};
 
 type SubDataKey = 'furigana' | 'translation' | 'reasoning' | 'glossary';
 
@@ -135,6 +155,11 @@ export default function EditSongPage() {
 
   if (!song) return null;
 
+  // LRC metadata (incl. `[offset:±ms]`) embedded in the synced timeline.
+  const lrcMetadata = extractLrcMetadata(song.lyrics_synced || '');
+  const lyricsSourceKey = song.lyrics_source ? LYRICS_SOURCE_KEYS[song.lyrics_source] : undefined;
+  const lyricsSourceLabel = lyricsSourceKey ? t(lyricsSourceKey) : song.lyrics_source || t('lyricsSources.none');
+
   const hasFurigana = !!song.lyrics_furigana && song.lyrics_furigana !== '[]';
   const hasTranslation = !!song.lyrics_translation && song.lyrics_translation !== '[]';
   const hasReasoning = !!song.lyrics_translation_reasoning;
@@ -178,6 +203,57 @@ export default function EditSongPage() {
         guardNavigate={guardNavigate}
         cancelHref={`/songs/${id}`}
       />
+
+      {/* 歌曲 metadata — 含歌词来源、置信度、同步状态与 LRC offset 等 */}
+      <section className="mt-8 rounded-lg border border-[var(--border)] bg-[var(--card)]/50 p-4 sm:p-5">
+        <div className="mb-1.5 flex items-center gap-2">
+          <Info className="h-4 w-4 text-[var(--muted-foreground)]" />
+          <h2 className="text-sm font-semibold tracking-tight">{t('edit.metadataTitle')}</h2>
+        </div>
+        <p className="mb-4 text-[11px] leading-relaxed text-[var(--muted-foreground)]">{t('edit.metadataHint')}</p>
+        <dl className="grid gap-2 sm:grid-cols-2">
+          <div className="rounded-md bg-[var(--accent)] px-3 py-2.5 text-xs text-[var(--muted-foreground)]">
+            <dt className="mb-0.5 font-medium text-[var(--foreground)]">{t('edit.metadataSource')}</dt>
+            <dd className="capitalize">{lyricsSourceLabel}</dd>
+          </div>
+          <div className="rounded-md bg-[var(--accent)] px-3 py-2.5 text-xs">
+            <dt className="mb-0.5 font-medium text-[var(--foreground)]">{t('edit.metadataConfidence')}</dt>
+            <dd className={`${(song.lyrics_confidence ?? 100) >= 90 ? 'text-[var(--success)]' : (song.lyrics_confidence ?? 100) >= 75 ? 'text-[var(--warning)]' : 'text-[var(--destructive)]'}`}>
+              {t('song.lyricsConfidence', { confidence: String(song.lyrics_confidence ?? 100) })}
+            </dd>
+          </div>
+          <div className="rounded-md bg-[var(--accent)] px-3 py-2.5 text-xs text-[var(--muted-foreground)]">
+            <dt className="mb-0.5 font-medium text-[var(--foreground)]">{t('edit.metadataSyncedCount')}</dt>
+            <dd className="text-[var(--success)]">{String((song.lyrics_synced || '').split('\n').filter((l) => l.trim().startsWith('[') && l.includes(']')).length)}</dd>
+          </div>
+          <div className="rounded-md bg-[var(--accent)] px-3 py-2.5 text-xs text-[var(--muted-foreground)]">
+            <dt className="mb-0.5 font-medium text-[var(--foreground)]">{t('edit.metadataOffset')}</dt>
+            <dd className={lrcMetadata.offsetMs == null ? '' : lrcMetadata.offsetMs !== 0 ? 'text-[var(--warning)]' : 'text-[var(--muted-foreground)]'}>
+              {lrcMetadata.offsetMs == null ? t('edit.metadataNone') : `${lrcMetadata.offsetMs > 0 ? '+' : ''}${lrcMetadata.offsetMs} ms`}
+            </dd>
+          </div>
+          <div className="rounded-md bg-[var(--accent)] px-3 py-2.5 text-xs text-[var(--muted-foreground)]">
+            <dt className="mb-0.5 font-medium text-[var(--foreground)]">{t('common.created')}</dt>
+            <dd>{new Date(song.created_at).toLocaleString()}</dd>
+          </div>
+          <div className="rounded-md bg-[var(--accent)] px-3 py-2.5 text-xs text-[var(--muted-foreground)]">
+            <dt className="mb-0.5 font-medium text-[var(--foreground)]">{t('common.updated')}</dt>
+            <dd>{new Date(song.updated_at).toLocaleString()}</dd>
+          </div>
+          {song.lyrics_needs_review === 1 && (
+            <div className="rounded-md bg-[var(--accent)] px-3 py-2.5 text-xs text-[var(--warning)]">
+              <dt className="mb-0.5 font-medium text-[var(--foreground)]">{t('edit.metadataNeedsReview')}</dt>
+              <dd>{t('song.lyricsNeedsReview')}</dd>
+            </div>
+          )}
+          {song.spotify_track_id && (
+            <div className="break-all rounded-md bg-[var(--accent)] px-3 py-2.5 text-xs text-[var(--muted-foreground)]">
+              <dt className="mb-0.5 font-medium text-[var(--foreground)]">{t('edit.metadataSpotify')}</dt>
+              <dd>{t('song.spotifyTrackId', { id: song.spotify_track_id })}{song.spotify_album ? ` · ${song.spotify_album}` : ''}</dd>
+            </div>
+          )}
+        </dl>
+      </section>
 
       {/* 歌词相关子数据清除区 — 不需要调试模式，编辑页默认展示 */}
       <section className="mt-8 rounded-lg border border-[var(--border)] bg-[var(--card)]/50 p-4 sm:p-5">
