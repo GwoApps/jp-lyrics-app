@@ -7,6 +7,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, RotateCcw, Sparkles } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import FuriganaEditor from '@/components/FuriganaEditor';
 import Toast from '@/components/Toast';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
@@ -14,6 +15,7 @@ import { convertLyricsReading, normalizeReadingScheme } from '@/lib/lyrics-readi
 import type { FuriganaLine, ReadingScheme } from '@/lib/types';
 import { useAuthSession } from '@/lib/auth-session';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { furiganaLinesMatchSource } from '@/lib/furigana-validation';
 
 interface SongData {
@@ -50,6 +52,7 @@ export default function FuriganaEditPage() {
   };
   const [saving, setSaving] = useState(false);
   const [reconverting, setReconverting] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -138,16 +141,18 @@ export default function FuriganaEditPage() {
 
   const isDirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(original), [draft, original]);
 
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (isDirty) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [isDirty]);
+  // Unified unsaved-changes guard covering in-app <Link> clicks (breadcrumbs,
+  // AppShell navigation), browser back/forward, `router.push` and unload. The
+  // dialog is rendered at the bottom of this page.
+  const { dialog: unsavedDialog, guard: guardNavigate } = useUnsavedChangesGuard({
+    confirmHref: `/songs/${id}`,
+    dirty: isDirty,
+  });
+
+  const doReset = useCallback(async () => {
+    setConfirmReset(false);
+    await loadSong();
+  }, [loadSong]);
 
   const handleSave = useCallback(async () => {
     if (!id) return;
@@ -178,10 +183,10 @@ export default function FuriganaEditPage() {
     }
   }, [id, draft, activeReadingScheme, sourceLyrics, showToast, t]);
 
-  const handleReset = useCallback(async () => {
-    if (isDirty && !window.confirm(t('furigana.unsavedConfirm'))) return;
-    await loadSong();
-  }, [isDirty, loadSong, t]);
+  const handleReset = useCallback(() => {
+    if (isDirty) setConfirmReset(true);
+    else void loadSong();
+  }, [isDirty, loadSong]);
 
   const handleReconvert = useCallback(async () => {
     if (!song?.lyrics_raw) return;
@@ -198,9 +203,8 @@ export default function FuriganaEditPage() {
   }, [song, showToast, t]);
 
   const handleCancel = useCallback(() => {
-    if (isDirty && !window.confirm(t('furigana.unsavedConfirm'))) return;
-    router.push(`/songs/${id}`);
-  }, [isDirty, router, id, t]);
+    guardNavigate(`/songs/${id}`);
+  }, [guardNavigate, id]);
 
   if (loading || auth === null) {
     return (
@@ -308,6 +312,17 @@ export default function FuriganaEditPage() {
       />
 
       {toast && <Toast type={toast.type} message={toast.msg} />}
+      <ConfirmDialog
+        open={confirmReset}
+        title={t('common.unsavedTitle')}
+        body={t('common.unsavedBody')}
+        confirmLabel={t('common.discard')}
+        cancelLabel={t('common.cancel')}
+        variant="danger"
+        onConfirm={() => void doReset()}
+        onCancel={() => setConfirmReset(false)}
+      />
+      {unsavedDialog}
     </div>
   );
 }

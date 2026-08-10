@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useI18n } from '@/lib/i18n';
-import { isSameOriginHref } from '@/lib/unsaved-changes';
+import { shouldInterceptLinkClick } from '@/lib/unsaved-changes';
 
 export interface UnsavedChangesGuardOptions {
   /** Fallback destination when a confirmed navigation has no pending target. */
@@ -155,16 +155,23 @@ export function useUnsavedChangesGuard({ confirmHref, dirty }: UnsavedChangesGua
   useEffect(() => {
     if (!dirty) return;
     const handleClick = (event: MouseEvent) => {
-      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey
-        || event.shiftKey || event.altKey) return;
       const anchor = (event.target as HTMLElement | null)?.closest('a');
-      if (!anchor) return;
-      const href = anchor.getAttribute('href');
-      if (!href || href.startsWith('#') || anchor.hasAttribute('download') || anchor.target === '_blank') return;
-      if (!isSameOriginHref(href, window.location.href)) return;
+      const shouldIntercept = shouldInterceptLinkClick({
+        href: anchor?.getAttribute('href') ?? null,
+        base: window.location.href,
+        defaultPrevented: event.defaultPrevented,
+        button: event.button,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        hasDownload: anchor?.hasAttribute('download') ?? false,
+        targetBlank: anchor?.target === '_blank',
+      });
+      if (!shouldIntercept) return;
       event.preventDefault();
       event.stopPropagation();
-      guard(href);
+      guard(anchor!.getAttribute('href')!);
     };
     document.addEventListener('click', handleClick, true);
     return () => document.removeEventListener('click', handleClick, true);

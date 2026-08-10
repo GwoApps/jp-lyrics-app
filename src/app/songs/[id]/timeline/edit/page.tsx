@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -31,6 +31,7 @@ import MarkCurrentLineCard from '@/components/timeline/MarkCurrentLineCard';
 import TimelineLineRow from '@/components/timeline/TimelineLineRow';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { useNowPlaying } from '@/hooks/useNowPlaying';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { useI18n } from '@/lib/i18n';
 import {
   createTimelineDraft,
@@ -65,7 +66,6 @@ function getAccurateProgress(anchor: { progressMs: number; receivedAt: number; p
 
 export default function TimelineEditorPage() {
   const params = useParams();
-  const router = useRouter();
   const { t } = useI18n();
   const id = params?.id as string;
   const [song, setSong] = useState<TimelineSong | null>(null);
@@ -77,8 +77,8 @@ export default function TimelineEditorPage() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [offsetDraft, setOffsetDraft] = useState('0');
-  const [confirmLeave, setConfirmLeave] = useState(false);
   const [confirmSort, setConfirmSort] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [staleConflict, setStaleConflict] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const sourceLyricsRef = useRef('');
@@ -155,12 +155,13 @@ export default function TimelineEditorPage() {
     && songMatchScore(song, nowPlaying.track) >= 0.5);
   const canUseSpotifyTime = !!(nowPlaying?.connected && nowPlaying.track && spotifyMatches);
 
-  useEffect(() => {
-    if (!dirty) return;
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => event.preventDefault();
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [dirty]);
+  // Unified unsaved-changes guard covering the back button, breadcrumbs,
+  // AppShell navigation, browser back/forward and unload. The dialog is
+  // rendered at the bottom of this page.
+  const { dialog: unsavedDialog, guard: guardNavigate } = useUnsavedChangesGuard({
+    confirmHref: `/songs/${id}`,
+    dirty,
+  });
 
   useEffect(() => {
     rowRefs.current[currentIndex]?.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -221,7 +222,8 @@ export default function TimelineEditorPage() {
     setConfirmSort(false);
   }, []);
 
-  const resetDraft = () => {
+  const doReset = () => {
+    setConfirmReset(false);
     if (!song) return;
     const draft = createTimelineDraft(song.lyrics_raw || '', song.lyrics_synced || '');
     setLines(draft);
@@ -230,6 +232,8 @@ export default function TimelineEditorPage() {
     const firstUnmarked = draft.findIndex((line) => line.timeMs == null);
     setCurrentIndex(firstUnmarked >= 0 ? firstUnmarked : 0);
   };
+
+  const requestReset = () => setConfirmReset(true);
 
   const reloadFromServer = useCallback(async () => {
     if (!id) return;
@@ -360,8 +364,7 @@ export default function TimelineEditorPage() {
   }, [currentIndex, markCurrentLine, save, selectLine, undo]);
 
   const requestLeave = () => {
-    if (dirty) setConfirmLeave(true);
-    else router.push(`/songs/${id}`);
+    guardNavigate(`/songs/${id}`);
   };
 
   if (loading) {
@@ -406,7 +409,7 @@ export default function TimelineEditorPage() {
           <button type="button" onClick={undo} disabled={history.length === 0} className="song-accent-button inline-flex h-9 items-center gap-2 rounded-md px-3 text-xs font-medium disabled:opacity-40">
             <Undo2 className="h-4 w-4" />{t('timelineWorkspace.undo')}
           </button>
-          <button type="button" onClick={resetDraft} disabled={!dirty} className="song-accent-button inline-flex h-9 items-center gap-2 rounded-md px-3 text-xs font-medium disabled:opacity-40">
+          <button type="button" onClick={requestReset} disabled={!dirty} className="song-accent-button inline-flex h-9 items-center gap-2 rounded-md px-3 text-xs font-medium disabled:opacity-40">
             <RotateCcw className="h-4 w-4" />{t('timelineWorkspace.reset')}
           </button>
           <button type="button" onClick={save} disabled={saving || !dirty} className="song-editor-primary-button inline-flex h-9 items-center gap-2 rounded-md px-4 text-xs font-medium disabled:opacity-40">
@@ -497,7 +500,17 @@ export default function TimelineEditorPage() {
       </div>
 
       {toast && <Toast type={toast.type} message={toast.msg} />}
-      <ConfirmDialog open={confirmLeave} title={t('timeline.unsavedTitle')} body={t('timeline.unsavedBody')} confirmLabel={t('timeline.discard')} cancelLabel={t('common.cancel')} variant="danger" onConfirm={() => router.push(`/songs/${id}`)} onCancel={() => setConfirmLeave(false)} />
+      {unsavedDialog}
+      <ConfirmDialog
+        open={confirmReset}
+        title={t('common.unsavedTitle')}
+        body={t('common.unsavedBody')}
+        confirmLabel={t('common.discard')}
+        cancelLabel={t('common.cancel')}
+        variant="danger"
+        onConfirm={doReset}
+        onCancel={() => setConfirmReset(false)}
+      />
       <ConfirmDialog open={confirmSort} title={t('timelineWorkspace.sortConfirmTitle')} body={t('timelineWorkspace.sortConfirmBody')} confirmLabel={t('timelineWorkspace.sortConfirmApply')} cancelLabel={t('common.cancel')} onConfirm={applySortByTime} onCancel={() => setConfirmSort(false)} />
       <ConfirmDialog open={staleConflict} title={t('timelineWorkspace.staleTitle')} body={t('timelineWorkspace.staleBody')} confirmLabel={t('timelineWorkspace.reload')} cancelLabel={t('timelineWorkspace.exportDraft')} variant="default" onConfirm={() => void reloadFromServer()} onCancel={() => { exportDraft(); setStaleConflict(false); }} />
     </div>
