@@ -67,6 +67,63 @@ export {
  * Minimal connectivity check against the configured provider: send a tiny
  * request and report status + latency. Used by the admin "Test" button.
  */
+/**
+ * Discover the list of models the provider exposes, for the admin config
+ * combobox ("auto-discover after a successful connection test").
+ *
+ * - OpenAI-compatible: GET {base_url}/models with Bearer auth → { data: [{ id }] }
+ * - Anthropic: GET {base_url}/v1/models with x-api-key → { data: [{ id }] }
+ * - workers-ai: no REST list endpoint (binding-backed), returns null.
+ *
+ * Returns a sorted list of model ids, or null when the provider has no
+ * listable model catalog (not supported / request failed). Never throws.
+ */
+export async function discoverTranslationModels(
+  config: TranslationConfig,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string[] | null> {
+  if (config.provider === 'workers-ai') return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    if (config.provider === 'anthropic') {
+      const base = config.baseUrl.replace(/\/+$/, '');
+      const url = base.endsWith('/v1') ? `${base}/models` : `${base}/v1/models`;
+      const res = await fetchImpl(url, {
+        headers: {
+          'x-api-key': config.apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        signal: controller.signal,
+      });
+      if (!res.ok) return null;
+      const data = await res.json() as { data?: Array<{ id?: unknown }> };
+      const ids = (data.data ?? [])
+        .map((m) => m.id)
+        .filter((id): id is string => typeof id === 'string' && id.trim().length > 0);
+      return ids.length ? [...new Set(ids)].sort() : null;
+    }
+
+    // OpenAI-compatible chat-completions APIs expose GET {base_url}/models.
+    const url = `${config.baseUrl.replace(/\/+$/, '')}/models`;
+    const res = await fetchImpl(url, {
+      headers: { Authorization: `Bearer ${config.apiKey}` },
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { data?: Array<{ id?: unknown }> };
+    const ids = (data.data ?? [])
+      .map((m) => m.id)
+      .filter((id): id is string => typeof id === 'string' && id.trim().length > 0);
+    return ids.length ? [...new Set(ids)].sort() : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function testTranslationConnection(config: TranslationConfig): Promise<TranslationTestResult> {
   const t0 = Date.now();
   const controller = new AbortController();

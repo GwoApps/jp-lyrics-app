@@ -282,3 +282,51 @@ test('streaming translation aborts the upstream fetch when the external signal f
   await assert.rejects(run, (error: unknown) => error instanceof Error);
   assert.ok(signalSeen!.aborted, 'upstream fetch signal aborted after cancel');
 });
+
+test('discovers and sorts models from an OpenAI-compatible /models endpoint', async () => {
+  const { discoverTranslationModels } = await import('./translation/index.ts');
+  const captured: { current?: CapturedCall } = {};
+  const models = await discoverTranslationModels(
+    { ...CFG, baseUrl: 'https://api.deepseek.com/v1' },
+    captureFetch(mockFetch(200, { data: [{ id: 'deepseek-v4-flash' }, { id: 'deepseek-reasoner' }, { id: 'deepseek-chat' }] }), captured),
+  );
+  assert.deepEqual(models, ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-flash']);
+  assert.ok(captured.current);
+  assert.equal(String(captured.current.input), 'https://api.deepseek.com/v1/models');
+  const headers = captured.current.init.headers as Record<string, string>;
+  assert.equal(headers.Authorization, 'Bearer test-key');
+});
+
+test('discovers Anthropic models via /v1/models without duplicating /v1', async () => {
+  const { discoverTranslationModels } = await import('./translation/index.ts');
+  const captured: { current?: CapturedCall } = {};
+  const models = await discoverTranslationModels(
+    { ...CFG, provider: 'anthropic', baseUrl: 'https://api.anthropic.com/v1' },
+    captureFetch(mockFetch(200, { data: [{ id: 'claude-sonnet-4-5' }, { id: 'claude-opus-4-1' }] }), captured),
+  );
+  assert.deepEqual(models, ['claude-opus-4-1', 'claude-sonnet-4-5']);
+  assert.ok(captured.current);
+  assert.equal(String(captured.current.input), 'https://api.anthropic.com/v1/models');
+  const headers = captured.current.init.headers as Record<string, string>;
+  assert.equal(headers['x-api-key'], 'test-key');
+  assert.equal(headers['anthropic-version'], '2023-06-01');
+});
+
+test('model discovery returns null on non-2xx, malformed data, or workers-ai', async () => {
+  const { discoverTranslationModels } = await import('./translation/index.ts');
+  // Non-2xx response.
+  assert.equal(
+    await discoverTranslationModels(CFG, mockFetch(401, { error: 'bad key' })),
+    null,
+  );
+  // Malformed body (no data array).
+  assert.equal(
+    await discoverTranslationModels(CFG, mockFetch(200, { nope: true })),
+    null,
+  );
+  // workers-ai has no REST model catalog.
+  assert.equal(
+    await discoverTranslationModels({ ...CFG, provider: 'workers-ai' }),
+    null,
+  );
+});

@@ -49,6 +49,9 @@ const TARGET_LANG_PRESETS = [
 /** Sentinel option value for the "custom target language" branch of the select. */
 const CUSTOM_LANG_OPTION = '__custom__';
 
+/** Sentinel option value for the "custom model name" branch of the model select. */
+const CUSTOM_MODEL_OPTION = '__custom_model__';
+
 interface TranslationConfigPanelProps {
   onConfigChange?: () => void;
 }
@@ -66,6 +69,9 @@ export default function TranslationConfigPanel({ onConfigChange }: TranslationCo
   const [showKey, setShowKey] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [customLangSelected, setCustomLangSelected] = useState(false);
+  const [customModelSelected, setCustomModelSelected] = useState(false);
+  const [discoveredModels, setDiscoveredModels] = useState<string[] | null>(null);
+  const [discoveringModels, setDiscoveringModels] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   const showToast = useCallback((type: 'success' | 'error', msg: string) => {
@@ -89,18 +95,50 @@ export default function TranslationConfigPanel({ onConfigChange }: TranslationCo
     });
   }, []);
 
+  /**
+   * Fetch the provider's model catalog for the given form snapshot (blank
+   * api_key falls back to the stored/env key, same merge semantics as the
+   * test endpoint). Null result = no listable catalog / not supported.
+   */
+  const discoverModels = useCallback(async (payload: Record<string, string>) => {
+    setDiscoveringModels(true);
+    try {
+      const res = await fetch('/api/admin/translation-config/models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        setDiscoveredModels(null);
+        return;
+      }
+      const data = (await res.json()) as { models: string[] | null };
+      setDiscoveredModels(data.models && data.models.length > 0 ? data.models : null);
+    } catch {
+      setDiscoveredModels(null);
+    } finally {
+      setDiscoveringModels(false);
+    }
+  }, []);
+
   const loadConfig = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch('/api/admin/translation-config');
       if (!res.ok) throw new Error();
-      applyResponse(await res.json());
+      const data = (await res.json()) as ConfigResponse;
+      applyResponse(data);
+      // Already-connected config (has a working key): auto-discover the model
+      // list so the combobox is populated without an extra test click.
+      if (data.effective?.has_api_key && data.effective.provider !== 'workers-ai') {
+        void discoverModels({});
+      }
     } catch {
       showToast('error', t('admin.translationLoadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [applyResponse, showToast, t]);
+  }, [applyResponse, showToast, t, discoverModels]);
 
   useEffect(() => {
     void loadConfig();
@@ -153,6 +191,8 @@ export default function TranslationConfigPanel({ onConfigChange }: TranslationCo
       if (!res.ok) throw new Error();
       applyResponse(await res.json());
       setTestResult(null);
+      setDiscoveredModels(null);
+      setCustomModelSelected(false);
       showToast('success', t('admin.translationCleared'));
       onConfigChange?.();
     } catch {
@@ -173,16 +213,36 @@ export default function TranslationConfigPanel({ onConfigChange }: TranslationCo
       });
       const data = (await res.json()) as TestResult;
       setTestResult(data);
+      // Connected successfully → auto-discover the provider's model catalog.
+      if (data.ok) {
+        // Same snapshot semantics as the test: blank api_key keeps the
+        // stored/env key server-side.
+        const payload: Record<string, string> = {
+          provider: form.provider ?? '',
+          base_url: form.base_url ?? '',
+          api_key: form.api_key,
+          model: form.model ?? '',
+          target_lang: form.target_lang ?? '',
+        };
+        void discoverModels(payload);
+      } else {
+        setDiscoveredModels(null);
+      }
     } catch {
       setTestResult({ ok: false, latencyMs: 0, message: t('admin.translationTestFail') });
     } finally {
       setTesting(false);
     }
-  }, [form, t]);
+  }, [form, t, discoverModels]);
 
   const setField = <K extends keyof FormConfig>(key: K, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setTestResult(null);
+    // Connection-affecting fields invalidate the discovered model list.
+    if (key === 'provider' || key === 'base_url' || key === 'api_key') {
+      setDiscoveredModels(null);
+      setCustomModelSelected(false);
+    }
   };
 
   const sourceLabel = source === 'db' ? t('admin.translationSourceDb')
@@ -206,6 +266,14 @@ export default function TranslationConfigPanel({ onConfigChange }: TranslationCo
   const targetLangSelectValue = selectedTargetLangPreset
     ? selectedTargetLangPreset.value
     : (customLangSelected || hasCustomTargetLang ? CUSTOM_LANG_OPTION : '');
+
+  // Model is a combobox: a discovered catalog option, the default (''), or
+  // "Custom…" to type a free model name. A saved model not present in the
+  // discovered list resolves to the custom branch so it stays editable.
+  const modelInDiscovered = discoveredModels?.includes(form.model ?? '') ?? false;
+  const modelSelectValue = modelInDiscovered
+    ? (form.model ?? '')
+    : ((customModelSelected || (form.model ?? '') !== '') ? CUSTOM_MODEL_OPTION : '');
 
   return (
     <div className="space-y-6">
@@ -279,15 +347,6 @@ export default function TranslationConfigPanel({ onConfigChange }: TranslationCo
               <option value="workers-ai">{t('admin.translationProviderWorkersAi')}</option>
             </select>
           </label>
-          <label className="block">
-            <span className="mb-1 block text-xs text-[var(--muted-foreground)]">{t('admin.translationModel')}</span>
-            <input
-              value={form.model ?? ''}
-              onChange={(e) => setField('model', e.target.value)}
-              placeholder={effective?.model ?? '@cf/google/gemini-3.6-flash'}
-              className={inputClass}
-            />
-          </label>
           {/* Target language is a common field — always visible regardless of provider, so
               Workers AI admins keep full control over the translation output language. */}
           <label className="block">
@@ -338,7 +397,7 @@ export default function TranslationConfigPanel({ onConfigChange }: TranslationCo
               className={inputClass}
             />
           </label>
-          <label className="block">
+          <label className="block sm:col-span-2">
             <span className="mb-1 block text-xs text-[var(--muted-foreground)]">{t('admin.translationApiKey')}</span>
             <div className="relative">
               <input
@@ -362,6 +421,63 @@ export default function TranslationConfigPanel({ onConfigChange }: TranslationCo
           </label>
           </>
           )}
+        {/* Model — combobox fed by the auto-discovered provider catalog
+            (after a successful test / when already connected) or a custom
+            name typed manually. */}
+        <label className="block sm:col-span-2">
+          <span className="mb-1 flex items-center gap-2">
+            <span className="text-xs text-[var(--muted-foreground)]">{t('admin.translationModel')}</span>
+            {form.provider !== 'workers-ai' && (
+            <button
+              type="button"
+              onClick={() => {
+                const payload: Record<string, string> = {
+                  provider: form.provider ?? '',
+                  base_url: form.base_url ?? '',
+                  api_key: form.api_key,
+                  model: form.model ?? '',
+                  target_lang: form.target_lang ?? '',
+                };
+                void discoverModels(payload);
+              }}
+              disabled={discoveringModels}
+              className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--accent)] px-2 py-0.5 text-[11px] text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] disabled:opacity-50"
+              title={t('admin.translationModelDiscover')}
+            >
+              {discoveringModels ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+              {t('admin.translationModelDiscover')}
+            </button>
+            )}
+          </span>
+          <select
+            value={modelSelectValue}
+            onChange={(e) => {
+              if (e.target.value === CUSTOM_MODEL_OPTION) {
+                setCustomModelSelected(true);
+                setTestResult(null);
+              } else {
+                setCustomModelSelected(false);
+                setField('model', e.target.value);
+              }
+            }}
+            className={inputClass}
+          >
+            <option value="">{t('admin.translationModelDefault')}</option>
+            {discoveredModels?.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+            <option value={CUSTOM_MODEL_OPTION}>{t('admin.translationModelCustom')}</option>
+          </select>
+          {modelSelectValue === CUSTOM_MODEL_OPTION && (
+            <input
+              value={form.model ?? ''}
+              onChange={(e) => setField('model', e.target.value)}
+              placeholder={effective?.model ?? '@cf/google/gemini-3.6-flash'}
+              className={`${inputClass} mt-1.5`}
+            />
+          )}
+          <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]/70">{t('admin.translationModelHint')}</span>
+        </label>
         </div>
 
         {/* System prompt override — defaults fill the textarea; reset re-fills it. */}
