@@ -4,6 +4,7 @@
  */
 
 import { extractMaterialCoverPalette, type CoverColor, type CoverPalette } from '@/lib/cover-color';
+import { parseTranslationCache } from '@/lib/translation/parse';
 
 export type Orientation = 'landscape' | 'portrait';
 
@@ -152,15 +153,9 @@ function stripLrcTags(line: string): string {
 }
 
 function parseTranslations(song: ShareSong): string[] {
-  if (!song.lyrics_translation) return [];
-  try {
-    const parsed = JSON.parse(song.lyrics_translation);
-    return Array.isArray(parsed)
-      ? parsed.filter((item): item is string => typeof item === 'string')
-      : [];
-  } catch {
-    return [];
-  }
+  // Index-aligned: non-string entries become '' at their original index
+  // (never filtered) so later lines keep their source line number.
+  return parseTranslationCache(song.lyrics_translation);
 }
 
 /**

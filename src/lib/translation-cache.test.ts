@@ -5,6 +5,7 @@ import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import { sql } from 'drizzle-orm';
 import { mergeSliceIntoCache, writeSongField } from './translation-cache.ts';
+import { parseTranslationCache } from './translation/parse.ts';
 import { songs } from './schema.ts';
 
 /**
@@ -251,4 +252,49 @@ test('writeSongField persists reasoning under the same source CAS', async () => 
     patch: { lyricsTranslationReasoning: 'stale thinking…' },
   });
   assert.deepEqual(stale, { ok: false, reason: 'stale_source' });
+});
+
+test('parseTranslationCache maps non-string entries to empty strings without shifting lines', () => {
+  // Regression for issue #85: ["第一行译文", null, "第三行译文"] must NOT become
+  // ["第一行译文", "第三行译文"] — the null slot is kept as '' so the third line
+  // stays aligned to index 2 instead of being shown on line 2.
+  assert.deepEqual(
+    parseTranslationCache('["第一行译文", null, "第三行译文"]'),
+    ['第一行译文', '', '第三行译文'],
+  );
+  // Mixed non-string types, with a total line count that pads/truncates.
+  assert.deepEqual(
+    parseTranslationCache('["一", null, "三", 4]', 5),
+    ['一', '', '三', '', ''],
+  );
+  // Extra entries beyond totalLines are dropped.
+  assert.deepEqual(
+    parseTranslationCache('["一", "二", "三", "四"]', 3),
+    ['一', '二', '三'],
+  );
+  // Damaged / missing / empty cache → all-empty seed of the right length.
+  assert.deepEqual(parseTranslationCache('', 3), ['', '', '']);
+  assert.deepEqual(parseTranslationCache('bad-json', 2), ['', '']);
+  assert.deepEqual(parseTranslationCache(null, 1), ['']);
+  assert.deepEqual(parseTranslationCache('[]', 4), ['', '', '', '']);
+});
+
+test('merge into a partial cache with a stale null slot does not shift later lines', async () => {
+  const t = makeTestDb(`/tmp/translation-cache-nullslot-${process.pid}-${Date.now()}.db`);
+  await createTables(t);
+  // Damaged/legacy cache: line 2 is null. If the parser filtered it, line 3's
+  // translation would shift up to line 2. It must stay at index 2.
+  await seedSong(t, { cache: '["早", null, "晚"]' });
+
+  const result = await mergeSliceIntoCache(t.db, {
+    id: SONG_ID,
+    sourceLyrics: LYRICS, // 4 lines
+    totalLines: 4,
+    start: 3,
+    resolved: makeResolved(['夜']),
+  });
+  assert.equal(result.ok, true);
+  const row = await readSong(t);
+  // Index 1 stays '' (was null), index 2 keeps "晚", index 3 is the new merge.
+  assert.equal(row?.lyricsTranslation, '["早","","晚","夜"]');
 });

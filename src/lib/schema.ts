@@ -83,6 +83,20 @@ export const settings = sqliteTable('settings', {
   value: text('value').notNull(),
 });
 
+// Per-user personal settings (non-admin preferences: theme, locale, font size,
+// reading mode, romanize furigana, show translation, follow playing, translation
+// target lang). One row per (user_id, key); value holds the JSON-encoded value.
+// Reading precedence: user setting > admin/global config > built-in default.
+// Unauthenticated users keep their existing localStorage-only behaviour.
+export const userSettings = sqliteTable('user_settings', {
+  userId: text('user_id').notNull(),
+  key: text('key').notNull(),
+  value: text('value').notNull(),
+  updatedAt: text('updated_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+}, (t) => [
+  primaryKey({ columns: [t.userId, t.key] }),
+]);
+
 // User-uploaded custom cover artwork, stored as a BLOB so it works on both
 // local SQLite and Cloudflare D1 (Workers have no persistent filesystem).
 // Spotify artwork is never stored here — its CDN URL is reused directly.

@@ -12,6 +12,7 @@ import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useAuthSession } from '@/lib/auth-session';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
+import { parseTranslationCache } from '@/lib/translation/parse';
 
 interface SongData {
   id: string;
@@ -74,13 +75,9 @@ export default function TranslationEditPage() {
           .catch(() => {});
       }
       const rawLines = data.lyrics_raw.split('\n');
-      let parsed: string[] = [];
-      try {
-        const json = JSON.parse(data.lyrics_translation || '[]');
-        if (Array.isArray(json)) parsed = json.filter((item): item is string => typeof item === 'string');
-      } catch { /* empty draft */ }
-      // Align exactly to the current lyric lines; stale/extra entries are dropped.
-      const aligned = Array.from({ length: rawLines.length }, (_, i) => parsed[i] ?? '');
+      // Index-aligned to the current lyric lines; stale non-string slots become
+      // '' and extra entries are dropped instead of shifting later lines.
+      const aligned = parseTranslationCache(data.lyrics_translation, rawLines.length);
       setOriginal(aligned);
       setDraft(aligned);
     } catch {

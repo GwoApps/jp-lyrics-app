@@ -32,6 +32,7 @@
 
 import { and, eq, sql } from 'drizzle-orm';
 import * as schema from './schema.ts';
+import { parseTranslationCache } from './translation/parse.ts';
 
 /** Max retries for the optimistic-lock merge loop (each retry re-reads the cache). */
 const MAX_MERGE_ATTEMPTS = 8;
@@ -44,16 +45,13 @@ export type MergeResult =
   | { ok: true; cache: string[] }
   | { ok: false; reason: 'stale_source' | 'not_found' | 'contention' };
 
-/** Parse a stored cache string into an array of strings; damaged/missing → []. */
-function parseCache(raw: string | null | undefined): string[] {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
-  } catch {
-    // Damaged cache — start from an empty seed (same policy as the route).
-    return [];
-  }
+/**
+ * Parse a stored cache string into a string[] index-aligned to the source
+ * lyric lines. Non-string entries are replaced with '' at their original
+ * index (never filtered) so line numbers never shift; damaged/missing → [].
+ */
+function parseCache(raw: string | null | undefined, totalLines: number): string[] {
+  return parseTranslationCache(raw, totalLines);
 }
 
 /**
@@ -120,7 +118,7 @@ export async function mergeSliceIntoCache(
     // The song's source lyrics moved on — this request's output is stale.
     if (latest.lyricsRaw !== opts.sourceLyrics) return { ok: false, reason: 'stale_source' };
 
-    const merged = mergeSlice(parseCache(latest.lyricsTranslation), opts.resolved, opts.totalLines, opts.start);
+    const merged = mergeSlice(parseCache(latest.lyricsTranslation, opts.totalLines), opts.resolved, opts.totalLines, opts.start);
     // CAS on the exact cache value we read: if a concurrent writer committed
     // in between, this UPDATE matches no row and we retry against its cache.
     const applied = await d.update(schema.songs)
