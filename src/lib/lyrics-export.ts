@@ -9,6 +9,7 @@
 
 import type { FuriganaLine, ReadingScheme } from './types.ts';
 import { normalizeFuriganaSegments, resolveFuriganaReading } from './romaji.ts';
+import { parseTranslationCache } from './translation/parse.ts';
 
 export type ExportFormat = 'text' | 'lrc' | 'html';
 
@@ -71,15 +72,13 @@ export function parseFuriganaLines(value: string): FuriganaLine[] {
   }
 }
 
-/** Parse the stored translation JSON array (aligned to `lyrics_raw` lines). */
+/**
+ * Parse the stored translation JSON array index-aligned to `lyrics_raw`
+ * lines. Non-string entries become '' at their original index (never
+ * filtered) so later lines never shift.
+ */
 export function parseTranslations(value: string): string[] {
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
-  } catch {
-    return [];
-  }
+  return parseTranslationCache(value);
 }
 
 /** Render one furigana line to HTML, honouring the reading mode. */

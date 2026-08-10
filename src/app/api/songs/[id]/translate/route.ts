@@ -6,6 +6,7 @@ import { extractLyricsGlossary, getTranslationConfig, streamTranslateLyricLines,
 import { getStoredTranslationConfig, resolveTranslationConfig } from '@/lib/translation-settings';
 import { extractCompletedArrayItems } from '@/lib/translation-progress';
 import { mergeSliceIntoCache, writeSongField } from '@/lib/translation-cache';
+import { parseTranslationCache } from '@/lib/translation/parse';
 
 const SSE_HEADERS = {
   'Content-Type': 'text/event-stream',
@@ -121,18 +122,9 @@ export async function POST(
     return NextResponse.json({ error: 'empty_lyrics' }, { status: 400 });
   }
 
-  // Existing cache (may be partial).
-  let cache: string[] = [];
-  if (existing.lyricsTranslation) {
-    try {
-      const parsed = JSON.parse(existing.lyricsTranslation);
-      if (Array.isArray(parsed)) cache = parsed.filter((item): item is string => typeof item === 'string');
-    } catch (error) {
-      // Damaged cache — start from an empty seed.
-      console.warn(`[translate] stored translation cache unparseable (slice) — ${error instanceof Error ? error.message : String(error)}`);
-      /* start empty */
-    }
-  }
+  // Existing cache (may be partial). Parsed with index-alignment so a stale
+  // null/number slot degrades to an empty string instead of shifting lines.
+  const cache: string[] = parseTranslationCache(existing.lyricsTranslation, lines.length);
 
   // Dedup: map each distinct non-empty line to its first occurrence (whole song),
   // so repeated lines reuse one translation instead of burning tokens per copy.

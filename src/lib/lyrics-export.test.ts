@@ -33,10 +33,13 @@ test('parseFuriganaLines handles empty and malformed JSON', () => {
   assert.equal(parseFuriganaLines(SONG.lyrics_furigana).length, 3);
 });
 
-test('parseTranslations filters non-string entries', () => {
+test('parseTranslations keeps index alignment by replacing non-string entries with empty strings', () => {
   assert.deepEqual(parseTranslations(''), []);
-  assert.deepEqual(parseTranslations('["a", 1, null]'), ['a']);
   assert.deepEqual(parseTranslations('bad'), []);
+  // Non-string slots are kept in place as '' (never filtered) so later
+  // lines keep their source-line index.
+  assert.deepEqual(parseTranslations('["a", 1, null]'), ['a', '', '']);
+  assert.deepEqual(parseTranslations('["第一行", null, "第三行"]'), ['第一行', '', '第三行']);
 });
 
 test('buildTextExport emits original text by default and pairs translations', () => {
@@ -128,4 +131,19 @@ test('buildExport LRC rejects blank synced lyrics (incl. invisible whitespace)',
       (error: unknown) => error instanceof ExportError && error.code === 'lrc_no_synced_lyrics',
     );
   }
+});
+
+test('buildTextExport keeps line alignment when a stale null slot exists mid-cache', () => {
+  const song = {
+    ...SONG,
+    // Line 2 (null slot) must not cause line 3's translation to shift up.
+    lyrics_translation: JSON.stringify(['Cherry blossoms dance', null, 'Toward tomorrow']),
+  };
+  const withTranslation = buildTextExport(song, true, 'none');
+  // Even though index 1 is a null slot, "Toward tomorrow" stays on the THIRD
+  // source line (index 2) — it is not printed under line 2.
+  assert.equal(
+    withTranslation,
+    '桜が舞う\nCherry blossoms dance\n\n明日へ\nToward tomorrow',
+  );
 });

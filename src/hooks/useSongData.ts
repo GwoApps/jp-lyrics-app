@@ -15,6 +15,7 @@ import {
   normalizeReadingScheme,
   type CantoneseDetectionResult,
 } from '@/lib/lyrics-reading';
+import { parseTranslationCache } from '@/lib/translation/parse';
 import {
   isKatakanaReadingSegment,
   isKoreanReadingSegment,
@@ -260,11 +261,10 @@ export function useSongData(id: string): UseSongDataReturn {
   }, [song]);
 
   const translations = useMemo<string[]>(() => {
-    if (!song?.lyrics_translation) return [];
-    try {
-      const parsed = JSON.parse(song.lyrics_translation);
-      return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
-    } catch { return []; }
+    const totalLines = song?.lyrics_raw ? song.lyrics_raw.split('\n').length : 0;
+    if (!song?.lyrics_translation || totalLines === 0) return [];
+    // Index-aligned so stale non-string slots become '' instead of shifting lines.
+    return parseTranslationCache(song.lyrics_translation, totalLines);
   }, [song]);
 
   // Client-side furigana (lazy-loaded from kuromoji-es CDN when needed)
