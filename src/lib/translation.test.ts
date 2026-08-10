@@ -312,7 +312,7 @@ test('discovers Anthropic models via /v1/models without duplicating /v1', async 
   assert.equal(headers['anthropic-version'], '2023-06-01');
 });
 
-test('model discovery returns null on non-2xx, malformed data, or workers-ai', async () => {
+test('model discovery returns null on non-2xx or malformed data', async () => {
   const { discoverTranslationModels } = await import('./translation/index.ts');
   // Non-2xx response.
   assert.equal(
@@ -324,9 +324,17 @@ test('model discovery returns null on non-2xx, malformed data, or workers-ai', a
     await discoverTranslationModels(CFG, mockFetch(200, { nope: true })),
     null,
   );
-  // workers-ai has no REST model catalog.
-  assert.equal(
-    await discoverTranslationModels({ ...CFG, provider: 'workers-ai' }),
-    null,
-  );
+});
+
+test('workers-ai model discovery returns the curated static catalog', async () => {
+  const { discoverTranslationModels, WORKERS_AI_MODELS } = await import('./translation/index.ts');
+  const models = await discoverTranslationModels({ ...CFG, provider: 'workers-ai' });
+  assert.ok(models, 'workers-ai must have a discoverable catalog');
+  assert.equal(models!.length, WORKERS_AI_MODELS.length);
+  assert.deepEqual(models, [...WORKERS_AI_MODELS].sort());
+  // Catalog only contains @cf/ binding-backed text-generation models.
+  for (const id of models!) {
+    assert.ok(id.startsWith('@cf/'), `unexpected non-binding id: ${id}`);
+  }
+  assert.ok(!models!.some((id) => id.includes('lora') || id.includes('whisper') || id.includes('flux')), 'no LoRA/ASR/image models leaked in');
 });

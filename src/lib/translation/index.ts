@@ -32,6 +32,7 @@ import {
   REASONING_EFFORT,
   RETRY_ATTEMPTS,
   RETRY_BASE_DELAY_MS,
+  WORKERS_AI_MODELS,
   TranslationError,
   type GlossaryEntry,
   type TranslationConfig,
@@ -53,6 +54,7 @@ export {
   MAX_OUTPUT_TOKENS,
   RETRY_ATTEMPTS,
   RETRY_BASE_DELAY_MS,
+  WORKERS_AI_MODELS,
   TranslationError,
   getTranslationConfig,
   isTranslationConfigured,
@@ -73,7 +75,8 @@ export {
  *
  * - OpenAI-compatible: GET {base_url}/models with Bearer auth → { data: [{ id }] }
  * - Anthropic: GET {base_url}/v1/models with x-api-key → { data: [{ id }] }
- * - workers-ai: no REST list endpoint (binding-backed), returns null.
+ * - workers-ai: the `env.AI` binding has no model-list API, so it returns
+ *   the curated static catalog (WORKERS_AI_MODELS); null when empty.
  *
  * Returns a sorted list of model ids, or null when the provider has no
  * listable model catalog (not supported / request failed). Never throws.
@@ -82,7 +85,9 @@ export async function discoverTranslationModels(
   config: TranslationConfig,
   fetchImpl: typeof fetch = fetch,
 ): Promise<string[] | null> {
-  if (config.provider === 'workers-ai') return null;
+  if (config.provider === 'workers-ai') {
+    return WORKERS_AI_MODELS.length > 0 ? [...WORKERS_AI_MODELS].sort() : null;
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15_000);

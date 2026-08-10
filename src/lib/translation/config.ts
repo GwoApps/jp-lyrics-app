@@ -52,6 +52,49 @@ export const DEFAULT_OPENAI_MODEL = 'deepseek-v4-flash';
 export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-5';
 export const DEFAULT_WORKERS_AI_MODEL = '@cf/google/gemini-3.6-flash';
 
+/**
+ * Static catalog of Cloudflare Workers AI text-generation models suitable
+ * for lyrics translation, curated from the official model directory
+ * (https://developers.cloudflare.com/workers-ai/models/).
+ *
+ * Excluded types: text/image/audio generation, embeddings, classification,
+ * ASR/TTS, object detection, summarization, dedicated NMT models, vision/
+ * multimodal models, LoRA-only bases, code-specific models, safety
+ * classifiers, and `@hf/` direct-connect models (not binding-backed).
+ * Workers AI's `env.AI` binding exposes no model-list API, so the admin
+ * combobox falls back to this catalog; admins may still type any custom
+ * model name.
+ */
+export const WORKERS_AI_MODELS: readonly string[] = [
+  '@cf/aisingapore/gemma-sea-lion-v4-27b-it',
+  '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b',
+  '@cf/google/gemma-3-12b-it',
+  '@cf/google/gemma-4-26b-a4b-it',
+  '@cf/ibm-granite/granite-4.0-h-micro',
+  '@cf/meta/llama-2-7b-chat-fp16',
+  '@cf/meta/llama-2-7b-chat-int8',
+  '@cf/meta/llama-3-8b-instruct',
+  '@cf/meta/llama-3-8b-instruct-awq',
+  '@cf/meta/llama-3.1-70b-instruct',
+  '@cf/meta/llama-3.1-8b-instruct',
+  '@cf/meta/llama-3.1-8b-instruct-awq',
+  '@cf/meta/llama-3.1-8b-instruct-fast',
+  '@cf/meta/llama-3.1-8b-instruct-fp8',
+  '@cf/meta/llama-3.2-1b-instruct',
+  '@cf/meta/llama-3.2-3b-instruct',
+  '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+  '@cf/microsoft/phi-2',
+  '@cf/mistral/mistral-7b-instruct-v0.1',
+  '@cf/moonshotai/kimi-k2.5',
+  '@cf/moonshotai/kimi-k2.6',
+  '@cf/nvidia/nemotron-3-120b-a12b',
+  '@cf/openai/gpt-oss-120b',
+  '@cf/openai/gpt-oss-20b',
+  '@cf/qwen/qwen3-30b-a3b-fp8',
+  '@cf/qwen/qwq-32b',
+  '@cf/zai-org/glm-4.7-flash',
+];
+
 /** Attempts and backoff for transient failures (1s, 2s). */
 export const RETRY_ATTEMPTS = 3;
 export const RETRY_BASE_DELAY_MS = 1000;

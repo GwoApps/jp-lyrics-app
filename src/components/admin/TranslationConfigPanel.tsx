@@ -128,9 +128,11 @@ export default function TranslationConfigPanel({ onConfigChange }: TranslationCo
       if (!res.ok) throw new Error();
       const data = (await res.json()) as ConfigResponse;
       applyResponse(data);
-      // Already-connected config (has a working key): auto-discover the model
-      // list so the combobox is populated without an extra test click.
-      if (data.effective?.has_api_key && data.effective.provider !== 'workers-ai') {
+      // Already-connected config: auto-discover the model list so the
+      // combobox is populated without an extra test click. workers-ai
+      // resolves its static catalog (no API key needed).
+      const eff = data.effective;
+      if (eff?.provider && (eff.provider === 'workers-ai' || eff.has_api_key)) {
         void discoverModels({});
       }
     } catch {
