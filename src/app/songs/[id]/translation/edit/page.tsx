@@ -11,6 +11,7 @@ import Toast from '@/components/Toast';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useAuthSession } from '@/lib/auth-session';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { parseTranslationCache } from '@/lib/translation/parse';
 
 interface SongData {
@@ -95,16 +96,13 @@ export default function TranslationEditPage() {
   const filledCount = useMemo(() => draft.filter((line) => line.trim()).length, [draft]);
   const isDirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(original), [draft, original]);
 
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      if (isDirty) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [isDirty]);
+  // Unified unsaved-changes guard covering in-app <Link> clicks (breadcrumbs,
+  // AppShell navigation), browser back/forward, `router.push` and unload. The
+  // dialog is rendered at the bottom of this page.
+  const { dialog: unsavedDialog, guard: guardNavigate } = useUnsavedChangesGuard({
+    confirmHref: `/songs/${id}`,
+    dirty: isDirty,
+  });
 
   const handleSave = useCallback(async () => {
     if (!id) return;
@@ -135,9 +133,8 @@ export default function TranslationEditPage() {
   }, [id, draft, sourceLyrics, showToast, t]);
 
   const handleCancel = useCallback(() => {
-    if (isDirty && !window.confirm(t('translation.unsavedConfirm'))) return;
-    router.push(`/songs/${id}`);
-  }, [isDirty, router, id, t]);
+    guardNavigate(`/songs/${id}`);
+  }, [guardNavigate, id]);
 
   if (loading || auth === null) {
     return (
@@ -265,6 +262,7 @@ export default function TranslationEditPage() {
       </div>
 
       {toast && <Toast type={toast.type} message={toast.msg} />}
+      {unsavedDialog}
     </div>
   );
 }
