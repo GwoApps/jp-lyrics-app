@@ -502,7 +502,7 @@ export default function SongViewPage() {
                   icon: <Languages className="h-3.5 w-3.5" />,
                   label: t('song.copyTranslation'),
                   onClick: () => data.handleCopy('translation'),
-                  disabled: data.translations.length === 0,
+                  disabled: !data.hasTranslation,
                 },
               ]}
             />
@@ -873,7 +873,7 @@ export default function SongViewPage() {
         <DownloadDialog
           songId={id}
           hasReadingData={furiganaLines.length > 0}
-          hasTranslation={data.translations.length > 0}
+          hasTranslation={data.hasTranslation}
           hasSynced={!isEmptyAfterTrim(data.song.lyrics_synced)}
           onClose={() => setShowDownloadDialog(false)}
         />

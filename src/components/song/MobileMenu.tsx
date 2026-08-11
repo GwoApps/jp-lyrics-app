@@ -122,7 +122,7 @@ export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSup
                 setShowCopyMenu(false);
                 void data.handleCopy('translation');
               }}
-              disabled={data.translations.length === 0}
+              disabled={!data.hasTranslation}
               className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)] disabled:opacity-50"
             >
               <Languages className="h-4 w-4" />

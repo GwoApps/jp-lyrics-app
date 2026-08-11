@@ -279,6 +279,20 @@ test('parseTranslationCache maps non-string entries to empty strings without shi
   assert.deepEqual(parseTranslationCache('[]', 4), ['', '', '', '']);
 });
 
+test('a padded empty cache must not count as "has translation" (untranslated songs)', () => {
+  // Regression: the DB column defaults to '[]' for untranslated songs, and the
+  // frontend pads the parsed cache to the lyric line count. An all-empty array
+  // still means "nothing translated" — consumers must test content, not length,
+  // or the translate trigger / prompt never fire for untranslated songs.
+  const cache = parseTranslationCache('[]', 4);
+  assert.equal(cache.length, 4);
+  assert.equal(cache.some((line) => line !== ''), false);
+  // A partial translation flips the same check to true (used by the resume
+  // prompt and the translation-toggle trigger).
+  const partial = parseTranslationCache('["一", "", "", ""]', 4);
+  assert.equal(partial.some((line) => line !== ''), true);
+});
+
 test('merge into a partial cache with a stale null slot does not shift later lines', async () => {
   const t = makeTestDb(`/tmp/translation-cache-nullslot-${process.pid}-${Date.now()}.db`);
   await createTables(t);

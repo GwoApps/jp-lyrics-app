@@ -111,6 +111,7 @@ export interface UseSongDataReturn {
   syncLines: ReturnType<typeof parseLrc>;
   furiganaLines: FuriganaLine[];
   translations: string[];
+  hasTranslation: boolean;
   showTranslation: boolean;
   setShowTranslation: React.Dispatch<React.SetStateAction<boolean>>;
   translating: boolean;
@@ -266,6 +267,15 @@ export function useSongData(id: string): UseSongDataReturn {
     // Index-aligned so stale non-string slots become '' instead of shifting lines.
     return parseTranslationCache(song.lyrics_translation, totalLines);
   }, [song]);
+
+  // Whether ANY rendered translation exists. Length is NOT a valid proxy: the
+  // DB column defaults to '[]' for untranslated songs and the cache is padded
+  // to the lyric line count, so `translations` is never empty for a song with
+  // lyrics even when nothing is translated yet.
+  const hasTranslation = useMemo(
+    () => translations.some((line) => line !== ''),
+    [translations],
+  );
 
   // Client-side furigana (lazy-loaded from kuromoji-es CDN when needed)
   const requestedLyricsRef = useRef('');
@@ -701,7 +711,7 @@ export function useSongData(id: string): UseSongDataReturn {
     if (
       showTranslation &&
       song?.lyrics_raw?.trim() &&
-      translations.length === 0 &&
+      !hasTranslation &&
       !translating &&
       !translationPromptedRef.current
     ) {
@@ -713,7 +723,7 @@ export function useSongData(id: string): UseSongDataReturn {
         void handleTranslate();
       });
     }
-  }, [showTranslation, song?.lyrics_raw, translations.length, translating, t, showToast, handleTranslate]);
+  }, [showTranslation, song?.lyrics_raw, hasTranslation, translating, t, showToast, handleTranslate]);
 
 
   // Auto-open the reasoning panel as soon as the model starts streaming
@@ -1044,6 +1054,7 @@ export function useSongData(id: string): UseSongDataReturn {
     syncLines,
     furiganaLines,
     translations,
+    hasTranslation,
     showTranslation,
     setShowTranslation,
     translating,

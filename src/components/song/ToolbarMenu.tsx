@@ -61,10 +61,10 @@ export function buildReadingMenuItems(
       label: t('song.translation'),
       status: data.translating ? t('song.translating') : t(data.showTranslation ? 'common.on' : 'common.off'),
       onClick: () => {
-        if (data.translations.length > 0) data.setShowTranslation(!data.showTranslation);
+        if (data.hasTranslation) data.setShowTranslation(!data.showTranslation);
         else void data.handleTranslate();
       },
-      disabled: data.translating || (!canEdit && data.translations.length === 0),
+      disabled: data.translating || (!canEdit && !data.hasTranslation),
       keepOpen: true,
     },
     ...(data.hasSavedReasoning || data.translationReasoning ? [{
