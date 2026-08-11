@@ -10,6 +10,8 @@ interface FuriganaEditorProps {
   rawLines?: string[];
   onChange: (lines: FuriganaLine[]) => void;
   readingScheme?: ReadingScheme;
+  /** Optional source-line index to auto-locate on mount (from `?line=N`). */
+  focusLine?: number;
 }
 
 type EditTarget = { lineIndex: number; segIndex: number } | null;
@@ -41,13 +43,15 @@ function groupEditorDisplaySegments(segments: FuriganaSegment[]): EditorDisplayP
   return parts;
 }
 
-export default function FuriganaEditor({ lines, rawLines, onChange, readingScheme = 'ja-kana' }: FuriganaEditorProps) {
+export default function FuriganaEditor({ lines, rawLines, onChange, readingScheme = 'ja-kana', focusLine }: FuriganaEditorProps) {
   const { t } = useI18n();
   const [active, setActive] = useState<EditTarget>(null);
   const [draft, setDraft] = useState('');
   const [readingCandidates, setReadingCandidates] = useState<string[]>([]);
   const [readingCandidatesLoading, setReadingCandidatesLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const locatedRef = useRef(false);
 
   useEffect(() => {
     if (active && inputRef.current) {
@@ -112,13 +116,29 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
     onChange(next);
   }, [lines, onChange]);
 
-  const startEdit = (li: number, si: number) => {
+  const startEdit = useCallback((li: number, si: number) => {
     const segment = lines[li].segments[si];
     setActive({ lineIndex: li, segIndex: si });
     setDraft(segment.reading);
     setReadingCandidates([]);
     setReadingCandidatesLoading(/[\u3400-\u4DBF\u4E00-\u9FFF]/.test(segment.text));
-  };
+  }, [lines]);
+
+  // Auto-locate the `?line=N` deep-link target once lines are ready: scroll the
+  // row into view, focus its first editable segment (which also highlights the
+  // line via the active ring), then never re-run on subsequent edits.
+  useEffect(() => {
+    if (locatedRef.current) return;
+    if (focusLine === undefined || lines.length === 0) return;
+    const li = focusLine;
+    if (li < 0 || li >= lines.length) return;
+    locatedRef.current = true;
+    const row = lineRefs.current[li];
+    if (row) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const firstEditable = lines[li].segments.findIndex((seg) => !isNonEditableDisplaySegment(seg.text));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-time auto-focus for `?line=N` deep link
+    if (firstEditable >= 0) startEdit(li, firstEditable);
+  }, [focusLine, lines, startEdit]);
 
   const commitReading = useCallback(() => {
     if (!active) return;
@@ -238,6 +258,7 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
         return (
           <div
             key={li}
+            ref={(el) => { lineRefs.current[li] = el; }}
             className={`rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 sm:p-4 transition-colors ${
               isActiveLine ? 'ring-1 ring-[var(--song-accent)]/30' : ''
             }`}

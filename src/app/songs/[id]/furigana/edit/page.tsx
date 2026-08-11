@@ -3,7 +3,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, RotateCcw, Sparkles } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
@@ -36,6 +36,7 @@ interface AuthState {
 export default function FuriganaEditPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const { t } = useI18n();
   const id = params?.id as string;
 
@@ -138,6 +139,19 @@ export default function FuriganaEditPage() {
   const sourceLyrics = song?.lyrics_raw ?? '';
   const rawLines = useMemo(() => sourceLyrics.split('\n'), [sourceLyrics]);
   const activeReadingScheme = normalizeReadingScheme(song?.reading_scheme);
+
+  // Resolve the `?line=N` deep-link target against the parsed draft lines. The
+  // detail-page「纠正注音」entry passes the source-line index; it matches the
+  // editor's `draft` array position (both are built from `lyrics_raw` split by
+  // line). Blank rows may be skipped in rendering, so we validate against the
+  // parsed array length instead of `rawLines`.
+  const focusLine = useMemo(() => {
+    const raw = searchParams?.get('line');
+    if (raw === null || raw === undefined) return undefined;
+    const n = parseInt(raw, 10);
+    if (Number.isNaN(n) || n < 0 || n >= draft.length) return undefined;
+    return n;
+  }, [searchParams, draft.length]);
 
   const isDirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(original), [draft, original]);
 
@@ -309,6 +323,7 @@ export default function FuriganaEditPage() {
         rawLines={rawLines}
         onChange={setDraft}
         readingScheme={activeReadingScheme}
+        focusLine={focusLine}
       />
 
       {toast && <Toast type={toast.type} message={toast.msg} />}

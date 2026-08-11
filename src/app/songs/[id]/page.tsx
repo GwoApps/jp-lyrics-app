@@ -778,7 +778,7 @@ export default function SongViewPage() {
                     onCopyLine={() => copyLyricLine(line)}
                     onCopyTranslation={() => copyLyricTranslation(i)}
                     onShareLine={() => router.push(`/songs/${id}/share?line=${i}`)}
-                    onCorrectFurigana={() => router.push(`/songs/${id}/furigana/edit`)}
+                    onCorrectFurigana={() => router.push(`/songs/${id}/furigana/edit?line=${i}`)}
                     canCorrectFurigana={canEdit}
                     readingMode={data.readingMode}
                     romanizeFurigana={data.romanizeFurigana}
