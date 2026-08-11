@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { I18nProvider, useI18n } from '@/lib/i18n';
@@ -17,6 +17,28 @@ function Nav() {
   const spotifyConnected = session?.spotify.connected === true;
   const isAdmin = session?.user?.isAdmin === true;
   const isLoggedIn = !!session?.user;
+  const showAdmin = spotifyConnected && isAdmin;
+
+  // Pending-queue count for the 管理 badge. null = unknown (no badge); the
+  // count refreshes on mount/login and whenever the route changes, so leaving
+  // the admin console updates the badge after queue changes.
+  const [todoCount, setTodoCount] = useState<number | null>(null);
+  const pathname = usePathname();
+  useEffect(() => {
+    if (!showAdmin) return;
+    let cancelled = false;
+    fetch('/api/admin/todo-count')
+      .then((res) => (res.ok ? res.json() as Promise<{ count?: number }> : null))
+      .then((data) => {
+        if (!cancelled) setTodoCount(typeof data?.count === 'number' ? data.count : null);
+      })
+      .catch(() => {
+        if (!cancelled) setTodoCount(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showAdmin, pathname]);
 
   return (
     <nav className="app-topbar sticky top-0 z-50 border-b border-[var(--border)] bg-[var(--background)]/80 backdrop-blur-sm">
@@ -29,12 +51,19 @@ function Nav() {
         </span>
         <div className="flex-1" />
         <div className="flex items-center gap-1 sm:gap-2">
-          <Link
-            href="/"
-            className="rounded-md px-2.5 sm:px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)]"
-          >
-            {t('common.list')}
-          </Link>
+          {showAdmin && (
+            <Link
+              href="/admin/todo"
+              className="relative rounded-md px-2.5 sm:px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)]"
+            >
+              {t('admin.title')}
+              {todoCount !== null && todoCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--destructive)] px-1 text-[10px] font-semibold leading-none text-[var(--destructive-foreground)]">
+                  {todoCount > 99 ? '99+' : todoCount}
+                </span>
+              )}
+            </Link>
+          )}
           {isLoggedIn && (
             <Link
               href="/settings"
@@ -43,14 +72,6 @@ function Nav() {
               aria-label={t('settings.title')}
             >
               <Settings className="h-4 w-4" />
-            </Link>
-          )}
-          {spotifyConnected && isAdmin && (
-            <Link
-              href="/admin/todo"
-              className="rounded-md px-2.5 sm:px-3 py-1.5 text-xs text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)]"
-            >
-              {t('admin.title')}
             </Link>
           )}
           <a
