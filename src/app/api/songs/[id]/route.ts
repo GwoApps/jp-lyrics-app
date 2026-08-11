@@ -52,6 +52,7 @@ const songFields = {
   reading_scheme_confirmed: schema.songs.readingSchemeConfirmed,
   lyrics_synced: schema.songs.lyricsSynced,
   lyrics_translation: schema.songs.lyricsTranslation,
+  lyrics_translation_lang: schema.songs.lyricsTranslationLang,
   lyrics_translation_reasoning: schema.songs.lyricsTranslationReasoning,
   lyrics_glossary: schema.songs.lyricsGlossary,
   cover_url: schema.songs.coverUrl,
@@ -177,6 +178,11 @@ export async function PUT(
   const lyricsTranslation = clear_translation === true
     ? '[]'
     : lyricsContentChanged ? '[]' : existing.lyrics_translation;
+  // When the translation cache is cleared, its recorded language is cleared
+  // too — a future request re-translates from scratch (issue #93).
+  const lyricsTranslationLang = (clear_translation === true || lyricsContentChanged)
+    ? null
+    : existing.lyrics_translation_lang;
   // Reasoning is tied to the translation run; wipe it whenever the translation
   // cache is cleared, the lyrics content changes, or explicitly on request
   // (the clear entry lives on the song editor page).
@@ -192,6 +198,7 @@ export async function PUT(
     lyricsRaw: newRaw,
     lyricsFurigana,
     lyricsTranslation,
+    lyricsTranslationLang,
     lyricsTranslationReasoning,
     lyricsGlossary,
     coverPalette: cover_palette !== undefined

@@ -92,6 +92,14 @@ export async function mergeSliceIntoCache(
     totalLines: number;
     start: number;
     resolved: (string | null)[];
+    /**
+     * The BCP-47 target language the merged translations were generated in.
+     * Recorded together with the cache so a later request can tell whether the
+     * stored translations match the current target language. When omitted,
+     * the existing stored language is preserved (e.g. a partial resume that
+     * keeps translating into the same language).
+     */
+    lang?: string;
   },
 ): Promise<MergeResult> {
   const d = db as {
@@ -124,6 +132,9 @@ export async function mergeSliceIntoCache(
     const applied = await d.update(schema.songs)
       .set({
         lyricsTranslation: JSON.stringify(merged),
+        // Stamp the language whenever a language is provided; otherwise keep
+        // whatever is already stored (a resume into the same language).
+        ...(opts.lang !== undefined ? { lyricsTranslationLang: opts.lang } : {}),
         updatedAt: sql`(datetime('now', 'localtime'))`,
       })
       .where(and(

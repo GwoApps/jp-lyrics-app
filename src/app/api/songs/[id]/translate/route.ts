@@ -63,6 +63,7 @@ export async function POST(
     artist: schema.songs.artist,
     lyricsRaw: schema.songs.lyricsRaw,
     lyricsTranslation: schema.songs.lyricsTranslation,
+    lyricsTranslationLang: schema.songs.lyricsTranslationLang,
     lyricsTranslationReasoning: schema.songs.lyricsTranslationReasoning,
     lyricsGlossary: schema.songs.lyricsGlossary,
   }).from(schema.songs).where(eq(schema.songs.id, id)).get();
@@ -89,15 +90,24 @@ export async function POST(
     return NextResponse.json({ error: 'empty_lyrics' }, { status: 400 });
   }
 
+  // The stored cache was generated in a specific target language. A cache
+  // whose recorded language doesn't match the current effective target
+  // language is treated as NOT a valid cache for this request — the user
+  // changed their target language (or the admin/global default changed) and
+  // the old translations would otherwise be served as-is (issue #93).
+  // Unknown/NULL language (legacy data, manual corrections) is likewise
+  // treated as incompatible so the first request re-translates.
+  const cacheLangMatches = existing.lyricsTranslationLang === config.targetLang;
+
   // An empty array (the default '[]' placeholder) is NOT a valid cache — it means
   // the song was never translated, so fall through to real translation.
-  // A cache only short-circuits when it is COMPLETE (line count aligned and
-  // every non-empty source line has a translation). Partial caches fall
-  // through so the whole-song request re-translates just the missing lines
-  // (cache/dedup skip the rest) — one request, full-lyrics context.
+  // A cache only short-circuits when it is COMPLETE (line count aligned, every
+  // non-empty source line has a translation) AND its language matches the
+  // current target language. Partial or wrong-language caches fall through so
+  // the whole-song request re-translates — one request, full-lyrics context.
   const start = Math.max(0, body.start ?? 0);
   const isSlice = body.start !== undefined;
-  if (!isSlice && !body.force && existing.lyricsTranslation) {
+  if (!isSlice && !body.force && cacheLangMatches && existing.lyricsTranslation) {
     try {
       const cached = JSON.parse(existing.lyricsTranslation);
       if (Array.isArray(cached) && cached.length === lines.length
@@ -106,13 +116,13 @@ export async function POST(
           const encoder = new TextEncoder();
           const stream = new ReadableStream({
             start(controller) {
-              controller.enqueue(encoder.encode(`event: done\ndata: ${JSON.stringify({ start: 0, count: cached.length, translations: cached, cached: true })}\n\n`));
+              controller.enqueue(encoder.encode(`event: done\ndata: ${JSON.stringify({ start: 0, count: cached.length, translations: cached, cached: true, lang: config.targetLang })}\n\n`));
               controller.close();
             },
           });
           return new Response(stream, { headers: SSE_HEADERS });
         }
-        return NextResponse.json({ start: 0, count: cached.length, translations: cached, cached: true });
+        return NextResponse.json({ start: 0, count: cached.length, translations: cached, cached: true, lang: config.targetLang });
       }
     } catch (error) {
       // Damaged translation cache — re-translate instead.
@@ -129,7 +139,12 @@ export async function POST(
 
   // Existing cache (may be partial). Parsed with index-alignment so a stale
   // null/number slot degrades to an empty string instead of shifting lines.
-  const cache: string[] = parseTranslationCache(existing.lyricsTranslation, lines.length);
+  // When the recorded language doesn't match the current target language, the
+  // old translations are unusable (wrong language) — treat the cache as empty
+  // so the whole song is re-translated into the new language (issue #93).
+  const cache: string[] = cacheLangMatches
+    ? parseTranslationCache(existing.lyricsTranslation, lines.length)
+    : Array(lines.length).fill('');
 
   // Dedup: map each distinct non-empty line to its first occurrence (whole song),
   // so repeated lines reuse one translation instead of burning tokens per copy.
@@ -250,6 +265,9 @@ export async function POST(
       totalLines: lines.length,
       start,
       resolved,
+      // Record the target language alongside the cache so a later request can
+      // tell whether the stored translations still match (issue #93).
+      lang: config.targetLang,
     });
     return { finalSlice, result };
   };
@@ -335,7 +353,7 @@ export async function POST(
               return;
             }
           }
-          send('done', { start, count: finalSlice.length, translations: finalSlice, cached: false });
+          send('done', { start, count: finalSlice.length, translations: finalSlice, cached: false, lang: config.targetLang });
         } catch (error) {
           // Client cancelled (cancel button or closed the page): the upstream
           // fetch was aborted via request.signal, so no AI quota is wasted.
@@ -393,6 +411,7 @@ export async function POST(
                 totalLines: lines.length,
                 start,
                 resolved,
+                lang: config.targetLang,
               });
               if (result.ok) {
                 partialDone = partial.length;
@@ -454,5 +473,5 @@ export async function POST(
     }
     return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
   }
-  return NextResponse.json({ start, count: finalSlice.length, translations: finalSlice, cached: false });
+  return NextResponse.json({ start, count: finalSlice.length, translations: finalSlice, cached: false, lang: config.targetLang });
 }

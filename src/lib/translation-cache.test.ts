@@ -53,6 +53,7 @@ async function createTables(t: TestDb) {
     reading_scheme_confirmed INTEGER NOT NULL DEFAULT 0,
     lyrics_synced TEXT NOT NULL DEFAULT '',
     lyrics_translation TEXT NOT NULL DEFAULT '[]',
+    lyrics_translation_lang TEXT,
     lyrics_translation_reasoning TEXT,
     lyrics_glossary TEXT,
     cover_url TEXT,
@@ -230,6 +231,50 @@ test('CAS retry merges on top of a concurrent write instead of clobbering it', a
   assert.equal(winner.ok, true);
   const row = await readSong(t);
   assert.equal(row?.lyricsTranslation, '["一","二","三","四"]');
+});
+
+test('merge stamps the target language alongside the cache', async () => {
+  const t = makeTestDb(`/tmp/translation-cache-lang-${process.pid}-${Date.now()}.db`);
+  await createTables(t);
+  await seedSong(t);
+
+  const result = await mergeSliceIntoCache(t.db, {
+    id: SONG_ID,
+    sourceLyrics: LYRICS,
+    totalLines: 4,
+    start: 0,
+    resolved: makeResolved(['一', '二', '三', '四']),
+    lang: 'en-US',
+  });
+  assert.equal(result.ok, true);
+  const row = await t.db.select({
+    lyricsTranslation: songs.lyricsTranslation,
+    lyricsTranslationLang: songs.lyricsTranslationLang,
+  }).from(songs).where(sql`id = ${SONG_ID}`).get();
+  assert.equal(row?.lyricsTranslation, '["一","二","三","四"]');
+  assert.equal(row?.lyricsTranslationLang, 'en-US');
+});
+
+test('merge without a lang preserves an already-stored language', async () => {
+  const t = makeTestDb(`/tmp/translation-cache-lang-preserve-${process.pid}-${Date.now()}.db`);
+  await createTables(t);
+  await seedSong(t, { cache: '["一","","",""]' });
+  await t.db.update(songs).set({ lyricsTranslationLang: 'zh-CN' }).where(sql`id = ${SONG_ID}`).run();
+
+  // A resume/partial merge that doesn't supply a language must not wipe the
+  // recorded language of the existing cache.
+  const result = await mergeSliceIntoCache(t.db, {
+    id: SONG_ID,
+    sourceLyrics: LYRICS,
+    totalLines: 4,
+    start: 1,
+    resolved: makeResolved(['二', '三', '四']),
+  });
+  assert.equal(result.ok, true);
+  const row = await t.db.select({
+    lyricsTranslationLang: songs.lyricsTranslationLang,
+  }).from(songs).where(sql`id = ${SONG_ID}`).get();
+  assert.equal(row?.lyricsTranslationLang, 'zh-CN');
 });
 
 test('writeSongField persists reasoning under the same source CAS', async () => {

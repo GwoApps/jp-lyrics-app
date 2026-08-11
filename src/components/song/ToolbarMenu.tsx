@@ -67,6 +67,15 @@ export function buildReadingMenuItems(
       disabled: data.translating || (!canEdit && !data.hasTranslation),
       keepOpen: true,
     },
+    // Force re-translate entry — after the user changes their target language
+    // (or wants fresh output) the cache is no longer trusted; `force: true`
+    // bypasses the server cache short-circuit entirely (issue #93).
+    ...(data.hasTranslation && !data.translating ? [{
+      icon: <RefreshCw className="h-3.5 w-3.5" />,
+      label: t('song.reTranslate'),
+      onClick: () => void data.handleTranslate(true),
+      keepOpen: false,
+    } as ToolbarMenuItem] : []),
     ...(data.hasSavedReasoning || data.translationReasoning ? [{
       icon: <Brain className="h-3.5 w-3.5" />,
       label: t('song.translationReasoningView'),

@@ -60,6 +60,7 @@ interface SongData {
   reading_scheme_confirmed: number;
   lyrics_synced: string;
   lyrics_translation: string;
+  lyrics_translation_lang?: string | null;
   lyrics_translation_reasoning?: string | null;
   cover_url?: string | null;
   cover_palette?: CoverPaletteJson | null;
@@ -128,7 +129,7 @@ export interface UseSongDataReturn {
   copyReasoning: () => Promise<void>;
   dismissTranslationError: () => void;
   clearReasoning: () => Promise<void>;
-  handleTranslate: () => Promise<void>;
+  handleTranslate: (force?: boolean) => Promise<void>;
   cancelTranslate: () => void;
   furiganaLoading: boolean;
   furiganaError: string;
@@ -609,7 +610,7 @@ export function useSongData(id: string): UseSongDataReturn {
   const cancelPlainSync = useCallback(() => setPlainHitSync(null), []);
 
 
-  const handleTranslate = useCallback(async () => {
+  const handleTranslate = useCallback(async (force = false) => {
     if (translating) return;
     const total = furiganaLines.length;
     if (total === 0) {
@@ -631,11 +632,14 @@ export function useSongData(id: string): UseSongDataReturn {
       // Whole song in ONE request, streamed via SSE: the model sees the full
       // lyrics (coherent context) and its live reasoning/translation deltas
       // are shown in the expandable panel. The server skips already-translated
-      // lines (cache/dedup), so this same call also serves as resume/retry.
+      // lines (cache/dedup) unless `force` is set, so this same call serves as
+      // resume/retry AND as a forced re-translate (e.g. after the user changed
+      // their target language — the server's own lang check re-translates on
+      // a mismatch, and `force` covers the explicit user override).
       const res = await fetch(`/api/songs/${id}/translate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stream: true }),
+        body: JSON.stringify({ stream: true, force }),
         signal: controller.signal,
       });
       if (!res.ok || !res.body) {
@@ -654,7 +658,7 @@ export function useSongData(id: string): UseSongDataReturn {
       // Local accumulator mirrors the streamed reasoning so the error path
       // below can check whether any reasoning was produced (state is async).
       let streamedReasoning = '';
-      const { translations, error: streamError, progress: errorProgress } = await readTranslationStream(
+      const { translations, lang: streamLang, error: streamError, progress: errorProgress } = await readTranslationStream(
         res.body,
         (delta) => {
           streamedReasoning += delta;
@@ -678,9 +682,20 @@ export function useSongData(id: string): UseSongDataReturn {
           }
         } catch { /* keep empty seed */ }
         translations.forEach((tr: string, i: number) => { if (i < total) seed[i] = tr; });
-        setSong((prev) => prev ? { ...prev, lyrics_translation: JSON.stringify(seed) } : prev);
+        setSong((prev) => prev ? {
+          ...prev,
+          lyrics_translation: JSON.stringify(seed),
+          // Record the language the translation was generated in so the UI can
+          // detect a future target-language mismatch and offer a re-translate.
+          lyrics_translation_lang: streamLang,
+        } : prev);
         setShowTranslation(true);
-        showToast('success', t('song.translationReady'));
+        // Report the actual language used so the user gets feedback like
+        // "已翻译为 English" instead of a generic "翻译完成" (issue #93).
+        const msg = streamLang
+          ? t('song.translationReadyLang', { lang: streamLang })
+          : t('song.translationReady');
+        showToast('success', msg);
         return;
       }
 

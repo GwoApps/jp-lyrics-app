@@ -99,6 +99,13 @@
       "when": 1786600000000,
       "tag": "0016_add_user_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1787000000000,
+      "tag": "0017_add_lyrics_translation_lang",
+      "breakpoints": true
     }
   ]
 }

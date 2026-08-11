@@ -15,6 +15,11 @@ export interface TranslationProgress {
 export interface TranslationStreamResult {
   /** Aligned translation array, null when the stream ended with an error. */
   translations: string[] | null;
+  /**
+   * The BCP-47 target language the returned translations were generated in
+   * (from the server's `done` event). Null when unknown/not reported.
+   */
+  lang: string | null;
   /** Error code from the `error` event (e.g. ai_quota_exceeded). */
   error: string | null;
   /**
@@ -35,6 +40,7 @@ export async function readTranslationStream(
   const decoder = new TextDecoder();
   let buffer = '';
   let translations: string[] | null = null;
+  let streamLang: string | null = null;
   let streamError: string | null = null;
   let errorProgress: TranslationProgress | null = null;
   let finished = false;
@@ -53,7 +59,7 @@ export async function readTranslationStream(
         else if (line.startsWith('data:')) dataStr += line.slice(5).trim();
       }
       if (!dataStr) continue;
-      let payload: { text?: string; translations?: string[]; error?: string; done?: number; total?: number };
+      let payload: { text?: string; translations?: string[]; error?: string; done?: number; total?: number; lang?: string };
       try {
         payload = JSON.parse(dataStr);
       } catch {
@@ -65,6 +71,7 @@ export async function readTranslationStream(
         onProgress?.({ done: payload.done, total: payload.total });
       } else if (eventName === 'done' && Array.isArray(payload.translations)) {
         translations = payload.translations;
+        if (typeof payload.lang === 'string') streamLang = payload.lang;
         finished = true;
       } else if (eventName === 'error' && payload.error) {
         streamError = payload.error;
@@ -76,5 +83,5 @@ export async function readTranslationStream(
     }
   }
 
-  return { translations, error: streamError, progress: errorProgress };
+  return { translations, lang: streamLang, error: streamError, progress: errorProgress };
 }
