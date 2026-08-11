@@ -21,6 +21,7 @@ import {
   RotateCcw,
   Save,
   Undo2,
+  RefreshCw,
 } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
@@ -75,6 +76,9 @@ export default function TimelineEditorPage() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // True when the load failed for a retryable reason (network/5xx/429) —
+  // offers a retry entry instead of a dead-end error page.
+  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [offsetDraft, setOffsetDraft] = useState('0');
   const [confirmSort, setConfirmSort] = useState(false);
@@ -89,31 +93,55 @@ export default function TimelineEditorPage() {
   const nowPlaying = nowPlayingHook.data;
   const coverTheme = useCoverTheme(song?.cover_url ?? null);
 
+  // Pure fetch — no setState — so the effect can apply the result inside a
+  // promise `.then` callback (avoids synchronous setState in an effect).
+  const fetchSong = useCallback(async (): Promise<
+    { data: TimelineSong } | { forbidden: true } | { failed: boolean; notFound?: boolean }
+  > => {
+    if (!id) return { failed: true, notFound: true };
+    try {
+      const response = await fetch(`/api/songs/${id}`);
+      if (response.status === 404) return { failed: true, notFound: true };
+      if (!response.ok) return { failed: true };
+      const data = await response.json() as TimelineSong;
+      if (!data.permissions?.can_edit) return { forbidden: true };
+      return { data };
+    } catch {
+      return { failed: true };
+    }
+  }, [id]);
+
+  // Apply the fetched result to state. Called from promise `.then` callbacks
+  // (mount + retry) so setState never runs synchronously inside an effect.
+  const applySongResult = useCallback((result: { data: TimelineSong } | { forbidden: true } | { failed: boolean; notFound?: boolean }) => {
+    if ('data' in result) {
+      const { data } = result;
+      setLoadError(false);
+      setError('');
+      setSong(data);
+      const draft = createTimelineDraft(data.lyrics_raw || '', data.lyrics_synced || '');
+      const serialized = serializeTimelineDraft(draft);
+      setLines(draft);
+      setInitialDraft(serialized);
+      sourceLyricsRef.current = data.lyrics_raw || '';
+      const firstUnmarked = draft.findIndex((line) => line.timeMs == null);
+      setCurrentIndex(firstUnmarked >= 0 ? firstUnmarked : 0);
+      return;
+    }
+    if ('forbidden' in result) {
+      setLoadError(false);
+      setError(t('timelineWorkspace.forbidden'));
+      return;
+    }
+    // Genuine 404 (song absent) vs a retryable load failure.
+    if (result.notFound) setLoadError(false);
+    else setLoadError(true);
+    setError(t('timelineWorkspace.loadFailed'));
+  }, [t]);
+
   useEffect(() => {
-    if (!id) return;
-    fetch(`/api/songs/${id}`)
-      .then(async (response) => {
-        if (!response.ok) throw new Error('load_failed');
-        return response.json() as Promise<TimelineSong>;
-      })
-      .then((data) => {
-        if (!data.permissions?.can_edit) throw new Error('forbidden');
-        const draft = createTimelineDraft(data.lyrics_raw || '', data.lyrics_synced || '');
-        const serialized = serializeTimelineDraft(draft);
-        setSong(data);
-        setLines(draft);
-        setInitialDraft(serialized);
-        sourceLyricsRef.current = data.lyrics_raw || '';
-        const firstUnmarked = draft.findIndex((line) => line.timeMs == null);
-        setCurrentIndex(firstUnmarked >= 0 ? firstUnmarked : 0);
-      })
-      .catch((reason: unknown) => {
-        setError(reason instanceof Error && reason.message === 'forbidden'
-          ? t('timelineWorkspace.forbidden')
-          : t('timelineWorkspace.loadFailed'));
-      })
-      .finally(() => setLoading(false));
-  }, [id, t]);
+    void fetchSong().then((result) => { applySongResult(result); setLoading(false); });
+  }, [fetchSong, applySongResult]);
 
   useEffect(() => {
     if (!nowPlaying) return;
@@ -376,7 +404,14 @@ export default function TimelineEditorPage() {
       <div className="mx-auto flex max-w-lg flex-col items-center gap-4 py-24 text-center">
         <AlertTriangle className="h-8 w-8 text-[var(--warning)]" />
         <p className="text-sm text-[var(--muted-foreground)]">{error || t('timelineWorkspace.loadFailed')}</p>
-        <Link href={`/songs/${id}`} className="song-editor-primary-button rounded-md px-4 py-2 text-sm">{t('timelineWorkspace.backToSong')}</Link>
+        <div className="flex items-center gap-3">
+          {loadError && (
+            <button onClick={() => { setLoading(true); void fetchSong().then((result) => { applySongResult(result); setLoading(false); }); }} className="song-editor-primary-button inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm">
+              <RefreshCw className="h-4 w-4" /> {t('song.retry')}
+            </button>
+          )}
+          <Link href={`/songs/${id}`} className="song-editor-primary-button rounded-md px-4 py-2 text-sm">{t('timelineWorkspace.backToSong')}</Link>
+        </div>
       </div>
     );
   }

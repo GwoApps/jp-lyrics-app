@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Eraser, Info } from 'lucide-react';
+import { Eraser, Info, RefreshCw, ArrowLeft } from 'lucide-react';
 import SongForm from '@/components/SongForm';
 import Toast from '@/components/Toast';
 import { useI18n } from '@/lib/i18n';
@@ -60,6 +60,7 @@ export default function EditSongPage() {
   const id = params?.id as string;
   const [song, setSong] = useState<SongData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [clearingKey, setClearingKey] = useState<SubDataKey | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,10 +96,18 @@ export default function EditSongPage() {
     if (!id) return;
     fetch(`/api/songs/${id}`)
       .then(async (response) => {
-        if (!response.ok) throw new Error('song_load_failed');
+        if (response.status === 404) {
+          setLoadError(false);
+          throw new Error('song_load_failed');
+        }
+        if (!response.ok) {
+          setLoadError(true);
+          throw new Error('song_load_failed');
+        }
         return response.json() as Promise<SongData>;
       })
       .then((data) => {
+        setLoadError(false);
         setSong(data);
         setLoading(false);
       })
@@ -106,6 +115,32 @@ export default function EditSongPage() {
         setLoading(false);
       });
   }, [id]);
+
+  const retryLoad = () => {
+    setLoadError(false);
+    setSong(null);
+    setLoading(true);
+    fetch(`/api/songs/${id}`)
+      .then(async (response) => {
+        if (response.status === 404) {
+          setLoadError(false);
+          throw new Error('song_load_failed');
+        }
+        if (!response.ok) {
+          setLoadError(true);
+          throw new Error('song_load_failed');
+        }
+        return response.json() as Promise<SongData>;
+      })
+      .then((data) => {
+        setLoadError(false);
+        setSong(data);
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+      });
+  };
 
   const handleSave = async (body: Record<string, string | boolean>) => {
     const res = await fetch(`/api/songs/${id}`, {
@@ -153,7 +188,28 @@ export default function EditSongPage() {
     );
   }
 
-  if (!song) return null;
+  if (!song) {
+    if (loadError) {
+      return (
+        <div className="flex flex-col items-center justify-center py-32 text-center">
+          <RefreshCw className="h-10 w-10 mb-4 text-[var(--muted-foreground)] opacity-20" />
+          <p className="text-sm text-[var(--muted-foreground)]">{t('song.loadFailed')}</p>
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              onClick={retryLoad}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> {t('song.retry')}
+            </button>
+            <Link href="/" className="inline-flex items-center gap-1 text-xs text-[var(--song-accent)] hover:underline">
+              <ArrowLeft className="h-3 w-3" /> {t('song.backToList')}
+            </Link>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  }
 
   // LRC metadata (incl. `[offset:±ms]`) embedded in the synced timeline.
   const lrcMetadata = extractLrcMetadata(song.lyrics_synced || '');

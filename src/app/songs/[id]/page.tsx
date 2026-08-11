@@ -275,6 +275,34 @@ export default function SongViewPage() {
   }
 
   if (!data.song) {
+    // A retryable load failure (network/5xx) is NOT a "not found" — show a
+    // network error with a retry entry instead of pretending the song vanished.
+    // When cached list metadata exists, surface it so the user sees the song
+    // they came for (with a hint that cached data is being shown).
+    if (data.loadError) {
+      return (
+        <div className="flex flex-col items-center justify-center py-32 text-center">
+          <RefreshCw className="h-10 w-10 mb-4 text-[var(--muted-foreground)] opacity-20" />
+          {cachedSong ? (
+            <div className="mb-2 flex flex-col items-center gap-1">
+              <p className="text-sm text-[var(--muted-foreground)]">{cachedSong.title}</p>
+              {cachedSong.artist && (
+                <p className="text-xs text-[var(--muted-foreground)]">{cachedSong.artist}</p>
+              )}
+            </div>
+          ) : null}
+          <p className="text-sm text-[var(--muted-foreground)]">{t('song.loadFailed')}</p>
+          <div className="mt-4 flex items-center gap-3">
+            <button onClick={data.retryLoad} className="mt-0 inline-flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
+              <RefreshCw className="h-3.5 w-3.5" /> {t('song.retry')}
+            </button>
+            <button onClick={() => transitionRouter.push('/')} className="mt-0 inline-flex items-center gap-1 text-xs text-[var(--song-accent)] hover:underline">
+              <ArrowLeft className="h-3 w-3" /> {t('song.backToList')}
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
         <p className="text-sm text-[var(--muted-foreground)]">{t('song.notFound')}</p>

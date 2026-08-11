@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import QRCode from 'qrcode';
-import { ArrowLeft, Download, Link2, Loader2, Check, Smartphone, Monitor } from 'lucide-react';
+import { ArrowLeft, Download, Link2, Loader2, Check, Smartphone, Monitor, RefreshCw } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { drawCard, getLyricLines, LANDSCAPE_H, LANDSCAPE_W, type Orientation, type ShareSong } from '@/lib/share-card';
@@ -21,6 +21,9 @@ export default function SharePage() {
   const [song, setSong] = useState<ShareSong | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // True when the fetch failed for a retryable reason (network/5xx/429) rather
+  // than a genuine 404 — the error screen then offers a retry button.
+  const [isLoadError, setIsLoadError] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -43,13 +46,47 @@ export default function SharePage() {
     }
     fetch(`/api/songs/${id}`)
       .then((res) => {
-        if (!res.ok) throw new Error('not found');
+        if (res.status === 404) {
+          setIsLoadError(false);
+          throw new Error('not found');
+        }
+        if (!res.ok) {
+          setIsLoadError(true);
+          throw new Error('load failed');
+        }
         return res.json();
       })
-      .then((data: ShareSong) => setSong(data))
+      .then((data: ShareSong) => {
+        setIsLoadError(false);
+        setSong(data);
+      })
       .catch(() => setError(t('share.error')))
       .finally(() => setLoading(false));
   }, [id, t]);
+
+  const retryLoad = () => {
+    setError('');
+    setLoading(true);
+    // Re-trigger the fetch effect by re-running the same request inline.
+    fetch(`/api/songs/${id}`)
+      .then((res) => {
+        if (res.status === 404) {
+          setIsLoadError(false);
+          throw new Error('not found');
+        }
+        if (!res.ok) {
+          setIsLoadError(true);
+          throw new Error('load failed');
+        }
+        return res.json();
+      })
+      .then((data: ShareSong) => {
+        setIsLoadError(false);
+        setSong(data);
+      })
+      .catch(() => setError(t('share.error')))
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
     if (defaultLine !== null && lyricLines.length > 0) {
@@ -151,14 +188,25 @@ export default function SharePage() {
   if (error || !song) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[var(--background)] text-[var(--foreground)] px-6">
-        <p className="text-[var(--muted-foreground)]">{error || t('share.notFound')}</p>
-        <button
-          onClick={() => router.push('/')}
-          className="song-editor-primary-button inline-flex items-center gap-2 rounded-lg px-4 py-2"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {t('share.back')}
-        </button>
+        <p className="text-[var(--muted-foreground)]">{isLoadError ? t('share.loadError') : (error || t('share.notFound'))}</p>
+        <div className="flex items-center gap-3">
+          {isLoadError && (
+            <button
+              onClick={retryLoad}
+              className="song-editor-primary-button inline-flex items-center gap-2 rounded-lg px-4 py-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              {t('share.retry')}
+            </button>
+          )}
+          <button
+            onClick={() => router.push('/')}
+            className="song-editor-primary-button inline-flex items-center gap-2 rounded-lg px-4 py-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {t('share.back')}
+          </button>
+        </div>
       </div>
     );
   }

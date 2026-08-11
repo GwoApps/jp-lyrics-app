@@ -120,6 +120,8 @@
   "song": {
     "notFound": "Song not found",
     "backToList": "Back to list",
+    "loadFailed": "Failed to load. Please check your network and try again.",
+    "retry": "Retry",
     "synced": "Lyrics synced ({source}, {lines} lines)",
     "lyricsSaved": "Lyrics saved",
     "saveFailed": "Save failed",
@@ -477,6 +479,8 @@
     "loading": "Loading...",
     "error": "Failed to load",
     "notFound": "Song not found",
+    "loadError": "Failed to load. Please check your network and try again.",
+    "retry": "Retry",
     "back": "Back to home",
     "hint": "Long-press or right-click the image to save, or tap Download to save as PNG.",
     "scan": "Scan to view lyrics",

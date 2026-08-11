@@ -5,7 +5,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, RotateCcw, Sparkles } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Sparkles, RefreshCw } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import FuriganaEditor from '@/components/FuriganaEditor';
@@ -41,6 +41,7 @@ export default function FuriganaEditPage() {
   const id = params?.id as string;
 
   const [song, setSong] = useState<SongData | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [draft, setDraft] = useState<FuriganaLine[]>([]);
   const [original, setOriginal] = useState<FuriganaLine[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,10 +86,20 @@ export default function FuriganaEditPage() {
   const loadSong = useCallback(async () => {
     if (!id) return;
     setLoading(true);
+    let wasNotFound = false;
     try {
       const res = await fetch(`/api/songs/${id}`);
-      if (!res.ok) throw new Error();
+      if (res.status === 404) {
+        wasNotFound = true;
+        setLoadError(false);
+        throw new Error('not found');
+      }
+      if (!res.ok) {
+        setLoadError(true);
+        throw new Error('load failed');
+      }
       const data = (await res.json()) as SongData;
+      setLoadError(false);
       setSong(data);
       if (!data.cover_url) {
         fetch(`/api/songs/${id}/cover`)
@@ -113,7 +124,7 @@ export default function FuriganaEditPage() {
         setDraft([]);
       }
     } catch {
-      showToast('error', t('song.notFound'));
+      showToast('error', t(wasNotFound ? 'song.notFound' : 'song.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -229,6 +240,28 @@ export default function FuriganaEditPage() {
   }
 
   if (!song) {
+    if (loadError) {
+      return (
+        <div className="flex flex-col items-center justify-center py-32 text-center">
+          <RefreshCw className="h-10 w-10 mb-4 text-[var(--muted-foreground)] opacity-20" />
+          <p className="text-sm text-[var(--muted-foreground)]">{t('song.loadFailed')}</p>
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              onClick={() => loadSong()}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> {t('song.retry')}
+            </button>
+            <button
+              onClick={() => router.push('/')}
+              className="inline-flex items-center gap-1 text-xs text-[var(--song-accent)] hover:underline"
+            >
+              <ArrowLeft className="h-3 w-3" /> {t('song.backToList')}
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
         <p className="text-sm text-[var(--muted-foreground)]">{t('song.notFound')}</p>

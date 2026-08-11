@@ -120,6 +120,8 @@
   "song": {
     "notFound": "找不到歌曲",
     "backToList": "返回列表",
+    "loadFailed": "載入失敗，請檢查網路後重試",
+    "retry": "重試",
     "synced": "歌詞同步完成 ({source}，{lines}行)",
     "lyricsSaved": "歌詞已儲存",
     "saveFailed": "儲存失敗",
@@ -477,6 +479,8 @@
     "loading": "載入中...",
     "error": "載入失敗",
     "notFound": "找不到歌曲",
+    "loadError": "載入失敗，請檢查網路後重試",
+    "retry": "重試",
     "back": "返回首頁",
     "hint": "長按或右鍵圖片可儲存，也可以點擊下載按鈕儲存 PNG。",
     "scan": "掃碼查看歌詞",

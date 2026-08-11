@@ -107,6 +107,8 @@ export interface ImportReviewState {
 export interface UseSongDataReturn {
   song: SongData | null;
   loading: boolean;
+  loadError: boolean;
+  retryLoad: () => void;
   refreshSong: () => Promise<void>;
   syncLines: ReturnType<typeof parseLrc>;
   furiganaLines: FuriganaLine[];
@@ -182,6 +184,10 @@ export function useSongData(id: string): UseSongDataReturn {
 
   const [song, setSong] = useState<SongData | null>(null);
   const [loading, setLoading] = useState(true);
+  // True when the detail fetch failed for a retryable reason (HTTP 5xx/429 or
+  // network/timeout). A 404 (genuinely absent song) keeps `song=null` and is
+  // shown as "not found" — distinct from a load error.
+  const [loadError, setLoadError] = useState(false);
   const [readingMode, setReadingMode] = useState<ReadingMode>(() => {
     if (typeof window === 'undefined') return 'furigana';
     const saved = localStorage.getItem('jplrc-reading-mode');
@@ -432,40 +438,75 @@ export function useSongData(id: string): UseSongDataReturn {
     } catch {}
   }, [id]);
 
+  // Fetch the single song. Distinguishes a genuine 404 (song absent) from
+  // every other failure (HTTP 5xx/429, network or timeout). Pure fetch — no
+  // setState — so callers can apply the result inside a promise `.then`
+  // callback (avoids synchronous setState in an effect).
+  const fetchSong = useCallback(async (): Promise<{ data?: SongData; notFound?: boolean }> => {
+    if (!id) return {};
+    try {
+      const res = await fetch(`/api/songs/${id}`);
+      if (res.status === 404) return { notFound: true };
+      if (!res.ok) return {};
+      const data = await res.json() as SongData;
+      return { data };
+    } catch {
+      // Network failure / timeout / invalid body — retryable.
+      return {};
+    }
+  }, [id]);
+
+  // Apply the fetched result to state. Called from promise `.then` callbacks
+  // (mount + retry) so setState never runs synchronously inside an effect.
+  const applySongResult = useCallback((result: { data?: SongData; notFound?: boolean }) => {
+    if (result.notFound) {
+      setLoadError(false);
+      setSong(null);
+      return;
+    }
+    const data = result.data;
+    if (!data) {
+      setLoadError(true);
+      return;
+    }
+    setLoadError(false);
+    setSong(data);
+    if (data.lyrics_translation_reasoning) {
+      setTranslationReasoning(data.lyrics_translation_reasoning);
+      setHasSavedReasoning(true);
+      // Persisted reasoning is reviewed on demand via the menu row — never
+      // auto-open it on page load (it would cover the lyrics).
+      reasoningUserHiddenRef.current = true;
+    }
+    if (data.lyrics_synced) setSyncLines(parseLrc(data.lyrics_synced));
+    if (!data.spotify_track_id && data.permissions?.can_edit) {
+      fetch(`/api/songs/${id}/cover`)
+        .then(async (metadataResponse) => {
+          if (!metadataResponse.ok) return null;
+          const refreshed = await fetch(`/api/songs/${id}`, { cache: 'no-store' });
+          return refreshed.ok ? refreshed.json() : null;
+        })
+        .then((enriched) => { if (enriched) setSong(enriched); })
+        .catch(() => {});
+    }
+  }, [id]);
+
+  // Retry entry for the error state: re-runs the exact same fetch as mount.
+  const retryLoad = useCallback(() => {
+    setLoading(true);
+    void fetchSong().then((result) => { applySongResult(result); setLoading(false); });
+  }, [fetchSong, applySongResult]);
+
   // Fetch song + all songs on mount
   useEffect(() => {
     if (!id) return;
-    fetch(`/api/songs/${id}`)
-      .then((r) => { if (!r.ok) throw new Error('Not found'); return r.json(); })
-      .then((data) => {
-        setSong(data);
-        setLoading(false);
-        if (data.lyrics_translation_reasoning) {
-          setTranslationReasoning(data.lyrics_translation_reasoning);
-          setHasSavedReasoning(true);
-          // Persisted reasoning is reviewed on demand via the menu row — never
-          // auto-open it on page load (it would cover the lyrics).
-          reasoningUserHiddenRef.current = true;
-        }
-        if (data.lyrics_synced) setSyncLines(parseLrc(data.lyrics_synced));
-        if (!data.spotify_track_id && data.permissions?.can_edit) {
-          fetch(`/api/songs/${id}/cover`)
-            .then(async (metadataResponse) => {
-              if (!metadataResponse.ok) return null;
-              const refreshed = await fetch(`/api/songs/${id}`, { cache: 'no-store' });
-              return refreshed.ok ? refreshed.json() : null;
-            })
-            .then((enriched) => { if (enriched) setSong(enriched); })
-            .catch(() => {});
-        }
-      })
-      .catch(() => setLoading(false));
+    void fetchSong().then((result) => { applySongResult(result); setLoading(false); });
 
     fetch('/api/songs')
       .then((r) => r.json())
       .then((data) => setAllSongs(data.map((s: { id: string; title: string; artist: string; spotify_track_id?: string | null; created_by?: string; is_public?: number }) => ({ id: s.id, title: s.title, artist: s.artist, spotify_track_id: s.spotify_track_id, created_by: s.created_by || '', is_public: s.is_public || 0 }))))
       .catch(() => {});
-  }, [id]);
+  }, [id, fetchSong, applySongResult]);
 
   // Handlers
   const applySyncResult = useCallback(async (data: {
@@ -1050,6 +1091,8 @@ export function useSongData(id: string): UseSongDataReturn {
   return {
     song,
     loading,
+    loadError,
+    retryLoad,
     refreshSong,
     syncLines,
     furiganaLines,

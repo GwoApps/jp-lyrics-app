@@ -120,6 +120,8 @@
   "song": {
     "notFound": "找不到歌曲",
     "backToList": "返回列表",
+    "loadFailed": "加载失败，请检查网络后重试",
+    "retry": "重试",
     "synced": "歌词同步完成 ({source}，{lines}行)",
     "lyricsSaved": "歌词已保存",
     "saveFailed": "保存失败",
@@ -477,6 +479,8 @@
     "loading": "加载中...",
     "error": "加载失败",
     "notFound": "找不到歌曲",
+    "loadError": "加载失败，请检查网络后重试",
+    "retry": "重试",
     "back": "返回首页",
     "hint": "长按或右键图片可保存，也可以点击下载按钮保存 PNG。",
     "scan": "扫码查看歌词",
