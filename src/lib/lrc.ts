@@ -14,6 +14,24 @@ const LRC_METADATA_KEYS = new Set(['ar', 'ti', 'al', 'by', 'offset', 're', 've',
 /** Match a standard LRC metadata tag line such as `[ar:YOASOBI]` / `[offset:120]`. */
 const METADATA_LINE_RE = /^\[([a-z]+):(.*)\]$/i;
 
+/** One or more standard timestamps at the start of an LRC lyric row. */
+const LEADING_TIMESTAMPS_RE = /^(?:\[\d{2}:\d{2}\.\d{2,3}\]\s*)+/;
+const TIMESTAMP_RE = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/g;
+
+/** Expand a multi-timestamp LRC row into one entry per timestamp. */
+function parseTimestampedRow(raw: string): SyncLine[] | null {
+  const prefix = raw.match(LEADING_TIMESTAMPS_RE)?.[0];
+  if (!prefix) return null;
+  const text = raw.slice(prefix.length).trim();
+  if (!text) return [];
+  return [...prefix.matchAll(TIMESTAMP_RE)].map((match) => ({
+    timeMs: Number.parseInt(match[1], 10) * 60000
+      + Number.parseInt(match[2], 10) * 1000
+      + Number.parseInt(match[3].padEnd(3, '0'), 10),
+    text,
+  }));
+}
+
 /** True when a trimmed line is a standard LRC metadata tag (case-insensitive). */
 export function isLrcMetadataLine(trimmed: string): boolean {
   const match = trimmed.match(METADATA_LINE_RE);
@@ -64,8 +82,7 @@ export function getLrcTextLines(value: string): string[] {
   return value.split('\n').flatMap((raw) => {
     const trimmed = raw.trim();
     if (!trimmed || isLrcMetadataLine(trimmed)) return [];
-    const timestamped = trimmed.match(/^\[\d{2}:\d{2}\.\d{2,3}\]\s*(.*)$/);
-    const text = (timestamped?.[1] ?? trimmed).trim();
+    const text = trimmed.replace(LEADING_TIMESTAMPS_RE, '').trim();
     return text ? [text] : [];
   });
 }
@@ -78,16 +95,9 @@ export function createTimelineDraft(plainLyrics: string, syncedLyrics: string): 
   const syncedRows = syncedLyrics.split('\n').flatMap<TimelineDraftLine>((raw) => {
     const trimmed = raw.trim();
     if (!trimmed || isLrcMetadataLine(trimmed)) return [];
-    const match = trimmed.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\]\s*(.*)$/);
-    if (!match) return [{ timeMs: null, text: trimmed }];
-    const text = match[4].trim();
-    if (!text) return [];
-    return [{
-      timeMs: Number.parseInt(match[1], 10) * 60000
-        + Number.parseInt(match[2], 10) * 1000
-        + Number.parseInt(match[3].padEnd(3, '0'), 10),
-      text,
-    }];
+    const parsed = parseTimestampedRow(trimmed);
+    if (parsed === null) return [{ timeMs: null, text: trimmed }];
+    return parsed;
   });
 
   if (plain.length === 0) return syncedRows;
@@ -137,12 +147,8 @@ export function parseLrc(lrc: string): SyncLine[] {
   const lines: SyncLine[] = [];
   for (const raw of lrc.split('\n')) {
     if (isLrcMetadataLine(raw.trim())) continue;
-    const m = raw.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\]\s*(.*)$/);
-    if (m) {
-      const ms = parseInt(m[1]) * 60000 + parseInt(m[2]) * 1000 + parseInt(m[3].padEnd(3, '0'));
-      const text = m[4].trim();
-      if (text) lines.push({ timeMs: ms, text });
-    }
+    const parsed = parseTimestampedRow(raw);
+    if (parsed) lines.push(...parsed);
   }
   return lines.sort((a, b) => a.timeMs - b.timeMs);
 }

@@ -78,6 +78,25 @@ test('parseLrc ignores metadata-only lines', () => {
   ]);
 });
 
+test('multi-timestamp rows expand without leaking timestamps into lyric text', () => {
+  const lrc = '[offset:120]\n[00:10.00][00:50.000]chorus line';
+  assert.deepEqual(parseLrc(lrc), [
+    { timeMs: 10000, text: 'chorus line' },
+    { timeMs: 50000, text: 'chorus line' },
+  ]);
+  assert.deepEqual(getLrcTextLines(lrc), ['chorus line']);
+});
+
+test('timeline draft queues every timestamp expanded from repeated lyric rows', () => {
+  assert.deepEqual(
+    createTimelineDraft('chorus line\nchorus line', '[00:10.00][00:50.000]chorus line'),
+    [
+      { timeMs: 10000, text: 'chorus line' },
+      { timeMs: 50000, text: 'chorus line' },
+    ],
+  );
+});
+
 test('resolveLrcTextUpdate ignores metadata-only changes', () => {
   const existingRaw = 'a\nb';
   assert.deepEqual(

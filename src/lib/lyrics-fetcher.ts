@@ -75,13 +75,13 @@ export function lrclibConfidence(
   return base;
 }
 
-function stripTimestamps(lrc: string): string {
+export function stripTimestamps(lrc: string): string {
   return lrc
     // Drop standard metadata tags ([ar:], [ti:], [al:], [by:], [offset:], …)
     // so they never leak into plain lyrics.
     .replace(/^\[[a-z]+:[^\]]*\]\s*$/gim, '')
     // Drop timestamp tags, keeping any lyric text after them.
-    .replace(/^\[\d{2}:\d{2}\.\d{2,3}\]\s*/gm, '')
+    .replace(/^(?:\[\d{2}:\d{2}\.\d{2,3}\]\s*)+/gm, '')
     .trim();
 }
 

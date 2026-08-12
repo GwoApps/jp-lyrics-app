@@ -10,6 +10,7 @@ import {
   parsePetitLyricsResponse,
   petitLyricsXmlToLrc,
   searchLrclib,
+  stripTimestamps,
   unescapeLyrics,
   LYRICS_DURATION_CONFLICT_MS,
   LYRICS_DURATION_TOLERANCE_MS,
@@ -29,6 +30,13 @@ test('decodeBase64Utf8 rejects malformed UTF-8 instead of storing replacement ch
 
 test('unescapeLyrics decodes named, decimal, and hexadecimal HTML entities', () => {
   assert.equal(unescapeLyrics('Tom &amp; Jerry &#39;A&#39; &#x266A; &quot;歌&quot;'), "Tom & Jerry 'A' ♪ \"歌\"");
+});
+
+test('stripTimestamps removes every leading timestamp and metadata tags', () => {
+  assert.equal(
+    stripTimestamps('[offset:120]\n[00:10.00][00:50.000]chorus line\n[01:00.00]outro'),
+    'chorus line\noutro',
+  );
 });
 
 test('decodes PetitLyrics type-2 LSY timings while preserving blank lyric rows', () => {
