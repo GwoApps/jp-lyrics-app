@@ -117,6 +117,11 @@ export interface UseSongDataReturn {
   furiganaLines: FuriganaLine[];
   translations: string[];
   hasTranslation: boolean;
+  // Number of lyric lines still missing a translation (used to surface
+  // partial translations in the UI and offer a one-tap resume entry).
+  untranslatedCount: number;
+  // Number of lyric lines that have a non-empty translation.
+  translatedCount: number;
   showTranslation: boolean;
   setShowTranslation: React.Dispatch<React.SetStateAction<boolean>>;
   translating: boolean;
@@ -287,6 +292,23 @@ export function useSongData(id: string): UseSongDataReturn {
     () => translations.some((line) => line !== ''),
     [translations],
   );
+
+  // A song is "fully translated" when every non-empty lyric line has a
+  // translation. Anything else (some lines empty, or nothing at all) counts
+  // as partial — this drives the 「继续翻译」entry and the progress banner.
+  // `lyrics_raw` non-empty lines are the source of truth; `translations` is
+  // index-aligned to them and padded to the same length.
+  const { translatedCount, untranslatedCount } = useMemo(() => {
+    const rawLines = song?.lyrics_raw ? song.lyrics_raw.split('\n') : [];
+    let translated = 0;
+    let total = 0;
+    rawLines.forEach((raw, i) => {
+      if (!raw.trim()) return; // skip empty/blank lyric lines
+      total += 1;
+      if ((translations[i] ?? '').trim() !== '') translated += 1;
+    });
+    return { translatedCount: translated, untranslatedCount: total - translated };
+  }, [song, translations]);
 
   // Client-side furigana (lazy-loaded from kuromoji-es CDN when needed)
   const requestedLyricsRef = useRef('');
@@ -696,12 +718,17 @@ export function useSongData(id: string): UseSongDataReturn {
           lyrics_translation_lang: streamLang,
         } : prev);
         setShowTranslation(true);
-        // Report the actual language used so the user gets feedback like
-        // "已翻译为 English" instead of a generic "翻译完成" (issue #93).
-        const msg = streamLang
-          ? t('song.translationReadyLang', { lang: streamLang })
-          : t('song.translationReady');
-        showToast('success', msg);
+        // Count how many non-empty lyric lines now have a translation so the
+        // completion toast distinguishes a full vs partial translation
+        // (issue #100). `seed` is index-aligned to the lyric lines.
+        const translatedNow = seed.filter((s) => (s ?? '').trim() !== '').length;
+        const partial = translatedNow < total;
+        const msg = partial
+          ? t('song.translationReadyPartial', { done: String(translatedNow), total: String(total) })
+          : streamLang
+            ? t('song.translationReadyLang', { lang: streamLang })
+            : t('song.translationReady');
+        showToast(partial ? 'info' : 'success', msg);
         return;
       }
 
@@ -1138,6 +1165,8 @@ export function useSongData(id: string): UseSongDataReturn {
     furiganaLines,
     translations,
     hasTranslation,
+    untranslatedCount,
+    translatedCount,
     showTranslation,
     setShowTranslation,
     translating,

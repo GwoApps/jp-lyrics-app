@@ -34,6 +34,7 @@ export default function FuriganaLineView({
   readingScheme = 'ja-kana',
   translation,
   onCopyTranslation,
+  showUntranslatedHint = false,
 }: {
   line: FuriganaLine;
   isActive: boolean;
@@ -49,6 +50,10 @@ export default function FuriganaLineView({
   readingScheme?: ReadingScheme;
   translation?: string | null;
   onCopyTranslation?: () => void;
+  // Issue #100: when a song is only partially translated, mark lines that
+  // still lack a translation with a faint "未翻译" placeholder so the user
+  // can tell untranslated lines apart from ones that are simply missing.
+  showUntranslatedHint?: boolean;
 }) {
   const { t } = useI18n();
   const [animKey, setAnimKey] = useState(0);
@@ -73,6 +78,13 @@ export default function FuriganaLineView({
       className={`lyric-translation select-none -mt-[0.6em] pb-[0.6em] sm:-mt-[0.9em] sm:pb-[0.9em] text-[0.72em] leading-relaxed text-[var(--muted-foreground)]/85 ${debugTs != null ? 'pl-[60px] sm:pl-[72px]' : ''}`}
     >
       {translation}
+    </div>
+  ) : showUntranslatedHint ? (
+    <div
+      className={`select-none -mt-[0.6em] pb-[0.6em] sm:-mt-[0.9em] sm:pb-[0.9em] text-[0.72em] leading-relaxed italic text-[var(--muted-foreground)]/40 ${debugTs != null ? 'pl-[60px] sm:pl-[72px]' : ''}`}
+      aria-hidden="true"
+    >
+      {t('song.untranslatedHint')}
     </div>
   ) : null;
 

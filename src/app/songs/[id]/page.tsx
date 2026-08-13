@@ -179,6 +179,15 @@ export default function SongViewPage() {
   const [coverRefresh, setCoverRefresh] = useState(0);
   const [showDotParams, setShowDotParams] = useState(false);
   const [showExperiments, setShowExperiments] = useState(false);
+  // Dismissal of the "partial translation" banner (issue #100). We remember
+  // the untranslated-count at dismissal time so the banner only stays hidden
+  // for that exact partial state; if the count changes (e.g. a resume adds a
+  // few lines, or a new translate is interrupted midway) the banner reappears.
+  const [partialBannerDismissedAt, setPartialBannerDismissedAt] = useState<number | null>(null);
+  const showPartialBanner = data.hasTranslation
+    && data.untranslatedCount > 0
+    && !data.translating
+    && partialBannerDismissedAt !== data.untranslatedCount;
   const spectrum = useSpectrumCapture();
 
   const closeExperiments = useCallback(() => {
@@ -832,6 +841,7 @@ export default function SongViewPage() {
                     romanizeFurigana={data.romanizeFurigana}
                     readingScheme={song.reading_scheme}
                     translation={data.showTranslation ? data.translations[i] ?? null : null}
+                    showUntranslatedHint={data.showTranslation && data.hasTranslation && data.untranslatedCount > 0 && !(data.translations[i] ?? '').trim()}
                   />
                 </div>
               ))
@@ -942,6 +952,37 @@ export default function SongViewPage() {
           onToggleSpectrum={spectrum.toggle}
           onClose={closeExperiments}
         />
+      )}
+
+      {/* Persistent "partial translation" banner (issue #100): once the error
+          pill is dismissed there is no other常驻 reminder that the song is
+          only partially translated. Show a dismissible "已翻译 X/Y 行，点击继续"
+          strip that re-opens the resume flow until the song is complete. */}
+      {showPartialBanner && (
+        <div className="fixed left-1/2 top-3 z-[99] flex -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--primary)]/30 bg-[var(--card)]/95 px-3 py-1.5 text-xs shadow-sm backdrop-blur-sm">
+          <Languages className="h-3.5 w-3.5 shrink-0 text-[var(--primary)]" />
+          <button
+            type="button"
+            onClick={() => {
+              setPartialBannerDismissedAt(null);
+              void data.handleTranslate();
+            }}
+            className="text-[var(--foreground)]"
+          >
+            {t('song.translationPartialBanner', {
+              done: String(data.translatedCount),
+              total: String(data.translatedCount + data.untranslatedCount),
+            })}
+          </button>
+          <button
+            type="button"
+            onClick={() => setPartialBannerDismissedAt(data.untranslatedCount)}
+            aria-label={t('common.close')}
+            className="rounded-full p-0.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
       )}
 
       {/* Translation status overlay — fixed at viewport level (not clipped by the lyrics panel): visible progress while translating, persistent error with dismiss + continue */}

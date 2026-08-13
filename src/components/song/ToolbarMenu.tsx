@@ -58,11 +58,33 @@ export function buildReadingMenuItems(
     }]),
     {
       icon: data.translating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Languages className="h-3.5 w-3.5" />,
-      label: t('song.translation'),
-      status: data.translating ? t('song.translating') : t(data.showTranslation ? 'common.on' : 'common.off'),
+      // Issue #100: a partially translated song keeps a persistent resume
+      // entry here —「继续翻译（剩余 N 行）」— instead of only offering the
+      // show/hide toggle. Only a fully translated song falls back to the
+      // plain display toggle.
+      label: data.translating
+        ? t('song.translating')
+        : !data.hasTranslation
+          ? t('song.translation')
+          : data.untranslatedCount > 0
+            ? t('song.translationContinueRemain', { count: String(data.untranslatedCount) })
+            : t('song.translation'),
+      status: data.translating
+        ? undefined
+        : !data.hasTranslation
+          ? undefined
+          : data.untranslatedCount > 0
+            ? t('song.translationPartial', { done: String(data.translatedCount), total: String(data.translatedCount + data.untranslatedCount) })
+            : t(data.showTranslation ? 'common.on' : 'common.off'),
       onClick: () => {
-        if (data.hasTranslation) data.setShowTranslation(!data.showTranslation);
-        else void data.handleTranslate();
+        // Fully translated → toggle display. Untranslated / partial → start
+        // (or resume) the translation, which the server continues from the
+        // already-cached lines.
+        if (data.hasTranslation && data.untranslatedCount === 0) {
+          data.setShowTranslation(!data.showTranslation);
+        } else {
+          void data.handleTranslate();
+        }
       },
       disabled: data.translating || (!canEdit && !data.hasTranslation),
       keepOpen: true,
