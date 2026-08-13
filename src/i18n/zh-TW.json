@@ -281,6 +281,8 @@
     "syncRetrying": "同步已暫停，正在重試…",
     "syncStopped": "同步已停止，請手動恢復",
     "resumeSync": "恢復同步",
+    "seekFailed": "無法跳轉到該行 — 請檢查播放設備後重試",
+    "seekAuthFailed": "無法跳轉到該行 — Spotify 連線已過期",
     "lyricsNeedsReview": "待審核 — 歌詞匹配可信度較低"
   },
   "timeline": {

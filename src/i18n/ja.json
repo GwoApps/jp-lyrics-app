@@ -281,6 +281,8 @@
     "syncRetrying": "同期を一時停止、再試行中…",
     "syncStopped": "同期を停止しました。手動で再開してください",
     "resumeSync": "同期を再開",
+    "seekFailed": "この行に移動できませんでした — 再生デバイスを確認してもう一度お試しください",
+    "seekAuthFailed": "この行に移動できませんでした — Spotify の接続が切れています",
     "lyricsNeedsReview": "要確認 — 歌詞のマッチ信頼度が低い"
   },
   "timeline": {

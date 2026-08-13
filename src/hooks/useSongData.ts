@@ -1061,15 +1061,33 @@ export function useSongData(id: string): UseSongDataReturn {
         `;
         pipWindow.document.body.appendChild(script);
 
-        // Listen for seek messages from PiP in main window
+        // Listen for seek messages from PiP in main window.
+        // fetch() only rejects on network errors, so inspect res.ok to surface
+        // HTTP failures (401 token expiry / 4xx / 5xx) via the same toast path
+        // as the main lyric page instead of silently dropping them.
         const onPipMessage = (e: MessageEvent) => {
-          if (e.data?.type === 'pip-seek' && typeof e.data.position_ms === 'number') {
-            fetch('/api/spotify/seek', {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ position_ms: e.data.position_ms }),
-            }).catch(() => {});
-          }
+          if (e.data?.type !== 'pip-seek' || typeof e.data.position_ms !== 'number') return;
+          (async () => {
+            let res: Response;
+            try {
+              res = await fetch('/api/spotify/seek', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ position_ms: e.data.position_ms }),
+              });
+            } catch {
+              showToast('error', t('song.seekFailed'));
+              return;
+            }
+            if (res.ok) return;
+            if (res.status === 401) {
+              showToast('error', t('song.seekAuthFailed'), t('song.reconnect'), () => {
+                window.location.assign('/api/auth/login');
+              });
+              return;
+            }
+            showToast('error', t('song.seekFailed'));
+          })();
         };
         window.addEventListener('message', onPipMessage);
         pipWindow.addEventListener('pagehide', () => {

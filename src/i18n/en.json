@@ -281,6 +281,8 @@
     "syncRetrying": "Sync paused — retrying…",
     "syncStopped": "Sync stopped — resume manually",
     "resumeSync": "Resume sync",
+    "seekFailed": "Couldn't jump to this line — please check your playback device and try again",
+    "seekAuthFailed": "Couldn't jump to this line — Spotify connection expired",
     "lyricsNeedsReview": "Pending review — this lyrics match was low-confidence"
   },
   "timeline": {

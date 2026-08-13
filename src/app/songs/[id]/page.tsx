@@ -313,13 +313,33 @@ export default function SongViewPage() {
     );
   }
 
-  // Spotify seek — click lyrics line to jump to that time
-  const handleSeek = (positionMs: number) => {
-    fetch('/api/spotify/seek', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ position_ms: positionMs }),
-    }).catch(() => {});
+  // Spotify seek — click lyrics line to jump to that time.
+  // fetch() only rejects on network errors, so we must inspect res.ok to surface
+  // HTTP failures (401 token expiry / 4xx / 5xx) instead of silently dropping them.
+  const handleSeek = async (positionMs: number) => {
+    let res: Response;
+    try {
+      res = await fetch('/api/spotify/seek', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ position_ms: positionMs }),
+      });
+    } catch {
+      data.showToast('error', t('song.seekFailed'));
+      return;
+    }
+    if (res.ok) return;
+
+    if (res.status === 401) {
+      // Token expired / Spotify not connected — link to the existing reconnect
+      // flow so the user can take action rather than clicking repeatedly.
+      data.showToast('error', t('song.seekAuthFailed'), t('song.reconnect'), () => {
+        window.location.assign('/api/auth/login');
+      });
+      return;
+    }
+
+    data.showToast('error', t('song.seekFailed'));
   };
 
   // Derived state
