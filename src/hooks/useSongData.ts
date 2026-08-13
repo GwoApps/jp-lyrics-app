@@ -103,6 +103,8 @@ export interface ImportReviewState {
   lines: number;
   preview: string;
   synced: boolean;
+  /** Metadata of the actually-matched song (e.g. Uta-Net) for human judgment. */
+  match?: { title: string; artist: string; link: string; ambiguous?: boolean };
 }
 
 export interface UseSongDataReturn {
@@ -159,10 +161,10 @@ export interface UseSongDataReturn {
   toast: ToastState | null;
   allSongs: { id: string; title: string; artist: string; spotify_track_id?: string | null; created_by: string; is_public: number }[];
   handleSync: () => Promise<void>;
-  lowConfidenceSync: { source: string; confidence: number; lines: number; lrc: string } | null;
+  lowConfidenceSync: { source: string; confidence: number; lines: number; lrc: string; match?: ImportReviewState['match'] } | null;
   confirmLowConfidenceSync: () => void;
   cancelLowConfidenceSync: () => void;
-  plainHitSync: { source: string; confidence: number; plain: string } | null;
+  plainHitSync: { source: string; confidence: number; plain: string; match?: ImportReviewState['match'] } | null;
   confirmPlainSync: () => void;
   cancelPlainSync: () => void;
   handleDelete: () => void;
@@ -237,6 +239,7 @@ export function useSongData(id: string): UseSongDataReturn {
     confidence: number;
     lines: number;
     lrc: string;
+    match?: ImportReviewState['match'];
   } | null>(null);
   // Pending plain-text sync result (no LRC timeline) waiting for explicit user
   // confirmation (server refuses to overwrite lyrics/timeline without it).
@@ -244,6 +247,7 @@ export function useSongData(id: string): UseSongDataReturn {
     source: string;
     confidence: number;
     plain: string;
+    match?: ImportReviewState['match'];
   } | null>(null);
   const [allSongs, setAllSongs] = useState<{ id: string; title: string; artist: string; spotify_track_id?: string | null; created_by: string; is_public: number }[]>([]);
   const [copied, setCopied] = useState(false);
@@ -546,6 +550,7 @@ export function useSongData(id: string): UseSongDataReturn {
           confidence: data.confidence,
           lines: data.lines,
           lrc: data.lrc,
+          match: data.match,
         });
         return;
       }
@@ -556,6 +561,7 @@ export function useSongData(id: string): UseSongDataReturn {
           source: data.source,
           confidence: data.confidence,
           plain: data.plain,
+          match: data.match,
         });
         return;
       }
@@ -906,6 +912,7 @@ export function useSongData(id: string): UseSongDataReturn {
           lines: data.lines,
           preview: data.preview,
           synced: data.synced,
+          match: data.match,
         });
         return;
       }

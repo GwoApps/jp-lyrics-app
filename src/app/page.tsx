@@ -35,6 +35,8 @@ interface ImportReviewState {
   lines: number;
   preview: string;
   synced: boolean;
+  /** Metadata of the actually-matched song (e.g. Uta-Net) for human judgment. */
+  match?: { title: string; artist: string; link: string; ambiguous?: boolean };
 }
 const EMPTY_SONG_IDS = new Set<string>();
 
@@ -235,6 +237,7 @@ export default function HomePage() {
           lines: data.lines,
           preview: data.preview,
           synced: data.synced,
+          match: data.match,
         });
         return;
       }
@@ -670,6 +673,12 @@ export default function HomePage() {
           confidence: String(importReview.confidence),
           lines: String(importReview.lines),
           preview: importReview.preview,
+          matched: importReview.match?.title ? t('home.importReviewMatched', {
+            matchedTitle: importReview.match.title,
+            matchedArtist: importReview.match.artist,
+            matchedLink: importReview.match.link,
+            ambiguous: importReview.match.ambiguous ? t('home.importReviewMatchedAmbiguous') : '',
+          }) : '',
         }) : ''}
         confirmLabel={t('home.importReviewConfirm')}
         cancelLabel={t('common.cancel')}

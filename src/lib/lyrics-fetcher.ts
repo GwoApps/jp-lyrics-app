@@ -38,6 +38,18 @@ export interface LyricsFetchResult {
   confidence: number;
   /** True when the candidate's recorded duration clearly conflicts with the requested Spotify duration. */
   durationMismatch?: boolean;
+  /**
+   * Metadata of the actual matched song (currently Uta-Net). Surfaced in the
+   * low-confidence review UI so users can judge a same-name / cover hit instead
+   * of guessing from the lyric preview alone.
+   */
+  match?: {
+    title: string;
+    artist: string;
+    link: string;
+    /** True when the top candidates were too close to be confident. */
+    ambiguous?: boolean;
+  };
 }
 
 function fetchedResult(
@@ -45,8 +57,25 @@ function fetchedResult(
   source: string,
   confidence: number,
   durationMismatch?: boolean,
+  match?: LyricsFetchResult['match'],
 ): LyricsFetchResult {
-  return { result: unescapeLyricsResult(result), source, confidence, ...(durationMismatch ? { durationMismatch } : {}) };
+  return {
+    result: unescapeLyricsResult(result),
+    source,
+    confidence,
+    ...(durationMismatch ? { durationMismatch } : {}),
+    ...(match ? { match } : {}),
+  };
+}
+
+/**
+ * Map a Uta-Net candidate's composite match score (0–1) to a confidence value.
+ * A perfect title+artist match lands at 90 (accepted); weaker matches stay
+ * below the 80 review threshold so they are always reviewed instead of being
+ * given a flat 76 regardless of how well (or poorly) the metadata matched.
+ */
+export function utaNetConfidence(score: number): number {
+  return Math.round(40 + score * 50);
 }
 
 /**
@@ -481,23 +510,69 @@ export function petitLyricsXmlToLrc(xml: string): string | null {
 
 // ─── Uta-Net ──
 
-async function fetchFromUtaNet(title: string, artist: string): Promise<LyricsResult | null> {
-  const headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-    'Accept-Language': 'ja,en;q=0.9',
-  };
+/**
+ * A parsed Uta-Net search-result candidate before scoring.
+ */
+interface UtaNetCandidate {
+  songId: string;
+  title: string;
+  artist: string;
+}
 
-  let songId: string | null = null;
-  try {
-    const q = encodeURIComponent(`${title} ${artist}`);
-    const res = await fetchWithTimeout(`https://www.uta-net.com/search/?Keyword=${q}&x=0&y=0&Aselect=2&Bselect=3`, { headers });
-    if (!res.ok) return null;
-    const html = await res.text();
-    const linkMatch = html.match(/\/song\/(\d+)\//);
-    if (linkMatch) songId = linkMatch[1];
-  } catch { return null; }
-  if (!songId) return null;
+/**
+ * A validated Uta-Net hit with the metadata that backed the match, so the
+ * low-confidence review UI can show which actual song was found instead of
+ * making the user guess from the first five lyric lines.
+ */
+export interface UtaNetHit {
+  result: LyricsResult;
+  /** Title as listed on the matched Uta-Net song page. */
+  matchedTitle: string;
+  /** Artist as listed on the matched Uta-Net song page. */
+  matchedArtist: string;
+  /** URL of the matched Uta-Net song page, for human verification. */
+  link: string;
+  /** Composite title*0.7 + artist*0.3 score of the winning candidate (0–1). */
+  score: number;
+  /** True when the top two candidates scored within `UTA_NET_AMBIGUOUS_GAP` — the match is ambiguous. */
+  ambiguous: boolean;
+}
 
+/**
+ * Parse the Uta-Net search results page into individual candidates.
+ *
+ * Uta-Net lists hits in a table where each row is:
+ *   <td class="td1"><a href="/song/{id}/">{song title}</a></td>
+ *   <td class="td2"><a href="/artist/{id}/">{artist name}</a></td>
+ *
+ * Returns every parsed row (song ID + title + artist). The caller is expected
+ * to rank them rather than trusting the first row, which may be an approximate
+ * keyword match, a same-name cover, or a medley.
+ */
+export function parseUtaNetCandidates(html: string): UtaNetCandidate[] {
+  const candidates: UtaNetCandidate[] = [];
+  // Split the table body into rows so song/artist pairs stay together.
+  const rowMatches = html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi);
+  for (const row of rowMatches) {
+    const song = row[1].match(/href="\/song\/(\d+)\/"[^>]*>([\s\S]*?)<\/a>/i);
+    if (!song) continue;
+    const songId = song[1];
+    const songTitle = unescapeLyrics(song[2].replace(/<[^>]+>/g, '').trim());
+    if (!songId || !songTitle) continue;
+    const artist = row[1].match(/href="\/artist\/[^"']*\/"[^>]*>([\s\S]*?)<\/a>/i);
+    candidates.push({
+      songId,
+      title: songTitle,
+      artist: artist ? unescapeLyrics(artist[1].replace(/<[^>]+>/g, '').trim()) : '',
+    });
+  }
+  return candidates;
+}
+
+/**
+ * Fetch the plain-text lyrics for a given Uta-Net song ID.
+ */
+async function fetchUtaNetLyrics(songId: string, headers: Record<string, string>): Promise<LyricsResult | null> {
   try {
     const res = await fetchWithTimeout(`https://www.uta-net.com/song/${songId}/`, { headers });
     if (!res.ok) return null;
@@ -512,6 +587,77 @@ async function fetchFromUtaNet(title: string, artist: string): Promise<LyricsRes
     if (!lyrics) return null;
     return { synced: '', plain: lyrics };
   } catch { return null; }
+}
+
+/** Minimum combined match score for a Uta-Net candidate to be accepted. */
+const UTA_NET_MIN_SCORE = 0.55;
+/** Combined-score gap below which the top two candidates are considered ambiguous. */
+const UTA_NET_AMBIGUOUS_GAP = 0.10;
+
+/**
+ * Fetch and validate Uta-Net lyrics.
+ *
+ * Unlike the old behaviour (blindly take the first `/song/{id}/` link), this
+ * parses every search result, ranks them with the same `titleScore`/
+ * `artistScore` used by the LRCLIB fuzzy search, and only accepts a candidate
+ * that clears real title AND artist thresholds. When no candidate qualifies
+ * the function returns null so the source chain falls through instead of
+ * importing another song's lyrics. The winning candidate's metadata is exposed
+ * for the low-confidence review flow.
+ */
+export async function fetchFromUtaNet(title: string, artist: string): Promise<UtaNetHit | null> {
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Accept-Language': 'ja,en;q=0.9',
+  };
+
+  let candidates: UtaNetCandidate[] = [];
+  try {
+    const q = encodeURIComponent(`${title} ${artist}`);
+    const res = await fetchWithTimeout(`https://www.uta-net.com/search/?Keyword=${q}&x=0&y=0&Aselect=2&Bselect=3`, { headers });
+    if (!res.ok) return null;
+    candidates = parseUtaNetCandidates(await res.text());
+  } catch { return null; }
+  if (candidates.length === 0) return null;
+
+  // Score every candidate. Artist is required to partially match when we have
+  // artist info to check against — same policy as the LRCLIB fuzzy search.
+  const hasRequestedArtist = artist.trim().length > 0;
+  const scored = candidates
+    .map((c) => {
+      const tScore = titleScore(title, c.title);
+      const aScore = hasRequestedArtist ? artistScore(artist, c.artist) : 0.5;
+      return {
+        candidate: c,
+        tScore,
+        aScore,
+        score: tScore * 0.7 + aScore * 0.3,
+      };
+    })
+    .filter((s) => s.tScore >= UTA_NET_MIN_SCORE)
+    .filter((s) => !hasRequestedArtist || (s.candidate.artist && s.aScore >= UTA_NET_MIN_SCORE))
+    .sort((a, b) => b.score - a.score);
+
+  if (scored.length === 0) return null;
+  const best = scored[0];
+
+  // Ambiguous when the runner-up is close enough that we can't be confident the
+  // top candidate is the intended recording (e.g. same-name different artist or
+  // a cover that ranks just behind the original).
+  const ambiguous = scored.length > 1
+    && best.score - scored[1].score < UTA_NET_AMBIGUOUS_GAP;
+
+  const lyrics = await fetchUtaNetLyrics(best.candidate.songId, headers);
+  if (!lyrics) return null;
+
+  return {
+    result: lyrics,
+    matchedTitle: best.candidate.title,
+    matchedArtist: best.candidate.artist,
+    link: `https://www.uta-net.com/song/${best.candidate.songId}/`,
+    score: best.score,
+    ambiguous,
+  };
 }
 
 // ─── ytmusicapi sidecar ──
@@ -576,7 +722,15 @@ export async function fetchLyrics(
 
   // 5. Uta-Net
   const un = await fetchFromUtaNet(title, artist);
-  if (un) return fetchedResult(un, 'uta-net', 76);
+  if (un) {
+    return fetchedResult(
+      un.result,
+      'uta-net',
+      utaNetConfidence(un.score),
+      false,
+      { title: un.matchedTitle, artist: un.matchedArtist, link: un.link, ambiguous: un.ambiguous },
+    );
+  }
 
   // 6. ytmusicapi
   const yt = await fetchFromYtMusic(title, artist);

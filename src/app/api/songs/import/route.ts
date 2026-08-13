@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ id: existing.id, alreadyExists: true });
   }
 
-  const { result, source, confidence, durationMismatch } = await fetchLyrics(title, artist, {
+  const { result, source, confidence, durationMismatch, match } = await fetchLyrics(title, artist, {
     spotifyCanonical: spotifyTrack
       ? { name: spotifyTrack.title, artist: spotifyTrack.artist }
       : null,
@@ -112,6 +112,7 @@ export async function POST(request: NextRequest) {
       lines: isPlainHit ? 0 : parseLrc(result.synced).length,
       preview: result.plain.split('\n').filter((line) => line.trim()).slice(0, 5).join('\n'),
       spotify_track_id: spotifyTrack?.id ?? null,
+      match,
     }, { status: 202 });
   }
 

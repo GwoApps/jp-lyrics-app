@@ -40,7 +40,7 @@ export async function POST(
   const spotifyCanonical = spotifyTrack
     ? { name: spotifyTrack.title, artist: spotifyTrack.artist }
     : null;
-  const { result, source, confidence, durationMismatch } = await fetchLyrics(song.title, song.artist, {
+  const { result, source, confidence, durationMismatch, match } = await fetchLyrics(song.title, song.artist, {
     spotifyCanonical,
     spotify: spotifyTrack
       ? { durationMs: spotifyTrack.durationMs, album: spotifyTrack.album }
@@ -94,6 +94,7 @@ export async function POST(
       source,
       confidence,
       plain: result.plain,
+      match,
     });
   }
 
@@ -108,6 +109,7 @@ export async function POST(
       confidence,
       lines: parsed.length,
       lrc: result.synced,
+      match,
     });
   }
 

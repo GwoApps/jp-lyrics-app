@@ -6,12 +6,15 @@ import {
   decodePetitLyricsLsyToLrc,
   durationStatus,
   fetchFromLrclib,
+  fetchFromUtaNet,
   lrclibConfidence,
   parsePetitLyricsResponse,
+  parseUtaNetCandidates,
   petitLyricsXmlToLrc,
   searchLrclib,
   stripTimestamps,
   unescapeLyrics,
+  utaNetConfidence,
   LYRICS_DURATION_CONFLICT_MS,
   LYRICS_DURATION_TOLERANCE_MS,
 } from './lyrics-fetcher.ts';
@@ -236,6 +239,141 @@ test('searchLrclib keeps title+artist-only scoring when Spotify duration is unkn
     const hit = await searchLrclib('Idol YOASOBI', 'Idol', 'YOASOBI');
     assert.equal(hit?.duration, 'unknown');
     assert.equal(hit?.result.synced, '[00:00.10]テスト');
+  } finally {
+    restore();
+  }
+});
+
+// ─── Uta-Net ────────────────────────────────────────────────
+
+/** Build a minimal Uta-Net search results page from rows of [songId, title, artist]. */
+function utanetSearchHtml(rows: [string, string, string][]): string {
+  const body = rows.map(([id, title, artist]) => (
+    `<tr><td class="td1"><a href="/song/${id}/">${title}</a></td>`
+    + `<td class="td2"><a href="/artist/123/">${artist}</a></td></tr>`
+  )).join('\n');
+  return `<table class="result">${body}</table>`;
+}
+
+const utanetLyricsHtml = '<div id="kashi_area">ここは歌詞です<br/>二行目</div>';
+
+/** Mock fetch so /search returns the given results and any /song/ page returns lyrics. */
+function mockUtaNet(rows: [string, string, string][]): () => void {
+  return mockFetch((url) => {
+    if (url.includes('/search/')) {
+      return new Response(utanetSearchHtml(rows), { status: 200 });
+    }
+    if (url.includes('/song/')) {
+      return new Response(utanetLyricsHtml, { status: 200 });
+    }
+    return null;
+  });
+}
+
+test('parseUtaNetCandidates extracts song id, title and artist per row', () => {
+  const html = utanetSearchHtml([
+    ['111', 'アイドル', 'YOASOBI'],
+    ['222', 'アイドル (Live)', 'Someone Else'],
+  ]);
+  assert.deepEqual(parseUtaNetCandidates(html), [
+    { songId: '111', title: 'アイドル', artist: 'YOASOBI' },
+    { songId: '222', title: 'アイドル (Live)', artist: 'Someone Else' },
+  ]);
+});
+
+test('utaNetConfidence maps a perfect match to accept, weak matches to review', () => {
+  // title=1, artist=1 → score 1.0 → 90 (accepted, above the 80 review threshold).
+  assert.equal(utaNetConfidence(1), 90);
+  // title=0.6, artist=1 → score 0.72 → 76 (needs review).
+  assert.equal(utaNetConfidence(0.72), 76);
+  // Minimum pass (score 0.55) → 68 (needs review, still above the 60 reject floor).
+  assert.equal(utaNetConfidence(0.55), 68);
+});
+
+test('fetchFromUtaNet picks the correctly-scored candidate when the first row is a wrong match', async () => {
+  // First row is a same-name cover with a different artist; second row is the
+  // intended song. Ranking must pick the second one, not blindly the first link.
+  const restore = mockUtaNet([
+    ['111', 'アイドル', 'Dummy Band'],
+    ['222', 'アイドル', 'YOASOBI'],
+  ]);
+  try {
+    const hit = await fetchFromUtaNet('アイドル', 'YOASOBI');
+    assert.equal(hit?.matchedTitle, 'アイドル');
+    assert.equal(hit?.matchedArtist, 'YOASOBI');
+    assert.match(hit!.link, /\/song\/222\//);
+    assert.equal(hit?.ambiguous, false);
+    assert.equal(hit?.result.plain, 'ここは歌詞です\n二行目');
+  } finally {
+    restore();
+  }
+});
+
+test('fetchFromUtaNet flags an ambiguous hit when the top two candidates are close', async () => {
+  // Two same-name recordings (original + cover) rank closely → ambiguous review.
+  const restore = mockUtaNet([
+    ['111', 'アイドル', 'YOASOBI'],
+    ['222', 'アイドル', 'YOASOBI feat. カバー'],
+  ]);
+  try {
+    const hit = await fetchFromUtaNet('アイドル', 'YOASOBI');
+    assert.ok(hit);
+    assert.equal(hit.ambiguous, true);
+  } finally {
+    restore();
+  }
+});
+
+test('fetchFromUtaNet rejects a same-name different-artist cover outright', async () => {
+  // Only a cover with the same title but a clearly different artist is returned
+  // — it must not be accepted as the original song.
+  const restore = mockUtaNet([
+    ['333', 'アイドル', 'Unknown Cover Band'],
+  ]);
+  try {
+    const hit = await fetchFromUtaNet('アイドル', 'YOASOBI');
+    assert.equal(hit, null);
+  } finally {
+    restore();
+  }
+});
+
+test('fetchFromUtaNet accepts a version-suffix title when the base title still matches', async () => {
+  // A version suffix (-LIVE) that keeps the requested title as a ≥70% substring
+  // of the full title is the same song by the same artist — accept it.
+  const restore = mockUtaNet([
+    ['444', '世界が終わるまで君と踊っていた -LIVE', 'YOASOBI'],
+  ]);
+  try {
+    const hit = await fetchFromUtaNet('世界が終わるまで君と踊っていた', 'YOASOBI');
+    assert.ok(hit);
+    assert.equal(hit?.matchedTitle, '世界が終わるまで君と踊っていた -LIVE');
+  } finally {
+    restore();
+  }
+});
+
+test('fetchFromUtaNet returns null when no candidate clears the thresholds', async () => {
+  // No row shares the requested title or artist → chain should fall through.
+  const restore = mockUtaNet([
+    ['555', '全く別の曲', '別のアーティスト'],
+  ]);
+  try {
+    const hit = await fetchFromUtaNet('アイドル', 'YOASOBI');
+    assert.equal(hit, null);
+  } finally {
+    restore();
+  }
+});
+
+test('fetchFromUtaNet matches artist even when a feature artist is appended', async () => {
+  const restore = mockUtaNet([
+    ['666', 'アイドル', 'YOASOBI / コラボ相手'],
+  ]);
+  try {
+    const hit = await fetchFromUtaNet('アイドル', 'YOASOBI');
+    assert.ok(hit);
+    assert.equal(hit?.ambiguous, false);
   } finally {
     restore();
   }

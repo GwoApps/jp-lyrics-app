@@ -1077,6 +1077,12 @@ export default function SongViewPage() {
           confidence: String(data.importReview.confidence),
           lines: String(data.importReview.lines),
           preview: data.importReview.preview,
+          matched: data.importReview.match?.title ? t('home.importReviewMatched', {
+            matchedTitle: data.importReview.match.title,
+            matchedArtist: data.importReview.match.artist,
+            matchedLink: data.importReview.match.link,
+            ambiguous: data.importReview.match.ambiguous ? t('home.importReviewMatchedAmbiguous') : '',
+          }) : '',
         }) : ''}
         confirmLabel={t('home.importReviewConfirm')}
         cancelLabel={t('common.cancel')}
@@ -1086,7 +1092,14 @@ export default function SongViewPage() {
       <ConfirmDialog
         open={!!data.lowConfidenceSync}
         title={t('song.syncLowConfidenceTitle')}
-        body={t('song.syncLowConfidenceBody')}
+        body={data.lowConfidenceSync ? t('song.syncLowConfidenceBody', {
+          matched: data.lowConfidenceSync.match?.title ? t('song.syncLowConfidenceMatched', {
+            matchedTitle: data.lowConfidenceSync.match.title,
+            matchedArtist: data.lowConfidenceSync.match.artist,
+            matchedLink: data.lowConfidenceSync.match.link,
+            ambiguous: data.lowConfidenceSync.match.ambiguous ? t('home.importReviewMatchedAmbiguous') : '',
+          }) : '',
+        }) : ''}
         confirmLabel={t('song.syncLowConfidenceConfirm')}
         cancelLabel={t('common.cancel')}
         onConfirm={data.confirmLowConfidenceSync}
@@ -1101,6 +1114,12 @@ export default function SongViewPage() {
               ? t(LYRICS_SOURCE_KEYS[data.plainHitSync.source])
               : data.plainHitSync.source)
             : '',
+          matched: data.plainHitSync?.match?.title ? t('song.plainHitMatched', {
+            matchedTitle: data.plainHitSync.match.title,
+            matchedArtist: data.plainHitSync.match.artist,
+            matchedLink: data.plainHitSync.match.link,
+            ambiguous: data.plainHitSync.match.ambiguous ? t('home.importReviewMatchedAmbiguous') : '',
+          }) : '',
         })}
         confirmLabel={t('song.plainHitConfirm')}
         cancelLabel={t('common.cancel')}
