@@ -35,7 +35,7 @@ import { useNowPlaying } from '@/hooks/useNowPlaying';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { useI18n } from '@/lib/i18n';
 import {
-  createTimelineDraft,
+  buildTimelineDraft,
   findTimelineConflicts,
   fmtMs,
   fmtTime,
@@ -72,6 +72,8 @@ export default function TimelineEditorPage() {
   const [song, setSong] = useState<TimelineSong | null>(null);
   const [lines, setLines] = useState<TimelineDraftLine[]>([]);
   const [initialDraft, setInitialDraft] = useState('');
+  const [fuzzyMatched, setFuzzyMatched] = useState(0);
+  const [unmatched, setUnmatched] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,6 +113,18 @@ export default function TimelineEditorPage() {
     }
   }, [id]);
 
+  // Build the timeline draft and persist both the lines and the alignment stats
+  // (fuzzy matches + unmatched synced rows) so the mismatch banner can render.
+  const applyDraft = useCallback((raw: string, synced: string) => {
+    const result = buildTimelineDraft(raw, synced);
+    setLines(result.lines);
+    setFuzzyMatched(result.fuzzyMatched);
+    setUnmatched(result.unmatched);
+    setInitialDraft(serializeTimelineDraft(result.lines));
+    const firstUnmarked = result.lines.findIndex((line) => line.timeMs == null);
+    setCurrentIndex(firstUnmarked >= 0 ? firstUnmarked : 0);
+  }, []);
+
   // Apply the fetched result to state. Called from promise `.then` callbacks
   // (mount + retry) so setState never runs synchronously inside an effect.
   const applySongResult = useCallback((result: { data: TimelineSong } | { forbidden: true } | { failed: boolean; notFound?: boolean }) => {
@@ -119,13 +133,8 @@ export default function TimelineEditorPage() {
       setLoadError(false);
       setError('');
       setSong(data);
-      const draft = createTimelineDraft(data.lyrics_raw || '', data.lyrics_synced || '');
-      const serialized = serializeTimelineDraft(draft);
-      setLines(draft);
-      setInitialDraft(serialized);
+      applyDraft(data.lyrics_raw || '', data.lyrics_synced || '');
       sourceLyricsRef.current = data.lyrics_raw || '';
-      const firstUnmarked = draft.findIndex((line) => line.timeMs == null);
-      setCurrentIndex(firstUnmarked >= 0 ? firstUnmarked : 0);
       return;
     }
     if ('forbidden' in result) {
@@ -137,7 +146,7 @@ export default function TimelineEditorPage() {
     if (result.notFound) setLoadError(false);
     else setLoadError(true);
     setError(t('timelineWorkspace.loadFailed'));
-  }, [t]);
+  }, [applyDraft, t]);
 
   useEffect(() => {
     void fetchSong().then((result) => { applySongResult(result); setLoading(false); });
@@ -253,12 +262,8 @@ export default function TimelineEditorPage() {
   const doReset = () => {
     setConfirmReset(false);
     if (!song) return;
-    const draft = createTimelineDraft(song.lyrics_raw || '', song.lyrics_synced || '');
-    setLines(draft);
+    applyDraft(song.lyrics_raw || '', song.lyrics_synced || '');
     setHistory([]);
-    setInitialDraft(serializeTimelineDraft(draft));
-    const firstUnmarked = draft.findIndex((line) => line.timeMs == null);
-    setCurrentIndex(firstUnmarked >= 0 ? firstUnmarked : 0);
   };
 
   const requestReset = () => setConfirmReset(true);
@@ -270,21 +275,16 @@ export default function TimelineEditorPage() {
       if (!response.ok) throw new Error('reload_failed');
       const data = await response.json() as TimelineSong;
       if (!data.permissions?.can_edit) throw new Error('forbidden');
-      const draft = createTimelineDraft(data.lyrics_raw || '', data.lyrics_synced || '');
-      const serialized = serializeTimelineDraft(draft);
       setSong(data);
-      setLines(draft);
-      setInitialDraft(serialized);
+      applyDraft(data.lyrics_raw || '', data.lyrics_synced || '');
       sourceLyricsRef.current = data.lyrics_raw || '';
       setHistory([]);
-      const firstUnmarked = draft.findIndex((line) => line.timeMs == null);
-      setCurrentIndex(firstUnmarked >= 0 ? firstUnmarked : 0);
       setStaleConflict(false);
       showToast('success', t('timelineWorkspace.reloaded'));
     } catch {
       showToast('error', t('timelineWorkspace.reloadFailed'));
     }
-  }, [id, showToast, t]);
+  }, [applyDraft, id, showToast, t]);
 
   const exportDraft = () => {
     const text = serializeTimelineDraft(lines);
@@ -349,12 +349,10 @@ export default function TimelineEditorPage() {
         throw new Error('save_failed');
       }
       const updated = await response.json() as TimelineSong;
-      const nextDraft = createTimelineDraft(updated.lyrics_raw || song.lyrics_raw, updated.lyrics_synced || '');
-      const nextSerialized = serializeTimelineDraft(nextDraft);
+      const raw = updated.lyrics_raw || song.lyrics_raw;
+      applyDraft(raw, updated.lyrics_synced || '');
+      sourceLyricsRef.current = raw;
       setSong(updated);
-      setLines(nextDraft);
-      setInitialDraft(nextSerialized);
-      sourceLyricsRef.current = updated.lyrics_raw || song.lyrics_raw;
       setHistory([]);
       showToast('success', markedCount === lines.length
         ? t('timelineWorkspace.savedComplete')
@@ -364,7 +362,7 @@ export default function TimelineEditorPage() {
     } finally {
       setSaving(false);
     }
-  }, [conflicts, id, lines, markedCount, selectLine, showToast, song, t]);
+  }, [applyDraft, conflicts, id, lines, markedCount, selectLine, showToast, song, t]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -487,6 +485,19 @@ export default function TimelineEditorPage() {
           <h2 className="text-sm font-medium">{t('timelineWorkspace.lyricLines')}</h2>
           <p className="mt-1 text-[11px] text-[var(--muted-foreground)]">{t('timelineWorkspace.listHint')}</p>
         </div>
+        {(unmatched > 0 || fuzzyMatched > 0) && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-[var(--warning)]/20 bg-[var(--warning)]/5 px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="flex items-start gap-2 text-xs font-medium text-[var(--warning)]">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{unmatched > 0
+                  ? t('timelineWorkspace.mismatchBanner', { count: String(unmatched) })
+                  : t('timelineWorkspace.fuzzyBanner', { count: String(fuzzyMatched) })}</span>
+              </p>
+              <p className="mt-1 text-[11px] text-[var(--muted-foreground)]">{t('timelineWorkspace.mismatchHint')}</p>
+            </div>
+          </div>
+        )}
         {conflicts.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-b border-[var(--destructive)]/20 bg-[var(--destructive)]/5 px-4 py-3">
             <div className="min-w-0 flex-1">

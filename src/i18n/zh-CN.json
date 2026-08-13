@@ -358,7 +358,10 @@
     "reload": "重新载入新歌词",
     "exportDraft": "导出我的草稿",
     "reloaded": "已载入最新歌词",
-    "reloadFailed": "无法重新载入最新歌词"
+    "reloadFailed": "无法重新载入最新歌词",
+    "mismatchBanner": "{count} 行时间戳未能与歌词文本匹配（已保留原文，可手动标记）",
+    "fuzzyBanner": "{count} 行时间戳已通过模糊匹配与歌词文本对齐",
+    "mismatchHint": "歌词与已同步 LRC 文本存在细微差异（全半角、标点、括号等），差异行的时间戳已尽力对齐；未匹配的行可手动标记。"
   },
   "lyricsSources": {
     "manual": "手动录入",

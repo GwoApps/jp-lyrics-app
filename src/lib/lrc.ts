@@ -1,3 +1,5 @@
+import { lineFuzzyMatch } from './match.ts';
+
 /** Parsed LRC sync line */
 export interface SyncLine {
   timeMs: number;
@@ -87,8 +89,30 @@ export function getLrcTextLines(value: string): string[] {
   });
 }
 
-/** Build an editor draft from plain lyrics and any existing full or partial LRC. */
-export function createTimelineDraft(plainLyrics: string, syncedLyrics: string): TimelineDraftLine[] {
+/**
+ * Result of aligning a plain-lyrics draft against a synced LRC source.
+ * `lines` is what the editor edits; the counts drive the mismatch hint so a
+ * fuzzy-matched / unmatched sync never silently disappears.
+ */
+export interface TimelineDraftResult {
+  lines: TimelineDraftLine[];
+  /** Number of plain lines whose timestamp was attached via fuzzy matching. */
+  fuzzyMatched: number;
+  /** Number of synced timed rows that could not be attached to any plain line. */
+  unmatched: number;
+}
+
+/**
+ * Build an editor draft from plain lyrics and any existing full or partial LRC.
+ *
+ * Alignment prefers exact, order-preserving text matches (so repeated chorus
+ * lines consume their own timestamp queue in order). Lines that would otherwise
+ * lose their timestamp to a tiny text difference (full/half-width, punctuation,
+ * bracket, furigana drift) fall back to position-aware fuzzy matching via
+ * `lineFuzzyMatch`, keeping the detail page's follow-scroll/seek usable instead
+ * of silently dropping timestamps.
+ */
+export function buildTimelineDraft(plainLyrics: string, syncedLyrics: string): TimelineDraftResult {
   const plain = plainLyrics.split('\n')
     .map((line) => line.trim())
     .filter((line) => Boolean(line) && !isLrcMetadataLine(line));
@@ -100,19 +124,79 @@ export function createTimelineDraft(plainLyrics: string, syncedLyrics: string): 
     return parsed;
   });
 
-  if (plain.length === 0) return syncedRows;
+  if (plain.length === 0) return { lines: syncedRows, fuzzyMatched: 0, unmatched: 0 };
   if (syncedRows.length === plain.length && syncedRows.every((row, index) => row.text === plain[index])) {
-    return syncedRows;
+    return { lines: syncedRows, fuzzyMatched: 0, unmatched: 0 };
   }
 
-  const timestampQueues = new Map<string, number[]>();
+  const lines: TimelineDraftLine[] = plain.map((text) => ({ text, timeMs: null }));
+
+  // Exact, order-preserving pass: each distinct text gets an ordered queue, so
+  // repeated chorus lines consume their own timestamps in the order they appear.
+  const exactQueues = new Map<string, number[]>();
   for (const row of syncedRows) {
     if (row.timeMs == null) continue;
-    const queue = timestampQueues.get(row.text) ?? [];
+    const queue = exactQueues.get(row.text) ?? [];
     queue.push(row.timeMs);
-    timestampQueues.set(row.text, queue);
+    exactQueues.set(row.text, queue);
   }
-  return plain.map((text) => ({ text, timeMs: timestampQueues.get(text)?.shift() ?? null }));
+  const consumed = new Array(syncedRows.length).fill(false);
+  for (let i = 0; i < plain.length; i += 1) {
+    const queue = exactQueues.get(plain[i]);
+    const timeMs = queue?.shift();
+    if (timeMs != null) {
+      lines[i] = { ...lines[i], timeMs };
+      // Mark the earliest unconsumed synced row with this text as consumed so the
+      // fuzzy pass never reuses it.
+      for (let j = 0; j < syncedRows.length; j += 1) {
+        if (!consumed[j] && syncedRows[j].text === plain[i] && syncedRows[j].timeMs === timeMs) {
+          consumed[j] = true;
+          break;
+        }
+      }
+    }
+  }
+
+  // Position-aware fuzzy fallback for lines still missing a timestamp. Pick the
+  // nearest available timed synced row (by row index) that fuzzy-matches, so
+  // alignment stays localized and avoids grabbing a far-away duplicate.
+  const timedIndexes = syncedRows
+    .map((row, index) => (row.timeMs != null ? index : -1))
+    .filter((index) => index >= 0);
+  let fuzzyMatched = 0;
+  for (let i = 0; i < plain.length; i += 1) {
+    if (lines[i].timeMs != null) continue;
+    let best = -1;
+    let bestDist = Infinity;
+    for (const j of timedIndexes) {
+      if (consumed[j]) continue;
+      if (!lineFuzzyMatch(plain[i], syncedRows[j].text)) continue;
+      const dist = Math.abs(j - i);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = j;
+      }
+    }
+    if (best >= 0) {
+      lines[i] = { ...lines[i], timeMs: syncedRows[best].timeMs };
+      consumed[best] = true;
+      fuzzyMatched += 1;
+    }
+  }
+
+  const unmatched = consumed.reduce(
+    (count, wasConsumed, index) => count + (wasConsumed || syncedRows[index].timeMs == null ? 0 : 1),
+    0,
+  );
+  return { lines, fuzzyMatched, unmatched };
+}
+
+/**
+ * Build an editor draft from plain lyrics and any existing full or partial LRC.
+ * Convenience wrapper returning only the editable lines (backwards compatible).
+ */
+export function createTimelineDraft(plainLyrics: string, syncedLyrics: string): TimelineDraftLine[] {
+  return buildTimelineDraft(plainLyrics, syncedLyrics).lines;
 }
 
 /**

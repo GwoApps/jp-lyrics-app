@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createTimelineDraft, extractLrcMetadata, findLrcConflicts, findTimelineConflicts, getLrcTextLines, hasSameLrcText, isLrcMetadataLine, mapTimelineTimestamps, offsetLrcLines, parseLrc, resolveLrcTextUpdate, resolveTimelineSave, serializeLrc, serializeTimelineDraft, updateLrcLineTime } from './lrc.ts';
+import { createTimelineDraft, buildTimelineDraft, extractLrcMetadata, findLrcConflicts, findTimelineConflicts, getLrcTextLines, hasSameLrcText, isLrcMetadataLine, mapTimelineTimestamps, offsetLrcLines, parseLrc, resolveLrcTextUpdate, resolveTimelineSave, serializeLrc, serializeTimelineDraft, updateLrcLineTime } from './lrc.ts';
 
 test('offsetLrcLines shifts timestamps and clamps at zero', () => {
   const lines = parseLrc('[00:00.250]first\n[01:02.345]second');
@@ -263,4 +263,82 @@ test('resolveTimelineSave refuses when plain lyrics were rewritten in another ta
 test('resolveTimelineSave refuses submissions that omit the source snapshot', () => {
   const result = resolveTimelineSave('first', '[00:01.000]first', '[00:02.000]first', undefined as unknown as string);
   assert.deepEqual(result, { ok: false, error: 'missing_source_lyrics' });
+});
+
+test('buildTimelineDraft fuzzy-matches half-width punctuation differences', () => {
+  // plain uses full-width ； while synced uses half-width ; → tiny diff, must still attach.
+  const result = buildTimelineDraft(
+    '空の青さ；春の風',
+    '[00:12.000]空の青さ;春の風',
+  );
+  assert.equal(result.fuzzyMatched, 1);
+  assert.equal(result.unmatched, 0);
+  assert.deepEqual(result.lines, [{ text: '空の青さ；春の風', timeMs: 12000 }]);
+});
+
+test('buildTimelineDraft fuzzy-matches punctuation and bracket differences', () => {
+  // plain drops the full-width parentheses that the synced LRC keeps.
+  const result = buildTimelineDraft(
+    'さよなら、それだけで十分',
+    '[00:20.000]さよなら（それだけで十分）',
+  );
+  assert.equal(result.fuzzyMatched, 1);
+  assert.equal(result.unmatched, 0);
+  assert.deepEqual(result.lines, [{ text: 'さよなら、それだけで十分', timeMs: 20000 }]);
+});
+
+test('buildTimelineDraft exact matches never fall back to fuzzy for repeated chorus lines', () => {
+  // Repeated identical chorus text must consume its own timestamp queue in order,
+  // even when a nearby line is fuzzy-similar, so fuzzy fallback never steals it.
+  const result = buildTimelineDraft(
+    'chorus\nverse one\nchorus\nverse two',
+    '[00:10.000]chorus\n[00:30.000]verse one\n[00:50.000]chorus\n[01:10.000]verse two',
+  );
+  assert.equal(result.fuzzyMatched, 0);
+  assert.equal(result.unmatched, 0);
+  assert.deepEqual(result.lines, [
+    { text: 'chorus', timeMs: 10000 },
+    { text: 'verse one', timeMs: 30000 },
+    { text: 'chorus', timeMs: 50000 },
+    { text: 'verse two', timeMs: 70000 },
+  ]);
+});
+
+test('buildTimelineDraft reports unmatched synced rows it cannot align', () => {
+  const result = buildTimelineDraft(
+    'one\ntwo\nthree',
+    '[00:01.000]one\n[00:02.000]totally different lyric\n[00:03.000]three',
+  );
+  // one and three align exactly; 'totally different lyric' has no fuzzy counterpart.
+  assert.equal(result.fuzzyMatched, 0);
+  assert.equal(result.unmatched, 1);
+  assert.deepEqual(result.lines, [
+    { text: 'one', timeMs: 1000 },
+    { text: 'two', timeMs: null },
+    { text: 'three', timeMs: 3000 },
+  ]);
+});
+
+test('buildTimelineDraft fuzzy fallback is position-aware and keeps local ordering', () => {
+  // A far-away repeated text must not steal a timestamp from a closer fuzzy match.
+  const result = buildTimelineDraft(
+    'verse one\nrefrain\nverse two',
+    '[00:10.000]verse one\n[00:20.000]verse two (fuzzy twin)\n[00:40.000]refrain',
+  );
+  // 'verse two' and 'verse two (fuzzy twin)' normalize; 'verse one' exact at 0;
+  // 'refrain' exact at index 2 → 00:40. 'verse two' fuzzy-matches the nearest 00:20.
+  assert.equal(result.fuzzyMatched, 1);
+  assert.equal(result.unmatched, 0);
+  assert.equal(result.lines[1].timeMs, 40000);
+  assert.equal(result.lines[2].timeMs, 20000);
+});
+
+test('buildTimelineDraft leaves exact full-table equality untouched', () => {
+  const result = buildTimelineDraft('a\nb', '[00:01.000]a\n[00:02.000]b');
+  assert.equal(result.fuzzyMatched, 0);
+  assert.equal(result.unmatched, 0);
+  assert.deepEqual(result.lines, [
+    { text: 'a', timeMs: 1000 },
+    { text: 'b', timeMs: 2000 },
+  ]);
 });

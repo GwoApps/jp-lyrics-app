@@ -358,7 +358,10 @@
     "reload": "Reload new lyrics",
     "exportDraft": "Export my draft",
     "reloaded": "Loaded the latest lyrics",
-    "reloadFailed": "Could not reload the latest lyrics"
+    "reloadFailed": "Could not reload the latest lyrics",
+    "mismatchBanner": "{count} timestamp(s) could not be matched to lyric text (original text kept — mark manually)",
+    "fuzzyBanner": "{count} timestamp(s) were aligned via fuzzy text matching",
+    "mismatchHint": "Lyrics and the synced LRC differ slightly (full/half-width, punctuation, brackets). Timestamps were aligned where possible; unmatched lines can be marked manually."
   },
   "lyricsSources": {
     "manual": "Manual",
