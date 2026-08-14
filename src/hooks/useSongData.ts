@@ -125,6 +125,9 @@ export interface UseSongDataReturn {
   showTranslation: boolean;
   setShowTranslation: React.Dispatch<React.SetStateAction<boolean>>;
   translating: boolean;
+  // True briefly after a cancellation/error while the client re-reads the
+  // server's final persisted result to show a reliable coverage number.
+  translationSaving: boolean;
   translationError: string | null;
   translationProgress: TranslationProgress | null;
   translationReasoning: string;
@@ -212,6 +215,9 @@ export function useSongData(id: string): UseSongDataReturn {
     return localStorage.getItem('jplrc-show-translation') === 'true';
   });
   const [translating, setTranslating] = useState(false);
+  // True while re-reading the server's final persisted result after a cancel /
+  // error so the UI can show "正在保存已完成部分" instead of a guessed number.
+  const [translationSaving, setTranslationSaving] = useState(false);
   const [translationError, setTranslationError] = useState<string | null>(null);
   const [translationProgress, setTranslationProgress] = useState<TranslationProgress | null>(null);
   const [translationReasoning, setTranslationReasoning] = useState('');
@@ -453,7 +459,9 @@ export function useSongData(id: string): UseSongDataReturn {
     }
   }, [showToast, t, updateReadingPreference]);
 
-  // Refresh song data (e.g. after request-public)
+  // Refresh song data (e.g. after request-public). Resolves with the fresh
+  // song payload (or undefined on failure) so callers can compute derived
+  // numbers synchronously without relying on async state propagation.
   const refreshSong = useCallback(async () => {
     try {
       const res = await fetch(`/api/songs/${id}`);
@@ -461,9 +469,28 @@ export function useSongData(id: string): UseSongDataReturn {
         const data = await res.json();
         setSong(data);
         if (data.lyrics_synced) setSyncLines(parseLrc(data.lyrics_synced));
+        return data;
       }
     } catch {}
+    return undefined;
   }, [id]);
+
+  // Full-song coverage over non-empty lyric lines (duplicates expanded, blank
+  // lines skipped), computed from the persisted translation cache. This is the
+  // reliable "how much of the song is translated" number — independent of how
+  // many DISTINCT lines the model had to process (request progress).
+  const coverageOf = useCallback((rawLyrics: string | undefined, translationCache: string | undefined) => {
+    const rawLines = rawLyrics ? rawLyrics.split('\n') : [];
+    const cache = parseTranslationCache(translationCache, rawLines.length);
+    let covered = 0;
+    let coverable = 0;
+    rawLines.forEach((raw, i) => {
+      if (!raw.trim()) return;
+      coverable += 1;
+      if ((cache[i] ?? '').trim() !== '') covered += 1;
+    });
+    return { covered, coverable };
+  }, []);
 
   // Fetch the single song. Distinguishes a genuine 404 (song absent) from
   // every other failure (HTTP 5xx/429, network or timeout). Pure fetch — no
@@ -675,12 +702,13 @@ export function useSongData(id: string): UseSongDataReturn {
         throw new Error((data as { error?: string }).error ?? 'translation_failed');
       }
 
-      // Live per-line progress while the model streams its translation array.
-      // The server reports { done, total } over the DISTINCT lines it still
-      // needs to translate (repeats reuse one translation), so show those
-      // numbers as-is — "done/total" reaches completion when the stream ends.
+      // Live progress while the model streams. The server reports BOTH the
+      // per-request metric over DISTINCT lines (requestDone/requestTotal, the
+      // units the model actually works in) and the reliable full-song coverage
+      // (covered/coverable, duplicates expanded, blank lines skipped). Track
+      // the request count for the cancellation ref; the UI shows coverage.
       const onProgress = (progress: TranslationProgress) => {
-        translationDoneRef.current = progress.done;
+        translationDoneRef.current = progress.requestDone;
         setTranslationProgress(progress);
       };
       // Local accumulator mirrors the streamed reasoning so the error path
@@ -733,20 +761,23 @@ export function useSongData(id: string): UseSongDataReturn {
       }
 
       const errorKey = TRANSLATION_ERROR_KEYS;
-      // A server-reported cancellation carries its own done/total — fill the
-      // placeholder so the notice shows how many lines were saved.
+      // A server-reported cancellation/failure carries its own request
+      // progress AND full-song coverage — use the persisted coverage for the
+      // notice so the number is meaningful to the user ("已保存 X 行").
+      const coveredNow = errorProgress?.covered ?? 0;
       const message = streamError === 'translation_cancelled'
-        ? t('song.translationCancelled', { done: String(errorProgress?.done ?? 0) })
+        ? t('song.translationCancelled', { done: String(coveredNow) })
         : streamError && errorKey[streamError]
           ? t(errorKey[streamError])
           : t('song.translationFailed');
       // On failure the server persists whatever lines streamed in before the
-      // error; report progress so the error pill shows the "continue" button
-      // and a real done/total count (断点续译入口). Refresh the song from the
-      // server so partial translations already persisted become visible.
+      // error; report the consistent progress/coverage so the error pill shows
+      // the "continue" button based on real remaining lines (断点续译入口).
+      // Refresh the song from the server so partial translations already
+      // persisted become visible.
       if (errorProgress) {
         setTranslationProgress(errorProgress);
-        if (errorProgress.done > 0) await refreshSong();
+        if (errorProgress.covered > 0) await refreshSong();
       } else {
         setTranslationProgress(null);
       }
@@ -757,25 +788,34 @@ export function useSongData(id: string): UseSongDataReturn {
       // Cancellation is informational (partial progress was saved), not an error.
       showToast(streamError === 'translation_cancelled' ? 'info' : 'error', message);
     } catch {
-      // User pressed cancel (or the request was aborted): the server has
-      // already persisted whatever complete lines streamed in, so refresh
-      // the song and show a friendly cancellation notice instead of a
-      // generic network error. The error pill keeps the resume entry
-      // (「继续翻译」) alive with the real done/total counts.
+      // User pressed cancel (or the request was aborted). Because the abort
+      // usually makes the stream read throw, the client almost never receives
+      // the server's later `error` event — so we must NOT guess a denominator
+      // here. Instead re-read the server's final persisted result (which the
+      // cancel path merged just before) and show the reliable full-song
+      // coverage. While that re-read is in flight show "正在保存已完成部分".
       if (controller.signal.aborted) {
-        const doneCount = translationDoneRef.current;
-        const message = t('song.translationCancelled', { done: String(doneCount) });
-        // Keep the error pill's 「继续翻译」 resume entry alive with the real
-        // done/total counts (断点续译) — cancellation is not destructive.
-        setTranslationProgress({ done: doneCount, total });
-        setTranslationError(message);
-        showToast('info', message);
-        if (doneCount > 0) {
+        const requestDone = translationDoneRef.current;
+        setTranslationSaving(true);
+        try {
           // The server persists the completed lines asynchronously after it
           // detects the disconnect — pull once now and once more after a beat
           // so the partial translations show up even if the first fetch races.
-          await refreshSong();
-          setTimeout(() => { void refreshSong(); }, 400);
+          const fresh = (await refreshSong())
+            ?? await new Promise<SongData | undefined>((resolve) => {
+              setTimeout(async () => { resolve(await refreshSong()); }, 400);
+            });
+          const { covered, coverable } = coverageOf(fresh?.lyrics_raw, fresh?.lyrics_translation);
+          setTranslationProgress({
+            requestDone,
+            requestTotal: requestDone,
+            covered,
+            coverable,
+          });
+          setTranslationError(t('song.translationCancelled', { done: String(covered) }));
+          showToast('info', t('song.translationCancelled', { done: String(covered) }));
+        } finally {
+          setTranslationSaving(false);
         }
         return;
       }
@@ -786,7 +826,7 @@ export function useSongData(id: string): UseSongDataReturn {
       translateAbortRef.current = null;
       setTranslating(false);
     }
-  }, [id, song, furiganaLines, t, showToast, translating, refreshSong]);
+  }, [id, song, furiganaLines, t, showToast, translating, refreshSong, coverageOf]);
 
   /** Abort the in-flight translation request (cancel button on the overlay). */
   const cancelTranslate = useCallback(() => {
@@ -1170,6 +1210,7 @@ export function useSongData(id: string): UseSongDataReturn {
     showTranslation,
     setShowTranslation,
     translating,
+    translationSaving,
     translationError,
     translationProgress,
     translationReasoning,

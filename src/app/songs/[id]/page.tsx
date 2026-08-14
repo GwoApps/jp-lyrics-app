@@ -988,6 +988,7 @@ export default function SongViewPage() {
       {/* Translation status overlay — fixed at viewport level (not clipped by the lyrics panel): visible progress while translating, persistent error with dismiss + continue */}
       <TranslationStatusOverlay
         translating={data.translating}
+        translationSaving={data.translationSaving}
         translationProgress={data.translationProgress}
         translationError={data.translationError}
         translationReasoning={data.translationReasoning}

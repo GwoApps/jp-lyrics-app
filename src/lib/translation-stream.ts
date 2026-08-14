@@ -8,8 +8,14 @@
  */
 
 export interface TranslationProgress {
-  done: number;
-  total: number;
+  /** Distinct lines the model has finished in THIS request. */
+  requestDone: number;
+  /** Distinct lines this request needs to process (repeated choruses deduped). */
+  requestTotal: number;
+  /** Full-song coverage: non-empty lyric lines that currently have a translation. */
+  covered: number;
+  /** Full-song coverage: non-empty lyric lines in the whole song (duplicates expanded). */
+  coverable: number;
 }
 
 export interface TranslationStreamResult {
@@ -59,25 +65,48 @@ export async function readTranslationStream(
         else if (line.startsWith('data:')) dataStr += line.slice(5).trim();
       }
       if (!dataStr) continue;
-      let payload: { text?: string; translations?: string[]; error?: string; done?: number; total?: number; lang?: string };
+      let payload: {
+        text?: string;
+        translations?: string[];
+        error?: string;
+        lang?: string;
+        requestDone?: number;
+        requestTotal?: number;
+        covered?: number;
+        coverable?: number;
+        // legacy fields from older server builds — kept for forward compatibility
+        done?: number;
+        total?: number;
+      };
       try {
         payload = JSON.parse(dataStr);
       } catch {
         continue;
       }
+      const toProgress = (p: typeof payload): TranslationProgress | null => {
+        const hasNew = typeof p.requestDone === 'number' && typeof p.requestTotal === 'number'
+          && typeof p.covered === 'number' && typeof p.coverable === 'number';
+        if (hasNew) {
+          return { requestDone: p.requestDone!, requestTotal: p.requestTotal!, covered: p.covered!, coverable: p.coverable! };
+        }
+        // Backward-compatible fallback for servers that only sent { done, total }.
+        if (typeof p.done === 'number' && typeof p.total === 'number') {
+          return { requestDone: p.done, requestTotal: p.total, covered: p.done, coverable: p.total };
+        }
+        return null;
+      };
       if (eventName === 'reasoning' && typeof payload.text === 'string') {
         onReasoning(payload.text);
-      } else if (eventName === 'progress' && typeof payload.done === 'number' && typeof payload.total === 'number') {
-        onProgress?.({ done: payload.done, total: payload.total });
+      } else if (eventName === 'progress') {
+        const progress = toProgress(payload);
+        if (progress) onProgress?.(progress);
       } else if (eventName === 'done' && Array.isArray(payload.translations)) {
         translations = payload.translations;
         if (typeof payload.lang === 'string') streamLang = payload.lang;
         finished = true;
       } else if (eventName === 'error' && payload.error) {
         streamError = payload.error;
-        if (typeof payload.done === 'number' && typeof payload.total === 'number') {
-          errorProgress = { done: payload.done, total: payload.total };
-        }
+        errorProgress = toProgress(payload);
         finished = true;
       }
     }

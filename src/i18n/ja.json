@@ -253,6 +253,7 @@
     "translatingProgress": "翻訳中 {done}/{total}",
     "translationContinue": "翻訳を続ける",
     "translationCancel": "キャンセル",
+    "translationSavingPartial": "完了した部分を保存しています…",
     "translationCancelled": "キャンセルしました。完了した {done} 行の翻訳は保存されています",
     "translationContinueRemain": "翻訳を続ける（残り {count} 行）",
     "translationPartial": "{done}/{total} 行翻訳済み",

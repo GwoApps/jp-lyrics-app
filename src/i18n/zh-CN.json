@@ -253,6 +253,7 @@
     "translatingProgress": "翻译中 {done}/{total}",
     "translationContinue": "继续翻译",
     "translationCancel": "取消",
+    "translationSavingPartial": "正在保存已完成部分…",
     "translationCancelled": "已取消，已完成的 {done} 行翻译已保存",
     "translationContinueRemain": "继续翻译（剩余 {count} 行）",
     "translationPartial": "已翻译 {done}/{total}",

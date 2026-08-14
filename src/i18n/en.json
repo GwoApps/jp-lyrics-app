@@ -253,6 +253,7 @@
     "translatingProgress": "Translating {done}/{total}",
     "translationContinue": "Continue translating",
     "translationCancel": "Cancel",
+    "translationSavingPartial": "Saving the completed part…",
     "translationCancelled": "Cancelled — {done} translated line(s) saved",
     "translationContinueRemain": "Continue translating ({count} left)",
     "translationPartial": "{done}/{total} translated",

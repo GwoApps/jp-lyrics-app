@@ -6,7 +6,16 @@ import { useI18n } from '@/lib/i18n';
 
 interface TranslationStatusOverlayProps {
   translating: boolean;
-  translationProgress: { done: number; total: number } | null;
+  // True briefly after a cancellation/error while the client re-reads the
+  // server's final persisted result — show "正在保存已完成部分" instead of a
+  // guessed number.
+  translationSaving: boolean;
+  translationProgress: {
+    requestDone: number;
+    requestTotal: number;
+    covered: number;
+    coverable: number;
+  } | null;
   translationError: string | null;
   translationReasoning: string;
   showTranslationReasoning: boolean;
@@ -33,6 +42,7 @@ interface TranslationStatusOverlayProps {
  */
 export default function TranslationStatusOverlay({
   translating,
+  translationSaving,
   translationProgress,
   translationError,
   translationReasoning,
@@ -142,19 +152,29 @@ export default function TranslationStatusOverlay({
   // reasoning toggle). When the translation finished (or is idle), only the
   // reasoning panel remains — so the persisted thinking can be read/copied
   // even after the stream ended.
-  const visible = translating || translationError
-    || (translationProgress && translationProgress.done < translationProgress.total)
+  const visible = translating || translationError || translationSaving
+    || (translationProgress && translationProgress.covered < translationProgress.coverable)
     || reasoningPanel;
   if (!visible) return null;
 
   return (
     <div className="fixed left-1/2 top-3 z-[100] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col items-center gap-2">
-      {translating ? (
+      {translationSaving ? (
+        // The server is still persisting the completed lines after a cancel /
+        // error — show a saving notice rather than a guessed progress number.
+        <>
+          <span className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--background)]/90 px-3 py-1.5 text-xs text-[var(--muted-foreground)] shadow-sm backdrop-blur-sm">
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[var(--primary)]" />
+            {t('song.translationSavingPartial')}
+          </span>
+          {reasoningPanel}
+        </>
+      ) : translating ? (
         <>
           <span className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--background)]/90 px-3 py-1.5 text-xs text-[var(--muted-foreground)] shadow-sm backdrop-blur-sm">
             <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[var(--primary)]" />
             {translationProgress
-              ? t('song.translatingProgress', { done: translationProgress.done, total: translationProgress.total })
+              ? t('song.translatingProgress', { done: translationProgress.covered, total: translationProgress.coverable })
               : t('song.translating')}
             <button
               type="button"
@@ -184,10 +204,10 @@ export default function TranslationStatusOverlay({
             <span className="max-w-[200px] sm:max-w-[320px] truncate">
               {translationError
                 ?? (translationProgress
-                  ? t('song.translatingProgress', { done: translationProgress.done, total: translationProgress.total })
+                  ? t('song.translatingProgress', { done: translationProgress.covered, total: translationProgress.coverable })
                   : '')}
             </span>
-            {translationProgress && translationProgress.done < translationProgress.total && (
+            {translationProgress && translationProgress.covered < translationProgress.coverable && (
               <button
                 type="button"
                 onClick={onContinue}

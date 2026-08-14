@@ -12,6 +12,30 @@
  * before scanning begins), so a `]` at depth 0 closes the top-level array.
  */
 
+/**
+ * Full-song translation coverage over NON-EMPTY lyric lines (duplicate
+ * choruses expanded, blank lines skipped). `coverable` is how many non-empty
+ * source lines exist; `covered` is how many of those currently have a
+ * non-empty translation. This is the reliable "how much of the whole song is
+ * translated" number — independent of how many DISTINCT lines the model had
+ * to process (which is the request-progress denominator).
+ *
+ * `cache` must be index-aligned to `sourceLines` (see parseTranslationCache).
+ */
+export function computeCoverage(
+  sourceLines: string[],
+  cache: string[],
+): { covered: number; coverable: number } {
+  let covered = 0;
+  let coverable = 0;
+  sourceLines.forEach((raw, i) => {
+    if (!raw.trim()) return;
+    coverable += 1;
+    if ((cache[i] ?? '').trim() !== '') covered += 1;
+  });
+  return { covered, coverable };
+}
+
 /** Count the complete string elements present in a JSON array that may still be streaming. */
 export function countCompletedArrayItems(text: string): number {
   const start = text.indexOf('[');
