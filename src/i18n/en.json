@@ -136,6 +136,7 @@
     "syncLowConfidenceBody": "No exact match found — this result may not be the original song. Replace the current lyrics with it? Furigana and translation are kept if the lyric text is unchanged.{matched}",
     "syncLowConfidenceMatched": "\n\nMatched song: “{matchedTitle}” by {matchedArtist}.{ambiguous}\nVerify it at {matchedLink}.",
     "syncLowConfidenceConfirm": "Use anyway",
+    "candidateExpired": "The preview has expired or the song changed — please run sync again to see the latest candidate.",
     "plainHitTitle": "Plain-text lyrics found (no timeline)",
     "plainHitBody": "Only plain-text lyrics (no timestamps) were found from {source}. Replace the current lyrics with this plain text? The existing timeline will be cleared; furigana and translation are kept if the lyric text is unchanged.{matched}",
     "plainHitConfirm": "Replace anyway",

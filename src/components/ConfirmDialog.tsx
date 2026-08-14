@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import {
   computeFocusBounds,
   getFocusableElements,
@@ -11,6 +11,8 @@ interface ConfirmDialogProps {
   open: boolean;
   title: string;
   body?: string;
+  /** Optional extra content rendered below the body (e.g. a lyric preview). */
+  children?: ReactNode;
   confirmLabel: string;
   cancelLabel?: string;
   variant?: 'danger' | 'default';
@@ -91,6 +93,7 @@ export default function ConfirmDialog({
   open,
   title,
   body,
+  children,
   confirmLabel,
   cancelLabel,
   variant = 'default',
@@ -218,6 +221,7 @@ export default function ConfirmDialog({
             <p>{body}</p>
           </div>
         )}
+        {children && <div className="confirm-dialog-children">{children}</div>}
         <div className="confirm-dialog-actions">
           {!alert && (
             <button

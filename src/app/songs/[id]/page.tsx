@@ -67,6 +67,38 @@ const LYRICS_SOURCE_KEYS: Record<string, string> = {
   ytmusic: 'lyricsSources.ytmusic',
 };
 
+/**
+ * Build the lyric preview block shown inside the low-confidence / plain-text
+ * sync confirmation dialogs so the user sees exactly what they are about to
+ * accept (source, confidence, line count and the first few lines).
+ */
+function SyncCandidatePreview({
+  sourceLabel,
+  confidence,
+  lines,
+  text,
+}: {
+  sourceLabel: string;
+  confidence: number;
+  lines: number;
+  text: string;
+}) {
+  const previewLines = text
+    .split('\n')
+    .map((line) => line.replace(/^\[\d{2}:\d{2}(?:\.\d{1,3})?\]\s*/g, '').trim())
+    .filter((line) => line && !/^\[[a-z]+:[^\]]*\]$/i.test(line));
+  const shown = previewLines.slice(0, 6);
+  return (
+    <div className="confirm-dialog-children">
+      <div className="preview-meta">
+        {sourceLabel}
+        {' · '}{confidence}% · {lines} 行
+      </div>
+      <div className="preview-lines">{shown.join('\n')}{previewLines.length > 6 ? '\n…' : ''}</div>
+    </div>
+  );
+}
+
 /** HSL saturation gives vibrant cover art a gentler ambient-light profile. */
 function colorSaturation({ r, g, b }: CoverColor) {
   const max = Math.max(r, g, b) / 255;
@@ -1146,7 +1178,18 @@ export default function SongViewPage() {
         cancelLabel={t('common.cancel')}
         onConfirm={data.confirmLowConfidenceSync}
         onCancel={data.cancelLowConfidenceSync}
-      />
+      >
+        {data.lowConfidenceSync && (
+          <SyncCandidatePreview
+            sourceLabel={LYRICS_SOURCE_KEYS[data.lowConfidenceSync.source]
+              ? t(LYRICS_SOURCE_KEYS[data.lowConfidenceSync.source])
+              : data.lowConfidenceSync.source}
+            confidence={data.lowConfidenceSync.confidence}
+            lines={data.lowConfidenceSync.lines}
+            text={data.lowConfidenceSync.lrc}
+          />
+        )}
+      </ConfirmDialog>
       <ConfirmDialog
         open={!!data.plainHitSync}
         title={t('song.plainHitTitle')}
@@ -1167,7 +1210,18 @@ export default function SongViewPage() {
         cancelLabel={t('common.cancel')}
         onConfirm={data.confirmPlainSync}
         onCancel={data.cancelPlainSync}
-      />
+      >
+        {data.plainHitSync && (
+          <SyncCandidatePreview
+            sourceLabel={LYRICS_SOURCE_KEYS[data.plainHitSync.source]
+              ? t(LYRICS_SOURCE_KEYS[data.plainHitSync.source])
+              : data.plainHitSync.source}
+            confidence={data.plainHitSync.confidence}
+            lines={data.plainHitSync.plain.split('\n').filter((l: string) => l.trim()).length}
+            text={data.plainHitSync.plain}
+          />
+        )}
+      </ConfirmDialog>
     </div>
   );
 }

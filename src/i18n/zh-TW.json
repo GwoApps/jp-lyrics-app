@@ -136,6 +136,7 @@
     "syncLowConfidenceBody": "沒有找到精確匹配的歌詞，以下結果可能不是原曲。確認使用它覆蓋目前歌詞嗎？歌詞文字未變化時會保留注音與翻譯。{matched}",
     "syncLowConfidenceMatched": "\n\n實際命中的歌曲：「{matchedTitle}」/ {matchedArtist}。{ambiguous}\n可在 {matchedLink} 核對。",
     "syncLowConfidenceConfirm": "仍要使用",
+    "candidateExpired": "預覽已過期或歌曲已變更 — 請重新同步以查看最新候選。",
     "plainHitTitle": "已取得純文字歌詞（無時間軸）",
     "plainHitBody": "從 {source} 取得的是純文字歌詞，沒有時間軸。確認用純文字覆蓋目前歌詞嗎？覆蓋後現有時間軸會被清空，歌詞文字未變化時會保留注音與翻譯。{matched}",
     "plainHitConfirm": "仍要覆蓋",

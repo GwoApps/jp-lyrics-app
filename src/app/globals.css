@@ -340,6 +340,14 @@ textarea {
 .confirm-dialog-body { font-size: 13px; line-height: 1.75; color: var(--muted-foreground); margin-bottom: 20px; }
 .confirm-dialog-body p { margin-bottom: 8px; white-space: pre-line; }
 .confirm-dialog-body p:last-child { margin-bottom: 0; }
+.confirm-dialog-children {
+  margin-bottom: 16px; padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--muted);
+  font-size: 12px; line-height: 1.7; color: var(--muted-foreground);
+  max-height: 180px; overflow-y: auto; white-space: pre-wrap;
+}
+.confirm-dialog-children .preview-meta { font-weight: 600; color: var(--foreground); margin-bottom: 6px; }
+.confirm-dialog-children .preview-lines { opacity: 0.85; }
 .confirm-dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .confirm-dialog-btn {
   padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 500;

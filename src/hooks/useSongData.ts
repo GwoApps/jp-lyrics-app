@@ -169,10 +169,10 @@ export interface UseSongDataReturn {
   toast: ToastState | null;
   allSongs: { id: string; title: string; artist: string; spotify_track_id?: string | null; created_by: string; is_public: number }[];
   handleSync: () => Promise<void>;
-  lowConfidenceSync: { source: string; confidence: number; lines: number; lrc: string; match?: ImportReviewState['match'] } | null;
+  lowConfidenceSync: { source: string; confidence: number; lines: number; lrc: string; candidate: string; match?: ImportReviewState['match'] } | null;
   confirmLowConfidenceSync: () => void;
   cancelLowConfidenceSync: () => void;
-  plainHitSync: { source: string; confidence: number; plain: string; match?: ImportReviewState['match'] } | null;
+  plainHitSync: { source: string; confidence: number; plain: string; candidate: string; match?: ImportReviewState['match'] } | null;
   confirmPlainSync: () => void;
   cancelPlainSync: () => void;
   handleDelete: () => void;
@@ -250,6 +250,7 @@ export function useSongData(id: string): UseSongDataReturn {
     confidence: number;
     lines: number;
     lrc: string;
+    candidate: string;
     match?: ImportReviewState['match'];
   } | null>(null);
   // Pending plain-text sync result (no LRC timeline) waiting for explicit user
@@ -258,6 +259,7 @@ export function useSongData(id: string): UseSongDataReturn {
     source: string;
     confidence: number;
     plain: string;
+    candidate: string;
     match?: ImportReviewState['match'];
   } | null>(null);
   const [allSongs, setAllSongs] = useState<{ id: string; title: string; artist: string; spotify_track_id?: string | null; created_by: string; is_public: number }[]>([]);
@@ -599,6 +601,7 @@ export function useSongData(id: string): UseSongDataReturn {
           confidence: data.confidence,
           lines: data.lines,
           lrc: data.lrc,
+          candidate: data.candidate,
           match: data.match,
         });
         return;
@@ -610,6 +613,7 @@ export function useSongData(id: string): UseSongDataReturn {
           source: data.source,
           confidence: data.confidence,
           plain: data.plain,
+          candidate: data.candidate,
           match: data.match,
         });
         return;
@@ -647,20 +651,80 @@ export function useSongData(id: string): UseSongDataReturn {
 
   const handleSync = useCallback(() => runSync(false), [runSync]);
 
-  const confirmLowConfidenceSync = useCallback(() => {
+  // Confirm a low-confidence candidate by echoing back the signed token the
+  // server issued during the preview. The server writes EXACTLY the reviewed
+  // content — it does not re-fetch, so a changing upstream can never swap in a
+  // different candidate after the user confirmed (fixes the TOCTOU).
+  const confirmLowConfidenceSync = useCallback(async () => {
+    if (!lowConfidenceSync?.candidate) return;
+    const token = lowConfidenceSync.candidate;
     setLowConfidenceSync(null);
-    void runSync(true);
-  }, [runSync]);
+    setSyncing(true);
+    try {
+      const res = await fetch(`/api/songs/${id}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidate: token }),
+      });
+      const data = await res.json();
+      if (res.status === 409 && (data.error === 'candidate_expired' || data.error === 'candidate_invalid' || data.error === 'stale_source')) {
+        setImportAlert({ message: t('song.candidateExpired') });
+        return;
+      }
+      if (data.synced) {
+        await applySyncResult(data);
+      } else {
+        setImportAlert({ message: t('song.syncNotFound') });
+      }
+    } catch {
+      setImportAlert({ message: t('song.networkErrorAlert') });
+    } finally {
+      setSyncing(false);
+    }
+  }, [id, t, lowConfidenceSync, applySyncResult]);
 
   const cancelLowConfidenceSync = useCallback(() => setLowConfidenceSync(null), []);
 
-  // Re-run sync with the plain-text overwrite confirmed. The server writes the
-  // plain lyrics and clears the timeline (LRC) — the user has explicitly accepted
-  // losing the old timed lyrics in exchange for the newly fetched plain text.
-  const confirmPlainSync = useCallback(() => {
+  // Confirm a plain-text candidate via its signed token (same guarantee as the
+  // low-confidence flow — the server writes the reviewed content atomically).
+  const confirmPlainSync = useCallback(async () => {
+    if (!plainHitSync?.candidate) return;
+    const token = plainHitSync.candidate;
     setPlainHitSync(null);
-    void runSync(true, true);
-  }, [runSync]);
+    setSyncing(true);
+    try {
+      const res = await fetch(`/api/songs/${id}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidate: token }),
+      });
+      const data = await res.json();
+      if (res.status === 409 && (data.error === 'candidate_expired' || data.error === 'candidate_invalid' || data.error === 'stale_source')) {
+        setImportAlert({ message: t('song.candidateExpired') });
+        return;
+      }
+      // Confirmed plain-text overwrite succeeded (no timeline remains).
+      if (data.plainUpdated) {
+        const updated = await fetch(`/api/songs/${id}`, { cache: 'no-store' });
+        if (updated.ok) setSong(await updated.json());
+        setSyncLines([]);
+        const sourceKey = LYRICS_SOURCE_KEYS[data.source];
+        showToast('success', t('song.plainUpdated', {
+          source: sourceKey ? t(sourceKey) : data.source,
+        }));
+        return;
+      }
+      if (data.synced) {
+        await applySyncResult(data);
+      } else {
+        setImportAlert({ message: t('song.syncNotFound') });
+      }
+    } catch {
+      setImportAlert({ message: t('song.networkErrorAlert') });
+    } finally {
+      setSyncing(false);
+    }
+  }, [id, t, plainHitSync, applySyncResult, showToast]);
 
   const cancelPlainSync = useCallback(() => setPlainHitSync(null), []);
 
