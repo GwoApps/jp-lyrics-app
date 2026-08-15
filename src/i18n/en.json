@@ -142,6 +142,7 @@
     "plainHitMatched": "\n\nMatched song: “{matchedTitle}” by {matchedArtist}.{ambiguous}\nVerify it at {matchedLink}.",
     "plainUpdated": "Updated to plain-text lyrics ({source}, no timeline)",
     "syncNotFoundManual": "Lyrics not found — please paste manually",
+    "syncStale": "The lyrics were modified in another window. Please refresh and try again.",
     "networkError": "Network error",
     "networkErrorAlert": "A network error occurred",
     "noLyricsParen": "(No lyrics)",

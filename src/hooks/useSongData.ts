@@ -183,7 +183,7 @@ export interface UseSongDataReturn {
     pipWindowRef: React.MutableRefObject<Window | null>,
     timestamps?: (number | null)[],
   ) => Promise<void>;
-  showToast: (type: 'success' | 'error', msg: string) => void;
+  showToast: (type: 'success' | 'error' | 'info', msg: string, actionLabel?: string, onAction?: () => void) => void;
 }
 
 export function useSongData(id: string): UseSongDataReturn {
@@ -560,7 +560,15 @@ export function useSongData(id: string): UseSongDataReturn {
       const res = await fetch(`/api/songs/${id}/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ force, confirmPlain }),
+        body: JSON.stringify({
+          force,
+          confirmPlain,
+          // Snapshot of the lyrics this request is based on. The server
+          // refuses (409 stale_source) when they changed in another tab
+          // while the fetch was in flight — a slow sync must never silently
+          // clobber newer lyrics (and wipe furigana/translation with them).
+          source_lyrics: song?.lyrics_raw ?? '',
+        }),
       });
       const data = await res.json();
       // Fuzzy search below the confidence threshold: the server keeps the
@@ -605,18 +613,25 @@ export function useSongData(id: string): UseSongDataReturn {
           lyrics_not_found: 'apiErrors.lyricsNotFound',
           forbidden: 'apiErrors.forbidden',
           login_required: 'apiErrors.loginRequired',
+          stale_source: 'song.syncStale',
         };
         const message = data.error && errorKey[data.error]
           ? t(errorKey[data.error])
           : t('song.syncNotFound');
         setImportAlert({ message });
+        if (data.error === 'stale_source') {
+          // Another tab saved different lyrics while this sync was in flight —
+          // the server wrote nothing. Re-fetch so the user sees the current
+          // lyrics instead of their stale baseline.
+          void fetchSong().then(applySongResult);
+        }
       }
     } catch {
       setImportAlert({ message: t('song.networkErrorAlert') });
     } finally {
       setSyncing(false);
     }
-  }, [id, t, showToast, applySyncResult]);
+  }, [id, t, showToast, applySyncResult, song, fetchSong, applySongResult]);
 
   const handleSync = useCallback(() => runSync(false), [runSync]);
 

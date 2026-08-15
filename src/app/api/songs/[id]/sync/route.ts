@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDB, schema, sql, eq } from '@/lib/db';
+import { getDB, schema, eq } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { fetchLyrics } from '@/lib/lyrics-fetcher';
 import { getLrcTextLines, parseLrc } from '@/lib/lrc';
 import { classifyLyricsHit } from '@/lib/lyrics-hit';
 import { getSpotifyTrack, searchSpotifyTrack } from '@/lib/spotify';
+import { applySyncWrite, resolveSyncBaseline } from '@/lib/sync-write';
 
 export async function POST(
   request: NextRequest,
@@ -35,6 +36,26 @@ export async function POST(
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
+  const { force, confirmPlain, source_lyrics } = await request.json().catch(() => ({})) as {
+    force?: boolean;
+    confirmPlain?: boolean;
+    source_lyrics?: unknown;
+  };
+
+  // The client submits the `lyrics_raw` snapshot its sync request was based
+  // on (same contract as the furigana / translation / timeline saves). When
+  // the snapshot is missing the request is malformed; when it no longer
+  // matches the stored lyrics, another tab/session already rewrote the song
+  // and syncing from this stale baseline would silently clobber the newer
+  // lyrics AND wipe its derived caches. Fail fast BEFORE spending a fetch.
+  const baseline = resolveSyncBaseline(source_lyrics, song.lyricsRaw);
+  if (!baseline.ok) {
+    return NextResponse.json({ error: baseline.error }, {
+      status: baseline.error === 'missing_source_lyrics' ? 400 : 409,
+    });
+  }
+  const { sourceLyrics } = baseline;
+
   const spotifyTrack = (song.spotifyTrackId ? await getSpotifyTrack(user.email, song.spotifyTrackId) : null)
     || await searchSpotifyTrack(user.email, song.title, song.artist);
   const spotifyCanonical = spotifyTrack
@@ -50,11 +71,6 @@ export async function POST(
   if (!result) {
     return NextResponse.json({ synced: false, error: 'lyrics_not_found' }, { status: 404 });
   }
-
-  const { force, confirmPlain } = await request.json().catch(() => ({})) as {
-    force?: boolean;
-    confirmPlain?: boolean;
-  };
 
   // Plain-text hit (no LRC timeline) — any such candidate would destroy
   // existing lyrics (timed or manually entered), so it needs explicit
@@ -121,35 +137,47 @@ export async function POST(
   const contentChanged = getLrcTextLines(result.plain).join('\n')
     !== getLrcTextLines(song.lyricsRaw).join('\n');
 
-  await db.update(schema.songs).set({
-    lyricsRaw: result.plain,
-    lyricsSynced: result.synced,
-    lyricsSource: source,
-    lyricsConfidence: confidence,
-    // Everything written through this route was either accepted outright or
-    // explicitly confirmed by the user — never leave the review flag set.
-    lyricsNeedsReview: 0,
-    lyricsFetchedAt: new Date().toISOString(),
-    ...(contentChanged ? {
-      lyricsFurigana: '[]',
-      lyricsTranslation: '[]',
-      lyricsTranslationReasoning: null,
-      lyricsGlossary: null,
-      // The Cantonese-detection banner only applies to the kana scheme; when the
-      // lyrics changed under it, re-prompt the user (same as the PUT route).
-      readingSchemeConfirmed: song.readingScheme === 'ja-kana' ? 0 : undefined,
-    } : {}),
-    ...(spotifyTrack ? {
-      spotifyTrackId: spotifyTrack.id,
-      spotifyUri: spotifyTrack.uri,
-      spotifyAlbum: spotifyTrack.album,
-      spotifyDurationMs: spotifyTrack.durationMs,
-      spotifyCanonicalTitle: spotifyTrack.title,
-      spotifyCanonicalArtist: spotifyTrack.artist,
-      coverUrl: spotifyTrack.coverUrl,
-    } : {}),
-    updatedAt: sql`(datetime('now', 'localtime'))`,
-  }).where(eq(schema.songs.id, id));
+  // CAS write: the UPDATE only matches while `lyrics_raw` still equals the
+  // snapshot this request was based on. If another tab/session edited the
+  // lyrics while the fetch was in flight, no row matches and NOTHING is
+  // persisted (no silent overwrite, no cache wipe) — same stale-source
+  // contract as the translation / furigana / timeline save paths.
+  const write = await applySyncWrite(db, {
+    id,
+    sourceLyrics,
+    patch: {
+      lyricsRaw: result.plain,
+      lyricsSynced: result.synced,
+      lyricsSource: source,
+      lyricsConfidence: confidence,
+      // Everything written through this route was either accepted outright or
+      // explicitly confirmed by the user — never leave the review flag set.
+      lyricsNeedsReview: 0,
+      lyricsFetchedAt: new Date().toISOString(),
+      ...(contentChanged ? {
+        lyricsFurigana: '[]',
+        lyricsTranslation: '[]',
+        lyricsTranslationReasoning: null,
+        lyricsGlossary: null,
+        // The Cantonese-detection banner only applies to the kana scheme; when the
+        // lyrics changed under it, re-prompt the user (same as the PUT route).
+        readingSchemeConfirmed: song.readingScheme === 'ja-kana' ? 0 : undefined,
+      } : {}),
+      ...(spotifyTrack ? {
+        spotifyTrackId: spotifyTrack.id,
+        spotifyUri: spotifyTrack.uri,
+        spotifyAlbum: spotifyTrack.album,
+        spotifyDurationMs: spotifyTrack.durationMs,
+        spotifyCanonicalTitle: spotifyTrack.title,
+        spotifyCanonicalArtist: spotifyTrack.artist,
+        coverUrl: spotifyTrack.coverUrl,
+      } : {}),
+    },
+  });
+
+  if (!write.ok) {
+    return NextResponse.json({ error: 'stale_source' }, { status: 409 });
+  }
 
   const parsed = result.synced ? parseLrc(result.synced) : [];
   return NextResponse.json({
