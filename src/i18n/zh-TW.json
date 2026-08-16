@@ -701,7 +701,12 @@
     "unsavedConfirm": "有未儲存的修改，確定離開？",
     "loginRequired": "請先連接 Spotify 以編輯翻譯",
     "forbidden": "沒有權限修改這首歌詞",
-    "staleSource": "歌詞已在其他頁面更新，請重新整理後重新校正"
+    "staleSource": "歌詞已在其他頁面更新，請重新整理後重新校正",
+    "fillMissing": "AI 補齊缺失行 ({count})",
+    "fillMissingDone": "已補齊 {count} 行翻譯",
+    "fillMissingEmpty": "沒有缺失的翻譯行",
+    "retranslateLine": "重新翻譯此行",
+    "retranslateLineDone": "已重新翻譯此行"
   },
   "settings": {
     "title": "個人設定",

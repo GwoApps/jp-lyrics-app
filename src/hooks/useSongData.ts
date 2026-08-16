@@ -186,7 +186,7 @@ export interface UseSongDataReturn {
     pipWindowRef: React.MutableRefObject<Window | null>,
     timestamps?: (number | null)[],
   ) => Promise<void>;
-  showToast: (type: 'success' | 'error', msg: string) => void;
+  showToast: (type: 'success' | 'error' | 'info', msg: string, actionLabel?: string, onAction?: () => void) => void;
 }
 
 export function useSongData(id: string): UseSongDataReturn {

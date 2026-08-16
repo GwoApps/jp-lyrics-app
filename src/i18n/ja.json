@@ -701,7 +701,12 @@
     "unsavedConfirm": "未保存の変更があります。離れますか？",
     "loginRequired": "翻訳の編集には Spotify への接続が必要です",
     "forbidden": "この歌詞を編集する権限がありません",
-    "staleSource": "歌詞が別のページで更新されました。再読み込みしてやり直してください"
+    "staleSource": "歌詞が別のページで更新されました。再読み込みしてやり直してください",
+    "fillMissing": "AI で欠落行を補完 ({count})",
+    "fillMissingDone": "{count} 行の翻訳を補完しました",
+    "fillMissingEmpty": "欠落している翻訳行はありません",
+    "retranslateLine": "この行を再翻訳",
+    "retranslateLineDone": "この行を再翻訳しました"
   },
   "settings": {
     "title": "個人設定",

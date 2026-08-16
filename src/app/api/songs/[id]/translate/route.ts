@@ -20,6 +20,8 @@ const SSE_HEADERS = {
 //   - Without `start`: translate the whole song (cache hit short-circuits unless `force`).
 //   - With `start`: translate only lines [start, start + count); the result is MERGED into the
 //     stored cache so partial translations survive failures (resume/continue support).
+//     Combined with `force`, cache reuse inside the slice is disabled so the requested lines
+//     are re-translated even when a previous translation is stored (targeted re-translate).
 //   - With `stream: true`: responds text/event-stream (SSE) — the provider's
 //     reasoning/translation deltas are forwarded live as `reasoning` and
 //     `translation` events, then a final `done` event carries the aligned
@@ -107,7 +109,8 @@ export async function POST(
   // the whole-song request re-translates — one request, full-lyrics context.
   const start = Math.max(0, body.start ?? 0);
   const isSlice = body.start !== undefined;
-  if (!isSlice && !body.force && cacheLangMatches && existing.lyricsTranslation) {
+  const force = body.force === true;
+  if (!isSlice && !force && cacheLangMatches && existing.lyricsTranslation) {
     try {
       const cached = JSON.parse(existing.lyricsTranslation);
       if (Array.isArray(cached) && cached.length === lines.length
@@ -163,7 +166,10 @@ export async function POST(
       return;
     }
     const first = firstOccurrence.get(key)!;
-    const cachedTr = first < cache.length ? cache[first] : '';
+    // `force` (whole-song or slice) disables cache reuse: the requested lines
+    // are re-translated even when a previous translation is stored. The editor
+    // uses slice+force for targeted re-translates of specific lines.
+    const cachedTr = !force && first < cache.length ? cache[first] : '';
     if (cachedTr) {
       resolved[i] = cachedTr; // already translated (this line or its duplicate)
       return;
@@ -172,11 +178,11 @@ export async function POST(
       needTranslation.push(i); // first occurrence within this batch → translate
     } else if (first >= start && first < start + slice.length) {
       // Duplicate of a line earlier in this same batch → copied after translation.
-    } else if (first < start && first < cache.length && cache[first] !== '') {
+    } else if (first < start && !force && first < cache.length && cache[first] !== '') {
       resolved[i] = cache[first]; // duplicate of an earlier cached line
     } else {
-      // First occurrence is outside this batch and untranslated (partial
-      // translation edge case) — translate this copy as the representative.
+      // First occurrence is outside this batch and untranslated (or force
+      // disabled the cache) — translate this copy as the representative.
       needTranslation.push(i);
     }
   });
@@ -256,7 +262,11 @@ export async function POST(
       const key = line.trim();
       if (!key) { resolved[i] = ''; return; }
       const first = firstOccurrence.get(key)!;
-      const fromBatch = bySliceIndex.get(first - start);
+      // Prefer the batch's translation for the line's first occurrence; for a
+      // line translated as a representative (its first occurrence lies outside
+      // this batch — e.g. a forced re-translate) fall back to this slice
+      // index's own entry before consulting the stale cache.
+      const fromBatch = bySliceIndex.get(first - start) ?? bySliceIndex.get(i);
       resolved[i] = fromBatch ?? (first < cache.length ? cache[first] : '');
     });
     const finalSlice = resolved.map((v) => v ?? '');
@@ -436,10 +446,16 @@ export async function POST(
                 const key = line.trim();
                 if (!key) { resolved[i] = ''; return; }
                 const first = firstOccurrence.get(key)!;
+                // Same representative fallback as expandAndMerge: a line
+                // translated for this batch whose first occurrence lies
+                // outside it must read its own pending entry, not the cache.
                 const fromPartial = pending.indexOf(first - start);
+                const ownPartial = pending.indexOf(i);
                 resolved[i] = fromPartial >= 0
                   ? (partial[fromPartial] ?? '')
-                  : (first < cache.length ? cache[first] : '');
+                  : ownPartial >= 0
+                    ? (partial[ownPartial] ?? '')
+                    : (first < cache.length ? cache[first] : '');
               });
               const result = await mergeSliceIntoCache(db, {
                 id,

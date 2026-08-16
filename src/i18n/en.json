@@ -701,7 +701,12 @@
     "unsavedConfirm": "Discard unsaved changes?",
     "loginRequired": "Connect Spotify to edit translations",
     "forbidden": "No permission to edit this song",
-    "staleSource": "Lyrics were updated elsewhere, please reload and retry"
+    "staleSource": "Lyrics were updated elsewhere, please reload and retry",
+    "fillMissing": "AI fill missing ({count})",
+    "fillMissingDone": "Filled {count} lines with AI",
+    "fillMissingEmpty": "No missing translation lines",
+    "retranslateLine": "Re-translate this line",
+    "retranslateLineDone": "This line was re-translated"
   },
   "settings": {
     "title": "Personal Settings",
