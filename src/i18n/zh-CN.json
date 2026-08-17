@@ -143,6 +143,7 @@
     "plainHitMatched": "\n\n实际命中的歌曲：“{matchedTitle}” / {matchedArtist}。{ambiguous}\n可在 {matchedLink} 核对。",
     "plainUpdated": "已更新为纯文本歌词（{source}，无时间轴）",
     "syncNotFoundManual": "找不到歌词 — 请手动粘贴",
+    "syncStale": "歌词已在其他窗口被修改，请刷新后重试",
     "networkError": "网络错误",
     "networkErrorAlert": "发生网络错误",
     "noLyricsParen": "（无歌词）",

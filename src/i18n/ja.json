@@ -143,6 +143,7 @@
     "plainHitMatched": "\n\n一致した曲：「{matchedTitle}」/ {matchedArtist}。{ambiguous}\n{matchedLink} で確認してください。",
     "plainUpdated": "歌詞を更新しました（{source}、タイムラインなし）",
     "syncNotFoundManual": "歌詞が見つかりません — 手動貼付をご利用ください",
+    "syncStale": "歌詞が別のウィンドウで変更されました。再読み込みしてからお試しください",
     "networkError": "通信エラー",
     "networkErrorAlert": "通信エラーが発生しました",
     "noLyricsParen": "（歌詞なし）",

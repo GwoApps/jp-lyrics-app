@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDB, schema, sql, eq } from '@/lib/db';
+import { getDB, schema, eq } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { fetchLyrics } from '@/lib/lyrics-fetcher';
 import { getLrcTextLines, parseLrc } from '@/lib/lrc';
@@ -7,6 +7,7 @@ import { classifyLyricsHit } from '@/lib/lyrics-hit';
 import { getSpotifyTrack, searchSpotifyTrack } from '@/lib/spotify';
 import { signCandidate, verifyCandidate } from '@/lib/candidate-token';
 import type { CandidateTokenPayload } from '@/lib/candidate-token';
+import { applySyncWrite, resolveSyncBaseline } from '@/lib/sync-write';
 
 export async function POST(
   request: NextRequest,
@@ -42,6 +43,7 @@ export async function POST(
     force?: boolean;
     confirmPlain?: boolean;
     candidate?: string;
+    source_lyrics?: unknown;
   };
 
   // === Candidate-confirmation fast path ===
@@ -82,11 +84,31 @@ export async function POST(
     // the stored `lyricsRaw` is still the pre-preview content. The `updatedAt`
     // bound in the token is the authoritative guard against a concurrent edit:
     // if any edit (lyrics or metadata) landed after the preview, `updatedAt`
-    // no longer matches and the candidate is rejected as stale.
-    return persistCandidate(db, schema, eq, sql, id, song, candidate);
+    // no longer matches and the candidate is rejected as stale. The write below
+    // additionally runs as a compare-and-set on `lyrics_raw` (issue #120), so a
+    // lyrics edit that lands between this check and the write can never be
+    // silently clobbered either.
+    return persistCandidate(db, id, song, candidate, {
+      sourceLyrics: song.lyricsRaw,
+    });
   }
 
   // === Full (re)sync path — only used for a fresh preview ===
+
+  // The client submits the `lyrics_raw` snapshot its sync request was based on
+  // (same contract as the furigana / translation / timeline saves). When the
+  // snapshot is missing the request is malformed; when it no longer matches the
+  // stored lyrics, another tab/session already rewrote the song and syncing
+  // from this stale baseline would silently clobber the newer lyrics AND wipe
+  // its derived caches. Fail fast BEFORE spending a fetch (issue #120).
+  const baseline = resolveSyncBaseline(body.source_lyrics, song.lyricsRaw);
+  if (!baseline.ok) {
+    return NextResponse.json({ synced: false, error: baseline.error }, {
+      status: baseline.error === 'missing_source_lyrics' ? 400 : 409,
+    });
+  }
+  const { sourceLyrics } = baseline;
+
   const spotifyTrack = (song.spotifyTrackId ? await getSpotifyTrack(user.email, song.spotifyTrackId) : null)
     || await searchSpotifyTrack(user.email, song.title, song.artist);
   const spotifyCanonical = spotifyTrack
@@ -180,8 +202,10 @@ export async function POST(
   }
 
   // Direct "sync with override" call (force / confirmPlain without a token) —
-  // writes the freshly fetched candidate.
-  return persistCandidate(db, schema, eq, sql, id, song, {
+  // writes the freshly fetched candidate. The write runs under the
+  // `source_lyrics` compare-and-set so a lyrics edit landing mid-flight can
+  // never be silently clobbered (issue #120).
+  return persistCandidate(db, id, song, {
     song: id,
     source,
     confidence,
@@ -190,6 +214,7 @@ export async function POST(
     updatedAt: song.updatedAt,
   }, {
     spotifyTrack,
+    sourceLyrics,
   });
 }
 
@@ -197,19 +222,25 @@ export async function POST(
  * Atomically write the reviewed candidate. When called from the token path the
  * candidate (and thus the exact content) comes from the validated token; when
  * called from the fresh-sync path the candidate comes from the current request.
+ *
+ * Both paths persist under a compare-and-set on `lyrics_raw` (issue #120): the
+ * UPDATE only matches while the stored lyrics still equal the snapshot this
+ * write was based on. If another tab/session edited the lyrics meanwhile, no
+ * row matches and NOTHING is persisted (no silent overwrite, no cache wipe) —
+ * the same stale-source contract as the translation / furigana / timeline
+ * save paths. For the token path the snapshot is the pre-preview `lyricsRaw`;
+ * for the fresh path it is the request's `source_lyrics`.
  */
-/* eslint-disable @typescript-eslint/no-explicit-any -- the Drizzle DB, schema,
-   eq/sql helpers and the row object are typed `any` by design (see lib/db.ts). */
+/* eslint-disable @typescript-eslint/no-explicit-any -- the Drizzle DB, the
+   row object and the fetched track are typed `any` by design (see lib/db.ts). */
 async function persistCandidate(
   db: any,
-  schema: any,
-  eq: any,
-  sql: any,
   id: string,
   song: any,
   candidate: CandidateTokenPayload,
   fresh?: {
-    spotifyTrack: any | null;
+    spotifyTrack?: any | null;
+    sourceLyrics: string;
   },
 ) {
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -228,35 +259,46 @@ async function persistCandidate(
   const contentChanged = getLrcTextLines(plain).join('\n')
     !== getLrcTextLines(song.lyricsRaw).join('\n');
 
-  await db.update(schema.songs).set({
-    lyricsRaw: plain,
-    lyricsSynced: synced,
-    lyricsSource: candidate.source,
-    lyricsConfidence: candidate.confidence,
-    // Everything written through this route was either accepted outright or
-    // explicitly confirmed by the user — never leave the review flag set.
-    lyricsNeedsReview: 0,
-    lyricsFetchedAt: new Date().toISOString(),
-    ...(contentChanged ? {
-      lyricsFurigana: '[]',
-      lyricsTranslation: '[]',
-      lyricsTranslationReasoning: null,
-      lyricsGlossary: null,
-      // The Cantonese-detection banner only applies to the kana scheme; when the
-      // lyrics changed under it, re-prompt the user (same as the PUT route).
-      readingSchemeConfirmed: song.readingScheme === 'ja-kana' ? 0 : undefined,
-    } : {}),
-    ...(fresh?.spotifyTrack ? {
-      spotifyTrackId: fresh.spotifyTrack.id,
-      spotifyUri: fresh.spotifyTrack.uri,
-      spotifyAlbum: fresh.spotifyTrack.album,
-      spotifyDurationMs: fresh.spotifyTrack.durationMs,
-      spotifyCanonicalTitle: fresh.spotifyTrack.title,
-      spotifyCanonicalArtist: fresh.spotifyTrack.artist,
-      coverUrl: fresh.spotifyTrack.coverUrl,
-    } : {}),
-    updatedAt: sql`(datetime('now', 'localtime'))`,
-  }).where(eq(schema.songs.id, id));
+  // CAS write: the UPDATE only matches while `lyrics_raw` still equals the
+  // snapshot this request was based on. If another tab/session edited the
+  // lyrics while the fetch/confirmation was in flight, no row matches and
+  // NOTHING is persisted (no silent overwrite, no cache wipe).
+  const write = await applySyncWrite(db, {
+    id,
+    sourceLyrics: fresh?.sourceLyrics ?? song.lyricsRaw,
+    patch: {
+      lyricsRaw: plain,
+      lyricsSynced: synced,
+      lyricsSource: candidate.source,
+      lyricsConfidence: candidate.confidence,
+      // Everything written through this route was either accepted outright or
+      // explicitly confirmed by the user — never leave the review flag set.
+      lyricsNeedsReview: 0,
+      lyricsFetchedAt: new Date().toISOString(),
+      ...(contentChanged ? {
+        lyricsFurigana: '[]',
+        lyricsTranslation: '[]',
+        lyricsTranslationReasoning: null,
+        lyricsGlossary: null,
+        // The Cantonese-detection banner only applies to the kana scheme; when the
+        // lyrics changed under it, re-prompt the user (same as the PUT route).
+        readingSchemeConfirmed: song.readingScheme === 'ja-kana' ? 0 : undefined,
+      } : {}),
+      ...(fresh?.spotifyTrack ? {
+        spotifyTrackId: fresh.spotifyTrack.id,
+        spotifyUri: fresh.spotifyTrack.uri,
+        spotifyAlbum: fresh.spotifyTrack.album,
+        spotifyDurationMs: fresh.spotifyTrack.durationMs,
+        spotifyCanonicalTitle: fresh.spotifyTrack.title,
+        spotifyCanonicalArtist: fresh.spotifyTrack.artist,
+        coverUrl: fresh.spotifyTrack.coverUrl,
+      } : {}),
+    },
+  });
+
+  if (!write.ok) {
+    return NextResponse.json({ synced: false, error: 'stale_source' }, { status: 409 });
+  }
 
   const parsed = synced ? parseLrc(synced) : [];
   return NextResponse.json({
