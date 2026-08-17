@@ -164,9 +164,9 @@ test('fetchFromLrclib returns a plain hit unchanged when duration agrees with Sp
   });
   try {
     const hit = await fetchFromLrclib('Idol', 'YOASOBI', { durationMs: 213_000, album: 'Idol' });
-    assert.equal(hit?.duration, 'match');
-    assert.equal(hit?.album, 'match');
-    assert.equal(hit?.result.synced, '[00:00.10]テスト');
+    assert.equal(hit.hit?.duration, 'match');
+    assert.equal(hit.hit?.album, 'match');
+    assert.equal(hit.hit?.result.synced, '[00:00.10]テスト');
   } finally {
     restore();
   }
@@ -186,7 +186,7 @@ test('fetchFromLrclib prefers an album-scoped hit when the bare exact duration c
   try {
     const hit = await fetchFromLrclib('Idol', 'YOASOBI', { durationMs: 213_000, album: 'Idol' });
     assert.equal(albumScopedCalled, true);
-    assert.equal(hit?.duration, 'match');
+    assert.equal(hit.hit?.duration, 'match');
   } finally {
     restore();
   }
@@ -204,7 +204,7 @@ test('fetchFromLrclib falls back to the album-scoped query when the bare exact 4
   try {
     const hit = await fetchFromLrclib('Idol', 'YOASOBI', { durationMs: 213_000, album: 'Idol' });
     assert.equal(albumScopedCalled, true);
-    assert.equal(hit?.duration, 'match');
+    assert.equal(hit.hit?.duration, 'match');
   } finally {
     restore();
   }
@@ -220,8 +220,8 @@ test('searchLrclib drops candidates whose duration clearly conflicts with Spotif
   try {
     // Spotify duration 213s — the 90s TV-size candidate must be dropped.
     const hit = await searchLrclib('Idol YOASOBI', 'Idol', 'YOASOBI', { durationMs: 213_000, album: 'Idol' });
-    assert.equal(hit?.duration, 'match');
-    assert.equal(hit?.album, 'match');
+    assert.equal(hit.hit?.duration, 'match');
+    assert.equal(hit.hit?.album, 'match');
   } finally {
     restore();
   }
@@ -237,8 +237,46 @@ test('searchLrclib keeps title+artist-only scoring when Spotify duration is unkn
   try {
     // No duration evidence → first candidate wins as before (old fallback).
     const hit = await searchLrclib('Idol YOASOBI', 'Idol', 'YOASOBI');
-    assert.equal(hit?.duration, 'unknown');
-    assert.equal(hit?.result.synced, '[00:00.10]テスト');
+    assert.equal(hit.hit?.duration, 'unknown');
+    assert.equal(hit.hit?.result.synced, '[00:00.10]テスト');
+  } finally {
+    restore();
+  }
+});
+
+test('lrclib 429 is retried once then surfaced as rateLimited, not a silent miss', async () => {
+  let attempts = 0;
+  const restore = mockFetch(() => {
+    attempts += 1;
+    // First two requests 429 (with Retry-After), then a successful hit.
+    if (attempts <= 2) {
+      return new Response('too many requests', { status: 429, headers: { 'Retry-After': '1' } });
+    }
+    return new Response(JSON.stringify(lrclibTrack({})), { status: 200 });
+  });
+  try {
+    // The bare exact query 429s twice (retry then exhausted) → rateLimited.
+    const hit = await fetchFromLrclib('Idol', 'YOASOBI');
+    assert.equal(hit.hit, null);
+    assert.equal(hit.rateLimited, true);
+  } finally {
+    restore();
+  }
+});
+
+test('lrclib 429 retry succeeds after Retry-After and returns the hit', async () => {
+  let attempts = 0;
+  const restore = mockFetch(() => {
+    attempts += 1;
+    if (attempts === 1) {
+      return new Response('too many requests', { status: 429, headers: { 'Retry-After': '1' } });
+    }
+    return new Response(JSON.stringify(lrclibTrack({})), { status: 200 });
+  });
+  try {
+    const hit = await fetchFromLrclib('Idol', 'YOASOBI');
+    assert.equal(hit.rateLimited, false);
+    assert.equal(hit.hit?.duration, 'unknown');
   } finally {
     restore();
   }

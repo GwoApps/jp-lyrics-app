@@ -50,6 +50,13 @@ export interface LyricsFetchResult {
     /** True when the top candidates were too close to be confident. */
     ambiguous?: boolean;
   };
+  /**
+   * True when the preferred lrclib source was rate-limited (HTTP 429 even
+   * after a retry). Set regardless of whether a later fallback source produced
+   * a result, so callers can tell "the exact-lyrics source is throttled, retry
+   * later" apart from "this song genuinely has no lyrics".
+   */
+  rateLimited?: boolean;
 }
 
 function fetchedResult(
@@ -133,6 +140,100 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs =
 }
 
 // ─── LRCLIB ──
+
+/**
+ * Lightweight in-process rate limiter for the LRCLIB public API.
+ *
+ * LRCLIB enforces ~50 requests/min per IP and answers excess with HTTP 429 +
+ * `Retry-After`. Playlist chunked imports can fire several LRCLIB requests in
+ * quick succession (each track may trigger an exact + album-scoped + fuzzy
+ * query), which would otherwise blow the quota instantly and silently degrade
+ * every later track to the plain-text sources. We enforce a small minimum
+ * spacing between requests so bursts are smoothed out while staying far below
+ * the per-IP ceiling.
+ */
+const LRCLIB_MIN_INTERVAL_MS = 1200;
+/** Extra safety margin between the app's self-imposed interval and LRCLIB's cap. */
+const LRCLIB_MIN_INTERVAL_FUZZ_MS = 300;
+
+let lrclibLastRequestAt = 0;
+
+/** Wait until `minIntervalMs` has elapsed since the previous LRCLIB request. */
+function throttleLrclib(minIntervalMs = LRCLIB_MIN_INTERVAL_MS + LRCLIB_MIN_INTERVAL_FUZZ_MS): Promise<void> {
+  const now = Date.now();
+  const elapsed = now - lrclibLastRequestAt;
+  if (elapsed >= minIntervalMs) {
+    lrclibLastRequestAt = now;
+    return Promise.resolve();
+  }
+  const wait = minIntervalMs - elapsed;
+  lrclibLastRequestAt = now + wait;
+  return new Promise((resolve) => setTimeout(resolve, wait));
+}
+
+/** Outcome of a single (possibly retried) LRCLIB request. */
+type LrclibRequestResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; rateLimited: boolean };
+
+/**
+ * Fetch a LRCLIB endpoint with HTTP 429 handling.
+ *
+ * On 429 it honours `Retry-After` (falling back to a short fixed backoff) and
+ * retries once; a second 429 marks the call as rate-limited instead of silently
+ * returning a "no lyrics" miss, so callers can surface a distinct error.
+ */
+async function lrclibFetch<T>(
+  url: string,
+  headers: Record<string, string>,
+  parse: (res: Response) => Promise<T>,
+  opts?: { notFoundMeansEmpty?: boolean },
+): Promise<LrclibRequestResult<T>> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await throttleLrclib();
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(url, { headers }, 15000);
+    } catch {
+      return { ok: false, rateLimited: false };
+    }
+
+    if (res.status === 429) {
+      const retryAfterRaw = res.headers.get('retry-after');
+      const retryAfter = retryAfterRaw ? Number(retryAfterRaw) : NaN;
+      // Honour a positive Retry-After (LRCLIB returns seconds); otherwise fall
+      // back to a fixed short backoff. Never wait longer than the caller will.
+      const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
+        ? Math.min(retryAfter * 1000, 5000)
+        : 1200;
+      if (attempt === 0) {
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue; // single retry
+      }
+      return { ok: false, rateLimited: true };
+    }
+
+    if (!res.ok) {
+      // For exact-match `/api/get`, a 404 is a legitimate "no lyrics for this
+      // track" and must NOT be treated as a failure — it just means the bare
+      // query found nothing and the caller should try the album-scoped query.
+      if (opts?.notFoundMeansEmpty && res.status === 404) {
+        try {
+          return { ok: true, data: await parse(res) };
+        } catch {
+          return { ok: true, data: null as unknown as T };
+        }
+      }
+      return { ok: false, rateLimited: false };
+    }
+    try {
+      return { ok: true, data: await parse(res) };
+    } catch {
+      return { ok: false, rateLimited: false };
+    }
+  }
+  return { ok: false, rateLimited: false };
+}
 
 /**
  * Spotify-side evidence (album + duration) used to disambiguate recordings
@@ -219,18 +320,22 @@ function toLrclibHit(track: LrclibTrack, evidence?: LrclibEvidence): LrclibHit |
   };
 }
 
-async function lrclibGet(params: URLSearchParams): Promise<LrclibTrack | null> {
+async function lrclibGet(params: URLSearchParams): Promise<LrclibRequestResult<LrclibTrack | null>> {
   const headers = { 'User-Agent': 'jp-lyrics-app/1.0' };
-  try {
-    const res = await fetchWithTimeout(`https://lrclib.net/api/get?${params}`, { headers });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && typeof data === 'object' && data.syncedLyrics) {
-        return data as LrclibTrack;
-      }
+  return lrclibFetch(`https://lrclib.net/api/get?${params}`, headers, async (res) => {
+    const data = await res.json();
+    if (data && typeof data === 'object' && data.syncedLyrics) {
+      return data as LrclibTrack;
     }
-  } catch { /* */ }
-  return null;
+    return null;
+  }, { notFoundMeansEmpty: true });
+}
+
+/** A lrclib lookup: the matched hit (or null) plus whether the source was rate-limited. */
+interface LrclibFetchOutcome {
+  hit: LrclibHit | null;
+  /** True when lrclib answered HTTP 429 even after a single retry. */
+  rateLimited: boolean;
 }
 
 /**
@@ -250,9 +355,9 @@ export async function fetchFromLrclib(
   title: string,
   artist: string,
   evidence?: LrclibEvidence,
-): Promise<LrclibHit | null> {
-  const albumScoped = (): Promise<LrclibTrack | null> => {
-    if (!evidence?.album) return Promise.resolve(null);
+): Promise<LrclibFetchOutcome> {
+  const albumScoped = (): Promise<LrclibRequestResult<LrclibTrack | null>> => {
+    if (!evidence?.album) return Promise.resolve({ ok: true, data: null });
     return lrclibGet(new URLSearchParams({
       track_name: title,
       artist_name: artist,
@@ -261,7 +366,9 @@ export async function fetchFromLrclib(
   };
 
   // Pass 1 — bare exact match.
-  const plain = await lrclibGet(new URLSearchParams({ track_name: title, artist_name: artist }));
+  const plainRes = await lrclibGet(new URLSearchParams({ track_name: title, artist_name: artist }));
+  if (!plainRes.ok) return { hit: null, rateLimited: plainRes.rateLimited };
+  const plain = plainRes.data;
   if (plain) {
     if (
       evidence?.album
@@ -270,14 +377,16 @@ export async function fetchFromLrclib(
       // Duration conflict is strong evidence the bare query returned a different
       // recording — the album-scoped hit is much more likely to be the right one.
       const scoped = await albumScoped();
-      if (scoped) return toLrclibHit(scoped, evidence);
+      if (scoped.ok && scoped.data) return { hit: toLrclibHit(scoped.data, evidence), rateLimited: false };
+      if (!scoped.ok) return { hit: null, rateLimited: scoped.rateLimited };
     }
-    return toLrclibHit(plain, evidence);
+    return { hit: toLrclibHit(plain, evidence), rateLimited: false };
   }
 
   // Pass 2 — album-scoped exact when the bare query 404'd.
   const scoped = await albumScoped();
-  return scoped ? toLrclibHit(scoped, evidence) : null;
+  if (!scoped.ok) return { hit: null, rateLimited: scoped.rateLimited };
+  return { hit: scoped.data ? toLrclibHit(scoped.data, evidence) : null, rateLimited: false };
 }
 
 /**
@@ -299,54 +408,55 @@ export async function searchLrclib(
   title: string,
   artist: string,
   evidence?: LrclibEvidence,
-): Promise<LrclibHit | null> {
+): Promise<LrclibFetchOutcome> {
   const headers = { 'User-Agent': 'jp-lyrics-app/1.0' };
-  try {
-    const res = await fetchWithTimeout(`https://lrclib.net/api/search?q=${encodeURIComponent(query)}`, { headers });
-    if (res.ok) {
-      const results = await res.json();
-      let best: LrclibHit | null = null;
-      let bestScore = -1;
-      const hasRequestedArtist = artist.trim().length > 0;
-      for (const item of results) {
-        if (!item.syncedLyrics) continue;
-        const itemTitle = String(item.trackName ?? '');
-        const itemArtist = String(item.artistName ?? '');
-        const tScore = titleScore(title, itemTitle);
-        // Artist must exist and partially match when we have artist info to
-        // check against; without it, fall back to title-only matching.
-        const aScore = hasRequestedArtist ? artistScore(artist, itemArtist) : 0.5;
-        if (tScore < 0.55) continue;
-        if (hasRequestedArtist && (!itemArtist || aScore < 0.55)) continue;
+  const res = await lrclibFetch(
+    `https://lrclib.net/api/search?q=${encodeURIComponent(query)}`,
+    headers,
+    async (res) => res.json(),
+  );
+  if (!res.ok) return { hit: null, rateLimited: res.rateLimited };
 
-        // A clearly different recording duration is strong evidence of another
-        // version (TV size / live / remaster) — drop it outright.
-        const duration = durationStatus(item.duration, evidence?.durationMs);
-        if (duration === 'conflict') continue;
+  const results = res.data as LrclibTrack[];
+  let best: LrclibHit | null = null;
+  let bestScore = -1;
+  const hasRequestedArtist = artist.trim().length > 0;
+  for (const item of results) {
+    if (!item.syncedLyrics) continue;
+    const itemTitle = String(item.trackName ?? '');
+    const itemArtist = String(item.artistName ?? '');
+    const tScore = titleScore(title, itemTitle);
+    // Artist must exist and partially match when we have artist info to
+    // check against; without it, fall back to title-only matching.
+    const aScore = hasRequestedArtist ? artistScore(artist, itemArtist) : 0.5;
+    if (tScore < 0.55) continue;
+    if (hasRequestedArtist && (!itemArtist || aScore < 0.55)) continue;
 
-        let score = tScore * 0.7 + aScore * 0.3;
-        if (duration === 'match') score += 0.05;
-        else if (duration === 'close') score -= 0.04;
-        const album = albumStatus(item.albumName, evidence?.album);
-        if (album === 'match') score += 0.03;
-        else if (album === 'partial') score += 0.01;
+    // A clearly different recording duration is strong evidence of another
+    // version (TV size / live / remaster) — drop it outright.
+    const duration = durationStatus(item.duration, evidence?.durationMs);
+    if (duration === 'conflict') continue;
 
-        if (score > bestScore) {
-          bestScore = score;
-          best = {
-            result: {
-              synced: item.syncedLyrics || '',
-              plain: item.plainLyrics || stripTimestamps(item.syncedLyrics || ''),
-            },
-            duration,
-            album,
-          };
-        }
-      }
-      return best;
+    let score = tScore * 0.7 + aScore * 0.3;
+    if (duration === 'match') score += 0.05;
+    else if (duration === 'close') score -= 0.04;
+    const album = albumStatus(item.albumName, evidence?.album);
+    if (album === 'match') score += 0.03;
+    else if (album === 'partial') score += 0.01;
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = {
+        result: {
+          synced: item.syncedLyrics || '',
+          plain: item.plainLyrics || stripTimestamps(item.syncedLyrics || ''),
+        },
+        duration,
+        album,
+      };
     }
-  } catch { /* */ }
-  return null;
+  }
+  return { hit: best, rateLimited: false };
 }
 
 // ─── PetitLyrics ──
@@ -698,43 +808,55 @@ export async function fetchLyrics(
 ): Promise<LyricsFetchResult> {
   const evidence = opts?.spotify;
 
+  // Tracks whether lrclib (the preferred timed-lyrics source) was throttled.
+  // When every source fails AND lrclib was rate-limited we want to report a
+  // distinct "retry later" outcome instead of a misleading "no lyrics found".
+  let rateLimited = false;
+
   // 1. LRCLIB exact
-  let hit = await fetchFromLrclib(title, artist, evidence);
-  if (hit) return fetchedResult(hit.result, 'lrclib', lrclibConfidence(hit, 98, true), hit.duration === 'conflict');
+  let outcome = await fetchFromLrclib(title, artist, evidence);
+  rateLimited = rateLimited || outcome.rateLimited;
+  if (outcome.hit) return fetchedResult(outcome.hit.result, 'lrclib', lrclibConfidence(outcome.hit, 98, true), outcome.hit.duration === 'conflict');
 
   // 2. LRCLIB with Spotify canonical name
   if (opts?.spotifyCanonical) {
-    hit = await fetchFromLrclib(opts.spotifyCanonical.name, opts.spotifyCanonical.artist, evidence);
-    if (hit) return fetchedResult(hit.result, 'lrclib', lrclibConfidence(hit, 96, true), hit.duration === 'conflict');
-    hit = await searchLrclib(`${opts.spotifyCanonical.name} ${opts.spotifyCanonical.artist}`, opts.spotifyCanonical.name, opts.spotifyCanonical.artist, evidence);
-    if (hit) return fetchedResult(hit.result, 'lrclib-search', lrclibConfidence(hit, 82, false));
+    outcome = await fetchFromLrclib(opts.spotifyCanonical.name, opts.spotifyCanonical.artist, evidence);
+    rateLimited = rateLimited || outcome.rateLimited;
+    if (outcome.hit) return fetchedResult(outcome.hit.result, 'lrclib', lrclibConfidence(outcome.hit, 96, true), outcome.hit.duration === 'conflict');
+    outcome = await searchLrclib(`${opts.spotifyCanonical.name} ${opts.spotifyCanonical.artist}`, opts.spotifyCanonical.name, opts.spotifyCanonical.artist, evidence);
+    rateLimited = rateLimited || outcome.rateLimited;
+    if (outcome.hit) return fetchedResult(outcome.hit.result, 'lrclib-search', lrclibConfidence(outcome.hit, 82, false));
   }
 
   // 3. LRCLIB fuzzy search
-  hit = await searchLrclib(`${title} ${artist}`, title, artist, evidence);
-  if (hit) return fetchedResult(hit.result, 'lrclib-search', lrclibConfidence(hit, 78, false));
+  outcome = await searchLrclib(`${title} ${artist}`, title, artist, evidence);
+  rateLimited = rateLimited || outcome.rateLimited;
+  if (outcome.hit) return fetchedResult(outcome.hit.result, 'lrclib-search', lrclibConfidence(outcome.hit, 78, false));
 
   // 4. PetitLyrics
   const pl = await fetchFromPetitLyrics(title, artist);
   if (pl && (pl.synced || pl.plain)) {
-    return fetchedResult(pl, 'petitlyrics', pl.synced ? 90 : 82);
+    return { ...fetchedResult(pl, 'petitlyrics', pl.synced ? 90 : 82), rateLimited };
   }
 
   // 5. Uta-Net
   const un = await fetchFromUtaNet(title, artist);
   if (un) {
-    return fetchedResult(
-      un.result,
-      'uta-net',
-      utaNetConfidence(un.score),
-      false,
-      { title: un.matchedTitle, artist: un.matchedArtist, link: un.link, ambiguous: un.ambiguous },
-    );
+    return {
+      ...fetchedResult(
+        un.result,
+        'uta-net',
+        utaNetConfidence(un.score),
+        false,
+        { title: un.matchedTitle, artist: un.matchedArtist, link: un.link, ambiguous: un.ambiguous },
+      ),
+      rateLimited,
+    };
   }
 
   // 6. ytmusicapi
   const yt = await fetchFromYtMusic(title, artist);
-  if (yt) return fetchedResult(yt, 'ytmusic', yt.synced ? 74 : 68);
+  if (yt) return { ...fetchedResult(yt, 'ytmusic', yt.synced ? 74 : 68), rateLimited };
 
-  return { result: null, source: '', confidence: 0 };
+  return { result: null, source: '', confidence: 0, rateLimited };
 }

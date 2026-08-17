@@ -111,6 +111,7 @@
     "importReviewMatchedAmbiguous": "\n前两名候选得分接近，请确认哪个才是目标曲目。",
     "playlistImportReviewHeader": "{count} 首曲目待审核",
     "playlistImportReviewHint": "这些曲目以低可信度歌词匹配导入。请在歌曲列表中打开它们，核对后重新同步。",
+    "playlistImportRateLimited": "部分曲目的歌词源被限流。这些曲目已跳过 — 请稍候再继续导入以重试。",
     "loadFailed": "歌曲列表加载失败，请检查网络后重试",
     "retry": "重试",
     "cachedData": "当前显示缓存数据，刷新失败",
@@ -378,6 +379,7 @@
   },
   "apiErrors": {
     "lyricsNotFound": "未找到歌词",
+    "lyricsRateLimited": "歌词源已限流，请稍候片刻再重试。",
     "forbidden": "你没有权限编辑这首歌曲",
     "loginRequired": "请先登录再继续"
   },

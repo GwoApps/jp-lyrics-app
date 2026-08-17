@@ -114,7 +114,7 @@ export async function POST(
   const spotifyCanonical = spotifyTrack
     ? { name: spotifyTrack.title, artist: spotifyTrack.artist }
     : null;
-  const { result, source, confidence, durationMismatch, match } = await fetchLyrics(song.title, song.artist, {
+  const { result, source, confidence, durationMismatch, match, rateLimited } = await fetchLyrics(song.title, song.artist, {
     spotifyCanonical,
     spotify: spotifyTrack
       ? { durationMs: spotifyTrack.durationMs, album: spotifyTrack.album }
@@ -122,6 +122,11 @@ export async function POST(
   });
 
   if (!result) {
+    // Distinguish a rate-limited lyric source (retry later) from a song that
+    // genuinely has no lyrics — reusing "not found" for 429 was misleading.
+    if (rateLimited) {
+      return NextResponse.json({ synced: false, error: 'lyrics_rate_limited' }, { status: 503 });
+    }
     return NextResponse.json({ synced: false, error: 'lyrics_not_found' }, { status: 404 });
   }
 

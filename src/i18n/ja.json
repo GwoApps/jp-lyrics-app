@@ -111,6 +111,7 @@
     "importReviewMatchedAmbiguous": "\n上位 2 候補が接近しています。どれが目的の曲か確認してください。",
     "playlistImportReviewHeader": "{count} 曲は要確認",
     "playlistImportReviewHint": "これらの曲は信頼度の低い歌詞マッチで取り込まれました。曲一覧で開いて確認し、再同期してください。",
+    "playlistImportRateLimited": "一部の曲で歌詞ソースがレート制限されました。それらの曲はスキップされました — 少し待ってから取込を再開すると再試行されます。",
     "loadFailed": "曲一覧の読み込みに失敗しました。接続を確認してもう一度お試しください。",
     "retry": "再試行",
     "cachedData": "キャッシュのデータを表示中 — 更新に失敗しました",
@@ -378,6 +379,7 @@
   },
   "apiErrors": {
     "lyricsNotFound": "歌詞が見つかりませんでした",
+    "lyricsRateLimited": "歌詞ソースが制限されています。少し待ってから再試行してください。",
     "forbidden": "この曲を編集する権限がありません",
     "loginRequired": "続行する前にログインしてください"
   },

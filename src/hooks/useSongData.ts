@@ -642,6 +642,7 @@ export function useSongData(id: string): UseSongDataReturn {
       } else {
         const errorKey: Record<string, string> = {
           lyrics_not_found: 'apiErrors.lyricsNotFound',
+          lyrics_rate_limited: 'apiErrors.lyricsRateLimited',
           forbidden: 'apiErrors.forbidden',
           login_required: 'apiErrors.loginRequired',
           stale_source: 'song.syncStale',
@@ -1066,6 +1067,7 @@ export function useSongData(id: string): UseSongDataReturn {
         const errorKey: Record<string, string> = {
           title_required: 'home.importTitleRequired',
           lyrics_not_found: 'home.importLyricsNotFound',
+          lyrics_rate_limited: 'apiErrors.lyricsRateLimited',
           login_required: 'home.importLoginRequired',
         };
         setImportAlert({

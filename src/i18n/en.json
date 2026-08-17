@@ -111,6 +111,7 @@
     "importReviewMatchedAmbiguous": "\nTwo candidates scored closely — please check which is the intended recording.",
     "playlistImportReviewHeader": "{count} track(s) need review",
     "playlistImportReviewHint": "These tracks were imported with a low-confidence lyrics match. Open them in the song list to verify and re-sync.",
+    "playlistImportRateLimited": "The lyrics source was rate-limited for some tracks. Those tracks were skipped — resume the import a little later to retry them.",
     "loadFailed": "Failed to load songs. Please check your connection and try again.",
     "retry": "Retry",
     "cachedData": "Showing cached data — refresh failed",
@@ -378,6 +379,7 @@
   },
   "apiErrors": {
     "lyricsNotFound": "No lyrics were found",
+    "lyricsRateLimited": "The lyrics source is rate-limited. Please wait a moment and try again.",
     "forbidden": "You do not have permission to edit this song",
     "loginRequired": "Please sign in before continuing"
   },

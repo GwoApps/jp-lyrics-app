@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ id: existing.id, alreadyExists: true });
   }
 
-  const { result, source, confidence, durationMismatch, match } = await fetchLyrics(title, artist, {
+  const { result, source, confidence, durationMismatch, match, rateLimited } = await fetchLyrics(title, artist, {
     spotifyCanonical: spotifyTrack
       ? { name: spotifyTrack.title, artist: spotifyTrack.artist }
       : null,
@@ -58,6 +58,10 @@ export async function POST(request: NextRequest) {
       : undefined,
   });
   if (!result) {
+    // A rate-limited source is not "no lyrics" — tell the user to retry.
+    if (rateLimited) {
+      return NextResponse.json({ error: 'lyrics_rate_limited', hasLyrics: false }, { status: 503 });
+    }
     return NextResponse.json({
       error: 'lyrics_not_found',
       hasLyrics: false,

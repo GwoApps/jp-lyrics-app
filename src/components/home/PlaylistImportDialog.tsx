@@ -21,6 +21,7 @@ interface PlaylistTrackResult {
   artist: string;
   status: 'imported' | 'skipped' | 'failed';
   needsReview?: boolean;
+  rateLimited?: boolean;
 }
 
 interface JobSummary {
@@ -247,6 +248,7 @@ export default function PlaylistImportDialog({ open, onClose, onImported }: Play
   };
 
   const reviewTracks = result.filter((track) => track.needsReview) ?? [];
+  const rateLimitedTracks = result.filter((track) => track.rateLimited) ?? [];
   const isDone = job?.status === 'completed';
   const isCancelled = job?.status === 'cancelled';
 
@@ -355,6 +357,11 @@ export default function PlaylistImportDialog({ open, onClose, onImported }: Play
                     ))}
                   </ul>
                   <p className="mt-1.5 text-[var(--muted-foreground)]">{t('home.playlistImportReviewHint')}</p>
+                </div>
+              )}
+              {isDone && rateLimitedTracks.length > 0 && (
+                <div className="mt-2 rounded-md border border-[var(--border)] bg-[var(--accent)] p-2 text-[var(--muted-foreground)]">
+                  {t('home.playlistImportRateLimited')}
                 </div>
               )}
               {isCancelled && (

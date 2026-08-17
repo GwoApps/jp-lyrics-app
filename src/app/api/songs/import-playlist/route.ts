@@ -42,6 +42,7 @@ interface PlaylistTrackResultDTO {
   source?: string;
   synced?: boolean;
   needsReview?: boolean;
+  rateLimited?: boolean;
 }
 
 // GET — fetch the current state of a job plus all persisted per-track outcomes.

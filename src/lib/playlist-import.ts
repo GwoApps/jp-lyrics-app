@@ -44,6 +44,8 @@ export interface PlaylistTrackResult {
   source?: string;
   synced?: boolean;
   needsReview?: boolean;
+  /** True when every source failed because the lrclib source was rate-limited (HTTP 429). */
+  rateLimited?: boolean;
 }
 
 /** Persisted outcome for a track (used to replay already-done tracks on resume). */
@@ -324,6 +326,7 @@ export async function processTrack(
   let source = '';
   let confidence = 0;
   let needsReview = false;
+  let rateLimited = false;
   try {
     const r = await withTimeout(
       fetchLyrics(track.title, track.artist, {
@@ -338,6 +341,7 @@ export async function processTrack(
     lyrics = r.result;
     source = r.source;
     confidence = r.confidence;
+    rateLimited = !!r.rateLimited;
     if (lyrics) {
       const verdict = classifyLyricsHit({
         source,
@@ -365,7 +369,9 @@ export async function processTrack(
     // Only persist a song when lyrics were actually found — an empty shell with
     // "no lyrics" pollutes the library (single-song import returns 404 instead).
     if (!lyrics) {
-      return { status: 'failed' };
+      // A rate-limited source is not "no lyrics" — flag it so the UI can tell
+      // the user to retry later instead of showing a blanket "no lyrics".
+      return rateLimited ? { status: 'failed', rateLimited: true } : { status: 'failed' };
     }
     const id = uuidv4();
     await db.insert(schema.songs).values({
