@@ -23,7 +23,6 @@ import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useI18n } from '@/lib/i18n';
 import { fmtMs, fmtTime, findActiveLine } from '@/lib/lrc';
 import { isSpotifyAuthError, isSpotifyTransientError } from '@/lib/spotify-error';
-import { findBestMatch } from '@/lib/match';
 import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
 import { animateSmoothScroll } from '@/lib/scroll-ease';
@@ -153,6 +152,12 @@ export default function SongViewPage() {
   // Data + handlers hook
   const data = useSongData(id);
   const [showSyncConfirm, setShowSyncConfirm] = useState(false);
+  // Best-matching *other* DB song for the currently-playing Spotify track,
+  // resolved lazily via the lightweight /api/spotify/match-song endpoint
+  // (never the full public list). Drives the "查看这首歌" button.
+  const [otherSongMatch, setOtherSongMatch] = useState<{
+    id: string; title: string; artist: string; spotify_track_id?: string | null;
+  } | null>(null);
   const lyricsRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -167,7 +172,7 @@ export default function SongViewPage() {
     lineTimestamps: [],
     debug: false,
     followPlaying: true,
-    allSongs: [],
+    matchSong: null,
     currentSongId: id,
     currentUserEmail: '',
   });
@@ -189,9 +194,36 @@ export default function SongViewPage() {
   useEffect(() => { syncRefs.current.lineTimestamps = data.lineTimestamps; }, [data.lineTimestamps]);
   useEffect(() => { syncRefs.current.debug = data.debug; }, [data.debug]);
   useEffect(() => { syncRefs.current.followPlaying = sync.followPlaying; }, [sync.followPlaying]);
-  useEffect(() => { syncRefs.current.allSongs = data.allSongs; }, [data.allSongs]);
+  useEffect(() => { syncRefs.current.matchSong = data.matchSong; }, [data.matchSong]);
   useEffect(() => { syncRefs.current.currentSongId = id; }, [id]);
   useEffect(() => { syncRefs.current.currentUserEmail = currentUserEmail; }, [currentUserEmail]);
+
+  // Resolve the best-matching *other* song for the currently-playing track on
+  // demand. Only fires while a track is actually playing and differs from this
+  // page's song — the full public list is never downloaded. Uses the
+  // lightweight /api/spotify/match-song endpoint.
+  const playingTrack = sync.spotify?.is_playing ? (sync.spotify?.track ?? null) : null;
+  const playingTrackKey = playingTrack
+    ? `${playingTrack.id || ''}||${playingTrack.name}||${playingTrack.artist}`
+    : '';
+  useEffect(() => {
+    let cancelled = false;
+    const applyMatch = (match: { id: string; title: string; artist: string; spotify_track_id?: string | null } | null) => {
+      if (!cancelled) setOtherSongMatch(match);
+    };
+    if (!playingTrack || sync.isSameSong) {
+      // Defer the reset out of the effect body (matches the async pattern the
+      // rest of the codebase uses to avoid cascading synchronous renders).
+      queueMicrotask(() => applyMatch(null));
+      return () => { cancelled = true; };
+    }
+    void data.matchSong(
+      { id: playingTrack.id || undefined, name: playingTrack.name, artist: playingTrack.artist },
+      id,
+    ).then(applyMatch);
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playingTrackKey, sync.isSameSong, data.matchSong, id]);
 
   // Re-center on active line when debug toggled off
   useEffect(() => {
@@ -395,9 +427,10 @@ export default function SongViewPage() {
   const isSynced = isSameSong && activeLine >= 0;
   const hasSyncData = syncLines.length > 0;
   const debugSyncActive = spotify?.is_playing && syncLines.length > 0 ? findActiveLine(syncLines, spotify.progress_ms) : -1;
-  const playingMatch = spotify?.track && !isSameSong
-    ? findBestMatch(data.allSongs.filter((s) => s.id !== id), spotify.track, currentUserEmail)
-    : null;
+  // Best-matching *other* song for the playing track — resolved lazily via the
+  // lightweight /api/spotify/match-song endpoint (never the full list). Null
+  // when there is nothing to match or no other song matches.
+  const playingMatch = otherSongMatch;
   const songThemeStyle = coverTheme.style;
   const coverSaturation = coverColor ? Math.max(colorSaturation(coverColor.primary), colorSaturation(coverColor.secondary), colorSaturation(coverColor.tertiary)) : 0;
   // Near-monochrome covers retain the main halo without manufacturing a second,

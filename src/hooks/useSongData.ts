@@ -173,7 +173,12 @@ export interface UseSongDataReturn {
   fontSize: number;
   setFontSize: React.Dispatch<React.SetStateAction<number>>;
   toast: ToastState | null;
-  allSongs: { id: string; title: string; artist: string; spotify_track_id?: string | null; created_by: string; is_public: number }[];
+  /** Server-side "now playing" match: returns the best DB song for a Spotify track
+   *  (or null), fetching only the winning candidate instead of the full list.
+   *  `excludeId` skips the song rendered on this page (the "other song" match). */
+  matchSong: (track: { id?: string; name: string; artist: string }, excludeId?: string) => Promise<{
+    id: string; title: string; artist: string; spotify_track_id?: string | null;
+  } | null>;
   handleSync: () => Promise<void>;
   lowConfidenceSync: { source: string; confidence: number; lines: number; lrc: string; candidate: string; match?: ImportReviewState['match'] } | null;
   confirmLowConfidenceSync: () => void;
@@ -268,7 +273,6 @@ export function useSongData(id: string): UseSongDataReturn {
     candidate: string;
     match?: ImportReviewState['match'];
   } | null>(null);
-  const [allSongs, setAllSongs] = useState<{ id: string; title: string; artist: string; spotify_track_id?: string | null; created_by: string; is_public: number }[]>([]);
   const [copied, setCopied] = useState(false);
   const [fontSize, setFontSize] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -564,16 +568,43 @@ export function useSongData(id: string): UseSongDataReturn {
     void fetchSong().then((result) => { applySongResult(result); setLoading(false); });
   }, [fetchSong, applySongResult]);
 
-  // Fetch song + all songs on mount
+  // Fetch the single song on mount. The previous full public-song list fetch
+  // was removed — the detail page no longer needs the entire catalogue for a
+  // single "now playing" match; callers use `matchSong` on demand instead.
   useEffect(() => {
     if (!id) return;
     void fetchSong().then((result) => { applySongResult(result); setLoading(false); });
-
-    fetch('/api/songs')
-      .then((r) => r.json())
-      .then((data) => setAllSongs(data.map((s: { id: string; title: string; artist: string; spotify_track_id?: string | null; created_by?: string; is_public?: number }) => ({ id: s.id, title: s.title, artist: s.artist, spotify_track_id: s.spotify_track_id, created_by: s.created_by || '', is_public: s.is_public || 0 }))))
-      .catch(() => {});
   }, [id, fetchSong, applySongResult]);
+
+  // Server-side "now playing" match — returns only the winning candidate's
+  // summary, so the detail page never downloads the full public song list.
+  // `excludeId` skips the song currently rendered on this page (used for the
+  // "查看这首歌" / follow-playing "other song" match).
+  const matchSong = useCallback(async (
+    track: { id?: string; name: string; artist: string },
+    excludeId?: string,
+  ): Promise<{ id: string; title: string; artist: string; spotify_track_id?: string | null } | null> => {
+    if (!track?.name) return null;
+    const params = new URLSearchParams({ title: track.name, artist: track.artist || '' });
+    if (track.id) params.set('track_id', track.id);
+    if (excludeId) params.set('exclude', excludeId);
+    try {
+      const res = await fetch(`/api/spotify/match-song?${params.toString()}`, { cache: 'no-store' });
+      if (!res.ok) {
+        console.warn('match-song request failed', res.status);
+        return null;
+      }
+      const data = await res.json() as { match?: { id: string; title: string; artist: string; spotify_track_id?: string | null } | null };
+      const match = data.match;
+      if (!match) return null;
+      if (excludeId && match.id === excludeId) return null;
+      return match;
+    } catch (error) {
+      // Never let a failed match silently break the UI; keep it observable.
+      console.warn('match-song request failed', error);
+      return null;
+    }
+  }, []);
 
   // Load the user's translation target language (user setting → global
   // default) so the translation entry can show and switch the target language
@@ -1387,7 +1418,7 @@ export function useSongData(id: string): UseSongDataReturn {
     fontSize,
     setFontSize,
     toast,
-    allSongs,
+    matchSong,
     handleSync,
     lowConfidenceSync,
     confirmLowConfidenceSync,

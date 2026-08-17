@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import type { FuriganaLine } from '@/lib/types';
-import { isSameSpotifyTrack, findBestMatch } from '@/lib/match';
+import { isSameSpotifyTrack } from '@/lib/match';
 import { useNowPlaying, type SyncState } from './useNowPlaying';
 import { animateSmoothScroll } from '@/lib/scroll-ease';
 
@@ -37,7 +37,10 @@ export interface SyncRefs {
   lineTimestamps: (number | null)[];
   debug: boolean;
   followPlaying: boolean;
-  allSongs: { id: string; title: string; artist: string; spotify_track_id?: string | null; created_by: string; is_public: number }[];
+  /** Server-side "now playing" matcher supplied by the detail page hook. */
+  matchSong: ((track: { id?: string; name: string; artist: string }, excludeId?: string) => Promise<{
+    id: string; title: string; artist: string; spotify_track_id?: string | null;
+  } | null>) | null;
   currentSongId: string;
   currentUserEmail: string;
 }
@@ -95,6 +98,10 @@ export function useSpotifySync(
   const highlightRef = useRef(-1);
   const prevTrackKeyRef = useRef('');
   const navigatingRef = useRef(false);
+  // Guards the async follow-playing match so a stale response (track changed
+  // again, or the user navigated manually while the fetch was in flight) never
+  // redirects to the wrong song.
+  const matchTokenRef = useRef(0);
   const pipWindowRef = useRef<Window | null>(null);
 
   // Persist follow-playing preference
@@ -135,12 +142,25 @@ export function useSpotifySync(
         prevTrackKeyRef.current &&
         prevTrackKeyRef.current !== trackKey
       ) {
-        const match = findBestMatch(refs.allSongs, track, refs.currentUserEmail);
-        if (match && match.id !== refs.currentSongId) {
-          navigatingRef.current = true;
-          window.location.assign(`/songs/${match.id}`);
-          return;
-        }
+        // Ask the server for the best-matching *other* song (skip the one this
+        // page already renders). Only the winning candidate is transferred.
+        const token = ++matchTokenRef.current;
+        void (async () => {
+          const match = refs.matchSong
+            ? await refs.matchSong(
+                { id: track.id || undefined, name: track.name, artist: track.artist },
+                refs.currentSongId,
+              )
+            : null;
+          // Ignore stale responses: the track changed again or the user
+          // navigated elsewhere while the fetch was in flight.
+          if (token !== matchTokenRef.current) return;
+          if (navigatingRef.current) return;
+          if (match && match.id !== refs.currentSongId) {
+            navigatingRef.current = true;
+            window.location.assign(`/songs/${match.id}`);
+          }
+        })();
       }
       prevTrackKeyRef.current = trackKey;
     } else {
