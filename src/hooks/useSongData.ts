@@ -1300,6 +1300,42 @@ export function useSongData(id: string): UseSongDataReturn {
     }
   }, [importReview, router, t, showToast]);
 
+  // Keep a reference to the page-provided pipWindowRef so the useEffect below
+  // can push live font-size / reading-mode updates into an already-open PiP
+  // window (the callback receives it per call, but the effect needs it too).
+  const pipWindowRefInternal = useRef<React.MutableRefObject<Window | null> | null>(null);
+
+  /** Render the PiP lyrics list HTML for the given reading settings. */
+  const renderPipLyricsHtml = useCallback((
+    furiganaLinesArg: FuriganaLine[],
+    songArg: SongData | null,
+    rm: ReadingMode,
+    roma: boolean,
+    timestamps?: (number | null)[],
+  ): string => {
+    return furiganaLinesArg.map((line, i) => {
+      if (line.segments.length === 0) return `<div class="line empty" data-line="${i}"></div>`;
+      const html = normalizeFuriganaSegments(line.segments).map(seg => {
+        if (rm === 'original') return escapeHtml(seg.text);
+        const scheme = normalizeReadingScheme(songArg?.reading_scheme);
+        const reading = resolveFuriganaReading(seg.text, seg.reading, roma, scheme);
+        if (!reading) return escapeHtml(seg.text);
+        const rubyClass = scheme === 'yue-jyutping'
+          ? 'cantonese-reading'
+          : roma && isKoreanReadingSegment(seg.text)
+            ? 'korean-word'
+            : roma && isKatakanaReadingSegment(seg.text) ? 'katakana-chunk' : '';
+        const className = rubyClass ? ` class="${rubyClass}"` : '';
+        const language = scheme === 'yue-jyutping' ? ' lang="yue-Latn"' : '';
+        return `<ruby${className}>${escapeHtml(seg.text)}<rp>(</rp><rt${language}>${escapeHtml(reading)}</rt><rp>)</rp></ruby>`;
+      }).join('');
+      const ts = timestamps?.[i];
+      const tsAttr = ts != null ? ` data-ts="${ts}"` : '';
+      const tsClass = ts != null ? ' has-ts' : '';
+      return `<div class="line${tsClass}" data-line="${i}"${tsAttr}>${html}</div>`;
+    }).join('');
+  }, []);
+
   // PiP is complex and needs external refs, so it's a callback the page calls with context
   const openPiP = useCallback(async (
     furiganaLinesArg: FuriganaLine[],
@@ -1332,9 +1368,14 @@ export function useSongData(id: string): UseSongDataReturn {
       });
 
       pipWindowRef.current = pipWindow;
+      pipWindowRefInternal.current = pipWindowRef;
 
       const title = escapeHtml(songArg?.title || '');
       const artist = escapeHtml(songArg?.artist || '');
+
+      // Lyric lines read their size from this CSS variable so the open window
+      // can be resized live via a `pip-font-size` message without rebuilding.
+      const pipFontSize = fontSize;
 
       pipWindow.document.documentElement.innerHTML = `
         <head>
@@ -1342,11 +1383,12 @@ export function useSongData(id: string): UseSongDataReturn {
           <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500&display=swap" rel="stylesheet">
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            html, body { background: #0a0a0a; color: #a3a3a3; font-family: 'Noto Sans JP', sans-serif; height: 100%; overflow: hidden; }
+            html { --pip-font-size: ${pipFontSize}px; }
+            html, body { background: #0a0a0a; color: #a3a3a3; font-family: 'Noto Sans JP', 'system-ui', system-ui, -apple-system, sans-serif; height: 100%; overflow: hidden; }
             #pip-header { padding: 8px 12px; border-bottom: 1px solid #262626; font-size: 11px; color: #737373; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             #pip-header .title { color: #e5e5e5; font-weight: 500; }
             #pip-lyrics { height: calc(100% - 36px); overflow-y: auto; padding: 12px; scroll-behavior: smooth; }
-            .line { line-height: 2.2; padding: 2px 4px; border-radius: 4px; transition: color 0.3s, transform 0.3s, opacity 0.3s; transform-origin: left; opacity: 0.6; font-size: ${fontSize}px; }
+            .line { line-height: 2.2; padding: 2px 4px; border-radius: 4px; transition: color 0.3s, transform 0.3s, opacity 0.3s; transform-origin: left; opacity: 0.6; font-size: var(--pip-font-size); }
             .line.has-ts { cursor: pointer; }
             .line.has-ts:hover { color: #e5e5e5; opacity: 0.9; }
             @keyframes lyricActivate { 0% { transform: scale(1); filter: brightness(1); } 40% { transform: scale(1.06); filter: brightness(1.25); } 100% { transform: scale(1.03); filter: brightness(1); } }
@@ -1363,27 +1405,7 @@ export function useSongData(id: string): UseSongDataReturn {
         <body>
           <div id="pip-header"><span class="title">${title}</span>${artist ? ` — ${artist}` : ''}</div>
           <div id="pip-lyrics">
-            ${furiganaLinesArg.map((line, i) => {
-              if (line.segments.length === 0) return `<div class="line empty" data-line="${i}"></div>`;
-              const html = normalizeFuriganaSegments(line.segments).map(seg => {
-                if (readingMode === 'original') return escapeHtml(seg.text);
-                const scheme = normalizeReadingScheme(songArg?.reading_scheme);
-                const reading = resolveFuriganaReading(seg.text, seg.reading, romanizeFurigana, scheme);
-                if (!reading) return escapeHtml(seg.text);
-                const rubyClass = scheme === 'yue-jyutping'
-                  ? 'cantonese-reading'
-                  : romanizeFurigana && isKoreanReadingSegment(seg.text)
-                    ? 'korean-word'
-                    : romanizeFurigana && isKatakanaReadingSegment(seg.text) ? 'katakana-chunk' : '';
-                const className = rubyClass ? ` class="${rubyClass}"` : '';
-                const language = scheme === 'yue-jyutping' ? ' lang="yue-Latn"' : '';
-                return `<ruby${className}>${escapeHtml(seg.text)}<rp>(</rp><rt${language}>${escapeHtml(reading)}</rt><rp>)</rp></ruby>`;
-              }).join('');
-              const ts = timestamps?.[i];
-              const tsAttr = ts != null ? ` data-ts="${ts}"` : '';
-              const tsClass = ts != null ? ' has-ts' : '';
-              return `<div class="line${tsClass}" data-line="${i}"${tsAttr}>${html}</div>`;
-            }).join('')}
+            ${renderPipLyricsHtml(furiganaLinesArg, songArg, readingMode, romanizeFurigana, timestamps)}
           </div>
         </body>
       `;
@@ -1442,6 +1464,33 @@ export function useSongData(id: string): UseSongDataReturn {
         });
       }
 
+      // Live-update handler: the main window pushes font-size and reading-mode
+      // changes here while the PiP stays open, so the user no longer needs to
+      // close/re-open the window to see them take effect.
+      const pipUpdateScript = pipWindow.document.createElement('script');
+      pipUpdateScript.textContent = `
+        window.addEventListener('message', function(e) {
+          var msg = e.data;
+          if (!msg || typeof msg !== 'object') return;
+          if (msg.type === 'pip-font-size' && typeof msg.fontSize === 'number') {
+            document.documentElement.style.setProperty('--pip-font-size', msg.fontSize + 'px');
+          } else if (msg.type === 'pip-lyrics-render' && typeof msg.html === 'string') {
+            var container = document.getElementById('pip-lyrics');
+            if (!container) return;
+            var activeIndex = (typeof msg.activeLine === 'number') ? msg.activeLine : -1;
+            container.innerHTML = msg.html;
+            var lines = container.querySelectorAll('.line');
+            lines.forEach(function(el, i) {
+              if (i === activeIndex) {
+                el.classList.add('active');
+                el.scrollIntoView({ block: 'center' });
+              }
+            });
+          }
+        });
+      `;
+      pipWindow.document.body.appendChild(pipUpdateScript);
+
       // Sync current active line immediately
       if (highlightLine >= 0) {
         const pipLines = pipWindow.document.querySelectorAll('.line');
@@ -1456,7 +1505,33 @@ export function useSongData(id: string): UseSongDataReturn {
       console.error('PiP failed:', e);
       showToast('error', t('song.pipFailed'));
     }
-  }, [fontSize, readingMode, romanizeFurigana, t, showToast]);
+  }, [fontSize, readingMode, romanizeFurigana, t, showToast, renderPipLyricsHtml]);
+
+  // Keep an already-open PiP window in sync with the main page.
+  // Font size is applied live via the CSS variable (no rebuild needed).
+  useEffect(() => {
+    const pipWin = pipWindowRefInternal.current?.current;
+    if (!pipWin || pipWin.closed) return;
+    pipWin.postMessage({ type: 'pip-font-size', fontSize }, '*');
+  }, [fontSize]);
+
+  // Reading mode / romanize toggle (and lyric data changes) regenerate the
+  // PiP lyrics list in place instead of forcing a close/re-open.
+  useEffect(() => {
+    const pipWin = pipWindowRefInternal.current?.current;
+    if (!pipWin || pipWin.closed) return;
+    let activeLine = -1;
+    try {
+      const lines = Array.from(pipWin.document.querySelectorAll('#pip-lyrics .line'));
+      const activeEl = pipWin.document.querySelector('#pip-lyrics .line.active');
+      activeLine = activeEl ? lines.indexOf(activeEl) : -1;
+    } catch { /* window gone */ }
+    pipWin.postMessage({
+      type: 'pip-lyrics-render',
+      html: renderPipLyricsHtml(furiganaLines, song, readingMode, romanizeFurigana, lineTimestamps),
+      activeLine,
+    }, '*');
+  }, [readingMode, romanizeFurigana, song, furiganaLines, lineTimestamps, renderPipLyricsHtml]);
 
   // Re-center when debug mode toggled off
   useEffect(() => {
