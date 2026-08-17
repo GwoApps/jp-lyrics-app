@@ -136,6 +136,7 @@
     "syncLowConfidenceBody": "完全一致する歌詞が見つかりませんでした。以下の結果は別の曲の可能性があります。この歌詞で現在の歌詞を上書きしますか？歌詞テキストが変わらない場合は読み仮名と翻訳は保持されます。{matched}",
     "syncLowConfidenceMatched": "\n\n一致した曲：「{matchedTitle}」/ {matchedArtist}。{ambiguous}\n{matchedLink} で確認してください。",
     "syncLowConfidenceConfirm": "この歌詞を使う",
+    "candidateExpired": "プレビューが期限切れか、曲が変更されました — 最新の候補を確認するにはもう一度同期してください。",
     "plainHitTitle": "タイムラインのない歌詞が見つかりました",
     "plainHitBody": "{source} ではタイムラインのない歌詞しか見つかりませんでした。この歌詞で現在の歌詞を上書きしますか？上書き後はタイムラインが消去されます。歌詞テキストが変わらない場合は読み仮名と翻訳は保持されます。{matched}",
     "plainHitConfirm": "上書きする",
@@ -254,6 +255,7 @@
     "translatingProgress": "翻訳中 {done}/{total}",
     "translationContinue": "翻訳を続ける",
     "translationCancel": "キャンセル",
+    "translationSavingPartial": "完了した部分を保存しています…",
     "translationCancelled": "キャンセルしました。完了した {done} 行の翻訳は保存されています",
     "translationContinueRemain": "翻訳を続ける（残り {count} 行）",
     "translationPartial": "{done}/{total} 行翻訳済み",
@@ -700,7 +702,12 @@
     "unsavedConfirm": "未保存の変更があります。離れますか？",
     "loginRequired": "翻訳の編集には Spotify への接続が必要です",
     "forbidden": "この歌詞を編集する権限がありません",
-    "staleSource": "歌詞が別のページで更新されました。再読み込みしてやり直してください"
+    "staleSource": "歌詞が別のページで更新されました。再読み込みしてやり直してください",
+    "fillMissing": "AI で欠落行を補完 ({count})",
+    "fillMissingDone": "{count} 行の翻訳を補完しました",
+    "fillMissingEmpty": "欠落している翻訳行はありません",
+    "retranslateLine": "この行を再翻訳",
+    "retranslateLineDone": "この行を再翻訳しました"
   },
   "settings": {
     "title": "個人設定",

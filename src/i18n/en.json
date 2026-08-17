@@ -136,6 +136,7 @@
     "syncLowConfidenceBody": "No exact match found — this result may not be the original song. Replace the current lyrics with it? Furigana and translation are kept if the lyric text is unchanged.{matched}",
     "syncLowConfidenceMatched": "\n\nMatched song: “{matchedTitle}” by {matchedArtist}.{ambiguous}\nVerify it at {matchedLink}.",
     "syncLowConfidenceConfirm": "Use anyway",
+    "candidateExpired": "The preview has expired or the song changed — please run sync again to see the latest candidate.",
     "plainHitTitle": "Plain-text lyrics found (no timeline)",
     "plainHitBody": "Only plain-text lyrics (no timestamps) were found from {source}. Replace the current lyrics with this plain text? The existing timeline will be cleared; furigana and translation are kept if the lyric text is unchanged.{matched}",
     "plainHitConfirm": "Replace anyway",
@@ -254,6 +255,7 @@
     "translatingProgress": "Translating {done}/{total}",
     "translationContinue": "Continue translating",
     "translationCancel": "Cancel",
+    "translationSavingPartial": "Saving the completed part…",
     "translationCancelled": "Cancelled — {done} translated line(s) saved",
     "translationContinueRemain": "Continue translating ({count} left)",
     "translationPartial": "{done}/{total} translated",
@@ -700,7 +702,12 @@
     "unsavedConfirm": "Discard unsaved changes?",
     "loginRequired": "Connect Spotify to edit translations",
     "forbidden": "No permission to edit this song",
-    "staleSource": "Lyrics were updated elsewhere, please reload and retry"
+    "staleSource": "Lyrics were updated elsewhere, please reload and retry",
+    "fillMissing": "AI fill missing ({count})",
+    "fillMissingDone": "Filled {count} lines with AI",
+    "fillMissingEmpty": "No missing translation lines",
+    "retranslateLine": "Re-translate this line",
+    "retranslateLineDone": "This line was re-translated"
   },
   "settings": {
     "title": "Personal Settings",

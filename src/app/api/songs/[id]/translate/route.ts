@@ -5,7 +5,7 @@ import { getAuthUser } from '@/lib/auth';
 import { extractLyricsGlossary, getTranslationConfig, streamTranslateLyricLines, translateLyricLines, TranslationError, type GlossaryEntry } from '@/lib/translation';
 import { getStoredTranslationConfig, resolveTranslationConfig } from '@/lib/translation-settings';
 import { getUserSettings, applyUserTargetLang } from '@/lib/user-settings';
-import { extractCompletedArrayItems } from '@/lib/translation-progress';
+import { computeCoverage, extractCompletedArrayItems } from '@/lib/translation-progress';
 import { mergeSliceIntoCache, writeSongField } from '@/lib/translation-cache';
 import { parseTranslationCache } from '@/lib/translation/parse';
 
@@ -20,6 +20,8 @@ const SSE_HEADERS = {
 //   - Without `start`: translate the whole song (cache hit short-circuits unless `force`).
 //   - With `start`: translate only lines [start, start + count); the result is MERGED into the
 //     stored cache so partial translations survive failures (resume/continue support).
+//     Combined with `force`, cache reuse inside the slice is disabled so the requested lines
+//     are re-translated even when a previous translation is stored (targeted re-translate).
 //   - With `stream: true`: responds text/event-stream (SSE) — the provider's
 //     reasoning/translation deltas are forwarded live as `reasoning` and
 //     `translation` events, then a final `done` event carries the aligned
@@ -107,7 +109,8 @@ export async function POST(
   // the whole-song request re-translates — one request, full-lyrics context.
   const start = Math.max(0, body.start ?? 0);
   const isSlice = body.start !== undefined;
-  if (!isSlice && !body.force && cacheLangMatches && existing.lyricsTranslation) {
+  const force = body.force === true;
+  if (!isSlice && !force && cacheLangMatches && existing.lyricsTranslation) {
     try {
       const cached = JSON.parse(existing.lyricsTranslation);
       if (Array.isArray(cached) && cached.length === lines.length
@@ -163,7 +166,10 @@ export async function POST(
       return;
     }
     const first = firstOccurrence.get(key)!;
-    const cachedTr = first < cache.length ? cache[first] : '';
+    // `force` (whole-song or slice) disables cache reuse: the requested lines
+    // are re-translated even when a previous translation is stored. The editor
+    // uses slice+force for targeted re-translates of specific lines.
+    const cachedTr = !force && first < cache.length ? cache[first] : '';
     if (cachedTr) {
       resolved[i] = cachedTr; // already translated (this line or its duplicate)
       return;
@@ -172,11 +178,11 @@ export async function POST(
       needTranslation.push(i); // first occurrence within this batch → translate
     } else if (first >= start && first < start + slice.length) {
       // Duplicate of a line earlier in this same batch → copied after translation.
-    } else if (first < start && first < cache.length && cache[first] !== '') {
+    } else if (first < start && !force && first < cache.length && cache[first] !== '') {
       resolved[i] = cache[first]; // duplicate of an earlier cached line
     } else {
-      // First occurrence is outside this batch and untranslated (partial
-      // translation edge case) — translate this copy as the representative.
+      // First occurrence is outside this batch and untranslated (or force
+      // disabled the cache) — translate this copy as the representative.
       needTranslation.push(i);
     }
   });
@@ -246,6 +252,8 @@ export async function POST(
   const expandAndMerge = async (translations: string[]): Promise<{
     finalSlice: string[];
     result: Awaited<ReturnType<typeof mergeSliceIntoCache>>;
+    /** Full-song coverage (non-empty source lines with a non-empty translation) after the merge. */
+    coverage: { covered: number; coverable: number };
   }> => {
     const bySliceIndex = new Map<number, string>();
     needTranslation.forEach((sliceIndex, j) => { bySliceIndex.set(sliceIndex, translations[j] ?? ''); });
@@ -254,7 +262,11 @@ export async function POST(
       const key = line.trim();
       if (!key) { resolved[i] = ''; return; }
       const first = firstOccurrence.get(key)!;
-      const fromBatch = bySliceIndex.get(first - start);
+      // Prefer the batch's translation for the line's first occurrence; for a
+      // line translated as a representative (its first occurrence lies outside
+      // this batch — e.g. a forced re-translate) fall back to this slice
+      // index's own entry before consulting the stale cache.
+      const fromBatch = bySliceIndex.get(first - start) ?? bySliceIndex.get(i);
       resolved[i] = fromBatch ?? (first < cache.length ? cache[first] : '');
     });
     const finalSlice = resolved.map((v) => v ?? '');
@@ -269,11 +281,19 @@ export async function POST(
       // tell whether the stored translations still match (issue #93).
       lang: config.targetLang,
     });
-    return { finalSlice, result };
+    // When the merge committed, the returned cache is the full index-aligned
+    // array — derive the authoritative full-song coverage from it. On failure
+    // fall back to the pre-merge estimate so callers still get a sane pair.
+    const coverage = result.ok
+      ? computeCoverage(lines, result.cache)
+      : computeCoverage(lines, resolved.length === lines.length ? resolved.map((v) => v ?? '') : cache);
+    return { finalSlice, result, coverage };
   };
 
   // Streaming mode: forward the provider's reasoning/translation deltas live,
-  // emit live `progress` events ({ done, total }) so the client can show a
+  // emit live `progress` events carrying BOTH request progress (requestDone /
+  // requestTotal over distinct lines) and full-song coverage (covered /
+  // coverable), so the client can show a
   // per-line counter, then a final `done` event with the aligned translations
   // array. On failure, whatever complete lines arrived before the error are
   // merged into the stored cache (resume support) and reported in the `error`
@@ -289,7 +309,9 @@ export async function POST(
             // Client disconnected mid-stream (page closed) — stop sending.
           }
         };
-        const total = uniqueLines.length;
+        // Request progress counts DISTINCT lines the model still needs to
+        // process (repeated choruses are deduped) — the live per-request metric.
+        const requestTotal = uniqueLines.length;
         // Reasoning text streamed so far — persisted on success AND on failure
         // so the user can review what the model thought before it finished
         // (or before it errored) from the song page later.
@@ -298,16 +320,33 @@ export async function POST(
         // in as complete lines stream in (used for partial-cache persistence).
         const pending: number[] = [...needTranslation];
         let partial: string[] = [];
+        // Build the unified progress payload: request progress (requestDone /
+        // requestTotal) PLUS the reliable full-song coverage (covered /
+        // coverable, duplicates expanded, blank lines skipped). The client is
+        // told to never guess a denominator — it consumes exactly these numbers.
+        const progressPayload = (requestDone: number, coverage: { covered: number; coverable: number }) => ({
+          requestDone,
+          requestTotal,
+          covered: coverage.covered,
+          coverable: coverage.coverable,
+        });
         const emitProgress = (translationText: string) => {
           const completed = extractCompletedArrayItems(translationText);
-          partial = completed.slice(0, total);
-          const done = Math.min(completed.length, total);
-          if (done > 0) {
-            send('progress', { done, total });
+          partial = completed.slice(0, requestTotal);
+          const requestDone = Math.min(completed.length, requestTotal);
+          if (requestDone > 0) {
+            // Live estimate: seed the whole-song cache with the slice-relative
+            // resolved lines we know about so far, then compute coverage.
+            const estimate = Array(lines.length).fill('');
+            lines.forEach((ln, i) => { estimate[i] = cache[i] ?? ''; });
+            pending.forEach((sliceIndex, j) => {
+              if (j < partial.length && sliceIndex < estimate.length) estimate[sliceIndex] = partial[j];
+            });
+            send('progress', progressPayload(requestDone, computeCoverage(lines, estimate)));
           }
         };
         try {
-          const translations = total > 0
+          const translations = requestTotal > 0
             ? await streamTranslateLyricLines(uniqueLines, config, (chunk) => {
               if (chunk.type === 'translation') emitProgress(chunk.text);
               else {
@@ -316,21 +355,22 @@ export async function POST(
               }
             }, fetch, ctx, request.signal)
             : [];
-          const { finalSlice, result } = await expandAndMerge(translations);
+          const { finalSlice, result, coverage } = await expandAndMerge(translations);
+          const requestDone = Math.min(translations.length, requestTotal);
           if (!result.ok) {
             if (result.reason === 'stale_source') {
               // Lyrics were edited while the model was running — never write
               // stale output back. Report it so the client can reload/retry.
-              send('error', { error: 'stale_annotation_source', done: 0, total });
+              send('error', { error: 'stale_annotation_source', ...progressPayload(requestDone, coverage) });
             } else if (result.reason === 'contention') {
               // The optimistic-lock merge never got a clean commit (extreme
               // concurrent load). Don't claim success — surface a retryable
               // failure so the client can retry the merge.
               console.warn('[translate] cache merge lost to contention — reporting retryable failure');
-              send('error', { error: 'translation_failed', done: 0, total });
+              send('error', { error: 'translation_failed', ...progressPayload(requestDone, coverage) });
             } else {
               // Song deleted mid-flight.
-              send('error', { error: 'song_not_found', done: 0, total });
+              send('error', { error: 'song_not_found', ...progressPayload(requestDone, coverage) });
             }
             return;
           }
@@ -349,16 +389,17 @@ export async function POST(
               // the reasoning write raced a lyrics edit. Report the conflict —
               // the translation is safe but stale relative to the current
               // lyrics, so the client should reload before trusting it.
-              send('error', { error: 'stale_annotation_source', done: 0, total });
+              send('error', { error: 'stale_annotation_source', ...progressPayload(requestDone, coverage) });
               return;
             }
           }
-          send('done', { start, count: finalSlice.length, translations: finalSlice, cached: false, lang: config.targetLang });
+          send('done', { start, count: finalSlice.length, translations: finalSlice, cached: false, lang: config.targetLang, ...progressPayload(requestDone, coverage) });
         } catch (error) {
           // Client cancelled (cancel button or closed the page): the upstream
           // fetch was aborted via request.signal, so no AI quota is wasted.
           // Everything below reuses the failure path — persist streamed
-          // reasoning + completed lines, then report done/total so the
+          // reasoning + completed lines, then report a consistent
+          // progress/coverage payload so the
           // client can offer the resume entry with real numbers.
           const cancelled = request.signal.aborted;
           let code = cancelled ? 'translation_cancelled' : 'translation_failed';
@@ -386,6 +427,11 @@ export async function POST(
           // Persist whatever complete lines streamed in before the failure so
           // a retry/continue skips them (partial-translation resume support).
           let partialDone = 0;
+          // Full-song coverage derived from the persisted result after the
+          // partial merge (fall back to the pre-merge cache when nothing was
+          // persisted). This is the number the client shows — request progress
+          // and coverage stay on consistent, separately-labelled scales.
+          let coverage = computeCoverage(lines, cache);
           if (partial.length > 0) {
             try {
               // Map partial line translations to their slice indices, then
@@ -400,10 +446,16 @@ export async function POST(
                 const key = line.trim();
                 if (!key) { resolved[i] = ''; return; }
                 const first = firstOccurrence.get(key)!;
+                // Same representative fallback as expandAndMerge: a line
+                // translated for this batch whose first occurrence lies
+                // outside it must read its own pending entry, not the cache.
                 const fromPartial = pending.indexOf(first - start);
+                const ownPartial = pending.indexOf(i);
                 resolved[i] = fromPartial >= 0
                   ? (partial[fromPartial] ?? '')
-                  : (first < cache.length ? cache[first] : '');
+                  : ownPartial >= 0
+                    ? (partial[ownPartial] ?? '')
+                    : (first < cache.length ? cache[first] : '');
               });
               const result = await mergeSliceIntoCache(db, {
                 id,
@@ -415,6 +467,7 @@ export async function POST(
               });
               if (result.ok) {
                 partialDone = partial.length;
+                coverage = computeCoverage(lines, result.cache);
               } else if (result.reason === 'stale_source') {
                 // Lyrics were edited mid-flight — the partial lines were
                 // generated from the OLD text and must not be written.
@@ -424,7 +477,7 @@ export async function POST(
               console.warn('[translate] failed to persist partial translation:', mergeError);
             }
           }
-          send('error', { error: code, done: partialDone, total });
+          send('error', { error: code, ...progressPayload(partialDone, coverage) });
         } finally {
           // After a client disconnect (or a normal close) the stream may
           // already be closed — closing again throws, so swallow it.

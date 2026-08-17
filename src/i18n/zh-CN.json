@@ -136,6 +136,7 @@
     "syncLowConfidenceBody": "没有找到精确匹配的歌词，以下结果可能不是原曲。确认使用它覆盖当前歌词吗？歌词文本未变化时会保留注音与翻译。{matched}",
     "syncLowConfidenceMatched": "\n\n实际命中的歌曲：“{matchedTitle}” / {matchedArtist}。{ambiguous}\n可在 {matchedLink} 核对。",
     "syncLowConfidenceConfirm": "仍要使用",
+    "candidateExpired": "预览已过期或歌曲已变更 — 请重新同步以查看最新候选。",
     "plainHitTitle": "已获取纯文本歌词（无时间轴）",
     "plainHitBody": "从 {source} 获取到的是纯文本歌词，没有时间轴。确认用纯文本覆盖当前歌词吗？覆盖后现有时间轴会被清空，歌词文本未变化时会保留注音与翻译。{matched}",
     "plainHitConfirm": "仍要覆盖",
@@ -254,6 +255,7 @@
     "translatingProgress": "翻译中 {done}/{total}",
     "translationContinue": "继续翻译",
     "translationCancel": "取消",
+    "translationSavingPartial": "正在保存已完成部分…",
     "translationCancelled": "已取消，已完成的 {done} 行翻译已保存",
     "translationContinueRemain": "继续翻译（剩余 {count} 行）",
     "translationPartial": "已翻译 {done}/{total}",
@@ -700,7 +702,12 @@
     "unsavedConfirm": "有未保存的修改，确定离开？",
     "loginRequired": "请先连接 Spotify 以编辑翻译",
     "forbidden": "没有权限修改这首歌词",
-    "staleSource": "歌词已在其他页面更新，请刷新后重新校正"
+    "staleSource": "歌词已在其他页面更新，请刷新后重新校正",
+    "fillMissing": "AI 补全缺失行 ({count})",
+    "fillMissingDone": "已补全 {count} 行翻译",
+    "fillMissingEmpty": "没有缺失的翻译行",
+    "retranslateLine": "重新翻译此行",
+    "retranslateLineDone": "已重新翻译此行"
   },
   "settings": {
     "title": "个人设置",
