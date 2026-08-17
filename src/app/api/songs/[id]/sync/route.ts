@@ -1,13 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB, schema, eq } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { fetchLyrics } from '@/lib/lyrics-fetcher';
+import { fetchLyrics, type SyncStage } from '@/lib/lyrics-fetcher';
 import { getLrcTextLines, parseLrc } from '@/lib/lrc';
 import { classifyLyricsHit } from '@/lib/lyrics-hit';
 import { getSpotifyTrack, searchSpotifyTrack } from '@/lib/spotify';
 import { signCandidate, verifyCandidate } from '@/lib/candidate-token';
 import type { CandidateTokenPayload } from '@/lib/candidate-token';
 import { applySyncWrite, resolveSyncBaseline } from '@/lib/sync-write';
+
+/**
+ * Convert a `{ status, body }` result into a JSON response. Used so the
+ * fresh-sync decision logic can be shared between the plain-JSON path and the
+ * SSE path (which wraps the same result in a `result` event).
+ */
+function toNextResponse(result: { status: number; body: unknown }): NextResponse {
+  return NextResponse.json(result.body, { status: result.status });
+}
 
 export async function POST(
   request: NextRequest,
@@ -88,9 +97,9 @@ export async function POST(
     // additionally runs as a compare-and-set on `lyrics_raw` (issue #120), so a
     // lyrics edit that lands between this check and the write can never be
     // silently clobbered either.
-    return persistCandidate(db, id, song, candidate, {
+    return toNextResponse(await persistCandidate(db, id, song, candidate, {
       sourceLyrics: song.lyricsRaw,
-    });
+    }));
   }
 
   // === Full (re)sync path — only used for a fresh preview ===
@@ -109,118 +118,25 @@ export async function POST(
   }
   const { sourceLyrics } = baseline;
 
-  const spotifyTrack = (song.spotifyTrackId ? await getSpotifyTrack(user.email, song.spotifyTrackId) : null)
-    || await searchSpotifyTrack(user.email, song.title, song.artist);
-  const spotifyCanonical = spotifyTrack
-    ? { name: spotifyTrack.title, artist: spotifyTrack.artist }
-    : null;
-  const { result, source, confidence, durationMismatch, match, rateLimited } = await fetchLyrics(song.title, song.artist, {
-    spotifyCanonical,
-    spotify: spotifyTrack
-      ? { durationMs: spotifyTrack.durationMs, album: spotifyTrack.album }
-      : undefined,
-  });
-
-  if (!result) {
-    // Distinguish a rate-limited lyric source (retry later) from a song that
-    // genuinely has no lyrics — reusing "not found" for 429 was misleading.
-    if (rateLimited) {
-      return NextResponse.json({ synced: false, error: 'lyrics_rate_limited' }, { status: 503 });
-    }
-    return NextResponse.json({ synced: false, error: 'lyrics_not_found' }, { status: 404 });
-  }
-
-  const { force, confirmPlain } = body;
-
-  // Plain-text hit (no LRC timeline) — any such candidate would destroy
-  // existing lyrics (timed or manually entered), so it needs explicit
-  // confirmation regardless of source.
-  const isPlainHit = !result.synced.trim();
-  const hasExistingLyrics = !!song.lyricsRaw.trim() || !!song.lyricsSynced.trim();
-
-  // Unified quality gate shared with import / import-playlist. The decision now
-  // depends on actual confidence (and match evidence), not the source string.
-  const verdict = classifyLyricsHit({
-    source,
-    confidence,
-    synced: !isPlainHit,
-    hasExistingTimeline: hasExistingLyrics,
-    durationMismatch,
-  });
-
-  // Below the hard floor → wrong candidate; never persist it silently.
-  if (verdict === 'rejected') {
-    return NextResponse.json({
-      synced: false,
-      error: 'lyrics_rejected',
-      source,
-      confidence,
-      lines: isPlainHit ? 0 : parseLrc(result.synced).length,
-    }, { status: 404 });
-  }
-
-  // Build the signed candidate so the later confirmation writes THIS exact
-  // preview (bound to the song's current updatedAt to detect concurrent edits).
-  const makeCandidate = (): Promise<string> => signCandidate({
-    song: id,
-    source,
-    confidence,
-    plain: result.plain,
-    synced: result.synced,
-    updatedAt: song.updatedAt,
-  });
-
-  // Plain-text hit (no LRC timeline) — do NOT silently overwrite stored lyrics /
-  // timeline. Unless the user explicitly confirms via a valid candidate token,
-  // keep the current lyrics untouched and ask — otherwise an existing LRC
-  // timeline, manual furigana and consumed AI translation quota would be lost
-  // unnoticed. We now hand back a signed token so the later confirmation writes
-  // THIS exact candidate.
-  if (isPlainHit && !confirmPlain) {
-    const candidate = await makeCandidate();
-    return NextResponse.json({
-      synced: false,
-      plainHit: true,
-      source,
-      confidence,
-      plain: result.plain,
-      candidate,
-      match,
-    });
-  }
-
-  // Risky (below threshold) match — return the candidate summary and let the
-  // user decide. Current lyrics stay untouched until they confirm via the token.
-  if (verdict === 'needs_review' && !force) {
-    const parsed = result.synced ? parseLrc(result.synced) : [];
-    const candidate = await makeCandidate();
-    return NextResponse.json({
-      synced: false,
-      lowConfidence: true,
-      source,
-      confidence,
-      lines: parsed.length,
-      lrc: result.synced,
-      candidate,
-      match,
-    });
-  }
-
-  // Direct "sync with override" call (force / confirmPlain without a token) —
-  // writes the freshly fetched candidate. The write runs under the
-  // `source_lyrics` compare-and-set so a lyrics edit landing mid-flight can
-  // never be silently clobbered (issue #120).
-  return persistCandidate(db, id, song, {
-    song: id,
-    source,
-    confidence,
-    plain: result.plain,
-    synced: result.synced,
-    updatedAt: song.updatedAt,
-  }, {
-    spotifyTrack,
+  const wantSse = request.headers.get('accept')?.includes('text/event-stream') ?? false;
+  const run = (onStage?: (stage: SyncStage) => void) => runFreshSync({
+    userEmail: user.email,
+    db,
+    id,
+    song,
+    body,
     sourceLyrics,
-  });
+  }, onStage);
+
+  // When the client opts into Server-Sent Events, stream per-source stage
+  // updates ("正在查询 LRCLIB…" etc.) and finish with a single `result` event
+  // carrying the same payload the plain-JSON path would return. This gives the
+  // long multi-source fetch a live progress line and a cancel affordance
+  // instead of a frozen spinner (issue #129).
+  if (wantSse) {
+    return sseResponse(run);
+  }
+  return toNextResponse(await run());
 }
 
 /**
@@ -247,7 +163,7 @@ async function persistCandidate(
     spotifyTrack?: any | null;
     sourceLyrics: string;
   },
-) {
+): Promise<{ status: number; body: unknown }> {
 /* eslint-enable @typescript-eslint/no-explicit-any */
   const plain = candidate.plain;
   const synced = candidate.synced;
@@ -302,17 +218,212 @@ async function persistCandidate(
   });
 
   if (!write.ok) {
-    return NextResponse.json({ synced: false, error: 'stale_source' }, { status: 409 });
+    return { status: 409, body: { synced: false, error: 'stale_source' } };
   }
 
   const parsed = synced ? parseLrc(synced) : [];
-  return NextResponse.json({
-    synced: parsed.length > 0,
-    plainUpdated: isPlain,
-    source: candidate.source,
-    confidence: candidate.confidence,
-    lines: parsed.length,
-    lrc: synced,
-    spotify_track_id: fresh?.spotifyTrack?.id ?? null,
+  return {
+    status: 200,
+    body: {
+      synced: parsed.length > 0,
+      plainUpdated: isPlain,
+      source: candidate.source,
+      confidence: candidate.confidence,
+      lines: parsed.length,
+      lrc: synced,
+      spotify_track_id: fresh?.spotifyTrack?.id ?? null,
+    },
+  };
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any -- Drizzle row is `any` (see lib/db.ts). */
+interface FreshSyncArgs {
+  userEmail: string;
+  db: any;
+  id: string;
+  song: any;
+  body: {
+    force?: boolean;
+    confirmPlain?: boolean;
+  };
+  sourceLyrics: string;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+/**
+ * Run the full (re)sync chain: fetch from all sources in order and classify the
+ * result into the same outcome the previous JSON-only route produced
+ * (plain-hit / low-confidence preview / direct write / not-found / rate-limit).
+ * Returns a plain `{ status, body }` so it can be served either as a regular
+ * JSON response or, when the caller wants SSE, wrapped into a `result` event.
+ *
+ * The optional `onStage` callback is forwarded to `fetchLyrics` so the SSE
+ * path can emit live "querying source…" progress lines.
+ */
+/* eslint-disable @typescript-eslint/no-explicit-any -- Drizzle row is `any` (see lib/db.ts). */
+async function runFreshSync(
+  args: FreshSyncArgs,
+  onStage?: (stage: SyncStage) => void,
+): Promise<{ status: number; body: unknown }> {
+/* eslint-enable @typescript-eslint/no-explicit-any */
+  const { userEmail, db, id, song, body, sourceLyrics } = args;
+
+  const spotifyTrack = (song.spotifyTrackId ? await getSpotifyTrack(userEmail, song.spotifyTrackId) : null)
+    || await searchSpotifyTrack(userEmail, song.title, song.artist);
+  const spotifyCanonical = spotifyTrack
+    ? { name: spotifyTrack.title, artist: spotifyTrack.artist }
+    : null;
+  const { result, source, confidence, durationMismatch, match, rateLimited } = await fetchLyrics(song.title, song.artist, {
+    spotifyCanonical,
+    spotify: spotifyTrack
+      ? { durationMs: spotifyTrack.durationMs, album: spotifyTrack.album }
+      : undefined,
+    onStage,
+  });
+
+  if (!result) {
+    // Distinguish a rate-limited lyric source (retry later) from a song that
+    // genuinely has no lyrics — reusing "not found" for 429 was misleading.
+    if (rateLimited) {
+      return { status: 503, body: { synced: false, error: 'lyrics_rate_limited' } };
+    }
+    return { status: 404, body: { synced: false, error: 'lyrics_not_found' } };
+  }
+
+  const { force, confirmPlain } = body;
+
+  // Plain-text hit (no LRC timeline) — any such candidate would destroy
+  // existing lyrics (timed or manually entered), so it needs explicit
+  // confirmation regardless of source.
+  const isPlainHit = !result.synced.trim();
+  const hasExistingLyrics = !!song.lyricsRaw.trim() || !!song.lyricsSynced.trim();
+
+  // Unified quality gate shared with import / import-playlist. The decision now
+  // depends on actual confidence (and match evidence), not the source string.
+  const verdict = classifyLyricsHit({
+    source,
+    confidence,
+    synced: !isPlainHit,
+    hasExistingTimeline: hasExistingLyrics,
+    durationMismatch,
+  });
+
+  // Below the hard floor → wrong candidate; never persist it silently.
+  if (verdict === 'rejected') {
+    return {
+      status: 404,
+      body: {
+        synced: false,
+        error: 'lyrics_rejected',
+        source,
+        confidence,
+        lines: isPlainHit ? 0 : parseLrc(result.synced).length,
+      },
+    };
+  }
+
+  // Build the signed candidate so the later confirmation writes THIS exact
+  // preview (bound to the song's current updatedAt to detect concurrent edits).
+  const makeCandidate = (): Promise<string> => signCandidate({
+    song: id,
+    source,
+    confidence,
+    plain: result.plain,
+    synced: result.synced,
+    updatedAt: song.updatedAt,
+  });
+
+  // Plain-text hit (no LRC timeline) — do NOT silently overwrite stored lyrics /
+  // timeline. Unless the user explicitly confirms via a valid candidate token,
+  // keep the current lyrics untouched and ask — otherwise an existing LRC
+  // timeline, manual furigana and consumed AI translation quota would be lost
+  // unnoticed. We now hand back a signed token so the later confirmation writes
+  // THIS exact candidate.
+  if (isPlainHit && !confirmPlain) {
+    const candidate = await makeCandidate();
+    return {
+      status: 200,
+      body: {
+        synced: false,
+        plainHit: true,
+        source,
+        confidence,
+        plain: result.plain,
+        candidate,
+        match,
+      },
+    };
+  }
+
+  // Risky (below threshold) match — return the candidate summary and let the
+  // user decide. Current lyrics stay untouched until they confirm via the token.
+  if (verdict === 'needs_review' && !force) {
+    const parsed = result.synced ? parseLrc(result.synced) : [];
+    const candidate = await makeCandidate();
+    return {
+      status: 200,
+      body: {
+        synced: false,
+        lowConfidence: true,
+        source,
+        confidence,
+        lines: parsed.length,
+        lrc: result.synced,
+        candidate,
+        match,
+      },
+    };
+  }
+
+  // Direct "sync with override" call (force / confirmPlain without a token) —
+  // writes the freshly fetched candidate. The write runs under the
+  // `source_lyrics` compare-and-set so a lyrics edit landing mid-flight can
+  // never be silently clobbered (issue #120).
+  return persistCandidate(db, id, song, {
+    song: id,
+    source,
+    confidence,
+    plain: result.plain,
+    synced: result.synced,
+    updatedAt: song.updatedAt,
+  }, {
+    spotifyTrack,
+    sourceLyrics,
+  });
+}
+
+/**
+ * Wrap a fresh-sync run in a Server-Sent Events stream. Each source the fetch
+ * chain hits is emitted as a `stage` event (`data: {"stage":"lrclib"}`), then a
+ * single `result` event carries the final `{ status, body }`. An error mid-fetch
+ * (e.g. an unexpected exception) is surfaced as an `error` event with a generic
+ * network message so the client can stop the spinner cleanly.
+ */
+function sseResponse(
+  run: (onStage: (stage: SyncStage) => void) => Promise<{ status: number; body: unknown }>,
+): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const write = (event: string, data: unknown) => {
+        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      };
+      try {
+        const result = await run((stage) => write('stage', { stage }));
+        write('result', result);
+      } catch {
+        write('error', { status: 500, body: { synced: false, error: 'network_error' } });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    },
   });
 }

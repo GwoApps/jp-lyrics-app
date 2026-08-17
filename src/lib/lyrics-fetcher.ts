@@ -790,11 +790,30 @@ async function fetchFromYtMusic(title: string, artist: string): Promise<LyricsRe
 
 // ─── Full chain ──
 
+/**
+ * Which lyrics source the fetch chain is currently querying. Emitted through
+ * {@link FetchLyricsOptions.onStage} so long syncs can surface real-time
+ * progress ("正在查询 LRCLIB…" etc.) and a cancel affordance instead of a
+ * frozen spinner.
+ */
+export type SyncStage =
+  | 'lrclib'        // LRCLIB exact + Spotify canonical name
+  | 'lrclib-search' // LRCLIB fuzzy search
+  | 'petitlyrics'
+  | 'uta-net'
+  | 'ytmusic';
+
 export interface FetchLyricsOptions {
   /** Use Spotify canonical name for CJK variant matching */
   spotifyCanonical?: { name: string; artist: string } | null;
   /** Spotify-side evidence (album + durationMs) used to disambiguate recordings. */
   spotify?: LrclibEvidence;
+  /**
+   * Invoked right before each source is queried, letting a streaming caller
+   * surface which provider is being contacted. No-op when omitted (import /
+   * playlist-import keep the existing behaviour).
+   */
+  onStage?: (stage: SyncStage) => void;
 }
 
 /**
@@ -812,34 +831,41 @@ export async function fetchLyrics(
   // When every source fails AND lrclib was rate-limited we want to report a
   // distinct "retry later" outcome instead of a misleading "no lyrics found".
   let rateLimited = false;
+  const stage = opts?.onStage;
 
   // 1. LRCLIB exact
+  stage?.('lrclib');
   let outcome = await fetchFromLrclib(title, artist, evidence);
   rateLimited = rateLimited || outcome.rateLimited;
   if (outcome.hit) return fetchedResult(outcome.hit.result, 'lrclib', lrclibConfidence(outcome.hit, 98, true), outcome.hit.duration === 'conflict');
 
   // 2. LRCLIB with Spotify canonical name
   if (opts?.spotifyCanonical) {
+    stage?.('lrclib');
     outcome = await fetchFromLrclib(opts.spotifyCanonical.name, opts.spotifyCanonical.artist, evidence);
     rateLimited = rateLimited || outcome.rateLimited;
     if (outcome.hit) return fetchedResult(outcome.hit.result, 'lrclib', lrclibConfidence(outcome.hit, 96, true), outcome.hit.duration === 'conflict');
+    stage?.('lrclib-search');
     outcome = await searchLrclib(`${opts.spotifyCanonical.name} ${opts.spotifyCanonical.artist}`, opts.spotifyCanonical.name, opts.spotifyCanonical.artist, evidence);
     rateLimited = rateLimited || outcome.rateLimited;
     if (outcome.hit) return fetchedResult(outcome.hit.result, 'lrclib-search', lrclibConfidence(outcome.hit, 82, false));
   }
 
   // 3. LRCLIB fuzzy search
+  stage?.('lrclib-search');
   outcome = await searchLrclib(`${title} ${artist}`, title, artist, evidence);
   rateLimited = rateLimited || outcome.rateLimited;
   if (outcome.hit) return fetchedResult(outcome.hit.result, 'lrclib-search', lrclibConfidence(outcome.hit, 78, false));
 
   // 4. PetitLyrics
+  stage?.('petitlyrics');
   const pl = await fetchFromPetitLyrics(title, artist);
   if (pl && (pl.synced || pl.plain)) {
     return { ...fetchedResult(pl, 'petitlyrics', pl.synced ? 90 : 82), rateLimited };
   }
 
   // 5. Uta-Net
+  stage?.('uta-net');
   const un = await fetchFromUtaNet(title, artist);
   if (un) {
     return {
@@ -855,6 +881,7 @@ export async function fetchLyrics(
   }
 
   // 6. ytmusicapi
+  stage?.('ytmusic');
   const yt = await fetchFromYtMusic(title, artist);
   if (yt) return { ...fetchedResult(yt, 'ytmusic', yt.synced ? 74 : 68), rateLimited };
 

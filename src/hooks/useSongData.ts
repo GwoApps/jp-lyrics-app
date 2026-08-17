@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CoverPaletteJson, FuriganaLine, ReadingMode, ReadingScheme } from '@/lib/types';
+import type { SyncStage } from '@/lib/lyrics-fetcher';
 import { mapTimelineTimestamps, parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
 import { readTranslationStream, type TranslationProgress } from '@/lib/translation-stream';
@@ -34,6 +35,68 @@ const LYRICS_SOURCE_KEYS: Record<string, string> = {
   utanet: 'lyricsSources.utanet',
   ytmusic: 'lyricsSources.ytmusic',
 };
+
+// The sync response is an untyped union of outcomes (not-found, plain-hit
+// preview, low-confidence preview, direct write, rate-limit…). Its shape is
+// intentionally loose (mirrors the previous `res.json()` behaviour), so the
+// result body is typed `any`; the exact fields are read in flag-checked
+// branches in `runSync`.
+/* eslint-disable @typescript-eslint/no-explicit-any -- SSE payload is intentionally untyped. */
+/**
+ * Read the Server-Sent Events response produced by the sync route. Emits each
+ * `stage` event to `onStage` (so the UI can show "正在查询 LRCLIB…" live) and
+ * resolves with the payload of the terminal `result` / `error` event — the same
+ * object the previous plain-JSON response carried, plus its HTTP status.
+ */
+async function readSyncEventStream(
+  res: Response,
+  onStage: (stage: SyncStage) => void,
+): Promise<{ status: number; body: any }> {
+  const reader = res.body?.getReader();
+  if (!reader) {
+    // Not a stream (e.g. an early JSON error before streaming began) — read as JSON.
+    const body = await res.json();
+    return { status: res.status, body };
+  }
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let terminal: { status: number; body: any } | null = null;
+  while (terminal === null) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let boundary: number;
+    // SSE frames are separated by a blank line.
+    while ((boundary = buffer.indexOf('\n\n')) !== -1) {
+      const frame = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+      let event = 'message';
+      const dataLines: string[] = [];
+      for (const line of frame.split('\n')) {
+        if (line.startsWith('event:')) event = line.slice(6).trim();
+        else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
+      }
+      if (dataLines.length === 0) continue;
+      let payload: { status?: number; stage?: SyncStage; body?: any };
+      try {
+        payload = JSON.parse(dataLines.join('\n'));
+      } catch {
+        continue;
+      }
+      if (event === 'stage' && payload.stage) {
+        onStage(payload.stage);
+      } else if (event === 'result' || event === 'error') {
+        terminal = { status: payload.status ?? res.status, body: payload.body ?? payload };
+      }
+    }
+  }
+  // Defensive: if the stream ended without a terminal event, surface a generic error.
+  if (!terminal) {
+    return { status: res.status || 500, body: { synced: false, error: 'network_error' } };
+  }
+  return terminal;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 const escapeHtml = (value: string) => value
   .replaceAll('&', '&amp;')
@@ -152,6 +215,10 @@ export interface UseSongDataReturn {
   retryFurigana: () => void;
   lineTimestamps: (number | null)[];
   syncing: boolean;
+  /** Current lyrics source being queried during a sync (SSE stage), for the progress line. */
+  syncStage: SyncStage | null;
+  /** Abort the in-flight sync fetch (cancel button next to the spinner). */
+  cancelSync: () => void;
   importing: boolean;
   copied: boolean;
   readingMode: ReadingMode;
@@ -253,6 +320,11 @@ export function useSongData(id: string): UseSongDataReturn {
   const [importReview, setImportReview] = useState<ImportReviewState | null>(null);
   const [syncLines, setSyncLines] = useState<ReturnType<typeof parseLrc>>([]);
   const [syncing, setSyncing] = useState(false);
+  const [syncStage, setSyncStage] = useState<SyncStage | null>(null);
+  // Tracks the in-flight sync request so the user can cancel a long
+  // multi-source fetch (or stop an accidental one) without reloading, and so
+  // the request is aborted when the component unmounts.
+  const syncAbortRef = useRef<AbortController | null>(null);
   const [importing, setImporting] = useState(false);
   // Pending fuzzy-search sync result waiting for explicit user confirmation
   // (server refuses to overwrite lyrics below the confidence threshold).
@@ -668,11 +740,23 @@ export function useSongData(id: string): UseSongDataReturn {
   }, [id, t, showToast]);
 
   const runSync = useCallback(async (force: boolean, confirmPlain = false) => {
+    const controller = new AbortController();
+    syncAbortRef.current = controller;
     setSyncing(true);
+    setSyncStage(null);
     try {
       const res = await fetch(`/api/songs/${id}/sync`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          // Ask the server to stream per-source progress over SSE so the UI can
+          // show "正在查询 LRCLIB…" etc. instead of a frozen spinner.
+          Accept: 'text/event-stream',
+        },
+        // The cancel button aborts this fetch; the request (and the server-side
+        // fetch chain behind it) stops mid-way. No write has happened yet, so
+        // cancelling has zero side effects.
+        signal: controller.signal,
         body: JSON.stringify({
           force,
           confirmPlain,
@@ -683,7 +767,7 @@ export function useSongData(id: string): UseSongDataReturn {
           source_lyrics: song?.lyrics_raw ?? '',
         }),
       });
-      const data = await res.json();
+      const { status, body: data } = await readSyncEventStream(res, (stage) => setSyncStage(stage));
       // Fuzzy search below the confidence threshold: the server keeps the
       // current lyrics untouched — ask before overriding (furigana and
       // translation would be reset too).
@@ -724,6 +808,11 @@ export function useSongData(id: string): UseSongDataReturn {
       if (data.synced) {
         await applySyncResult(data);
       } else {
+        // Mid-fetch failure surfaced over SSE (or a stale/non-2xx result).
+        if (data.error === 'network_error' || status >= 500) {
+          setImportAlert({ message: t('song.networkErrorAlert') });
+          return;
+        }
         const errorKey: Record<string, string> = {
           lyrics_not_found: 'apiErrors.lyricsNotFound',
           lyrics_rate_limited: 'apiErrors.lyricsRateLimited',
@@ -743,13 +832,27 @@ export function useSongData(id: string): UseSongDataReturn {
         }
       }
     } catch {
-      setImportAlert({ message: t('song.networkErrorAlert') });
+      // Cancelling is expected — a clean stop, not a network failure.
+      if (!controller.signal.aborted) {
+        setImportAlert({ message: t('song.networkErrorAlert') });
+      }
     } finally {
       setSyncing(false);
+      setSyncStage(null);
+      if (syncAbortRef.current === controller) syncAbortRef.current = null;
     }
   }, [id, t, showToast, applySyncResult, song, fetchSong, applySongResult]);
 
   const handleSync = useCallback(() => runSync(false), [runSync]);
+
+  /** Abort the in-flight sync fetch (cancel button on the sync progress line). */
+  const cancelSync = useCallback(() => {
+    syncAbortRef.current?.abort();
+  }, []);
+
+  // Abort any in-flight sync when the component unmounts so a slow server-side
+  // fetch chain never keeps running after the user leaves the page (issue #129).
+  useEffect(() => () => { syncAbortRef.current?.abort(); }, []);
 
   // Confirm a low-confidence candidate by echoing back the signed token the
   // server issued during the preview. The server writes EXACTLY the reviewed
@@ -1397,6 +1500,8 @@ export function useSongData(id: string): UseSongDataReturn {
     retryFurigana,
     lineTimestamps,
     syncing,
+    syncStage,
+    cancelSync,
     importing,
     copied,
     readingMode,

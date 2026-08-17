@@ -14,6 +14,7 @@ import { useSpectrumCapture } from '@/hooks/useSpectrumCapture';
 import ExperimentsPanel from '@/components/ExperimentsPanel';
 import Toast from '@/components/Toast';
 import TranslationStatusOverlay from '@/components/TranslationStatusOverlay';
+import SyncStatusOverlay from '@/components/SyncStatusOverlay';
 import { ToolbarMenu, buildReadingMenuItems, type ToolbarMenuItem } from '@/components/song/ToolbarMenu';
 import { MobileMenu } from '@/components/song/MobileMenu';
 import DownloadDialog from '@/components/song/DownloadDialog';
@@ -1078,6 +1079,7 @@ export default function SongViewPage() {
         onContinue={() => void data.handleTranslate()}
         onCancel={data.cancelTranslate}
       />
+      <SyncStatusOverlay syncing={data.syncing} stage={data.syncStage} onCancel={data.cancelSync} />
       {data.toast && <Toast type={data.toast.type} message={data.toast.msg} actionLabel={data.toast.actionLabel} onAction={data.toast.onAction} />}
 
       {showSongInfo && (
