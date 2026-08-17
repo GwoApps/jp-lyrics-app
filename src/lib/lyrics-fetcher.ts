@@ -116,8 +116,10 @@ export function stripTimestamps(lrc: string): string {
     // Drop standard metadata tags ([ar:], [ti:], [al:], [by:], [offset:], …)
     // so they never leak into plain lyrics.
     .replace(/^\[[a-z]+:[^\]]*\]\s*$/gim, '')
-    // Drop timestamp tags, keeping any lyric text after them.
-    .replace(/^(?:\[\d{2}:\d{2}\.\d{2,3}\]\s*)+/gm, '')
+    // Drop every leading timestamp tag (one or more per row), keeping any lyric
+    // text after them. Accepts the same non-standard forms the LRC parser does:
+    // 1-2 digit minutes, fixed 2-digit seconds, optional 1-3 digit fraction.
+    .replace(/^(?:\[(?:\d{1,2}:\d{2}(?:\.\d{1,3})?)\]\s*)+/gm, '')
     .trim();
 }
 

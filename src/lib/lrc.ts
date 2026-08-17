@@ -16,22 +16,37 @@ const LRC_METADATA_KEYS = new Set(['ar', 'ti', 'al', 'by', 'offset', 're', 've',
 /** Match a standard LRC metadata tag line such as `[ar:YOASOBI]` / `[offset:120]`. */
 const METADATA_LINE_RE = /^\[([a-z]+):(.*)\]$/i;
 
-/** One or more standard timestamps at the start of an LRC lyric row. */
-const LEADING_TIMESTAMPS_RE = /^(?:\[\d{2}:\d{2}\.\d{2,3}\]\s*)+/;
-const TIMESTAMP_RE = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/g;
+/** One or more timestamps at the start of an LRC lyric row (any supported form). */
+const LEADING_TIMESTAMPS_RE = /^(?:\[(?:\d{1,2}:\d{2}(?:\.\d{1,3})?)\]\s*)+/;
+/** Global matcher used to expand every timestamp inside a multi-timestamp prefix. */
+const TIMESTAMP_RE = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]/g;
 
-/** Expand a multi-timestamp LRC row into one entry per timestamp. */
+/** Parse minutes/seconds/fraction (as captured by {@link TIMESTAMP_RE}) into ms. */
+function timestampCapturesToMs(minutes: string, seconds: string, fraction: string | undefined): number {
+  const secs = Number.parseInt(seconds, 10);
+  if (secs >= 60) return NaN;
+  const frac = (fraction ?? '').padEnd(3, '0');
+  return Number.parseInt(minutes, 10) * 60000
+    + secs * 1000
+    + (frac ? Number.parseInt(frac, 10) : 0);
+}
+
+/**
+ * Expand a multi-timestamp LRC row into one entry per timestamp.
+ * Supports non-standard forms (`[1:23.45]`, `[01:23]`) with 1-2 digit minutes
+ * and an optional fraction. Returns null when the row has no leading timestamp.
+ */
 function parseTimestampedRow(raw: string): SyncLine[] | null {
   const prefix = raw.match(LEADING_TIMESTAMPS_RE)?.[0];
   if (!prefix) return null;
   const text = raw.slice(prefix.length).trim();
   if (!text) return [];
-  return [...prefix.matchAll(TIMESTAMP_RE)].map((match) => ({
-    timeMs: Number.parseInt(match[1], 10) * 60000
-      + Number.parseInt(match[2], 10) * 1000
-      + Number.parseInt(match[3].padEnd(3, '0'), 10),
-    text,
-  }));
+  const lines: SyncLine[] = [];
+  for (const match of prefix.matchAll(TIMESTAMP_RE)) {
+    const timeMs = timestampCapturesToMs(match[1], match[2], match[3]);
+    if (!Number.isNaN(timeMs)) lines.push({ timeMs, text });
+  }
+  return lines;
 }
 
 /** True when a trimmed line is a standard LRC metadata tag (case-insensitive). */
@@ -402,20 +417,15 @@ export function findLrcConflicts(lrc: string): TimelineConflict[] {
   for (const raw of lrc.split('\n')) {
     const trimmed = raw.trim();
     if (!trimmed) continue;
-    const match = trimmed.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\]\s*(.*)$/);
-    if (!match) {
+    const parsed = parseTimestampedRow(trimmed);
+    if (parsed === null) {
       // Untimed rows are kept in timeline drafts; they are ignored by the check.
       lines.push({ timeMs: null, text: trimmed });
       continue;
     }
-    const text = match[4].trim();
-    if (!text) continue;
-    lines.push({
-      timeMs: Number.parseInt(match[1], 10) * 60000
-        + Number.parseInt(match[2], 10) * 1000
-        + Number.parseInt(match[3].padEnd(3, '0'), 10),
-      text,
-    });
+    // A timestamp with no lyric text (e.g. `[00:12.00]`) carries nothing to highlight.
+    if (parsed.length === 0) continue;
+    lines.push(...parsed);
   }
   return findTimelineConflicts(lines);
 }

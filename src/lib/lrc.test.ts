@@ -87,6 +87,50 @@ test('multi-timestamp rows expand without leaking timestamps into lyric text', (
   assert.deepEqual(getLrcTextLines(lrc), ['chorus line']);
 });
 
+test('parseLrc tolerates non-standard timestamps (single-digit minutes, missing fraction)', () => {
+  // [1:23.45] single-digit minute, [01:23] missing fraction, [0:05] single digit.
+  const lines = parseLrc('[1:23.45]first\n[01:23]second\n[0:05]third\n[00:12.345]fourth');
+  assert.deepEqual(lines, [
+    { timeMs: 5000, text: 'third' },
+    { timeMs: 12345, text: 'fourth' },
+    { timeMs: 83000, text: 'second' },
+    { timeMs: 83450, text: 'first' },
+  ]);
+  // Row order is preserved for the plain-text view (no line dropped, no
+  // timestamp leaks into the text).
+  assert.deepEqual(getLrcTextLines('[1:23.45]first\n[01:23]second\n[0:05]third'), ['first', 'second', 'third']);
+});
+
+test('non-standard timestamps do not leak into text lines nor get dropped', () => {
+  // Mixed input: standard, non-standard, multi-timestamp and a plain row.
+  const lrc = '[00:10.00][1:23.45]chorus\n[02:00]verse\nplain line\n[3:04.1]bridge';
+  assert.deepEqual(parseLrc(lrc), [
+    { timeMs: 10000, text: 'chorus' },
+    { timeMs: 83450, text: 'chorus' },
+    { timeMs: 120000, text: 'verse' },
+    { timeMs: 184100, text: 'bridge' },
+  ]);
+  assert.deepEqual(getLrcTextLines(lrc), ['chorus', 'verse', 'plain line', 'bridge']);
+});
+
+test('findLrcConflicts accepts non-standard timestamps without dropping rows', () => {
+  // [1:23.45] → 83450 must be seen as a real timed row so an out-of-order row
+  // after it is still flagged correctly.
+  assert.deepEqual(findLrcConflicts('[1:23.45]a\n[00:50.000]b'), [
+    { index: 1, line: 2, previousIndex: 0, previousLine: 1, timeMs: 50000, previousTimeMs: 83450 },
+  ]);
+  assert.deepEqual(findLrcConflicts('[1:23.45]a\n[01:40]b'), []);
+});
+
+test('timeline draft aligns non-standard timestamp rows with plain lyrics', () => {
+  const draft = createTimelineDraft('first\nsecond', '[1:23.45]first\n[01:23]second');
+  assert.deepEqual(draft, [
+    { text: 'first', timeMs: 83450 },
+    { text: 'second', timeMs: 83000 },
+  ]);
+  assert.equal(serializeTimelineDraft(draft), '[01:23.450]first\n[01:23.000]second');
+});
+
 test('timeline draft queues every timestamp expanded from repeated lyric rows', () => {
   assert.deepEqual(
     createTimelineDraft('chorus line\nchorus line', '[00:10.00][00:50.000]chorus line'),

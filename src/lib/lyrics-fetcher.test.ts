@@ -42,6 +42,20 @@ test('stripTimestamps removes every leading timestamp and metadata tags', () => 
   );
 });
 
+test('stripTimestamps handles non-standard timestamps (single-digit minutes, missing fraction)', () => {
+  // [1:23.45] single-digit minute and [01:23] missing fraction must be stripped
+  // without leaking the timestamp into plain text.
+  assert.equal(
+    stripTimestamps('[1:23.45]first\n[01:23]second\n[0:05]third'),
+    'first\nsecond\nthird',
+  );
+  // Multi-timestamp rows mixing standard and non-standard forms.
+  assert.equal(
+    stripTimestamps('[1:23.45][02:00.00]chorus\n[00:10.00][00:50.000]outro'),
+    'chorus\noutro',
+  );
+});
+
 test('decodes PetitLyrics type-2 LSY timings while preserving blank lyric rows', () => {
   const payload = new Uint8Array(0xcc + 8);
   const view = new DataView(payload.buffer);
