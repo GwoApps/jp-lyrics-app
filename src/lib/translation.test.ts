@@ -179,6 +179,45 @@ test('default system prompt keeps rhetoric conditional and carries a good/bad fe
   assert.ok(!rendered.includes('{{'));
 });
 
+test('few-shot quality example follows the target language (en / zh-TW / ja)', () => {
+  const en = renderSystemPrompt(DEFAULT_SYSTEM_PROMPT, 'en');
+  assert.match(en, /Japanese → English lyric line/);
+  assert.match(en, /GOOD: If my voice could reach you before the tears fall/);
+  // English example must not leak the Chinese renderings.
+  assert.ok(!en.includes('泪落之前'));
+  assert.ok(!en.includes('若在泪水落下前'));
+
+  const tw = renderSystemPrompt(DEFAULT_SYSTEM_PROMPT, 'zh-TW');
+  assert.match(tw, /Japanese → Traditional Chinese lyric line/);
+  assert.match(tw, /若在淚水落下前，這聲音能傳到你身邊/);
+  assert.ok(!tw.includes('泪落之前'), 'zh-TW must not use simplified zh example');
+
+  const ja = renderSystemPrompt(DEFAULT_SYSTEM_PROMPT, 'ja');
+  assert.match(ja, /Japanese → Japanese lyric line/);
+  assert.match(ja, /GOOD: 涙が落ちる前に、この声が届くなら/);
+  assert.ok(!ja.includes('泪落之前'), 'ja must not use zh example');
+
+  // Any other BCP-47 prefix falls back to the default Simplified Chinese example.
+  const kr = renderSystemPrompt(DEFAULT_SYSTEM_PROMPT, 'ko');
+  assert.match(kr, /Japanese → Simplified Chinese lyric line/);
+  assert.match(kr, /若在泪水落下前，这声音能传到你身边/);
+});
+
+test('few-shot selection is unaffected by song context and glossary injection', () => {
+  const rendered = renderSystemPrompt(DEFAULT_SYSTEM_PROMPT, 'en', {
+    title: '花火',
+    artist: 'AAA',
+    glossary: [{ original: '花火', translation: 'Fireworks' }],
+  });
+  // Target-language example still selected…
+  assert.match(rendered, /Japanese → English lyric line/);
+  assert.match(rendered, /If my voice could reach you before the tears fall/);
+  // …while context and glossary are injected normally.
+  assert.match(rendered, /title: "花火", artist: "AAA"/);
+  assert.match(rendered, /花火 → Fireworks/);
+  assert.ok(!rendered.includes('{{'));
+});
+
 test('renderSystemPrompt fills song context and glossary placeholders', () => {
   const rendered = renderSystemPrompt(DEFAULT_SYSTEM_PROMPT, 'zh-CN', {
     title: '花火',
