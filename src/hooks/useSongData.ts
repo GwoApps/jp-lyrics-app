@@ -141,6 +141,12 @@ export interface UseSongDataReturn {
   clearReasoning: () => Promise<void>;
   handleTranslate: (force?: boolean) => Promise<void>;
   cancelTranslate: () => void;
+  /** Effective target language for translation (user setting → global default). */
+  targetLang: string | null;
+  /** The user's own translation-target override ('' when using the system default). */
+  targetLangOverride: string;
+  /** Persist a new translation target language and refresh the effective value. */
+  setTargetLang: (code: string) => Promise<void>;
   furiganaLoading: boolean;
   furiganaError: string;
   retryFurigana: () => void;
@@ -271,6 +277,11 @@ export function useSongData(id: string): UseSongDataReturn {
     }
     return 20;
   });
+  // Effective target language for translation (user setting → global default).
+  // null until the settings are loaded.
+  const [targetLang, setTargetLangState] = useState<string | null>(null);
+  // The user's own translation-target override ('' = follow system default).
+  const [targetLangOverride, setTargetLangOverride] = useState('');
 
 
   // Persist font size
@@ -563,6 +574,48 @@ export function useSongData(id: string): UseSongDataReturn {
       .then((data) => setAllSongs(data.map((s: { id: string; title: string; artist: string; spotify_track_id?: string | null; created_by?: string; is_public?: number }) => ({ id: s.id, title: s.title, artist: s.artist, spotify_track_id: s.spotify_track_id, created_by: s.created_by || '', is_public: s.is_public || 0 }))))
       .catch(() => {});
   }, [id, fetchSong, applySongResult]);
+
+  // Load the user's translation target language (user setting → global
+  // default) so the translation entry can show and switch the target language
+  // inline on the song page (issue #123). Unauthenticated users get a 401 and
+  // stay at the built-in default. Returns null on failure so callers keep the
+  // previous value.
+  const fetchTargetLang = useCallback(async (): Promise<{
+    effective_target_lang?: string;
+    settings?: { translation_target_lang?: string };
+  } | null> => {
+    try {
+      const res = await fetch('/api/me/settings', { cache: 'no-store' });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch { return null; }
+  }, []);
+  useEffect(() => {
+    void fetchTargetLang().then((data) => {
+      if (!data) return;
+      if (typeof data.effective_target_lang === 'string' && data.effective_target_lang.trim()) {
+        setTargetLangState(data.effective_target_lang.trim());
+      }
+      setTargetLangOverride(data.settings?.translation_target_lang ?? '');
+    });
+  }, [fetchTargetLang]);
+
+  // Persist a new translation target language and refresh the effective value.
+  const setTargetLang = useCallback(async (code: string) => {
+    try {
+      const res = await fetch('/api/me/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ translation_target_lang: code }),
+      });
+      if (!res.ok) return;
+      const data = await res.json() as { effective_target_lang?: string; settings?: { translation_target_lang?: string } };
+      if (typeof data.effective_target_lang === 'string' && data.effective_target_lang.trim()) {
+        setTargetLangState(data.effective_target_lang.trim());
+      }
+      setTargetLangOverride(data.settings?.translation_target_lang ?? '');
+    } catch { /* keep previous value */ }
+  }, []);
 
   // Handlers
   const applySyncResult = useCallback(async (data: {
@@ -1305,6 +1358,9 @@ export function useSongData(id: string): UseSongDataReturn {
     clearReasoning,
     handleTranslate,
     cancelTranslate,
+    targetLang,
+    targetLangOverride,
+    setTargetLang,
     furiganaLoading,
     furiganaError,
     retryFurigana,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
-import { getUserSettings, setUserSettings, USER_SETTING_KEYS, type UserSettingsMap } from '@/lib/user-settings';
+import { getEffectiveTranslationConfig } from '@/lib/translation-settings';
+import { getUserSettings, setUserSettings, userTranslationTargetLang, USER_SETTING_KEYS, type UserSettingsMap } from '@/lib/user-settings';
 
 // GET /api/me/settings — current user's personal settings (server-persisted).
 // Requires an authenticated session. Unauthenticated → 401.
@@ -10,7 +11,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'login_required' }, { status: 401 });
   }
   const settings = await getUserSettings(user.id);
-  return NextResponse.json({ settings });
+  // The language the next translation request would actually produce:
+  // user override wins, otherwise the admin/global default (issue #123).
+  const effectiveConfig = await getEffectiveTranslationConfig();
+  const effective_target_lang =
+    userTranslationTargetLang(settings) ?? effectiveConfig?.targetLang ?? 'zh-CN';
+  return NextResponse.json({ settings, effective_target_lang });
 }
 
 // PUT /api/me/settings — save personal settings (whitelisted keys only).
@@ -41,5 +47,10 @@ export async function PUT(request: NextRequest) {
   }
 
   const settings = await setUserSettings(user.id, patch);
-  return NextResponse.json({ settings });
+  // Mirror the effective target language so the song page's inline switch can
+  // update its display without a second round-trip (issue #123).
+  const effectiveConfig = await getEffectiveTranslationConfig();
+  const effective_target_lang =
+    userTranslationTargetLang(settings) ?? effectiveConfig?.targetLang ?? 'zh-CN';
+  return NextResponse.json({ settings, effective_target_lang });
 }
