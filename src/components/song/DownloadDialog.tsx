@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Download, FileText, FileClock, FileCode2, Check, X, AlertCircle, Ban } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { useModalFocus } from '@/hooks/useModalFocus';
 import type { ExportFormat, ExportReadingMode } from '@/lib/lyrics-export';
 
 interface DownloadDialogProps {
@@ -31,20 +32,21 @@ export default function DownloadDialog({
 }: DownloadDialogProps) {
   const { t } = useI18n();
   const titleId = useId();
+  const dialogRef = useRef<HTMLElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   // The dialog is conditionally rendered by the caller, so it always mounts
   // fresh with a clean selection — no stale state from a previous download.
   const [format, setFormat] = useState<ExportFormat>('text');
   const [reading, setReading] = useState<ExportReadingMode>('none');
   const [includeTranslation, setIncludeTranslation] = useState(false);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      onClose();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+  // Focus trap + inert background + focus restore on close.
+  useModalFocus({
+    open: true,
+    dialogRef,
+    initialFocusRef: closeRef,
+    onEscape: onClose,
+  });
 
   const showReadingOptions = hasReadingData && format !== 'lrc';
   const showTranslationOption = hasTranslation && format !== 'lrc';
@@ -88,6 +90,7 @@ export default function DownloadDialog({
       onMouseDown={onClose}
     >
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -104,7 +107,7 @@ export default function DownloadDialog({
           </div>
           <button
             type="button"
-            autoFocus
+            ref={closeRef}
             onClick={onClose}
             className="rounded-md p-2 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
             aria-label={t('common.close')}

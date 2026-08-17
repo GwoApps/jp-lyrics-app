@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { nextFocusTarget } from './focus-trap.ts';
+import { nextFocusTarget, getFocusableElements, computeFocusBounds } from './focus-trap.ts';
 
 // Plain objects stand in for focusable elements; nextFocusTarget only relies
 // on reference identity and ordering, so it is fully testable without a DOM.
@@ -41,4 +41,93 @@ test('nextFocusTarget returns null for an empty list', () => {
   assert.equal(nextFocusTarget([], a, false), null);
   assert.equal(nextFocusTarget([], a, true), null);
   assert.equal(nextFocusTarget([], null, false), null);
+});
+
+// --- Modal focus-trap collection helpers (DOM-dependent) ---
+// These drive the focus trap: they decide which elements inside a dialog are
+// focusable and which are the first/last Tab targets. A minimal fake DOM
+// stands in for the real browser so the filtering logic is testable here.
+
+interface FakeElement {
+  tagName: string;
+  attrs: Record<string, string>;
+  hidden: boolean;
+  style: { display?: string; visibility?: string; pointerEvents?: string };
+  getAttribute(name: string): string | null;
+  querySelectorAll(): FakeElement[];
+  isFake: true;
+}
+
+function makeFakeEl(tagName: string, attrs: Record<string, string> = {}): FakeElement {
+  return {
+    tagName,
+    attrs,
+    hidden: false,
+    style: {},
+    getAttribute(name: string) {
+      return name in attrs ? attrs[name] : null;
+    },
+    querySelectorAll() {
+      return [];
+    },
+    isFake: true,
+  };
+}
+
+// Cast the fake container to HTMLElement for the helpers; they only touch
+// getAttribute/hidden/style/querySelectorAll, all of which the fakes provide.
+function asContainer(el: FakeElement): HTMLElement {
+  return el as unknown as HTMLElement;
+}
+
+function asElements(els: FakeElement[]): HTMLElement[] {
+  return els as unknown as HTMLElement[];
+}
+
+test('getFocusableElements excludes hidden, invisible and negative-tabindex elements', () => {
+  const visible = makeFakeEl('button');
+  const negativeTab = makeFakeEl('button', { tabindex: '-1' });
+  const hiddenAttr = makeFakeEl('button');
+  hiddenAttr.hidden = true;
+  const displayNone = makeFakeEl('button');
+  displayNone.style.display = 'none';
+  const visibilityHidden = makeFakeEl('button');
+  visibilityHidden.style.visibility = 'hidden';
+  const positiveTab = makeFakeEl('a', { href: '#', tabindex: '0' });
+
+  const container = {
+    ...makeFakeEl('div'),
+    querySelectorAll() {
+      return [visible, negativeTab, hiddenAttr, displayNone, visibilityHidden, positiveTab];
+    },
+  };
+
+  const result = getFocusableElements(asContainer(container));
+  assert.deepEqual(result, asElements([visible, positiveTab]));
+});
+
+test('computeFocusBounds returns the first and last focusable elements', () => {
+  const first = makeFakeEl('button');
+  const middle = makeFakeEl('a', { href: '#' });
+  const last = makeFakeEl('button');
+  const container = {
+    ...makeFakeEl('div'),
+    querySelectorAll() {
+      return [first, middle, last];
+    },
+  };
+  const bounds = computeFocusBounds(asContainer(container));
+  assert.ok(bounds);
+  assert.equal(bounds.first, first);
+  assert.equal(bounds.last, last);
+});
+
+test('computeFocusBounds returns null when nothing is focusable', () => {
+  const container = {
+    ...makeFakeEl('div'),
+    querySelectorAll() {
+      return [];
+    },
+  };
+  assert.equal(computeFocusBounds(asContainer(container)), null);
 });

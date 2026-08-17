@@ -1,11 +1,7 @@
 'use client';
 
-import { useEffect, useId, useRef, type ReactNode } from 'react';
-import {
-  computeFocusBounds,
-  getFocusableElements,
-  nextFocusTarget,
-} from '@/lib/focus-trap';
+import { useId, useRef, type ReactNode } from 'react';
+import { useModalFocus } from '@/hooks/useModalFocus';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -21,72 +17,6 @@ interface ConfirmDialogProps {
   initialFocus?: 'cancel' | 'confirm';
   onConfirm: () => void;
   onCancel?: () => void;
-}
-
-const RESTORE_ATTR = 'data-confirm-restore-focus';
-
-/**
- * Capture the currently focused element so it can be restored on close.
- * Only records the first element that opened the dialog (not later Tab moves).
- */
-function captureTrigger(): HTMLElement | null {
-  const active = document.activeElement;
-  if (!(active instanceof HTMLElement)) return null;
-  // Skip elements inside the dialog itself (e.g. nested re-open).
-  if (active.closest('[role="dialog"]')) return null;
-  return active;
-}
-
-/** Ancestors of the dialog, excluding <html> and <body>. */
-function ancestorChain(el: HTMLElement): HTMLElement[] {
-  const chain: HTMLElement[] = [];
-  let node = el.parentElement;
-  while (node && node !== document.documentElement && node !== document.body) {
-    chain.push(node);
-    node = node.parentElement;
-  }
-  return chain;
-}
-
-function focusElement(el: HTMLElement | null): void {
-  if (el && typeof el.focus === 'function') {
-    el.focus({ preventScroll: true });
-  }
-}
-
-function handleTab(
-  event: KeyboardEvent,
-  dialog: HTMLElement | null,
-): void {
-  if (!dialog) return;
-  const bounds = computeFocusBounds(dialog);
-  if (!bounds) {
-    // Nothing focusable inside; keep focus on the dialog container itself.
-    event.preventDefault();
-    dialog.focus({ preventScroll: true });
-    return;
-  }
-  const current = document.activeElement;
-  const reverse = event.shiftKey;
-  // Escaping the first/last element should wrap, otherwise let the browser cycle.
-  const atBoundary =
-    !(current instanceof HTMLElement) ||
-    !dialog.contains(current) ||
-    current === (reverse ? bounds.first : bounds.last);
-  if (atBoundary) {
-    event.preventDefault();
-    focusElement(reverse ? bounds.last : bounds.first);
-  } else {
-    const next = nextFocusTarget(
-      getFocusableElements(dialog),
-      current as HTMLElement,
-      reverse,
-    );
-    if (next) {
-      event.preventDefault();
-      focusElement(next);
-    }
-  }
 }
 
 export default function ConfirmDialog({
@@ -107,93 +37,18 @@ export default function ConfirmDialog({
   const cancelRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-
-    const dialogEl = dialogRef.current;
-
-    // 1) Record the trigger so we can restore focus after close.
-    const trigger = captureTrigger();
-    const previouslyInert: Element[] = [];
-    const previousBodyOverflow = document.body.style.overflow;
-    const previousDialogTabIndex = dialogEl?.getAttribute('tabindex') ?? null;
-
-    // 2) Decide which button receives initial focus.
-    const wantCancel =
+  // Escape dismisses for non-alert dialogs, confirms (fire-and-forget) for
+  // alerts — mirroring the overlay click behaviour below.
+  useModalFocus({
+    open,
+    dialogRef,
+    initialFocusRef:
       (initialFocus === 'cancel') ||
-      (initialFocus !== 'confirm' && variant === 'danger' && !alert);
-    focusElement(wantCancel ? cancelRef.current : confirmRef.current);
-
-    // If no buttons are focusable, make the dialog container itself focusable.
-    if (dialogEl && getFocusableElements(dialogEl).length === 0) {
-      dialogEl.setAttribute('tabindex', '-1');
-      dialogEl.focus({ preventScroll: true });
-    }
-
-    // 3) Isolate background content by marking every sibling of the dialog's
-    //    ancestor chain inert, and lock body scrolling. Falls back to inert
-    //    on major landmarks when the dialog is not deeply nested.
-    if (dialogEl && typeof (dialogEl as HTMLElement).inert === 'boolean') {
-      const chain = ancestorChain(dialogEl);
-      if (chain.length > 0) {
-        chain.forEach((ancestor) => {
-          Array.from(ancestor.children).forEach((child) => {
-            if (child === dialogEl || child.contains(dialogEl)) return;
-            if (child instanceof HTMLElement) {
-              child.setAttribute('inert', '');
-              child.setAttribute(RESTORE_ATTR, '1');
-              previouslyInert.push(child);
-            }
-          });
-        });
-      } else {
-        document.body.querySelectorAll<HTMLElement>(
-          'header, nav, main, footer, aside',
-        ).forEach((el) => {
-          if (el.contains(dialogEl)) return;
-          el.setAttribute('inert', '');
-          el.setAttribute(RESTORE_ATTR, '1');
-          previouslyInert.push(el);
-        });
-      }
-    }
-    document.body.style.overflow = 'hidden';
-
-    // 4) Trap Tab / Shift+Tab within the dialog.
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Tab') {
-        handleTab(event, dialogEl);
-        return;
-      }
-      if (event.key !== 'Escape') return;
-      if (alert) onConfirm();
-      else onCancel?.();
-    };
-    document.addEventListener('keydown', onKeyDown);
-
-    return () => {
-      document.removeEventListener('keydown', onKeyDown);
-
-      // Restore body scroll.
-      document.body.style.overflow = previousBodyOverflow;
-
-      // Remove inert markers and restore original attributes.
-      previouslyInert.forEach((el) => {
-        el.removeAttribute('inert');
-        el.removeAttribute(RESTORE_ATTR);
-      });
-
-      // Restore dialog container's tabindex.
-      if (dialogEl && previousDialogTabIndex === null) {
-        dialogEl.removeAttribute('tabindex');
-      } else if (dialogEl && previousDialogTabIndex !== null) {
-        dialogEl.setAttribute('tabindex', previousDialogTabIndex);
-      }
-
-      // 5) Return focus to the element that opened the dialog.
-      focusElement(trigger);
-    };
-  }, [alert, onCancel, onConfirm, open, initialFocus, variant]);
+      (initialFocus !== 'confirm' && variant === 'danger' && !alert)
+        ? cancelRef
+        : confirmRef,
+    onEscape: alert ? onConfirm : onCancel,
+  });
 
   if (!open) return null;
 

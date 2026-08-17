@@ -17,6 +17,7 @@ import TranslationStatusOverlay from '@/components/TranslationStatusOverlay';
 import { ToolbarMenu, buildReadingMenuItems, type ToolbarMenuItem } from '@/components/song/ToolbarMenu';
 import { MobileMenu } from '@/components/song/MobileMenu';
 import DownloadDialog from '@/components/song/DownloadDialog';
+import { useModalFocus } from '@/hooks/useModalFocus';
 import { isEmptyAfterTrim } from '@/lib/lyrics-export';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useI18n } from '@/lib/i18n';
@@ -156,6 +157,8 @@ export default function SongViewPage() {
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   // Mutable ref bag for the rAF sync loop (avoids stale closures)
+  const songInfoDialogRef = useRef<HTMLElement>(null);
+  const songInfoCloseRef = useRef<HTMLButtonElement>(null);
   const syncRefs = useRef<SyncRefs>({
     songTitle: '',
     songArtist: '',
@@ -254,14 +257,12 @@ export default function SongViewPage() {
       cacheSongCover(id, data.song.cover_url);
     }
   }, [data.song?.cover_url, id]);
-  useEffect(() => {
-    if (!showSongInfo) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setShowSongInfo(false);
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [showSongInfo]);
+  useModalFocus({
+    open: showSongInfo,
+    dialogRef: songInfoDialogRef,
+    initialFocusRef: songInfoCloseRef,
+    onEscape: () => setShowSongInfo(false),
+  });
   useEffect(() => {
     if (!id || !currentUserEmail || !spotifyConnected || coverUrl || !data.song?.permissions?.can_edit) return;
     fetch(`/api/songs/${id}/cover`)
@@ -1052,6 +1053,7 @@ export default function SongViewPage() {
           onMouseDown={() => setShowSongInfo(false)}
         >
           <section
+            ref={songInfoDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="song-info-title"
@@ -1068,7 +1070,7 @@ export default function SongViewPage() {
               </div>
               <button
                 type="button"
-                autoFocus
+                ref={songInfoCloseRef}
                 onClick={() => setShowSongInfo(false)}
                 className="rounded-md p-2 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--accent)] hover:text-[var(--foreground)]"
                 aria-label={t('common.close')}
