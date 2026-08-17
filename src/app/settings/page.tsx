@@ -6,6 +6,14 @@ import { Loader2, LogIn, Save, Check } from 'lucide-react';
 import { useI18n, LOCALE_META, type Locale } from '@/lib/i18n';
 import { useAuthSession } from '@/lib/auth-session';
 import { normalizeTheme, normalizeReadingMode, normalizeBoolean, normalizeFontSize, normalizeLocale } from '@/lib/settings-utils';
+import {
+  isSyncEnabled,
+  syncSettingsToLocalStorage,
+  setSyncEnabled,
+  SYNCABLE_KEYS,
+  type SettingsPayload,
+} from '@/lib/sync-settings';
+import { useTheme } from '@/lib/theme';
 
 type ToastState = { type: 'success' | 'error'; msg: string } | null;
 
@@ -18,6 +26,7 @@ interface SettingsMap {
   show_translation?: string;
   follow_playing?: string;
   translation_target_lang?: string;
+  sync_settings?: string;
 }
 
 /** Common target-language presets, aligned with the admin config combobox. */
@@ -46,12 +55,14 @@ function Row({ label, hint, control }: { label: string; hint?: string; control: 
 export default function SettingsPage() {
   const router = useRouter();
   const { t, setLocale } = useI18n();
+  const { setTheme } = useTheme();
   const { session } = useAuthSession();
   const [settings, setSettings] = useState<SettingsMap>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
   const [dirty, setDirty] = useState(false);
+  const [syncEnabled, setSyncEnabledState] = useState<boolean>(() => isSyncEnabled());
 
   const user = session?.user ?? null;
 
@@ -65,25 +76,44 @@ export default function SettingsPage() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  // Load server-persisted settings once authenticated.
+  // Load server-persisted settings once authenticated. When cross-device sync
+  // is turned off, skip the fetch entirely so a local-only user is never
+  // overwritten by stale server values from another device.
   useEffect(() => {
     if (!user) return;
+    if (!syncEnabled) {
+      // Preserve whatever is already in localStorage as the current truth and
+      // seed the form from it so the page reflects the local-only preferences.
+      setSettings({
+        theme: localStorage.getItem('jplrc-theme') ?? undefined,
+        locale: localStorage.getItem('jplrc-locale') ?? undefined,
+        font_size: localStorage.getItem('jplrc-font-size') ?? undefined,
+        reading_mode: localStorage.getItem('jplrc-reading-mode') ?? undefined,
+        romanize_furigana: localStorage.getItem('jplrc-romanize-furigana') ?? undefined,
+        show_translation: localStorage.getItem('jplrc-show-translation') ?? undefined,
+        follow_playing: localStorage.getItem('jplrc-follow-playing') ?? undefined,
+        sync_settings: 'false',
+      });
+      setLoading(false);
+      return;
+    }
     fetch('/api/me/settings', { cache: 'no-store' })
       .then((r) => {
         if (!r.ok) throw new Error('load_failed');
         return r.json();
       })
       .then((data) => {
-        setSettings(data.settings ?? {});
+        const server = data.settings ?? {};
+        setSettings(server);
         // Fast-path: sync server settings into localStorage so first-screen
         // behaviour matches the persisted values on the next load.
-        syncLocalStorage(data.settings ?? {});
+        syncSettingsToLocalStorage(server);
       })
       .catch(() => {
         // Falls back to existing localStorage behaviour on transient failure.
       })
       .finally(() => setLoading(false));
-  }, [user]);
+  }, [user, syncEnabled]);
 
   const setField = useCallback((key: keyof SettingsMap, value: string) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
@@ -93,14 +123,12 @@ export default function SettingsPage() {
   // Live-apply immediate preferences (theme / locale) so the page reacts instantly.
   const applyLive = useCallback((key: keyof SettingsMap, value: string) => {
     if (key === 'theme') {
-      const next = normalizeTheme(value);
-      document.documentElement.setAttribute('data-theme', next);
-      try { localStorage.setItem('jplrc-theme', next); } catch {}
+      setTheme(normalizeTheme(value));
     } else if (key === 'locale') {
       const l = normalizeLocale(value) as Locale;
       setLocale(l);
     }
-  }, [setLocale]);
+  }, [setTheme, setLocale]);
 
   const handleFieldChange = useCallback((key: keyof SettingsMap, value: string) => {
     setField(key, value);
@@ -111,18 +139,38 @@ export default function SettingsPage() {
     if (!user) return;
     setSaving(true);
     try {
+      // The sync switch always rides along so it survives a device change. When
+      // sync is off, only the switch itself is sent; everything else stays local.
+      const syncOn = settings.sync_settings === 'true';
+      const payload: SettingsPayload = { sync_settings: String(syncOn) };
+      if (syncOn) {
+        for (const key of SYNCABLE_KEYS) {
+          const value = settings[key as keyof SettingsMap];
+          if (value !== undefined) payload[key] = value;
+        }
+      }
       const res = await fetch('/api/me/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         showToast('error', t('settings.saveFailed'));
         return;
       }
       const data = await res.json();
-      setSettings(data.settings ?? {});
-      syncLocalStorage(data.settings ?? {});
+      // Mirror the chosen value into localStorage regardless of server state,
+      // so the switch and preferences take effect even on a transient failure.
+      setSyncEnabledState(syncOn);
+      setSyncEnabled(syncOn);
+      syncSettingsToLocalStorage(syncOn ? payload : { ...payload, ...settings });
+      // When sync is on, the server's persisted map is the source of truth for
+      // the form. When off, keep the local values the user just chose.
+      if (syncOn) {
+        setSettings(data.settings ?? {});
+      } else {
+        setSettings((prev) => ({ ...prev, sync_settings: 'false' }));
+      }
       setDirty(false);
       showToast('success', t('settings.saved'));
     } catch {
@@ -130,6 +178,11 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSyncToggle = (value: boolean) => {
+    setSettings((prev) => ({ ...prev, sync_settings: String(value) }));
+    setDirty(true);
   };
 
   if (!user) {
@@ -166,6 +219,7 @@ export default function SettingsPage() {
   const followPlaying = normalizeBoolean(settings.follow_playing);
   const fontSize = normalizeFontSize(settings.font_size);
   const targetLang = settings.translation_target_lang ?? '';
+  const syncOn = normalizeBoolean(settings.sync_settings);
 
   const renderToggle = (key: keyof SettingsMap, checked: boolean, onChange: (v: boolean) => void) => (
     <button
@@ -195,6 +249,18 @@ export default function SettingsPage() {
           <span>{t('settings.save')}</span>
         </button>
       </div>
+
+      {/* 同步与账户 */}
+      <section className="mb-6 rounded-lg border border-[var(--border)] bg-[var(--card)] p-5">
+        <h2 className="mb-2 text-sm font-semibold">{t('settings.sectionSync')}</h2>
+        <div className="divide-y divide-[var(--border)]">
+          <Row
+            label={t('settings.syncSettings')}
+            hint={syncOn ? t('settings.syncSettingsOn') : t('settings.syncSettingsOff')}
+            control={renderToggle('sync_settings', syncOn, handleSyncToggle)}
+          />
+        </div>
+      </section>
 
       {/* 外观 */}
       <section className="mb-6 rounded-lg border border-[var(--border)] bg-[var(--card)] p-5">
@@ -342,22 +408,4 @@ export default function SettingsPage() {
       )}
     </div>
   );
-}
-
-/** Write the persisted settings into localStorage as the first-screen fast path. */
-function syncLocalStorage(settings: SettingsMap) {
-  if (typeof window === 'undefined') return;
-  const map: Record<string, string | undefined> = {
-    'jplrc-theme': settings.theme,
-    'jplrc-locale': settings.locale,
-    'jplrc-font-size': settings.font_size,
-    'jplrc-reading-mode': settings.reading_mode,
-    'jplrc-romanize-furigana': settings.romanize_furigana,
-    'jplrc-show-translation': settings.show_translation,
-    'jplrc-follow-playing': settings.follow_playing,
-  };
-  for (const [key, value] of Object.entries(map)) {
-    if (value === undefined) continue;
-    try { localStorage.setItem(key, value); } catch {}
-  }
 }

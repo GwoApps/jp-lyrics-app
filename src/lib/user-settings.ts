@@ -24,6 +24,7 @@ export type SettingKey =
   | 'show_translation'        // boolean
   | 'follow_playing'          // boolean
   | 'translation_target_lang' // BCP-47 tag, e.g. 'zh-CN' | 'en-US'
+  | 'sync_settings'           // boolean — master switch for cross-device sync
 
 export const USER_SETTING_KEYS: readonly SettingKey[] = [
   'theme',
@@ -34,6 +35,7 @@ export const USER_SETTING_KEYS: readonly SettingKey[] = [
   'show_translation',
   'follow_playing',
   'translation_target_lang',
+  'sync_settings',
 ];
 
 /** The shape the /api/me/settings API returns. */

@@ -755,6 +755,10 @@
     "translationTargetLang": "默认目标语言",
     "translationTargetLangHint": "翻译歌词时的默认目标语言；未设置时沿用系统默认。",
     "translationTargetLangDefault": "跟随系统默认",
-    "unsaved": "有未保存的修改"
+    "unsaved": "有未保存的修改",
+    "sectionSync": "同步",
+    "syncSettings": "跨设备同步偏好",
+    "syncSettingsOn": "开启后，你的偏好会保存到账号，换设备/新会话自动同步。",
+    "syncSettingsOff": "关闭后，偏好仅保存在此设备浏览器，不同步到账号。"
   }
 }

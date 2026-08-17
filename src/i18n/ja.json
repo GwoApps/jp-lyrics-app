@@ -755,6 +755,10 @@
     "translationTargetLang": "既定のターゲット言語",
     "translationTargetLangHint": "翻訳時の既定のターゲット言語。未設定時はシステム既定に従います。",
     "translationTargetLangDefault": "システム既定に従う",
-    "unsaved": "未保存の変更があります"
+    "unsaved": "未保存の変更があります",
+    "sectionSync": "同期",
+    "syncSettings": "デバイス間で設定を同期",
+    "syncSettingsOn": "オンにすると、設定がアカウントに保存され、新しいデバイス/セッションで自動的に同期されます。",
+    "syncSettingsOff": "オフにすると、設定はこのデバイスのブラウザのみに保存され、アカウントには同期されません。"
   }
 }

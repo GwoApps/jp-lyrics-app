@@ -755,6 +755,10 @@
     "translationTargetLang": "預設目標語言",
     "translationTargetLangHint": "翻譯歌詞時的預設目標語言；未設定時沿用系統預設。",
     "translationTargetLangDefault": "跟隨系統預設",
-    "unsaved": "有未儲存的修改"
+    "unsaved": "有未儲存的修改",
+    "sectionSync": "同步",
+    "syncSettings": "跨裝置同步偏好",
+    "syncSettingsOn": "開啟後，你的偏好會儲存到帳號，換裝置/新工作階段自動同步。",
+    "syncSettingsOff": "關閉後，偏好僅儲存在此裝置瀏覽器，不會同步到帳號。"
   }
 }

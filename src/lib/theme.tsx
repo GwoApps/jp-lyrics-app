@@ -12,7 +12,9 @@ const THEME_COLORS: Record<Theme, string> = {
 const ThemeContext = createContext<{
   theme: Theme;
   toggleTheme: () => void;
-}>({ theme: 'dark', toggleTheme: () => {} });
+  /** Imperatively apply a theme (used when server-synced settings arrive). */
+  setTheme: (theme: Theme) => void;
+}>({ theme: 'dark', toggleTheme: () => {}, setTheme: () => {} });
 
 export function useTheme() {
   return useContext(ThemeContext);
@@ -21,6 +23,12 @@ export function useTheme() {
 function applyThemeColor(theme: Theme) {
   const meta = document.getElementById('theme-color-meta');
   if (meta) meta.setAttribute('content', THEME_COLORS[theme]);
+}
+
+function applyTheme(theme: Theme) {
+  localStorage.setItem('jplrc-theme', theme);
+  document.documentElement.setAttribute('data-theme', theme);
+  applyThemeColor(theme);
 }
 
 function detectTheme(): Theme {
@@ -33,22 +41,25 @@ function detectTheme(): Theme {
 const subscribeHydration = () => () => {};
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [clientTheme, setTheme] = useState<Theme>(detectTheme);
+  const [clientTheme, setThemeState] = useState<Theme>(detectTheme);
   const hydrated = useSyncExternalStore(subscribeHydration, () => true, () => false);
   const theme = hydrated ? clientTheme : 'dark';
 
+  const setTheme = useCallback((next: Theme) => {
+    setThemeState(next);
+    applyTheme(next);
+  }, []);
+
   const toggleTheme = useCallback(() => {
-    setTheme((prev) => {
+    setThemeState((prev) => {
       const next = prev === 'dark' ? 'light' : 'dark';
-      localStorage.setItem('jplrc-theme', next);
-      document.documentElement.setAttribute('data-theme', next);
-      applyThemeColor(next);
+      applyTheme(next);
       return next;
     });
   }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
       {children}
     </ThemeContext.Provider>
   );

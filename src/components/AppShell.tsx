@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { I18nProvider, useI18n } from '@/lib/i18n';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useAuthSession } from '@/lib/auth-session';
+import { fetchAndSyncSettings } from '@/lib/sync-settings';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { Sun, Moon, Settings } from 'lucide-react';
 
@@ -114,6 +115,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
       <I18nProvider>
+        <BootstrapSettingsSync />
         <Nav />
         <main className={isSharePage ? '' : 'mx-auto max-w-[860px] px-4 py-6 sm:px-6 sm:py-8'}>
           {children}
@@ -121,4 +123,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </I18nProvider>
     </ThemeProvider>
   );
+}
+
+/**
+ * On boot (once an authenticated session is confirmed), pull the server-persisted
+ * settings once and sync them into localStorage, applying theme/locale live. This
+ * makes saved preferences take effect on the very first screen of a fresh device
+ * or new session instead of only after visiting /settings (issue #124).
+ */
+function BootstrapSettingsSync() {
+  const { session } = useAuthSession();
+  const { setTheme } = useTheme();
+  const { setLocale } = useI18n();
+
+  useEffect(() => {
+    if (!session?.user) return;
+    void fetchAndSyncSettings({ setTheme, setLocale });
+  }, [session?.user, setTheme, setLocale]);
+
+  return null;
 }

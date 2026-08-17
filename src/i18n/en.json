@@ -755,6 +755,10 @@
     "translationTargetLang": "Default target language",
     "translationTargetLangHint": "Default target language for translated lyrics; falls back to the system default when unset.",
     "translationTargetLangDefault": "Use system default",
-    "unsaved": "Unsaved changes"
+    "unsaved": "Unsaved changes",
+    "sectionSync": "Sync",
+    "syncSettings": "Sync preferences across devices",
+    "syncSettingsOn": "When on, your preferences are saved to your account and synced automatically on new devices/sessions.",
+    "syncSettingsOff": "When off, preferences stay only in this device's browser and are not synced to your account."
   }
 }

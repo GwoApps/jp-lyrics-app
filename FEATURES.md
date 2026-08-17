@@ -113,6 +113,12 @@ Open a song page → **More** menu (desktop toolbar or mobile overflow) →
   localStorage.
 - **Multi-Language UI** — Japanese, English, Simplified Chinese,
   Traditional Chinese (auto-detected from browser).
+- **Cross-device preference sync** — Logged-in users can choose whether their
+  personal settings (theme / language / reading / translation) are synced to
+  their account and pulled automatically on a new device or fresh session.
+  When enabled, the app fetches the server-persisted settings on boot so the
+  first screen already reflects them; when disabled, preferences stay local to
+  the current browser only. Off by default for guests (localStorage-only).
 - **Favorites & Collections** — Star songs, organize into collections,
   filter by favorites, bulk-manage from the home page.
 - **Responsive** — Mobile-optimized bottom bar with a 3-dot overflow menu;
