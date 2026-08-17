@@ -44,6 +44,12 @@ import {
   type TimelineDraftLine,
 } from '@/lib/lrc';
 import { songMatchScore } from '@/lib/match';
+import {
+  applyUndo,
+  pushLineEntry,
+  pushSnapshotEntry,
+  type HistoryEntry,
+} from '@/lib/timeline-history';
 
 interface TimelineSong {
   id: string;
@@ -54,11 +60,6 @@ interface TimelineSong {
   cover_url?: string | null;
   spotify_track_id?: string | null;
   permissions?: { can_edit: boolean };
-}
-
-interface HistoryEntry {
-  index: number;
-  previousTime: number | null;
 }
 
 function getAccurateProgress(anchor: { progressMs: number; receivedAt: number; playing: boolean }) {
@@ -215,7 +216,7 @@ export default function TimelineEditorPage() {
 
   const setLineTime = useCallback((index: number, timeMs: number | null, advance = false) => {
     const previousTime = lines[index]?.timeMs ?? null;
-    setHistory((items) => [...items.slice(-49), { index, previousTime }]);
+    setHistory((items) => pushLineEntry(items, index, previousTime));
     setLines((current) => current.map((line, lineIndex) => lineIndex === index
       ? { ...line, timeMs: timeMs == null ? null : Math.max(0, Math.round(timeMs)) }
       : line));
@@ -231,17 +232,16 @@ export default function TimelineEditorPage() {
   }, [canUseSpotifyTime, currentIndex, currentLine, setLineTime]);
 
   const undo = useCallback(() => {
-    const entry = history[history.length - 1];
-    if (!entry) return;
-    setLines((current) => current.map((line, index) => index === entry.index
-      ? { ...line, timeMs: entry.previousTime }
-      : line));
-    setCurrentIndex(entry.index);
-    setHistory((current) => current.slice(0, -1));
-  }, [history]);
+    const result = applyUndo(history, lines);
+    if (!result.lines) return;
+    setLines(result.lines);
+    if (result.lineIndex != null) setCurrentIndex(result.lineIndex);
+    setHistory(result.entries);
+  }, [history, lines]);
 
   const applyOffset = (offsetMs: number) => {
     if (!Number.isFinite(offsetMs) || offsetMs === 0) return;
+    setHistory((items) => pushSnapshotEntry(items, lines));
     setLines((current) => current.map((line) => ({
       ...line,
       timeMs: line.timeMs == null ? null : Math.max(0, Math.round(line.timeMs + offsetMs)),
@@ -251,13 +251,14 @@ export default function TimelineEditorPage() {
 
   /** Sort marked rows by timestamp; only invoked after explicit user confirmation. */
   const applySortByTime = useCallback(() => {
+    setHistory((items) => pushSnapshotEntry(items, lines));
     setLines((current) => [...current].sort((a, b) => {
       if (a.timeMs == null) return b.timeMs == null ? 0 : 1;
       if (b.timeMs == null) return -1;
       return a.timeMs - b.timeMs;
     }));
     setConfirmSort(false);
-  }, []);
+  }, [lines]);
 
   const doReset = () => {
     setConfirmReset(false);
