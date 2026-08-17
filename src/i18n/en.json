@@ -201,6 +201,8 @@
     "copyFailed": "Failed to copy",
     "tokenExpired": "Token expired",
     "reconnect": "Reconnect",
+    "spotifyTempUnavailable": "Spotify temporarily unavailable — retrying…",
+    "spotifyError": "Spotify error ({code})",
     "export": "Export",
     "download": "Download",
     "exportFurigana": "(with annotations)",

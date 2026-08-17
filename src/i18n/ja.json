@@ -201,6 +201,8 @@
     "copyFailed": "コピーに失敗しました",
     "tokenExpired": "トークン期限切れ",
     "reconnect": "再接続",
+    "spotifyTempUnavailable": "Spotify が一時的に利用できません。再試行中…",
+    "spotifyError": "Spotify エラー ({code})",
     "export": "エクスポート",
     "download": "ダウンロード",
     "exportFurigana": "（注音付き）",

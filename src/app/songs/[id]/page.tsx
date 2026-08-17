@@ -21,6 +21,7 @@ import { isEmptyAfterTrim } from '@/lib/lyrics-export';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useI18n } from '@/lib/i18n';
 import { fmtMs, fmtTime, findActiveLine } from '@/lib/lrc';
+import { isSpotifyAuthError, isSpotifyTransientError } from '@/lib/spotify-error';
 import { findBestMatch } from '@/lib/match';
 import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
@@ -730,13 +731,23 @@ export default function SongViewPage() {
                   {spotifyConnected === null ? t('song.spotifyLoading') : t('song.spotifyDisconnected')}
                 </span>
               </div>
-            ) : spotify.error ? (
+            ) : spotify.error ? isSpotifyAuthError(spotify.error) ? (
               <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--warning-muted)] border border-[var(--warning)]/30 px-2 sm:px-3 py-1">
                 <span className="inline-block h-2 w-2 rounded-full bg-[var(--warning)]" />
                 <span className="text-xs text-[var(--warning)]">{t('song.tokenExpired')}</span>
                 <SpotifyLoginButton className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--warning)]/20 text-[var(--warning)] hover:bg-[var(--warning)]/30 transition-colors shrink-0 disabled:opacity-60">
                   <RefreshCw className="h-3 w-3" /><span>{t('song.reconnect')}</span>
                 </SpotifyLoginButton>
+              </div>
+            ) : isSpotifyTransientError(spotify.error) ? (
+              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--warning-muted)] border border-[var(--warning)]/30 px-2 sm:px-3 py-1">
+                <Loader2 className="h-3 w-3 animate-spin text-[var(--warning)]" />
+                <span className="text-xs text-[var(--warning)]">{t('song.spotifyTempUnavailable')}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--warning-muted)] border border-[var(--warning)]/30 px-2 sm:px-3 py-1">
+                <span className="inline-block h-2 w-2 rounded-full bg-[var(--warning)]" />
+                <span className="text-xs text-[var(--warning)]">{t('song.spotifyError', { code: spotify.error })}</span>
               </div>
             ) : isSynced ? (
               <div className="song-playing-surface song-playing-surface--synced flex items-center gap-1.5 sm:gap-2 rounded-full px-2 sm:px-3 py-1">

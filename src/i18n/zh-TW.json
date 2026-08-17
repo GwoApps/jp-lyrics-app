@@ -201,6 +201,8 @@
     "copyFailed": "複製失敗",
     "tokenExpired": "令牌已過期",
     "reconnect": "重新連接",
+    "spotifyTempUnavailable": "Spotify 暫時無法使用，正在自動重試…",
+    "spotifyError": "Spotify 錯誤 ({code})",
     "export": "匯出",
     "download": "下載",
     "exportFurigana": "（含注音）",

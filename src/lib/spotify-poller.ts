@@ -1,6 +1,7 @@
 import { getSpotifyTokenForUser } from './spotify';
 import { normalizeSpotifyTrack } from './spotify';
 import { MAX_CONSECUTIVE_ERRORS, backoffDelay } from './retry-backoff';
+import { isSpotifyTransientError } from './spotify-error';
 export interface NowPlayingData {
   connected: boolean;
   is_playing: boolean;
@@ -149,6 +150,16 @@ async function tick(userEmail: string, poller: UserPoller) {
 
   try {
     const data = await fetchNowPlaying(userEmail);
+    // Transient Spotify fault (429/5xx): back off but NEVER count toward the
+    // fatal-error stop — these auto-recover without user action. This prevents
+    // a brief Spotify outage from permanently stopping sync (issue #117).
+    if (data.error && isSpotifyTransientError(data.error)) {
+      poller.consecutiveErrors = 0;
+      if (poller.syncState !== 'retrying') poller.syncState = 'retrying';
+      broadcast(poller, data);
+      scheduleTick(userEmail, poller, backoffDelay(1));
+      return;
+    }
     // Success → reset failure counter, restore normal cadence.
     poller.consecutiveErrors = 0;
     if (poller.syncState !== 'connected') poller.syncState = 'connected';

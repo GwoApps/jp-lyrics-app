@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { MAX_CONSECUTIVE_ERRORS, backoffDelay } from '@/lib/retry-backoff';
+import { isSpotifyTransientError } from '@/lib/spotify-error';
 
 export interface NowPlayingData {
   connected: boolean;
@@ -109,6 +110,17 @@ export function useNowPlaying(enabled = true) {
         const res = await fetch('/api/spotify/now-playing');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const d = await res.json();
+        // Transient Spotify fault (429/5xx): auto-retry with backoff instead of
+        // the normal cadence, but never count toward a permanent stop — these
+        // recover without user action (issue #117).
+        if (d && d.error && isSpotifyTransientError(d.error)) {
+          clientErrorsRef.current = 0;
+          setSyncState('retrying');
+          setData(d);
+          lastMessageTimeRef.current = Date.now();
+          scheduleClientPollRef.current(backoffDelay(1));
+          return;
+        }
         handlePollSuccess(d);
         // Success → back to the normal poll cadence.
         scheduleClientPollRef.current(CLIENT_POLL_INTERVAL_MS);
