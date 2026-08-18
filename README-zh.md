@@ -62,6 +62,15 @@ npm run dev
 | `JPLRC_LOGIN_PASSPHRASE_REQUIRED` | 否 | 开始 Spotify OAuth 前是否需要口令 |
 | `JPLRC_LOGIN_PASSPHRASE` | 否 | 口令本身（仅在服务端校验） |
 | `SESSION_SECRET` | 否 | 生产环境推荐：独立签名登录/会话 Cookie |
+| `LYRICS_PROVIDER_ALLOW_HTTP` | 否 | 允许明文 `http://` HTTP 歌词源（默认 `false`，fail-closed） |
+| `LYRICS_PROVIDER_ALLOW_PRIVATE_NETWORK` | 否 | 允许歌词源使用 loopback/私网/Docker-bridge 地址（默认 `false`） |
+| `LYRICS_PROVIDER_SECRET_KEY` | 仅 Bearer 歌词源 | 用于加密歌词源 Bearer token 的 AES-GCM 密钥 |
+| `LYRICS_PROVIDER_DEFAULT_TIMEOUT_MS` | 否 | 单歌词源搜索预算（默认 `20000`） |
+| `LYRICS_PROVIDER_MAX_TIMEOUT_MS` | 否 | 管理员单配置超时上限（默认 `60000`） |
+| `LYRICS_PROVIDER_MANIFEST_TIMEOUT_MS` | 否 | manifest/测试连接预算（默认 `15000`） |
+| `LYRICS_PROVIDER_CHAIN_TIMEOUT_MS` | 否 | 整条歌词源链预算（默认 `180000`） |
+
+HTTP 歌词源的完整部署指南见 [DEPLOYMENT.md](DEPLOYMENT.md) 第 4 节。
 
 Spotify 集成是可选的。不配置也可以正常管理歌词。
 
