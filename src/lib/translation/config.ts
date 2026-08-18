@@ -15,6 +15,15 @@ export interface TranslationContext {
   title?: string;
   artist?: string;
   glossary?: GlossaryEntry[];
+  /**
+   * Full-song lyrics, used ONLY as reference context when translating a
+   * subset of lines (slice / single-line re-translate). Lets the model resolve
+   * omitted subjects, pronouns and proper nouns from the surrounding lyrics
+   * while still outputting exactly the requested target lines (issue #146).
+   */
+  fullLyrics?: string[];
+  /** Absolute indices (into `fullLyrics`) of the lines actually being translated. */
+  targetIndices?: number[];
 }
 
 export interface TranslationConfig {

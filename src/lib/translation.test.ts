@@ -95,6 +95,37 @@ test('translates via OpenAI-compatible API and preserves line structure', async 
   assert.equal(JSON.parse(body.messages[1].content).length, 3);
 });
 
+test('slice requests embed full-song context but keep the target list as the parseable payload', async () => {
+  const captured: { current?: CapturedCall } = {};
+  // Translate a single line (line 4, absolute index 3) of a longer song with
+  // slice context attached — the model must still see the surrounding lyrics.
+  const out = await translateLyricLines(
+    ['そのまま'],
+    CFG,
+    captureFetch(mockFetch(200, { choices: [{ message: { content: '["就这样"]' } }] }), captured),
+    {
+      title: '夜',
+      artist: 'AAA',
+      fullLyrics: ['風が', '吹いて', '君の', 'そのまま', '君の', '声を'],
+      targetIndices: [3],
+    },
+  );
+  assert.deepEqual(out, ['就这样']);
+  assert.ok(captured.current);
+  const body = openAIBody(captured.current);
+  const user = body.messages[1].content;
+  // The full song is embedded as reference context…
+  assert.match(user, /FULL SONG \(context only\)/);
+  assert.match(user, /風が/);
+  assert.match(user, /君の/);
+  // …while the TARGET list stays the exact payload, so line alignment holds.
+  assert.match(user, /TARGET LINES TO TRANSLATE/);
+  const target = user.slice(user.indexOf('TARGET LINES TO TRANSLATE'));
+  assert.deepEqual(JSON.parse(target.slice(target.indexOf('['))), ['そのまま']);
+  // Explicitly instruct the model to only translate the targets.
+  assert.match(user, /Translate ONLY the TARGET lines/);
+});
+
 test('falls back to newline-separated text when JSON parsing fails', async () => {
   const out = await translateLyricLines(
     ['line one', 'line two', ''],

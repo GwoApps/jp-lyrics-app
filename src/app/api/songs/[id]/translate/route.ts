@@ -191,9 +191,13 @@ export async function POST(
   const uniqueLines = needTranslation.map((i) => slice[i]);
 
   // Terminology: reuse a stored glossary, or extract one from the full song.
+  // Extraction runs for BOTH whole-song and slice requests — a song that was
+  // never fully translated (or whose glossary was cleared after an edit) must
+  // still get consistent proper-noun constraints when lines are filled/re-
+  // translated piecemeal (issue #146).
   // Three distinguishable states (see extractLyricsGlossary): a stored array
   // (possibly empty = genuinely no terms) is reused as-is; a stored `null`
-  // means the last extraction FAILED, so it is retried on the next whole-song
+  // means the last extraction FAILED, so it is retried on the next translation
   // request instead of being pinned to "no terms" forever.
   let glossary: GlossaryEntry[] | null = null;
   if (existing.lyricsGlossary) {
@@ -211,7 +215,7 @@ export async function POST(
       /* ignored */
     }
   }
-  if (glossary === null && !isSlice) {
+  if (glossary === null) {
     const extracted = await extractLyricsGlossary(existing.title, existing.artist, lines, config);
     if (extracted !== null) {
       // Only persist a SUCCESSFUL extraction. A failure returns null and is
@@ -241,7 +245,17 @@ export async function POST(
     }
   }
 
-  const ctx = { title: existing.title, artist: existing.artist, glossary: glossary ?? undefined };
+  const ctx = {
+    title: existing.title,
+    artist: existing.artist,
+    glossary: glossary ?? undefined,
+    // Slice requests (missing-line fill / single-line re-translate) get the
+    // full song as REFERENCE CONTEXT so the model resolves Japanese omitted
+    // subjects, pronouns and proper nouns from the surrounding lyrics instead
+    // of guessing from an isolated line (issue #146). The model still outputs
+    // exactly the requested lines (alignment preserved).
+    ...(isSlice ? { fullLyrics: lines, targetIndices: needTranslation.map((i) => start + i) } : {}),
+  };
 
   /**
    * Expand duplicates from their first occurrence's result and PERSIST the

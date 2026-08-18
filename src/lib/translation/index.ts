@@ -201,6 +201,32 @@ function systemPromptFor(cfg: TranslationConfig, ctx?: TranslationContext): stri
   return renderSystemPrompt(cfg.systemPrompt ?? DEFAULT_SYSTEM_PROMPT, cfg.targetLang, ctx);
 }
 
+/**
+ * Build the user message for a translation request.
+ *
+ * For slice requests (targeting a subset of a longer song) the caller attaches
+ * `ctx.fullLyrics` + `ctx.targetIndices`. In that case the full song is embedded
+ * as REFERENCE CONTEXT — the model can resolve Japanese omitted subjects,
+ * pronouns and proper nouns from the surrounding lyrics — while the explicit
+ * TARGET list still dictates the exact output count/order, so parsing and
+ * alignment are unaffected. Without slice context it falls back to the plain
+ * JSON array of the lines to translate (unchanged behaviour).
+ */
+function buildUserContent(lines: string[], ctx?: TranslationContext): string {
+  if (!ctx?.fullLyrics || !ctx.targetIndices || ctx.targetIndices.length === 0) {
+    return JSON.stringify(lines);
+  }
+  const contextBlock = ctx.fullLyrics
+    .map((line, i) => `[${i}] ${line}`)
+    .join('\n');
+  return 'Translate ONLY the TARGET lines listed at the end into the target language. '
+    + 'The full song below is REFERENCE CONTEXT only — use it to resolve omitted '
+    + 'subjects, pronouns and proper nouns, but do NOT translate the non-target lines.\n\n'
+    + 'FULL SONG (context only):\n' + contextBlock + '\n\n'
+    + 'TARGET LINES TO TRANSLATE (output exactly ' + lines.length + ' strings, in this order):\n'
+    + JSON.stringify(lines);
+}
+
 function buildOpenAIPayload(lines: string[], cfg: TranslationConfig, ctx?: TranslationContext) {
   return {
     model: cfg.model,
@@ -210,7 +236,7 @@ function buildOpenAIPayload(lines: string[], cfg: TranslationConfig, ctx?: Trans
     reasoning_effort: REASONING_EFFORT,
     messages: [
       { role: 'system', content: systemPromptFor(cfg, ctx) },
-      { role: 'user', content: JSON.stringify(lines) },
+      { role: 'user', content: buildUserContent(lines, ctx) },
     ],
   };
 }
@@ -221,7 +247,7 @@ function buildAnthropicPayload(lines: string[], cfg: TranslationConfig, ctx?: Tr
     max_tokens: MAX_OUTPUT_TOKENS,
     temperature: 0.2,
     system: systemPromptFor(cfg, ctx),
-    messages: [{ role: 'user', content: JSON.stringify(lines) }],
+    messages: [{ role: 'user', content: buildUserContent(lines, ctx) }],
   };
 }
 
@@ -374,7 +400,7 @@ async function requestWorkersAI(lines: string[], cfg: TranslationConfig, ctx?: T
   }
   const { estimateTokens, neuronsForTokens } = await import('@/lib/ai-usage');
   const prompt = systemPromptFor(cfg, ctx);
-  const inputText = `${prompt}\n${JSON.stringify(lines)}`;
+  const inputText = `${prompt}\n${buildUserContent(lines, ctx)}`;
   // Daily Neurons guard: atomically reserve an estimated budget BEFORE the
   // model runs so concurrent requests can never collectively exceed the hard
   // cap, then settle with actual usage (多退少补) afterwards. Dynamic import
@@ -385,7 +411,7 @@ async function requestWorkersAI(lines: string[], cfg: TranslationConfig, ctx?: T
     const data = await ai.run(cfg.model, {
       messages: [
         { role: 'system', content: prompt },
-        { role: 'user', content: JSON.stringify(lines) },
+        { role: 'user', content: buildUserContent(lines, ctx) },
       ],
       temperature: 0.2,
     });
@@ -525,7 +551,7 @@ export async function streamTranslateLyricLines(
   if (cfg.provider === 'workers-ai') {
     const { estimateTokens, neuronsForTokens } = await import('@/lib/ai-usage');
     const prompt = systemPromptFor(cfg, ctx);
-    const inputText = `${prompt}\n${JSON.stringify(lines)}`;
+    const inputText = `${prompt}\n${buildUserContent(lines, ctx)}`;
     const estimate = neuronsForTokens(estimateTokens(inputText), 0);
     text = await runWithAiQuota(estimate, async () => {
       const ai = await getWorkersAiBinding();
@@ -533,7 +559,7 @@ export async function streamTranslateLyricLines(
       const data = await ai.run(cfg.model, {
         messages: [
           { role: 'system', content: prompt },
-          { role: 'user', content: JSON.stringify(lines) },
+          { role: 'user', content: buildUserContent(lines, ctx) },
         ],
         temperature: 0.2,
       });
