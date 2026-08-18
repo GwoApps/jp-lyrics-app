@@ -480,6 +480,7 @@
     "reset": "Reset to auto",
     "reconvert": "Reconvert",
     "reconverting": "Converting...",
+    "reconverted": "Annotations regenerated — click Save to persist",
     "empty": "No annotations to correct",
     "line": "Line {n}",
     "readingPlaceholder": "e.g. ひらがな",

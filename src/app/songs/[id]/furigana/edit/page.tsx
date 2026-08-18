@@ -219,7 +219,10 @@ export default function FuriganaEditPage() {
     try {
       const lines = await convertLyricsReading(song.lyrics_raw, normalizeReadingScheme(song.reading_scheme));
       setDraft(lines);
-      showToast('success', t('edit.saved'));
+      // Only replace the editor draft here — persistence happens in handleSave.
+      // Use a dedicated message instead of `edit.saved` so the user isn't misled
+      // into thinking the regenerated annotations have already been persisted.
+      showToast('success', t('furigana.reconverted'));
     } catch {
       showToast('error', t('song.furiganaLoadFailed'));
     } finally {

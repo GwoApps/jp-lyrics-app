@@ -480,6 +480,7 @@
     "reset": "自動変換に戻す",
     "reconvert": "再変換",
     "reconverting": "変換中...",
+    "reconverted": "注音を再生成しました。保存をクリックしてください",
     "empty": "修正する注音がありません",
     "line": "{n}行目",
     "readingPlaceholder": "例：ひらがな",

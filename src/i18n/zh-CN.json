@@ -480,6 +480,7 @@
     "reset": "恢复自动转换",
     "reconvert": "重新转换",
     "reconverting": "转换中...",
+    "reconverted": "已重新生成注音，请点击保存",
     "empty": "没有需要纠正的注音",
     "line": "第 {n} 行",
     "readingPlaceholder": "例如：ひらがな",

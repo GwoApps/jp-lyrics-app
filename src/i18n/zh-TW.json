@@ -480,6 +480,7 @@
     "reset": "恢復自動轉換",
     "reconvert": "重新轉換",
     "reconverting": "轉換中...",
+    "reconverted": "已重新產生注音，請點擊儲存",
     "empty": "沒有需要糾正的注音",
     "line": "第 {n} 行",
     "readingPlaceholder": "例如：ひらがな",
