@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { writeAuditLog, parseStrictJson } from '@/lib/admin';
+import { writeAuditLog, isSameOriginRequest, parseStrictJson } from '@/lib/admin';
 import { reorderProviders } from '@/lib/lyrics-provider/config';
 
 // POST /api/admin/lyrics-providers/reorder — drag-to-sort global providers (admin only).
@@ -9,6 +9,10 @@ import { reorderProviders } from '@/lib/lyrics-provider/config';
 export async function POST(request: NextRequest) {
   const user = await getAuthUser(request);
   if (!user?.isAdmin) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+  // CSRF defence-in-depth: reject cross-origin admin mutations before parsing.
+  if (!isSameOriginRequest(request)) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
   const parsed = await parseStrictJson(request);

@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   deriveEndpoints,
   getNetworkPolicy,
+  isMetadataIpv6,
   isPrivateIpv4,
   isPrivateIpv6,
   normalizeProviderBaseUrl,
@@ -12,12 +13,14 @@ import {
   PROVIDER_DEFAULT_TIMEOUT_MS,
   PROVIDER_MAX_TIMEOUT_MS,
   clampConfiguredTimeoutMs,
+  getBudgetConfig,
   resolveProviderTimeoutMs,
 } from './lyrics-provider/budget.ts';
-import { parseManifest, parseCandidate } from './lyrics-provider/http-client.ts';
+import { parseManifest, parseCandidate, searchHttpProvider } from './lyrics-provider/http-client.ts';
 import { MAX_CANDIDATES_PER_PROVIDER } from './lyrics-provider/normalize.ts';
 import { normalizeCandidateLyrics } from './lyrics-provider/normalize.ts';
 import { hasProviderSecretKey, maskSecret } from './lyrics-provider/secret.ts';
+import { isSameOriginRequest } from './admin.ts';
 
 // ─── Policy: private IP detection ─────────────────────────────
 
@@ -39,6 +42,34 @@ test('isPrivateIpv6 detects loopback / link-local / unique-local / v4-mapped', (
   assert.equal(isPrivateIpv6('::ffff:127.0.0.1'), true);
   assert.equal(isPrivateIpv6('::ffff:8.8.8.8'), false);
   assert.equal(isPrivateIpv6('2606:4700::1'), false);
+});
+
+test('isPrivateIpv6 detects hex-mapped IPv4 (RFC1918 / link-local / loopback)', () => {
+  // WHATWG URL normalises [::ffff:169.254.169.254] → ::ffff:a9fe:a9fe.
+  assert.equal(isPrivateIpv6('::ffff:a9fe:a9fe'), true); // 169.254.169.254 link-local
+  assert.equal(isPrivateIpv6('::ffff:7f00:1'), true); // 127.0.0.1 loopback
+  assert.equal(isPrivateIpv6('::ffff:c0a8:0101'), true); // 192.168.1.1 RFC1918
+  assert.equal(isPrivateIpv6('::ffff:0a00:0001'), true); // 10.0.0.1 RFC1918
+  // Public hex-mapped stays public.
+  assert.equal(isPrivateIpv6('::ffff:0808:0808'), false); // 8.8.8.8
+  assert.equal(isPrivateIpv6('::ffff:1.1.1.1'), false); // dotted public
+});
+
+test('isMetadataIpv6 rejects IPv4-mapped cloud metadata even in hex form', () => {
+  assert.equal(isMetadataIpv6('::ffff:169.254.169.254'), true);
+  assert.equal(isMetadataIpv6('::ffff:a9fe:a9fe'), true); // 169.254.169.254 hex
+  assert.equal(isMetadataIpv6('::ffff:6464:64c8'), true); // 100.100.100.200 hex (Alibaba metadata)
+  assert.equal(isMetadataIpv6('2606:4700::1'), false); // public, not metadata
+});
+
+test('validateProviderBaseUrl forbids hex-mapped metadata IPv6 regardless of switches', async () => {
+  // Even with private network + http allowed, hex-mapped metadata must be rejected.
+  const p = { allowHttp: true, allowPrivateNetwork: true };
+  assert.equal(await validateProviderBaseUrl('http://[::ffff:a9fe:a9fe]/latest', p), 'metadata_forbidden');
+  assert.equal(await validateProviderBaseUrl('https://[::ffff:169.254.169.254]/', p), 'metadata_forbidden');
+  // Private (non-metadata) mapped IPv6 is allowed only when private net is on.
+  assert.equal(await validateProviderBaseUrl('https://[::ffff:7f00:1]:8787/', { allowHttp: false, allowPrivateNetwork: true }), null);
+  assert.equal(await validateProviderBaseUrl('https://[::ffff:7f00:1]:8787/', { allowHttp: false, allowPrivateNetwork: false }), 'unsafe_host');
 });
 
 test('normalizeProviderBaseUrl keeps path prefix and trims trailing slash', () => {
@@ -122,6 +153,64 @@ test('clampConfiguredTimeoutMs returns null for blank and clamps valid ranges', 
   assert.equal(clampConfiguredTimeoutMs(30000, budget), 30000);
 });
 
+test('getBudgetConfig applies explicit bounds and fails closed on invalid env', () => {
+  const keys = [
+    'LYRICS_PROVIDER_DEFAULT_TIMEOUT_MS',
+    'LYRICS_PROVIDER_MAX_TIMEOUT_MS',
+    'LYRICS_PROVIDER_MANIFEST_TIMEOUT_MS',
+    'LYRICS_PROVIDER_CHAIN_TIMEOUT_MS',
+  ];
+  const prev = keys.map((k) => [k, process.env[k]] as const);
+  try {
+    // Tightening the ceiling now takes effect (was previously stuck at 60000).
+    process.env.LYRICS_PROVIDER_MAX_TIMEOUT_MS = '30000';
+    assert.equal(getBudgetConfig().maxTimeoutMs, 30000);
+
+    // 1 ms (below min) fails closed to the safe default.
+    process.env.LYRICS_PROVIDER_MAX_TIMEOUT_MS = '1';
+    assert.equal(getBudgetConfig().maxTimeoutMs, PROVIDER_MAX_TIMEOUT_MS);
+
+    // Non-numeric string fails closed.
+    process.env.LYRICS_PROVIDER_MAX_TIMEOUT_MS = 'abc';
+    assert.equal(getBudgetConfig().maxTimeoutMs, PROVIDER_MAX_TIMEOUT_MS);
+
+    // Absurdly large value fails closed.
+    process.env.LYRICS_PROVIDER_MAX_TIMEOUT_MS = '999999999';
+    assert.equal(getBudgetConfig().maxTimeoutMs, PROVIDER_MAX_TIMEOUT_MS);
+
+    // Negative fails closed.
+    process.env.LYRICS_PROVIDER_MAX_TIMEOUT_MS = '-5';
+    assert.equal(getBudgetConfig().maxTimeoutMs, PROVIDER_MAX_TIMEOUT_MS);
+  } finally {
+    for (const [k, v] of prev) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+});
+
+test('getBudgetConfig clamps sub-budgets to the max ceiling', () => {
+  const keys = [
+    'LYRICS_PROVIDER_DEFAULT_TIMEOUT_MS',
+    'LYRICS_PROVIDER_MAX_TIMEOUT_MS',
+    'LYRICS_PROVIDER_MANIFEST_TIMEOUT_MS',
+    'LYRICS_PROVIDER_CHAIN_TIMEOUT_MS',
+  ];
+  const prev = keys.map((k) => [k, process.env[k]] as const);
+  try {
+    process.env.LYRICS_PROVIDER_MAX_TIMEOUT_MS = '10000';
+    process.env.LYRICS_PROVIDER_DEFAULT_TIMEOUT_MS = '20000'; // above ceiling
+    process.env.LYRICS_PROVIDER_MANIFEST_TIMEOUT_MS = '5000';
+    const budget = getBudgetConfig();
+    assert.equal(budget.maxTimeoutMs, 10000);
+    assert.equal(budget.defaultTimeoutMs, 10000); // clamped down to ceiling
+    assert.equal(budget.manifestTimeoutMs, 5000);
+  } finally {
+    for (const [k, v] of prev) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+});
+
 // ─── Manifest / schema validation ─────────────────────────────
 
 test('parseManifest accepts a valid manifest and caps max_candidates', () => {
@@ -150,11 +239,24 @@ test('parseManifest rejects wrong protocol / version / non-object', () => {
 
 test('parseCandidate requires plain or synced lyrics and caps field length', () => {
   assert.equal(parseCandidate({ title: 't', artists: ['a'], plain_lyrics: 'x' })?.plainLyrics, 'x');
-  assert.equal(parseCandidate({ title: 't', synced_lyrics: '[00:00.00]x' })?.syncedLyrics, '[00:00.00]x');
+  assert.equal(parseCandidate({ title: 't', artists: ['a'], synced_lyrics: '[00:00.00]x' })?.syncedLyrics, '[00:00.00]x');
   // No lyrics at all → dropped.
   assert.equal(parseCandidate({ title: 't', artists: [] }), null);
   // Oversized field → dropped.
-  assert.equal(parseCandidate({ title: 't', plain_lyrics: 'x'.repeat(200001) }), null);
+  assert.equal(parseCandidate({ title: 't', artists: ['a'], plain_lyrics: 'x'.repeat(200001) }), null);
+});
+
+test('parseCandidate rejects missing / blank title and artist identity evidence', () => {
+  // Missing title must not inherit the request's title (would score a perfect match).
+  assert.equal(parseCandidate({ artists: ['a'], plain_lyrics: 'x' }), null);
+  assert.equal(parseCandidate({ title: '   ', artists: ['a'], plain_lyrics: 'x' }), null);
+  // Missing / blank artist must not be accepted as identity evidence.
+  assert.equal(parseCandidate({ title: 't', plain_lyrics: 'x' }), null);
+  assert.equal(parseCandidate({ title: 't', artists: ['', '  '], plain_lyrics: 'x' }), null);
+  // Non-string entries are filtered; an empty resulting artist list is rejected.
+  assert.equal(parseCandidate({ title: 't', artists: [42], plain_lyrics: 'x' }), null);
+  // Whitespace around title/artists is trimmed.
+  assert.equal(parseCandidate({ title: '  t  ', artists: ['  a  '], plain_lyrics: 'x' })?.title, 't');
 });
 
 // ─── Normalize ────────────────────────────────────────────────
@@ -163,6 +265,18 @@ test('normalizeCandidateLyrics decodes entities and derives plain from synced', 
   const out = normalizeCandidateLyrics({ syncedLyrics: '[00:01.00]Tom &amp; Jerry', plainLyrics: '' });
   assert.equal(out.plain, 'Tom & Jerry');
   assert.equal(out.synced, '[00:01.00]Tom & Jerry');
+  assert.equal(out.syncedValid, true);
+});
+
+test('normalizeCandidateLyrics downgrades synced with no valid LRC timeline to plain', () => {
+  // Plain text masquerading as synced (no timestamps) → synced is dropped.
+  const plainOnly = normalizeCandidateLyrics({ syncedLyrics: 'just plain text, no timestamps', plainLyrics: '' });
+  assert.equal(plainOnly.synced, '');
+  assert.equal(plainOnly.syncedValid, false);
+  // A real timed LRC keeps the timeline and flags syncedValid.
+  const timed = normalizeCandidateLyrics({ syncedLyrics: '[00:01.00]Tom &amp; Jerry\n[00:04.00]says hi', plainLyrics: '' });
+  assert.equal(timed.syncedValid, true);
+  assert.match(timed.plain, /Tom & Jerry/);
 });
 
 // ─── Secret helpers (non-crypto pure functions) ───────────────
@@ -174,6 +288,77 @@ test('maskSecret masks short and long values without revealing plaintext', () =>
   assert.equal(maskSecret('short'), '••••');
   assert.match(maskSecret('abcdefghijklmnop')!, /^abcd/);
   assert.equal(maskSecret('abcdefghijklmnop'), 'abcd...mnop');
+});
+
+// ─── HTTP search cancellation propagation ─────────────────────
+
+test('searchHttpProvider propagates caller cancellation instead of mapping to timeout', async () => {
+  const originalFetch = globalThis.fetch as unknown;
+  // A fetch that never settles on its own — only the abort signal can end it.
+  globalThis.fetch = (async (_input: unknown, init?: { signal?: AbortSignal }) =>
+    new Promise((_resolve, reject) => {
+      const signal = init?.signal;
+      if (signal?.aborted) {
+        reject(new DOMException('aborted', 'AbortError'));
+        return;
+      }
+      signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
+    })) as typeof fetch;
+  const controller = new AbortController();
+  try {
+    const promise = searchHttpProvider(
+      { baseUrl: 'https://8.8.8.8/x', authType: 'none', timeoutMs: 50 },
+      { title: 't', artists: ['a'] },
+      50,
+      'req-id',
+      controller.signal,
+    );
+    // Abort the caller — must reject (propagate) rather than return a `timeout` outcome.
+    controller.abort();
+    await assert.rejects(promise, (err: unknown) =>
+      err instanceof Error && err.name === 'AbortError');
+  } finally {
+    globalThis.fetch = originalFetch as typeof fetch;
+  }
+});
+
+test('searchHttpProvider returns a timeout outcome on provider timeout without caller cancel', async () => {
+  const originalFetch = globalThis.fetch as unknown;
+  // Never settles on its own, but honours the provider timeout's abort signal.
+  globalThis.fetch = (async (_input: unknown, init?: { signal?: AbortSignal }) =>
+    new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
+    })) as typeof fetch;
+  try {
+    const outcome = await searchHttpProvider(
+      { baseUrl: 'https://8.8.8.8/x', authType: 'none', timeoutMs: 20 },
+      { title: 't', artists: ['a'] },
+      20,
+      'req-id',
+    );
+    assert.equal(outcome.status, 'timeout');
+  } finally {
+    globalThis.fetch = originalFetch as typeof fetch;
+  }
+});
+
+// ─── Admin CSRF / Origin guard ────────────────────────────────
+
+test('isSameOriginRequest rejects mismatched Origin and allows same-origin / missing', () => {
+  const req = (origin: string | null, host = 'app.example.com') => ({
+    headers: { get: (name: string) => (name === 'Origin' ? origin : name === 'Host' ? host : null) },
+    nextUrl: { host },
+  });
+  // Allowed: matching Origin host.
+  assert.equal(isSameOriginRequest(req('https://app.example.com')), true);
+  assert.equal(isSameOriginRequest(req('http://app.example.com')), true); // scheme ignored
+  // Allowed: missing Origin (non-browser / server-to-server).
+  assert.equal(isSameOriginRequest(req(null)), true);
+  // Rejected: cross-origin / different sibling site.
+  assert.equal(isSameOriginRequest(req('https://evil.example.net')), false);
+  assert.equal(isSameOriginRequest(req('https://app.example.com.evil.net')), false);
+  // Rejected: malformed Origin.
+  assert.equal(isSameOriginRequest(req('not a url')), false);
 });
 
 test('hasProviderSecretKey reflects the env var', () => {

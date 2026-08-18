@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { writeAuditLog } from '@/lib/admin';
+import { writeAuditLog, isSameOriginRequest } from '@/lib/admin';
 import { getProviderConfig, updateProviderConfig } from '@/lib/lyrics-provider/config';
 import { getBudgetConfig } from '@/lib/lyrics-provider/budget';
 import { fetchManifest } from '@/lib/lyrics-provider/http-client';
@@ -14,6 +14,11 @@ import { getNetworkPolicy, isInsecureTransport, normalizeProviderBaseUrl, valida
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthUser(request);
   if (!user?.isAdmin) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+  // CSRF defence-in-depth: reject cross-origin admin mutations before parsing
+  // or touching any external provider.
+  if (!isSameOriginRequest(request)) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
   const { id } = await params;
@@ -46,23 +51,35 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const timeoutMs = Math.min(budget.manifestTimeoutMs, budget.maxTimeoutMs);
   const result = await fetchManifest({ baseUrl, authType, authSecret }, timeoutMs);
 
-  // Persist the diagnostic health state for the stored provider (never the secret).
-  if (result.ok) {
-    await updateProviderConfig(db, id, {
-      lastCheckStatus: 'ok',
-      lastCheckCode: null,
-      lastCheckLatencyMs: result.latencyMs,
-      checkedAt: new Date().toISOString(),
-      manifestJson: JSON.stringify(result.manifest),
-    });
-  } else {
-    await updateProviderConfig(db, id, {
-      lastCheckStatus: 'failed',
-      lastCheckCode: result.code,
-      lastCheckLatencyMs: result.latencyMs,
-      checkedAt: new Date().toISOString(),
-      manifestJson: null,
-    });
+  // Only persist the diagnostic health state when the tested config matches the
+  // provider's persisted config exactly. A temporary form-snapshot test (unsaved
+  // base_url / auth) must NOT overwrite the stored row's manifest/health — the
+  // list would otherwise show a manifest for a service the row isn't actually
+  // using. Snapshot tests return the result without touching the DB.
+  const testedMatchesStored =
+    baseUrl === existing.baseUrl &&
+    authType === existing.authType &&
+    authSecret === (existing.authType === 'bearer' && existing.authSecretCiphertext
+      ? await decryptProviderSecret(existing.authSecretCiphertext)
+      : null);
+  if (testedMatchesStored) {
+    if (result.ok) {
+      await updateProviderConfig(db, id, {
+        lastCheckStatus: 'ok',
+        lastCheckCode: null,
+        lastCheckLatencyMs: result.latencyMs,
+        checkedAt: new Date().toISOString(),
+        manifestJson: JSON.stringify(result.manifest),
+      });
+    } else {
+      await updateProviderConfig(db, id, {
+        lastCheckStatus: 'failed',
+        lastCheckCode: result.code,
+        lastCheckLatencyMs: result.latencyMs,
+        checkedAt: new Date().toISOString(),
+        manifestJson: null,
+      });
+    }
   }
 
   await writeAuditLog(db, {

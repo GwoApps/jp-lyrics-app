@@ -57,6 +57,7 @@ export async function insertProviderConfig(db: DB, row: {
   baseUrl: string;
   authType: 'none' | 'bearer';
   authSecretCiphertext: string | null;
+  enabled: number;
   priority: number;
   timeoutMs: number | null;
   protocolVersion: number;

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { getDB } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { writeAuditLog, hasUnknownFields, parseStrictJson } from '@/lib/admin';
+import { writeAuditLog, hasUnknownFields, isSameOriginRequest, parseStrictJson } from '@/lib/admin';
 import {
   getProviderConfig,
   insertProviderConfig,
@@ -48,12 +48,16 @@ async function validateBody(body: Record<string, unknown>): Promise<
     budget,
   );
 
+  // New providers default to DISABLED: they only join the effective chain after
+  // the admin has explicitly enabled them (ideally after a successful manifest
+  // test). The UI does not send `enabled` on create, so a fresh provider is safe.
+  const enabled = body.enabled === true ? 1 : 0;
   return {
     name,
     baseUrl,
     authType,
     authSecretCiphertext,
-    enabled: body.enabled === false ? 0 : 1,
+    enabled,
     priority: Number.isFinite(Number(body.priority)) ? Math.max(0, Math.floor(Number(body.priority))) : 0,
     timeoutMs,
   };
@@ -103,6 +107,10 @@ export async function POST(request: NextRequest) {
   if (!user?.isAdmin) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
+  // CSRF defence-in-depth: reject cross-origin admin mutations before parsing.
+  if (!isSameOriginRequest(request)) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
 
   const parsed = await parseStrictJson(request);
   if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
@@ -123,6 +131,7 @@ export async function POST(request: NextRequest) {
     baseUrl: validated.baseUrl,
     authType: validated.authType,
     authSecretCiphertext: validated.authSecretCiphertext,
+    enabled: validated.enabled,
     priority: validated.priority,
     timeoutMs: validated.timeoutMs,
     protocolVersion: 1,

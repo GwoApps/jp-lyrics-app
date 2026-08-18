@@ -18,12 +18,27 @@ export const PROVIDER_MAX_TIMEOUT_MS = 60_000;
 export const PROVIDER_MANIFEST_TIMEOUT_MS = 15_000;
 export const PROVIDER_CHAIN_TIMEOUT_MS = 180_000;
 
-function readIntEnv(name: string, fallback: number): number {
+/** Explicit, fail-closed bounds for every deployment budget value. */
+export const BUDGET_BOUNDS = {
+  max: { min: 5_000, max: 300_000, fallback: PROVIDER_MAX_TIMEOUT_MS },
+  default: { min: 1_000, max: 300_000, fallback: PROVIDER_DEFAULT_TIMEOUT_MS },
+  manifest: { min: 1_000, max: 300_000, fallback: PROVIDER_MANIFEST_TIMEOUT_MS },
+  chain: { min: 5_000, max: 600_000, fallback: PROVIDER_CHAIN_TIMEOUT_MS },
+} as const;
+
+/**
+ * Read + clamp an integer env var. Missing, non-numeric, out-of-range or
+ * non-finite values fall back to the safe default (fail-closed) rather than
+ * trusting an extreme deployment override.
+ */
+function readBoundedEnv(name: string, bounds: { min: number; max: number; fallback: number }): number {
   const raw = process.env[name];
-  if (!raw) return fallback;
+  if (raw === undefined || raw === null || raw.trim() === '') return bounds.fallback;
   const n = Number(raw);
-  if (!Number.isFinite(n) || n <= 0) return fallback;
-  return Math.floor(n);
+  if (!Number.isFinite(n) || n <= 0) return bounds.fallback;
+  const floor = Math.floor(n);
+  if (floor < bounds.min || floor > bounds.max) return bounds.fallback;
+  return floor;
 }
 
 export interface BudgetConfig {
@@ -34,19 +49,18 @@ export interface BudgetConfig {
 }
 
 export function getBudgetConfig(): BudgetConfig {
-  const maxTimeoutMs = Math.max(
-    PROVIDER_MAX_TIMEOUT_MS,
-    Math.min(PROVIDER_MAX_TIMEOUT_MS, readIntEnv('LYRICS_PROVIDER_MAX_TIMEOUT_MS', PROVIDER_MAX_TIMEOUT_MS)),
-  );
+  const maxTimeoutMs = readBoundedEnv('LYRICS_PROVIDER_MAX_TIMEOUT_MS', BUDGET_BOUNDS.max);
+  // Per-request / manifest / chain budgets are additionally clamped to the max
+  // ceiling so a provider timeout never exceeds the admin-configurable ceiling.
   const defaultTimeoutMs = Math.min(
     maxTimeoutMs,
-    readIntEnv('LYRICS_PROVIDER_DEFAULT_TIMEOUT_MS', PROVIDER_DEFAULT_TIMEOUT_MS),
+    readBoundedEnv('LYRICS_PROVIDER_DEFAULT_TIMEOUT_MS', BUDGET_BOUNDS.default),
   );
   const manifestTimeoutMs = Math.min(
     maxTimeoutMs,
-    readIntEnv('LYRICS_PROVIDER_MANIFEST_TIMEOUT_MS', PROVIDER_MANIFEST_TIMEOUT_MS),
+    readBoundedEnv('LYRICS_PROVIDER_MANIFEST_TIMEOUT_MS', BUDGET_BOUNDS.manifest),
   );
-  const chainTimeoutMs = readIntEnv('LYRICS_PROVIDER_CHAIN_TIMEOUT_MS', PROVIDER_CHAIN_TIMEOUT_MS);
+  const chainTimeoutMs = readBoundedEnv('LYRICS_PROVIDER_CHAIN_TIMEOUT_MS', BUDGET_BOUNDS.chain);
   return { defaultTimeoutMs, maxTimeoutMs, manifestTimeoutMs, chainTimeoutMs };
 }
 

@@ -95,10 +95,18 @@ export function parseManifest(raw: unknown): { ok: true; manifest: ProviderManif
  */
 export function parseCandidate(raw: unknown): ProviderCandidate | null {
   if (!isPlainObject(raw)) return null;
-  const title = typeof raw.title === 'string' ? raw.title : '';
-  const artists = Array.isArray(raw.artists) ? raw.artists.filter((a): a is string => typeof a === 'string') : [];
+  const title = typeof raw.title === 'string' ? raw.title.trim() : '';
+  const artists = Array.isArray(raw.artists)
+    ? raw.artists.filter((a): a is string => typeof a === 'string').map((a) => a.trim()).filter((a) => a.length > 0)
+    : [];
   const plain = typeof raw.plain_lyrics === 'string' ? raw.plain_lyrics : '';
   const synced = typeof raw.synced_lyrics === 'string' ? raw.synced_lyrics : '';
+  // A candidate must carry a non-empty, bounded title to be trusted: a missing
+  // title would otherwise inherit the request's title and score a perfect match
+  // while proving nothing about the song's identity.
+  if (!title || title.length > MAX_LYRICS_CHARS) return null;
+  if (artists.length === 0) return null; // artist identity is required evidence
+  if (artists.some((a) => a.length > MAX_LYRICS_CHARS)) return null;
   if (!plain && !synced) return null; // must carry at least one lyric form
   if (plain.length > MAX_LYRICS_CHARS || synced.length > MAX_LYRICS_CHARS) return null;
   let sourceUrl: string | undefined;
@@ -230,6 +238,7 @@ export async function searchHttpProvider(
   query: LyricsProviderQuery,
   timeoutMs: number,
   requestId: string,
+  callerSignal?: AbortSignal,
 ): Promise<ProviderOutcome> {
   const policyError = await validateProviderBaseUrl(config.baseUrl, getNetworkPolicy());
   if (policyError) {
@@ -261,6 +270,11 @@ export async function searchHttpProvider(
   }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  // Caller cancellation (SSE disconnect, JSON abort, chain deadline) takes
+  // precedence and must propagate up as a real abort; the provider timeout
+  // alone maps to a `timeout` outcome below.
+  const onCallerAbort = () => controller.abort();
+  callerSignal?.addEventListener('abort', onCallerAbort, { once: true });
   try {
     const res = await fetch(searchUrl, {
       method: 'POST',
@@ -274,8 +288,8 @@ export async function searchHttpProvider(
     if (!res.ok) {
       const { retryAfterMs, diagnostic } = parseErrorBody(rawBody);
       const status = mapHttpStatus(res.status);
-      if (status === 'rate_limited' && retryAfterMs) {
-        return { status, candidates: [], retryAfterMs: Math.min(retryAfterMs, 30_000), diagnostic };
+      if (status === 'rate_limited') {
+        return { status, candidates: [], rateLimited: true, ...(retryAfterMs ? { retryAfterMs: Math.min(retryAfterMs, 30_000) } : {}), ...(diagnostic ? { diagnostic } : {}) };
       }
       return { status, candidates: [], ...(diagnostic ? { diagnostic } : {}) };
     }
@@ -298,11 +312,16 @@ export async function searchHttpProvider(
     }
     return { status: 'hit', candidates };
   } catch (err) {
+    // Caller cancellation must propagate (not be swallowed as a timeout).
+    if (err instanceof Error && err.name === 'AbortError' && callerSignal?.aborted) {
+      throw err;
+    }
     if (err instanceof Error && err.name === 'AbortError') {
       return { status: 'timeout', candidates: [] };
     }
     return { status: 'error', candidates: [] };
   } finally {
     clearTimeout(timer);
+    callerSignal?.removeEventListener('abort', onCallerAbort);
   }
 }

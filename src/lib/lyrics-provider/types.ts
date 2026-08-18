@@ -32,6 +32,18 @@ export interface ProviderCandidate {
   syncedLyrics?: string;
   /** Optional human-verifiable link (must be a safe https: URL; rendered with noopener noreferrer). */
   sourceUrl?: string;
+  /**
+   * Pre-scored confidence (0–100) supplied by a provider that already ran its
+   * own scoring (the builtin chain). When absent, the orchestrator applies the
+   * shared `scoreCandidate` evidence pipeline instead.
+   */
+  confidence?: number;
+  /** Pre-scored match metadata for the review UI (builtin sources). */
+  match?: { title: string; artist: string; link: string; ambiguous?: boolean };
+  /** True when the provider was rate-limited even though it produced no hit. */
+  rateLimited?: boolean;
+  /** True when the candidate's duration conflicts with the requested one. */
+  durationMismatch?: boolean;
 }
 
 /** Language-neutral outcome status for a single provider query. */
@@ -52,6 +64,8 @@ export interface ProviderOutcome {
   candidates: ProviderCandidate[];
   /** Present only when the provider answered 429; seconds, capped by caller. */
   retryAfterMs?: number;
+  /** True when the provider was rate-limited even though it produced no hit. */
+  rateLimited?: boolean;
   /** Structured diagnostic detail (truncated, language-neutral). */
   diagnostic?: string;
 }

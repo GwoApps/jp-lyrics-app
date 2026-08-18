@@ -1,10 +1,12 @@
 /**
  * Effective provider chain orchestrator (ISSUE #148).
  *
- * The builtin chain (LRCLIB → PetitLyrics → Uta-Net → ytmusic) runs first and
- * keeps its exact order + confidence rules (backward compatible). When the
- * builtin chain finds nothing, the admin-enabled HTTP providers are consulted
- * in priority order. Every HTTP candidate is re-scored by jplrc using the same
+ * Phase 1 unified abstraction: builtin sources (LRCLIB → PetitLyrics → Uta-Net
+ * → ytmusic) and admin-enabled HTTP providers are all exposed as `LyricsProvider`
+ * adapters and scheduled by a single orchestrator loop, sharing the caller's
+ * AbortSignal and the chain budget. The builtin adapter keeps its exact order +
+ * confidence rules (backward compatible) and sits first; HTTP providers follow
+ * by priority. Every HTTP candidate is re-scored by jplrc using the same
  * title/artist/duration/album evidence pipeline — provider-reported confidence
  * is never trusted.
  *
@@ -12,11 +14,12 @@
  * caller's AbortSignal (user cancel) always takes precedence over any timeout.
  */
 import { artistScore, titleScore } from '../match.ts';
-import { fetchLyrics, type LyricsFetchResult, durationStatus, albumStatus } from '../lyrics-fetcher.ts';
-import type { LyricsProviderQuery, ProviderStage } from './types.ts';
+import { type LyricsFetchResult, durationStatus, albumStatus } from '../lyrics-fetcher.ts';
+import type { LyricsProvider, LyricsProviderQuery, ProviderStage } from './types.ts';
+import { builtinLyricsProvider } from './builtin-provider.ts';
+import { httpLyricsProvider } from './http-provider.ts';
 import { getBudgetConfig, resolveProviderTimeoutMs, isAbortError } from './budget.ts';
 import { listEffectiveProviders } from './config.ts';
-import { searchHttpProvider } from './http-client.ts';
 import { decryptProviderSecret } from './secret.ts';
 import { normalizeCandidateLyrics } from './normalize.ts';
 import { getDB } from '../db.ts';
@@ -67,21 +70,27 @@ function scoreCandidate(
   if (album === 'match') score += 0.03;
   else if (album === 'partial') score += 0.01;
 
-  const synced = !!(candidate.synced && candidate.synced.trim());
-  const confidence = Math.round(40 + score * 50);
-  // Reuse the same base confidence mapping as Uta-Net (plain/synced-aware).
-  const finalConfidence = synced ? Math.min(90, confidence) : Math.min(82, confidence);
-  const isPlainHit = !candidate.synced?.trim();
   const result = normalizeCandidateLyrics({
     plainLyrics: candidate.plain || (candidate.synced ? '' : candidate.plain),
     syncedLyrics: candidate.synced,
   });
+  // A candidate is a timed hit only when its synced payload actually carries a
+  // valid LRC timeline (malformed / plain-only synced is downgraded to plain).
+  const synced = result.syncedValid;
+  if (!synced && !result.plain.trim()) return null; // no usable lyrics at all
+  const confidence = Math.round(40 + score * 50);
+  // Reuse the same base confidence mapping as Uta-Net (plain/synced-aware).
+  const finalConfidence = synced ? Math.min(90, confidence) : Math.min(82, confidence);
+  const isPlainHit = !synced;
 
   // Fall below the hard floor → wrong candidate; never persist silently.
   if (finalConfidence < 60) return null;
 
-  const match = candidate.title || candidate.artists[0]
-    ? { title: candidate.title || query.title, artist: candidate.artists[0] || '', link: '' }
+  // Never substitute the request's title/artist as if it were candidate
+  // evidence — `parseCandidate` guarantees non-empty identity fields for HTTP
+  // candidates, so a missing title here is treated as no trusted match.
+  const match = candidate.title && candidate.artists[0]
+    ? { title: candidate.title, artist: candidate.artists[0], link: '' }
     : undefined;
 
   return {
@@ -123,78 +132,88 @@ export async function fetchLyricsWithChain(
     spotifyTrackId: opts?.spotifyCanonical?.name ? undefined : undefined,
   };
 
+  // Unified provider chain (Phase 1 abstraction): the builtin chain is exposed
+  // as a `LyricsProvider` (pre-scored confidence, backward compatible) and sits
+  // first so its default order + confidence rules are preserved; runtime HTTP
+  // providers follow by their configured priority. Every source is scheduled by
+  // the same loop and shares the caller's cancel signal.
   try {
-    // 1. Builtin chain first (preserves default order + confidence exactly).
-    const builtin = await fetchLyrics(title, artist, {
-      spotifyCanonical: opts?.spotifyCanonical,
-      spotify: opts?.spotify,
-      signal: combinedSignal,
-      onStage: (s) => emitStage(s),
-    });
-    if (builtin.result) return builtin;
-
-    // 2. HTTP providers (only reached when builtin found nothing).
     const db = getDB();
     const httpProviders = await listEffectiveProviders(db);
-    if (httpProviders.length === 0) {
-      return builtin; // no plugin → identical legacy result
+
+    // Build the unified provider chain: builtin first (backward compatible),
+    // then each enabled HTTP provider with its decrypted secret + timeout.
+    const providers: LyricsProvider[] = [
+      builtinLyricsProvider({
+        spotifyCanonical: opts?.spotifyCanonical,
+        spotify: opts?.spotify,
+      }),
+    ];
+    for (const cfg of httpProviders) {
+      const authSecret = cfg.authType === 'bearer' && cfg.authSecretCiphertext
+        ? await decryptProviderSecret(cfg.authSecretCiphertext)
+        : null;
+      providers.push(httpLyricsProvider(
+        cfg,
+        authSecret,
+        resolveProviderTimeoutMs(cfg.timeoutMs, chainBudget),
+      ));
     }
 
-    for (const cfg of httpProviders) {
+    let best: LyricsFetchResult | null = null;
+    let rateLimited = false;
+
+    for (const provider of providers) {
       if (combinedSignal.aborted) {
         if (opts?.signal?.aborted) throw opts.signal.reason;
         break;
       }
-      const providerStage: ProviderStage = {
-        id: `plugin:${cfg.id}:${cfg.protocolVersion}`,
-        displayName: cfg.name,
-        kind: 'http',
-      };
-      emitStage(providerStage);
 
-      const timeoutMs = resolveProviderTimeoutMs(cfg.timeoutMs, chainBudget);
-      const authSecret = cfg.authType === 'bearer' && cfg.authSecretCiphertext
-        ? await decryptProviderSecret(cfg.authSecretCiphertext)
-        : null;
-      const outcome = await searchHttpProvider(
-        {
-          baseUrl: cfg.baseUrl,
-          authType: cfg.authType,
-          authSecret,
-          timeoutMs,
-        },
-        query,
-        timeoutMs,
-        crypto.randomUUID(),
-      );
+      // The provider's own search() emits its stage via onStage (dynamic stage
+      // objects for both builtin bridges and HTTP plugins); nothing else needed.
+      const outcome = await provider.search(query, { signal: combinedSignal, onStage: emitStage });
+      rateLimited = rateLimited || !!outcome.rateLimited;
+      if (outcome.status !== 'hit') continue;
 
-      if (outcome.status !== 'hit') continue; // fall through on every non-hit status
-
-      // Re-score every candidate; take the best accepted one.
-      let best: LyricsFetchResult | null = null;
       for (const candidate of outcome.candidates) {
-        const scored = scoreCandidate(
-          query,
-          opts?.spotify,
-          {
-            title: candidate.title,
-            artists: candidate.artists,
-            plain: candidate.plainLyrics,
-            synced: candidate.syncedLyrics,
-            durationMs: candidate.durationMs,
-            album: candidate.album,
-          },
-          `plugin:${cfg.id}:${cfg.protocolVersion}`,
-        );
+        // Builtin candidates carry a pre-scored confidence and are accepted
+        // directly; HTTP candidates are scored by the shared evidence pipeline.
+        let scored: LyricsFetchResult | null;
+        if (typeof candidate.confidence === 'number') {
+          scored = {
+            result: {
+              plain: candidate.plainLyrics ?? '',
+              synced: candidate.syncedLyrics ?? '',
+            },
+            source: candidate.candidateId ?? provider.id,
+            confidence: candidate.confidence,
+            ...(candidate.durationMismatch ? { durationMismatch: true } : {}),
+            ...(candidate.match ? { match: candidate.match } : {}),
+          };
+        } else {
+          scored = scoreCandidate(
+            query,
+            opts?.spotify,
+            {
+              title: candidate.title,
+              artists: candidate.artists,
+              plain: candidate.plainLyrics,
+              synced: candidate.syncedLyrics,
+              durationMs: candidate.durationMs,
+              album: candidate.album,
+            },
+            provider.id,
+          );
+        }
         if (scored && (!best || scored.confidence > best.confidence)) {
           best = scored;
         }
       }
-      if (best) return best;
+      if (best) return { ...best, rateLimited: best.rateLimited || rateLimited };
     }
 
-    // Nothing from HTTP providers either → return the builtin miss (or rate-limit).
-    return builtin;
+    // No source produced a trusted hit → report a miss (or the rate-limit flag).
+    return { result: null, source: '', confidence: 0, rateLimited };
   } catch (err) {
     if (isAbortError(err)) {
       // Chain budget expired without a caller cancel → report a soft timeout.

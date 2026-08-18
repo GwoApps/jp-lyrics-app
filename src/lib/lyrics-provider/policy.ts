@@ -39,14 +39,57 @@ export function isPrivateIpv4(ip: string): boolean {
   return PRIVATE_IP_RANGES.some(([lo, hi]) => int >= lo && int <= hi);
 }
 
+/**
+ * Convert an IPv4-mapped IPv6 literal into its embedded dotted IPv4 address, or
+ * null when the literal is not an IPv4-mapped address. Handles both the dotted
+ * form WHATWG emits for `::ffff:127.0.0.1` and the hex-mapped form it emits for
+ * `[::ffff:169.254.169.254]` → `::ffff:a9fe:a9fe`. Without this, hex-mapped
+ * addresses slip past the private/metadata checks and are treated as public.
+ */
+function mappedIpv4(ip: string): string | null {
+  const lower = ip.toLowerCase();
+  // Dotted form: ::ffff:127.0.0.1
+  const dotted = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (dotted) return dotted[1];
+  // Hex form: ::ffff:a9fe:a9fe (one or two 16-bit groups after the prefix).
+  const hex = lower.match(/^::ffff:([0-9a-f]{1,4})(?::([0-9a-f]{1,4}))?$/);
+  if (!hex) return null;
+  const first = parseInt(hex[1], 16);
+  const second = hex[2] !== undefined ? parseInt(hex[2], 16) : -1;
+  if (second < 0) {
+    // Single group covers the whole 32-bit IPv4 (e.g. ::ffff:ffff → 255.255.255.255).
+    if (first > 0xffffffff) return null;
+    return [
+      (first >>> 24) & 0xff,
+      (first >>> 16) & 0xff,
+      (first >>> 8) & 0xff,
+      first & 0xff,
+    ].join('.');
+  }
+  const int = ((first << 16) | second) >>> 0;
+  return [(int >>> 24) & 0xff, (int >>> 16) & 0xff, (int >>> 8) & 0xff, int & 0xff].join('.');
+}
+
 /** IPv6 loopback / link-local / unique-local / unspecified / v4-mapped checks. */
 export function isPrivateIpv6(ip: string): boolean {
   const lower = ip.toLowerCase();
   if (lower === '::' || lower === '::1' || lower.startsWith('fe80:') || lower.startsWith('fc') || lower.startsWith('fd')) {
     return true;
   }
-  const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return isPrivateIpv4(mapped[1]);
+  if (lower.startsWith('::ffff:')) {
+    const mapped = mappedIpv4(lower);
+    if (mapped) return isPrivateIpv4(mapped);
+  }
+  return false;
+}
+
+/** True when an IPv6 literal embeds a cloud-metadata IPv4 (mapped or not). */
+export function isMetadataIpv6(ip: string): boolean {
+  if (isMetadataHost(ip)) return true;
+  if (ip.toLowerCase().startsWith('::ffff:')) {
+    const mapped = mappedIpv4(ip);
+    if (mapped && METADATA_HOSTS.has(mapped)) return true;
+  }
   return false;
 }
 
@@ -173,7 +216,10 @@ export async function validateProviderBaseUrl(
   const ipLiteral = hostname.match(/^\[?([0-9a-f:.]+)\]?$/);
   if (ipLiteral) {
     const ip = ipLiteral[1];
-    const isPrivate = ip.includes(':') ? isPrivateIpv6(ip) : isPrivateIpv4(ip);
+    const isIpv6 = ip.includes(':');
+    // Metadata is ALWAYS forbidden, including IPv4-mapped IPv6 forms.
+    if (isIpv6 && isMetadataIpv6(ip)) return 'metadata_forbidden';
+    const isPrivate = isIpv6 ? isPrivateIpv6(ip) : isPrivateIpv4(ip);
     if (isPrivate && !p.allowPrivateNetwork) return 'unsafe_host';
     return null; // public IP literal, or private allowed
   }

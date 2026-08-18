@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { writeAuditLog, hasUnknownFields, parseStrictJson } from '@/lib/admin';
+import { writeAuditLog, hasUnknownFields, isSameOriginRequest, parseStrictJson } from '@/lib/admin';
 import {
   deleteProviderConfig,
   getProviderConfig,
@@ -56,6 +56,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthUser(request);
   if (!user?.isAdmin) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+  // CSRF defence-in-depth: reject cross-origin admin mutations before parsing.
+  if (!isSameOriginRequest(request)) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
   const id = await getTargetId(params);
@@ -144,6 +148,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getAuthUser(request);
   if (!user?.isAdmin) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+  // CSRF defence-in-depth: reject cross-origin admin mutations before parsing.
+  if (!isSameOriginRequest(request)) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
   const id = await getTargetId(params);

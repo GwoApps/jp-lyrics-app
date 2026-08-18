@@ -7,6 +7,7 @@
  * anything is persisted or surfaced to the user.
  */
 import * as heModule from 'he';
+import { parseLrc } from '../lrc.ts';
 
 const decodeHtmlEntity = (heModule as unknown as { default?: typeof heModule }).default?.decode ?? heModule.decode;
 
@@ -26,20 +27,39 @@ export function stripTimestamps(lrc: string): string {
 }
 
 /**
+ * True when a string parses to at least one valid timed LRC row. Used to reject
+ * a `synced_lyrics` payload that is only plain text or malformed (no usable
+ * timeline), which would otherwise be treated as a high-confidence timed hit.
+ */
+export function hasValidLrcTimeline(synced: string): boolean {
+  return parseLrc(synced).length > 0;
+}
+
+/**
  * Ensure a candidate always carries both plain + synced text. When only one
  * side is present we derive the other (strip timestamps from synced, or wrap
  * plain into no timeline), and HTML-decode both sides.
+ *
+ * A `synced_lyrics` payload with no valid LRC timeline (malformed / plain-only)
+ * is downgraded: `syncedValid` is false and `synced` is dropped so the caller
+ * never treats it as a timed high-confidence hit.
  */
 export function normalizeCandidateLyrics(input: {
   plainLyrics?: string;
   syncedLyrics?: string;
-}): { plain: string; synced: string } {
-  const synced = input.syncedLyrics ? unescapeLyrics(input.syncedLyrics) : '';
+}): { plain: string; synced: string; syncedValid: boolean } {
+  let synced = input.syncedLyrics ? unescapeLyrics(input.syncedLyrics) : '';
+  let syncedValid = false;
+  if (synced) {
+    // Only keep synced lyrics that carry at least one valid timestamp row.
+    syncedValid = hasValidLrcTimeline(synced);
+    if (!syncedValid) synced = '';
+  }
   const plainFromSynced = synced ? stripTimestamps(synced) : '';
   const plain = input.plainLyrics
     ? unescapeLyrics(input.plainLyrics)
     : plainFromSynced;
-  return { plain, synced };
+  return { plain, synced, syncedValid };
 }
 
 /** Hard limits enforced by jplrc, not the provider. */
