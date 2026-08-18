@@ -9,6 +9,7 @@ import {
 import { useI18n } from '@/lib/i18n';
 import { localeToBCP47 } from './admin-types';
 import TranslationConfigPanel from './TranslationConfigPanel';
+import LyricsProvidersPanel from './LyricsProvidersPanel';
 
 interface SystemData {
   translation: {
@@ -198,6 +199,9 @@ export default function AdminSystemPanel() {
         </dl>
         <p className="mt-3 text-[11px] text-[var(--muted-foreground)]/70">{t('admin.systemTranslationHint')}</p>
       </section>
+
+      {/* Lyrics sources (ISSUE #148 Phase 2) */}
+      <LyricsProvidersPanel />
 
       {/* AI usage */}
       <section className={cardCls}>

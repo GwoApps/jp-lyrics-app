@@ -1,5 +1,6 @@
 import * as heModule from 'he';
 import { artistScore, normalize, titleScore } from './match.ts';
+import type { ProviderStage } from './lyrics-provider/types.ts';
 
 const decodeHtmlEntity = (heModule as unknown as { default?: typeof heModule }).default?.decode ?? heModule.decode;
 
@@ -134,6 +135,12 @@ function msToLrcTime(ms: number): string {
 async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = 15000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const outer = init.signal;
+  if (outer) {
+    const onAbort = () => controller.abort();
+    if (outer.aborted) controller.abort();
+    else outer.addEventListener('abort', onAbort, { once: true });
+  }
   try {
     return await fetch(url, { ...init, signal: controller.signal });
   } finally {
@@ -190,13 +197,15 @@ async function lrclibFetch<T>(
   headers: Record<string, string>,
   parse: (res: Response) => Promise<T>,
   opts?: { notFoundMeansEmpty?: boolean },
+  signal?: AbortSignal,
 ): Promise<LrclibRequestResult<T>> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     await throttleLrclib();
     let res: Response;
     try {
-      res = await fetchWithTimeout(url, { headers }, 15000);
+      res = await fetchWithTimeout(url, { headers, signal }, 15000);
     } catch {
+      if (signal?.aborted) throw signal.reason;
       return { ok: false, rateLimited: false };
     }
 
@@ -322,7 +331,7 @@ function toLrclibHit(track: LrclibTrack, evidence?: LrclibEvidence): LrclibHit |
   };
 }
 
-async function lrclibGet(params: URLSearchParams): Promise<LrclibRequestResult<LrclibTrack | null>> {
+async function lrclibGet(params: URLSearchParams, signal?: AbortSignal): Promise<LrclibRequestResult<LrclibTrack | null>> {
   const headers = { 'User-Agent': 'jp-lyrics-app/1.0' };
   return lrclibFetch(`https://lrclib.net/api/get?${params}`, headers, async (res) => {
     const data = await res.json();
@@ -330,7 +339,7 @@ async function lrclibGet(params: URLSearchParams): Promise<LrclibRequestResult<L
       return data as LrclibTrack;
     }
     return null;
-  }, { notFoundMeansEmpty: true });
+  }, { notFoundMeansEmpty: true }, signal);
 }
 
 /** A lrclib lookup: the matched hit (or null) plus whether the source was rate-limited. */
@@ -357,6 +366,7 @@ export async function fetchFromLrclib(
   title: string,
   artist: string,
   evidence?: LrclibEvidence,
+  signal?: AbortSignal,
 ): Promise<LrclibFetchOutcome> {
   const albumScoped = (): Promise<LrclibRequestResult<LrclibTrack | null>> => {
     if (!evidence?.album) return Promise.resolve({ ok: true, data: null });
@@ -364,11 +374,11 @@ export async function fetchFromLrclib(
       track_name: title,
       artist_name: artist,
       album_name: evidence.album,
-    }));
+    }), signal);
   };
 
   // Pass 1 — bare exact match.
-  const plainRes = await lrclibGet(new URLSearchParams({ track_name: title, artist_name: artist }));
+  const plainRes = await lrclibGet(new URLSearchParams({ track_name: title, artist_name: artist }), signal);
   if (!plainRes.ok) return { hit: null, rateLimited: plainRes.rateLimited };
   const plain = plainRes.data;
   if (plain) {
@@ -410,12 +420,15 @@ export async function searchLrclib(
   title: string,
   artist: string,
   evidence?: LrclibEvidence,
+  signal?: AbortSignal,
 ): Promise<LrclibFetchOutcome> {
   const headers = { 'User-Agent': 'jp-lyrics-app/1.0' };
   const res = await lrclibFetch(
     `https://lrclib.net/api/search?q=${encodeURIComponent(query)}`,
     headers,
     async (res) => res.json(),
+    undefined,
+    signal,
   );
   if (!res.ok) return { hit: null, rateLimited: res.rateLimited };
 
@@ -549,7 +562,7 @@ export function decodePetitLyricsLsyToLrc(payload: Uint8Array, plainLyrics: stri
   return lrcLines.join('\n');
 }
 
-async function fetchFromPetitLyrics(title: string, artist: string): Promise<LyricsResult | null> {
+async function fetchFromPetitLyrics(title: string, artist: string, signal?: AbortSignal): Promise<LyricsResult | null> {
   const url = 'https://p0.petitlyrics.com/api/GetPetitLyricsData.php';
   const headers = {
     'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
@@ -569,10 +582,13 @@ async function fetchFromPetitLyrics(title: string, artist: string): Promise<Lyri
       logFlag: '0',
     });
     try {
-      const res = await fetchWithTimeout(url, { method: 'POST', headers, body }, 8_000);
+      const res = await fetchWithTimeout(url, { method: 'POST', headers, body, signal }, 8_000);
       if (!res.ok) return null;
       return parsePetitLyricsResponse(await res.text(), lyricsType);
-    } catch { return null; }
+    } catch {
+      if (signal?.aborted) throw signal.reason;
+      return null;
+    }
   }
 
   // The API only returns one result per request, even when maxcount is higher. Search a small
@@ -717,7 +733,7 @@ const UTA_NET_AMBIGUOUS_GAP = 0.10;
  * importing another song's lyrics. The winning candidate's metadata is exposed
  * for the low-confidence review flow.
  */
-export async function fetchFromUtaNet(title: string, artist: string): Promise<UtaNetHit | null> {
+export async function fetchFromUtaNet(title: string, artist: string, signal?: AbortSignal): Promise<UtaNetHit | null> {
   const headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     'Accept-Language': 'ja,en;q=0.9',
@@ -726,10 +742,13 @@ export async function fetchFromUtaNet(title: string, artist: string): Promise<Ut
   let candidates: UtaNetCandidate[] = [];
   try {
     const q = encodeURIComponent(`${title} ${artist}`);
-    const res = await fetchWithTimeout(`https://www.uta-net.com/search/?Keyword=${q}&x=0&y=0&Aselect=2&Bselect=3`, { headers });
+    const res = await fetchWithTimeout(`https://www.uta-net.com/search/?Keyword=${q}&x=0&y=0&Aselect=2&Bselect=3`, { headers, signal });
     if (!res.ok) return null;
     candidates = parseUtaNetCandidates(await res.text());
-  } catch { return null; }
+  } catch {
+    if (signal?.aborted) throw signal.reason;
+    return null;
+  }
   if (candidates.length === 0) return null;
 
   // Score every candidate. Artist is required to partially match when we have
@@ -774,20 +793,23 @@ export async function fetchFromUtaNet(title: string, artist: string): Promise<Ut
 
 // ─── ytmusicapi sidecar ──
 
-async function fetchFromYtMusic(title: string, artist: string): Promise<LyricsResult | null> {
+async function fetchFromYtMusic(title: string, artist: string, signal?: AbortSignal): Promise<LyricsResult | null> {
   const sidecarUrl = process.env.YT_MUSIC_SIDECAR_URL;
   if (!sidecarUrl) return null;
   try {
     const res = await fetchWithTimeout(
       `${sidecarUrl}/lyrics?q=${encodeURIComponent(`${title} ${artist}`)}`,
-      {},
+      { signal },
       20000,
     );
     if (!res.ok) return null;
     const data = await res.json();
     if (!data.plain && !data.lyrics) return null;
     return { synced: data.synced || '', plain: data.plain || data.lyrics || '' };
-  } catch { return null; }
+  } catch {
+    if (signal?.aborted) throw signal.reason;
+    return null;
+  }
 }
 
 // ─── Full chain ──
@@ -805,6 +827,31 @@ export type SyncStage =
   | 'uta-net'
   | 'ytmusic';
 
+/**
+ * Dynamic provider stage used by the SSE UI. Keeps the legacy `SyncStage`
+ * string keys for backward compatibility while also carrying a display name
+ * and kind so third-party HTTP providers can surface their own name without
+ * hardcoding third-party strings into i18n (ISSUE #148).
+ */
+export type DynamicStage = ProviderStage;
+
+/** Map a legacy SyncStage to a display name used by the SSE stage events. */
+export function syncStageToProviderStage(stage: SyncStage): ProviderStage {
+  const names: Record<SyncStage, string> = {
+    'lrclib': 'LRCLIB',
+    'lrclib-search': 'LRCLIB',
+    'petitlyrics': 'PetitLyrics',
+    'uta-net': 'Uta-Net',
+    'ytmusic': 'YouTube Music',
+  };
+  return { id: stage, displayName: names[stage] ?? 'Lyrics', kind: 'builtin' };
+}
+
+/** Same as {@link syncStageToProviderStage} but accepts any string (unknown keys fall back). */
+export function syncStageToDynamicProviderStage(stage: string): ProviderStage {
+  return syncStageToProviderStage(stage as SyncStage);
+}
+
 export interface FetchLyricsOptions {
   /** Use Spotify canonical name for CJK variant matching */
   spotifyCanonical?: { name: string; artist: string } | null;
@@ -813,9 +860,16 @@ export interface FetchLyricsOptions {
   /**
    * Invoked right before each source is queried, letting a streaming caller
    * surface which provider is being contacted. No-op when omitted (import /
-   * playlist-import keep the existing behaviour).
+   * playlist-import keep the existing behaviour). Receives either a legacy
+   * string stage (backward compatible) or a dynamic provider stage.
    */
-  onStage?: (stage: SyncStage) => void;
+  onStage?: (stage: SyncStage | ProviderStage) => void;
+  /**
+   * Caller-provided abort signal propagated to every builtin + HTTP provider.
+   * A cancelled sync must actually stop subsequent network requests (issue #129
+   * hardening).
+   */
+  signal?: AbortSignal;
 }
 
 /**
@@ -833,42 +887,46 @@ export async function fetchLyrics(
   // When every source fails AND lrclib was rate-limited we want to report a
   // distinct "retry later" outcome instead of a misleading "no lyrics found".
   let rateLimited = false;
+  const signal = opts?.signal;
   const stage = opts?.onStage;
+  // A stage callback may accept either a legacy string or a dynamic provider
+  // stage; pass the legacy string for the builtin chain (backward compatible).
+  const emit = (s: SyncStage) => stage?.(s);
 
   // 1. LRCLIB exact
-  stage?.('lrclib');
-  let outcome = await fetchFromLrclib(title, artist, evidence);
+  emit('lrclib');
+  let outcome = await fetchFromLrclib(title, artist, evidence, signal);
   rateLimited = rateLimited || outcome.rateLimited;
   if (outcome.hit) return fetchedResult(outcome.hit.result, 'lrclib', lrclibConfidence(outcome.hit, 98, true), outcome.hit.duration === 'conflict');
 
   // 2. LRCLIB with Spotify canonical name
   if (opts?.spotifyCanonical) {
-    stage?.('lrclib');
-    outcome = await fetchFromLrclib(opts.spotifyCanonical.name, opts.spotifyCanonical.artist, evidence);
+    emit('lrclib');
+    outcome = await fetchFromLrclib(opts.spotifyCanonical.name, opts.spotifyCanonical.artist, evidence, signal);
     rateLimited = rateLimited || outcome.rateLimited;
     if (outcome.hit) return fetchedResult(outcome.hit.result, 'lrclib', lrclibConfidence(outcome.hit, 96, true), outcome.hit.duration === 'conflict');
-    stage?.('lrclib-search');
-    outcome = await searchLrclib(`${opts.spotifyCanonical.name} ${opts.spotifyCanonical.artist}`, opts.spotifyCanonical.name, opts.spotifyCanonical.artist, evidence);
+    emit('lrclib-search');
+    outcome = await searchLrclib(`${opts.spotifyCanonical.name} ${opts.spotifyCanonical.artist}`, opts.spotifyCanonical.name, opts.spotifyCanonical.artist, evidence, signal);
     rateLimited = rateLimited || outcome.rateLimited;
     if (outcome.hit) return fetchedResult(outcome.hit.result, 'lrclib-search', lrclibConfidence(outcome.hit, 82, false));
   }
 
   // 3. LRCLIB fuzzy search
-  stage?.('lrclib-search');
-  outcome = await searchLrclib(`${title} ${artist}`, title, artist, evidence);
+  emit('lrclib-search');
+  outcome = await searchLrclib(`${title} ${artist}`, title, artist, evidence, signal);
   rateLimited = rateLimited || outcome.rateLimited;
   if (outcome.hit) return fetchedResult(outcome.hit.result, 'lrclib-search', lrclibConfidence(outcome.hit, 78, false));
 
   // 4. PetitLyrics
-  stage?.('petitlyrics');
-  const pl = await fetchFromPetitLyrics(title, artist);
+  emit('petitlyrics');
+  const pl = await fetchFromPetitLyrics(title, artist, signal);
   if (pl && (pl.synced || pl.plain)) {
     return { ...fetchedResult(pl, 'petitlyrics', pl.synced ? 90 : 82), rateLimited };
   }
 
   // 5. Uta-Net
-  stage?.('uta-net');
-  const un = await fetchFromUtaNet(title, artist);
+  emit('uta-net');
+  const un = await fetchFromUtaNet(title, artist, signal);
   if (un) {
     return {
       ...fetchedResult(
@@ -883,8 +941,8 @@ export async function fetchLyrics(
   }
 
   // 6. ytmusicapi
-  stage?.('ytmusic');
-  const yt = await fetchFromYtMusic(title, artist);
+  emit('ytmusic');
+  const yt = await fetchFromYtMusic(title, artist, signal);
   if (yt) return { ...fetchedResult(yt, 'ytmusic', yt.synced ? 74 : 68), rateLimited };
 
   return { result: null, source: '', confidence: 0, rateLimited };

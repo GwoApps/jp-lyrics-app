@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { and, eq, or, sql } from 'drizzle-orm';
 import { getDB, schema } from '@/lib/db';
-import { fetchLyrics } from '@/lib/lyrics-fetcher';
+import { fetchLyricsWithChain } from '@/lib/lyrics-provider';
 import { classifyLyricsHit } from '@/lib/lyrics-hit';
 import { getSpotifyTokenForUser } from '@/lib/spotify';
 import type { AuthUser } from '@/lib/auth';
@@ -329,7 +329,7 @@ export async function processTrack(
   let rateLimited = false;
   try {
     const r = await withTimeout(
-      fetchLyrics(track.title, track.artist, {
+      fetchLyricsWithChain(track.title, track.artist, {
         spotify: {
           durationMs: track.durationMs,
           album: track.album || undefined,

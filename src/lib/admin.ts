@@ -25,7 +25,7 @@ export type UserAction = (typeof USER_ACTIONS)[number];
 export const SONG_ACTIONS = ['approve_public', 'reject_public', 'publish', 'unpublish', 'undo_approve'] as const;
 export type SongAction = (typeof SONG_ACTIONS)[number];
 
-export type AdminTargetType = 'user' | 'song' | 'translation_config';
+export type AdminTargetType = 'user' | 'song' | 'translation_config' | 'lyrics_provider';
 
 /** Allowed top-level body keys for the write endpoints — everything else is rejected. */
 // (Kept inline at each route via hasUnknownFields; no shared constant needed.)
