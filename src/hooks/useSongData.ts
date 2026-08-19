@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CoverPaletteJson, FuriganaLine, ReadingMode, ReadingScheme } from '@/lib/types';
 import type { SyncStage } from '@/lib/lyrics-fetcher';
+import type { ProviderStage } from '@/lib/lyrics-provider/types';
 import { mapTimelineTimestamps, parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
 import { readTranslationStream, type TranslationProgress } from '@/lib/translation-stream';
@@ -50,7 +51,7 @@ const LYRICS_SOURCE_KEYS: Record<string, string> = {
  */
 async function readSyncEventStream(
   res: Response,
-  onStage: (stage: SyncStage) => void,
+  onStage: (stage: SyncStage | ProviderStage) => void,
 ): Promise<{ status: number; body: any }> {
   const reader = res.body?.getReader();
   if (!reader) {
@@ -77,7 +78,7 @@ async function readSyncEventStream(
         else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
       }
       if (dataLines.length === 0) continue;
-      let payload: { status?: number; stage?: SyncStage; body?: any };
+      let payload: { status?: number; stage?: SyncStage | ProviderStage; body?: any };
       try {
         payload = JSON.parse(dataLines.join('\n'));
       } catch {
@@ -216,7 +217,7 @@ export interface UseSongDataReturn {
   lineTimestamps: (number | null)[];
   syncing: boolean;
   /** Current lyrics source being queried during a sync (SSE stage), for the progress line. */
-  syncStage: SyncStage | null;
+  syncStage: SyncStage | ProviderStage | null;
   /** Abort the in-flight sync fetch (cancel button next to the spinner). */
   cancelSync: () => void;
   importing: boolean;
@@ -320,7 +321,7 @@ export function useSongData(id: string): UseSongDataReturn {
   const [importReview, setImportReview] = useState<ImportReviewState | null>(null);
   const [syncLines, setSyncLines] = useState<ReturnType<typeof parseLrc>>([]);
   const [syncing, setSyncing] = useState(false);
-  const [syncStage, setSyncStage] = useState<SyncStage | null>(null);
+  const [syncStage, setSyncStage] = useState<SyncStage | ProviderStage | null>(null);
   // Tracks the in-flight sync request so the user can cancel a long
   // multi-source fetch (or stop an accidental one) without reloading, and so
   // the request is aborted when the component unmounts.

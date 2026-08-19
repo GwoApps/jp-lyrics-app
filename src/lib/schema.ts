@@ -88,6 +88,36 @@ export const settings = sqliteTable('settings', {
   value: text('value').notNull(),
 });
 
+/**
+ * Admin-managed global HTTP lyrics providers (ISSUE #148, Phase 2).
+ *
+ * All rows are GLOBAL providers — there is deliberately no owner_user_id,
+ * personal scope or per-user override (a user-level hotplug would open SSRF /
+ * credential-exfiltration / multi-tenant isolation risks). Only admins can
+ * create / edit / test / reorder / enable-disable / delete these through
+ * /api/admin/*. The effective (enabled, ordered) chain drives every sync,
+ * single-song import and playlist import.
+ */
+export const lyricsProviderConfigs = sqliteTable('lyrics_provider_configs', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  baseUrl: text('base_url').notNull(),
+  authType: text('auth_type', { enum: ['none', 'bearer'] }).notNull().default('none'),
+  // AES-GCM ciphertext (v1:<iv>:<cipher>); NEVER returned by GET / audit.
+  authSecretCiphertext: text('auth_secret_ciphertext'),
+  enabled: integer('enabled').notNull().default(1),
+  priority: integer('priority').notNull().default(0),
+  timeoutMs: integer('timeout_ms'),
+  protocolVersion: integer('protocol_version').notNull().default(1),
+  manifestJson: text('manifest_json'),
+  lastCheckStatus: text('last_check_status', { enum: ['ok', 'failed', 'unchecked'] }).notNull().default('unchecked'),
+  lastCheckCode: text('last_check_code'),
+  lastCheckLatencyMs: integer('last_check_latency_ms'),
+  checkedAt: text('checked_at'),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+  updatedAt: text('updated_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+});
+
 // Per-user personal settings (non-admin preferences: theme, locale, font size,
 // reading mode, romanize furigana, show translation, follow playing, translation
 // target lang). One row per (user_id, key); value holds the JSON-encoded value.

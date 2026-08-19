@@ -20,7 +20,7 @@
  */
 import { type SQLiteTable, type SQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { sql, eq, and, or, like, inArray, desc, asc, isNull, isNotNull } from 'drizzle-orm';
-import * as schema from './schema';
+import * as schema from './schema.ts';
 
 // Use `any` so getDB() stays synchronous — the actual Drizzle type is the same
 // regardless of driver, and we don't want to expose the async init type.

@@ -62,6 +62,15 @@ npm run dev
 | `JPLRC_LOGIN_PASSPHRASE_REQUIRED` | いいえ | Spotify OAuth 開始前にパスフレーズを要求するか |
 | `JPLRC_LOGIN_PASSPHRASE` | いいえ | パスフレーズ本体（サーバー側でのみ検証） |
 | `SESSION_SECRET` | いいえ | 本番推奨：ログイン/セッション Cookie を独立に署名 |
+| `LYRICS_PROVIDER_ALLOW_HTTP` | いいえ | 平文 `http://` HTTP 歌詞プロバイダを許可（既定 `false`、fail-closed） |
+| `LYRICS_PROVIDER_ALLOW_PRIVATE_NETWORK` | いいえ | ループバック/プライベート/Docker-bridge アドレスを許可（既定 `false`） |
+| `LYRICS_PROVIDER_SECRET_KEY` | Bearer プロバイダのみ | プロバイダ Bearer トークンを暗号化する AES-GCM 鍵 |
+| `LYRICS_PROVIDER_DEFAULT_TIMEOUT_MS` | いいえ | プロバイダごとの検索予算（既定 `20000`） |
+| `LYRICS_PROVIDER_MAX_TIMEOUT_MS` | いいえ | 管理者のタイムアウト上書き上限（既定 `60000`） |
+| `LYRICS_PROVIDER_MANIFEST_TIMEOUT_MS` | いいえ | manifest/接続テスト予算（既定 `15000`） |
+| `LYRICS_PROVIDER_CHAIN_TIMEOUT_MS` | いいえ | プロバイダチェーン全体の予算（既定 `180000`） |
+
+HTTP 歌詞プロバイダの完全なデプロイガイドは [DEPLOYMENT.md](DEPLOYMENT.md) 第 4 節を参照してください。
 
 Spotify 連携はオプションです。設定しなくても歌詞の管理は可能です。
 

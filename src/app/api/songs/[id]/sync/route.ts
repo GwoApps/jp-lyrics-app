@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB, schema, eq } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { fetchLyrics, type SyncStage } from '@/lib/lyrics-fetcher';
+import { fetchLyricsWithChain } from '@/lib/lyrics-provider';
+import type { ProviderStage } from '@/lib/lyrics-provider/types';
+import { syncStageToDynamicProviderStage as toProviderStage } from '@/lib/lyrics-fetcher';
 import { getLrcTextLines, parseLrc } from '@/lib/lrc';
 import { classifyLyricsHit } from '@/lib/lyrics-hit';
 import { getSpotifyTrack, searchSpotifyTrack } from '@/lib/spotify';
@@ -119,14 +121,20 @@ export async function POST(
   const { sourceLyrics } = baseline;
 
   const wantSse = request.headers.get('accept')?.includes('text/event-stream') ?? false;
-  const run = (onStage?: (stage: SyncStage) => void) => runFreshSync({
+  // The SSE stream passes its own AbortSignal so a client disconnect / cancel
+  // actually aborts the in-flight fetch and the remaining provider chain
+  // (issue #148 hardening). The plain-JSON path uses the request signal.
+  const run = (opts?: {
+    onStage?: (stage: string | ProviderStage) => void;
+    signal?: AbortSignal;
+  }) => runFreshSync({
     userEmail: user.email,
     db,
     id,
     song,
     body,
     sourceLyrics,
-  }, onStage);
+  }, opts?.onStage, opts?.signal ?? request.signal);
 
   // When the client opts into Server-Sent Events, stream per-source stage
   // updates ("正在查询 LRCLIB…" etc.) and finish with a single `result` event
@@ -260,12 +268,11 @@ interface FreshSyncArgs {
  * The optional `onStage` callback is forwarded to `fetchLyrics` so the SSE
  * path can emit live "querying source…" progress lines.
  */
-/* eslint-disable @typescript-eslint/no-explicit-any -- Drizzle row is `any` (see lib/db.ts). */
 async function runFreshSync(
   args: FreshSyncArgs,
-  onStage?: (stage: SyncStage) => void,
+  onStage?: (stage: string | ProviderStage) => void,
+  signal?: AbortSignal,
 ): Promise<{ status: number; body: unknown }> {
-/* eslint-enable @typescript-eslint/no-explicit-any */
   const { userEmail, db, id, song, body, sourceLyrics } = args;
 
   const spotifyTrack = (song.spotifyTrackId ? await getSpotifyTrack(userEmail, song.spotifyTrackId) : null)
@@ -273,12 +280,17 @@ async function runFreshSync(
   const spotifyCanonical = spotifyTrack
     ? { name: spotifyTrack.title, artist: spotifyTrack.artist }
     : null;
-  const { result, source, confidence, durationMismatch, match, rateLimited } = await fetchLyrics(song.title, song.artist, {
+  // Route through the effective chain (builtin + admin HTTP providers). The
+  // chain applies its own 180s budget, but the caller's AbortSignal (user
+  // cancel / SSE disconnect) always wins and stops remaining requests.
+  const { result, source, confidence, durationMismatch, match, rateLimited } = await fetchLyricsWithChain(song.title, song.artist, {
     spotifyCanonical,
+    spotifyTrackId: spotifyTrack?.id ?? null,
     spotify: spotifyTrack
       ? { durationMs: spotifyTrack.durationMs, album: spotifyTrack.album }
       : undefined,
     onStage,
+    signal,
   });
 
   if (!result) {
@@ -400,22 +412,45 @@ async function runFreshSync(
  * network message so the client can stop the spinner cleanly.
  */
 function sseResponse(
-  run: (onStage: (stage: SyncStage) => void) => Promise<{ status: number; body: unknown }>,
+  run: (opts?: {
+    onStage?: (stage: string | ProviderStage) => void;
+    signal?: AbortSignal;
+  }) => Promise<{ status: number; body: unknown }>,
 ): Response {
   const encoder = new TextEncoder();
+  // Abort the underlying fetch chain when the client disconnects (SSE cancel).
+  const abortController = new AbortController();
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const write = (event: string, data: unknown) => {
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
       };
       try {
-        const result = await run((stage) => write('stage', { stage }));
+        const result = await run({
+          signal: abortController.signal,
+          onStage: (stage) => {
+            // Emit the legacy string for builtin stages (backward compatible)
+            // and the dynamic `{ id, displayName, kind }` object for plugins.
+            if (typeof stage === 'string') {
+              write('stage', { stage: toProviderStage(stage) });
+            } else {
+              write('stage', stage);
+            }
+          },
+        });
         write('result', result);
       } catch {
-        write('error', { status: 500, body: { synced: false, error: 'network_error' } });
+        if (abortController.signal.aborted) {
+          // Client disconnected — no need to write anything; just close.
+        } else {
+          write('error', { status: 500, body: { synced: false, error: 'network_error' } });
+        }
       } finally {
         controller.close();
       }
+    },
+    async cancel() {
+      abortController.abort();
     },
   });
   return new Response(stream, {

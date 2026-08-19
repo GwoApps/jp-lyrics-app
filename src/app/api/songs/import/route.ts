@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { and, eq, or } from 'drizzle-orm';
 import { getDB, schema } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { fetchLyrics } from '@/lib/lyrics-fetcher';
+import { fetchLyricsWithChain } from '@/lib/lyrics-provider';
 import { classifyLyricsHit } from '@/lib/lyrics-hit';
 import { parseLrc } from '@/lib/lrc';
 import { getSpotifyTrack, searchSpotifyTrack } from '@/lib/spotify';
@@ -49,13 +49,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ id: existing.id, alreadyExists: true });
   }
 
-  const { result, source, confidence, durationMismatch, match, rateLimited } = await fetchLyrics(title, artist, {
+  const { result, source, confidence, durationMismatch, match, rateLimited } = await fetchLyricsWithChain(title, artist, {
     spotifyCanonical: spotifyTrack
       ? { name: spotifyTrack.title, artist: spotifyTrack.artist }
       : null,
+    spotifyTrackId: spotifyTrack?.id ?? null,
     spotify: spotifyTrack
       ? { durationMs: spotifyTrack.durationMs, album: spotifyTrack.album }
       : undefined,
+    signal: request.signal,
   });
   if (!result) {
     // A rate-limited source is not "no lyrics" — tell the user to retry.

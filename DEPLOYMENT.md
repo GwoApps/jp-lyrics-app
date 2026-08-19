@@ -58,6 +58,19 @@ JPLRC_LOGIN_PASSPHRASE=your_passphrase
 
 # Recommended in production: signs login/session cookies independently
 SESSION_SECRET=your_session_secret
+
+# HTTP lyrics providers (ISSUE #148) — deployment-level network policy + budgets.
+# These are env-only; admins/users cannot override them from the UI or database.
+# Boolean values accept only an explicit `true` (any other value = false / fail-closed).
+LYRICS_PROVIDER_ALLOW_HTTP=false
+LYRICS_PROVIDER_ALLOW_PRIVATE_NETWORK=false
+# Required to store Bearer-token providers (AES-GCM encryption at rest).
+LYRICS_PROVIDER_SECRET_KEY=
+# Optional per-provider / chain budgets (ms). Missing/invalid values fall back to safe defaults.
+LYRICS_PROVIDER_DEFAULT_TIMEOUT_MS=20000
+LYRICS_PROVIDER_MAX_TIMEOUT_MS=60000
+LYRICS_PROVIDER_MANIFEST_TIMEOUT_MS=15000
+LYRICS_PROVIDER_CHAIN_TIMEOUT_MS=180000
 ```
 
 Start:
@@ -207,7 +220,13 @@ Create `wrangler.jsonc` (not `.toml` — OpenNext uses JSONC format):
     "TRANSLATION_BASE_URL": "https://api.deepseek.com/v1",
     "TRANSLATION_MODEL": "deepseek-v4-flash",
     "TRANSLATION_TARGET_LANG": "zh-CN",
-    "AI_DAILY_NEURON_LIMIT": "9000"
+    "AI_DAILY_NEURON_LIMIT": "9000",
+    "LYRICS_PROVIDER_ALLOW_HTTP": "false",
+    "LYRICS_PROVIDER_ALLOW_PRIVATE_NETWORK": "false",
+    "LYRICS_PROVIDER_DEFAULT_TIMEOUT_MS": "20000",
+    "LYRICS_PROVIDER_MAX_TIMEOUT_MS": "60000",
+    "LYRICS_PROVIDER_MANIFEST_TIMEOUT_MS": "15000",
+    "LYRICS_PROVIDER_CHAIN_TIMEOUT_MS": "180000"
   }
 }
 ```
@@ -219,6 +238,8 @@ wrangler secret put SPOTIFY_CLIENT_ID
 wrangler secret put SPOTIFY_CLIENT_SECRET
 wrangler secret put SESSION_SECRET   # optional, falls back to SPOTIFY_CLIENT_SECRET
 wrangler secret put TRANSLATION_API_KEY   # optional, for the translation feature
+# Required only if you configure Bearer-token HTTP lyrics providers (ISSUE #148)
+wrangler secret put LYRICS_PROVIDER_SECRET_KEY
 ```
 
 > **Note:** when using the `workers-ai` translation provider, no API key is
@@ -241,6 +262,7 @@ ls .open-next/worker.js  # must exist before deploy
 # D1 intentionally does not run the Node/local startup migrator.
 wrangler d1 execute jplrc-db --remote --file=./drizzle/0004_lovely_doctor_faustus.sql
 wrangler d1 execute jplrc-db --remote --file=./drizzle/0014_add_playlist_import_jobs.sql
+wrangler d1 execute jplrc-db --remote --file=./drizzle/0018_add_lyrics_provider_configs.sql
 
 # Deploy
 wrangler deploy
@@ -329,6 +351,10 @@ spotify_auth    — user_email, access_token, refresh_token, expires_at,
 favorites       — user_email, song_id, created_at
 collections     — id, user_email, name, created_at
 collection_songs— collection_id, song_id, sort_order
+lyrics_provider_configs — admin-configured global HTTP lyrics providers (ISSUE #148)
+                  id, name, base_url, auth_type, auth_secret_ciphertext, enabled,
+                  priority, timeout_ms, protocol_version, manifest_json,
+                  last_check_status/code/latency_ms, checked_at, created_at, updated_at
 ```
 
 ### Manual Schema Migration
@@ -360,3 +386,74 @@ Ensure `TURSO_URL` format is `libsql://your-db.turso.io` (not `https://`). The `
 ### Docker container permission errors
 
 The container runs as `nextjs` user (uid 1001). The `data/` directory is created and chowned in the Dockerfile. If using a bind mount instead of a named volume, ensure the host directory is writable by uid 1001.
+
+---
+
+## 4. HTTP Lyrics Providers — Deployment Configuration (ISSUE #148)
+
+Project `jplrc` can hot-plug external HTTP lyrics providers via a versioned
+protocol (`GET {base_url}/manifest.json` + `POST {base_url}/v1/search`).
+Administrators manage providers in the admin UI; deployment only needs to set
+the network policy and budget knobs below. **These are deployment-level
+environment variables — they cannot be overridden from the UI or the
+database, and ordinary users cannot configure providers at all.**
+
+### Network policy (fail-closed)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `LYRICS_PROVIDER_ALLOW_HTTP` | `false` | Allow plaintext `http://` provider base URLs |
+| `LYRICS_PROVIDER_ALLOW_PRIVATE_NETWORK` | `false` | Allow loopback / RFC1918 / link-local / CGNAT / IPv6 ULA / Docker-bridge addresses |
+
+- Boolean variables only accept an explicit `true` (case-insensitive); a
+  missing, empty or any other value is treated as `false` — the policy never
+  fails open.
+- Default (both `false`) only allows **HTTPS + public addresses**.
+- Cloud metadata targets (e.g. `169.254.169.254`, `100.100.100.200`) are
+  **always denied**, regardless of these flags. Redirects are never followed
+  (`redirect: 'error'`).
+- When HTTP is allowed, affected providers are marked `insecure_transport` and
+  the admin UI shows an explicit risk warning.
+
+### Secret storage
+
+| Variable | Required | Meaning |
+|---|---|---|
+| `LYRICS_PROVIDER_SECRET_KEY` | only for Bearer providers | AES-GCM encryption key used to store Bearer tokens at rest |
+
+- Without `LYRICS_PROVIDER_SECRET_KEY`, only `auth=none` providers can be
+  saved; Bearer-token providers are rejected.
+- Tokens are never echoed by the API, UI, logs or audit trail.
+
+### Request budgets (ms)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `LYRICS_PROVIDER_DEFAULT_TIMEOUT_MS` | `20000` | Per-provider `/v1/search` budget |
+| `LYRICS_PROVIDER_MAX_TIMEOUT_MS` | `60000` | Ceiling for an admin per-config `timeout_ms` override (5–60s clamp) |
+| `LYRICS_PROVIDER_MANIFEST_TIMEOUT_MS` | `15000` | Manifest / test-connection budget |
+| `LYRICS_PROVIDER_CHAIN_TIMEOUT_MS` | `180000` | Whole effective provider chain budget |
+
+- Missing/invalid/out-of-range values fall back to these safe defaults;
+  `DEFAULT_TIMEOUT_MS` is clamped to `MAX_TIMEOUT_MS`.
+- Built-in providers keep their original per-request timeouts (PetitLyrics 8s,
+  LRCLIB 15s, Uta-Net 15s, ytmusic 20s) — they are not squeezed to the plugin
+  default, so existing search behavior is unchanged.
+
+### Per-target notes
+
+- **Docker / Vercel**: set these as regular environment variables (see the
+  `.env` example in the Docker section, or Vercel's Environment Variables).
+  The `lyrics_provider_configs` table is created automatically on first run.
+- **Cloudflare Workers (D1)**: add the budget/policy vars to `vars` in
+  `wrangler.jsonc`, and store `LYRICS_PROVIDER_SECRET_KEY` via
+  `wrangler secret put LYRICS_PROVIDER_SECRET_KEY`. **You must also run the
+  new migration `drizzle/0018_add_lyrics_provider_configs.sql` against D1**
+  (D1 does not run the local startup migrator) — see Step 4 above.
+
+### Plugin protocol & example
+
+See `examples/provider-plugin/README.md` for the HTTP provider protocol v1
+contract, and `examples/provider-plugin/` for a runnable reference plugin
+(Node).
+

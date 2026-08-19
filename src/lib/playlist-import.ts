@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { and, eq, or, sql } from 'drizzle-orm';
 import { getDB, schema } from '@/lib/db';
-import { fetchLyrics } from '@/lib/lyrics-fetcher';
+import { fetchLyricsWithChain } from '@/lib/lyrics-provider';
 import { classifyLyricsHit } from '@/lib/lyrics-hit';
 import { getSpotifyTokenForUser } from '@/lib/spotify';
 import type { AuthUser } from '@/lib/auth';
@@ -328,14 +328,22 @@ export async function processTrack(
   let needsReview = false;
   let rateLimited = false;
   try {
+    // Real cancellation: a per-track AbortController is wired into the chain so
+    // the per-track budget (and any caller cancel) genuinely aborts the ongoing
+    // provider requests instead of letting them keep running in the background
+    // and burning external quota.
+    const controller = new AbortController();
     const r = await withTimeout(
-      fetchLyrics(track.title, track.artist, {
+      fetchLyricsWithChain(track.title, track.artist, {
+        spotifyTrackId: track.id,
         spotify: {
           durationMs: track.durationMs,
           album: track.album || undefined,
         },
+        signal: controller.signal,
       }),
       LYRICS_FETCH_TIMEOUT_MS,
+      controller,
       'lyrics fetch timeout',
     );
     lyrics = r.result;
@@ -408,10 +416,15 @@ export async function processTrack(
   }
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+function withTimeout<T>(promise: Promise<T>, ms: number, controller: AbortController, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(label)), ms);
+    timer = setTimeout(() => {
+      // Abort the underlying work so in-flight provider requests actually stop
+      // (previous behaviour only raced the promise and let the chain keep running).
+      controller.abort();
+      reject(new Error(label));
+    }, ms);
   });
   return Promise.race([promise, timeout]).finally(() => {
     if (timer) clearTimeout(timer);

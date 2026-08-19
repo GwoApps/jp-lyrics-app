@@ -19,13 +19,46 @@ export const MAX_REASON_LENGTH = 200;
 /** Hard cap for the paged list APIs (limit=1..50). */
 export const MAX_PAGE_LIMIT = 50;
 
+/**
+ * Reject cross-origin admin mutations (CSRF defence-in-depth, ISSUE #148).
+ * The admin mutation endpoints call this BEFORE parsing the body or touching
+ * any external provider. A present-but-mismatched `Origin` header is rejected;
+ * a missing header (non-browser / same-origin fetch that omits it) is allowed,
+ * since SameSite cookies already stop cross-site browser requests.
+ * Returns true when the request may proceed.
+ */
+export function isSameOriginRequest(request: {
+  headers: { get(name: string): string | null };
+  nextUrl?: { host: string };
+}): boolean {
+  const origin = request.headers.get('Origin');
+  if (!origin) return true; // non-browser client or server-to-server call
+  let originUrl: URL;
+  try {
+    originUrl = new URL(origin);
+  } catch {
+    return false; // malformed Origin is not trusted
+  }
+  // Compare only the host portion; scheme differences (http/https) are ignored
+  // so an HTTPS page calling an HTTP-internal host still matches.
+  const requestHost = request.nextUrl?.host;
+  if (requestHost) {
+    return originUrl.host.toLowerCase() === requestHost.toLowerCase();
+  }
+  // Fall back to the Host header when nextUrl is unavailable.
+  const hostHeader = request.headers.get('Host') ?? '';
+  if (!hostHeader) return false;
+  return originUrl.host.toLowerCase() === hostHeader.split(':')[0].toLowerCase() ||
+    originUrl.host.toLowerCase() === hostHeader.toLowerCase();
+}
+
 export const USER_ACTIONS = ['promote', 'demote', 'block', 'unblock'] as const;
 export type UserAction = (typeof USER_ACTIONS)[number];
 
 export const SONG_ACTIONS = ['approve_public', 'reject_public', 'publish', 'unpublish', 'undo_approve'] as const;
 export type SongAction = (typeof SONG_ACTIONS)[number];
 
-export type AdminTargetType = 'user' | 'song' | 'translation_config';
+export type AdminTargetType = 'user' | 'song' | 'translation_config' | 'lyrics_provider';
 
 /** Allowed top-level body keys for the write endpoints — everything else is rejected. */
 // (Kept inline at each route via hasUnknownFields; no shared constant needed.)

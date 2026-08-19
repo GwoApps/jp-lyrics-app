@@ -71,6 +71,15 @@ npm run dev
 | `JPLRC_LOGIN_PASSPHRASE_REQUIRED` | No | Require a passphrase before starting Spotify OAuth |
 | `JPLRC_LOGIN_PASSPHRASE` | No | The passphrase itself (validated server-side only) |
 | `SESSION_SECRET` | No | Recommended in production: signs login/session cookies |
+| `LYRICS_PROVIDER_ALLOW_HTTP` | No | Allow plaintext `http://` HTTP lyrics providers (default `false`, fail-closed) |
+| `LYRICS_PROVIDER_ALLOW_PRIVATE_NETWORK` | No | Allow loopback/private/Docker-bridge addresses for providers (default `false`) |
+| `LYRICS_PROVIDER_SECRET_KEY` | Only for Bearer providers | AES-GCM key to encrypt provider Bearer tokens at rest |
+| `LYRICS_PROVIDER_DEFAULT_TIMEOUT_MS` | No | Per-provider search budget (default `20000`) |
+| `LYRICS_PROVIDER_MAX_TIMEOUT_MS` | No | Ceiling for admin per-config timeout override (default `60000`) |
+| `LYRICS_PROVIDER_MANIFEST_TIMEOUT_MS` | No | Manifest/test-connection budget (default `15000`) |
+| `LYRICS_PROVIDER_CHAIN_TIMEOUT_MS` | No | Whole provider chain budget (default `180000`) |
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) §4 for the full HTTP lyrics-provider deployment guide.
 
 Spotify integration is optional. Without it, you can still manage lyrics manually.
 
