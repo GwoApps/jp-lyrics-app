@@ -47,6 +47,14 @@ export function builtinLyricsProvider(opts?: {
       }
       return {
         status: 'hit',
+        // Keep the rate-limit flag at the outcome level too (mirroring the miss
+        // branch and the HTTP provider): the legacy `fetchLyrics` preserves
+        // `rateLimited` on a hit (e.g. LRCLIB 429 → Uta-Net hit), so the builtin
+        // adapter must surface it the same way or the orchestrator would drop it
+        // (it only reads `outcome.rateLimited`). This keeps sync/import able to
+        // distinguish "preferred timed source throttled, retry later" from a
+        // normal hit.
+        ...(res.rateLimited ? { rateLimited: true } : {}),
         candidates: [
           {
             // Keep the legacy builtin source key (e.g. `lrclib`, `uta-net`) so

@@ -17,6 +17,7 @@ import {
   resolveProviderTimeoutMs,
 } from './lyrics-provider/budget.ts';
 import { parseManifest, parseCandidate, searchHttpProvider } from './lyrics-provider/http-client.ts';
+import { builtinLyricsProvider } from './lyrics-provider/builtin-provider.ts';
 import { assertFullOrderedSet } from './lyrics-provider/reorder.ts';
 import { MAX_CANDIDATES_PER_PROVIDER } from './lyrics-provider/normalize.ts';
 import { normalizeCandidateLyrics } from './lyrics-provider/normalize.ts';
@@ -446,4 +447,55 @@ test('assertFullOrderedSet rejects unknown ids not present in the stored set', (
 test('assertFullOrderedSet accepts a full ordered list', () => {
   // Full set, any order, no duplicates → valid.
   assert.doesNotThrow(() => assertFullOrderedSet(['p1', 'p2'], ['p2', 'p1']));
+});
+
+// ─── Builtin provider: rateLimited preserved on a hit ────────
+
+test('builtinLyricsProvider keeps rateLimited on a hit (LRCLIB 429 → Uta-Net hit)', async () => {
+  const originalFetch = globalThis.fetch as unknown;
+  // Drive the builtin chain with mocks: LRCLIB is always 429 (so the preferred
+  // timed source is throttled), PetitLyrics misses, and Uta-Net hits. The hit
+  // must still carry the outcome-level `rateLimited` flag so the orchestrator
+  // (`fetchLyricsWithChain`) does not drop it — this is the regression from the
+  // third-round review where `rateLimited` was only put on the candidate.
+  globalThis.fetch = (async (input: unknown) => {
+    const url = String(input);
+    if (url.includes('lrclib.net')) {
+      // Always 429 → after the single retry the source reports rateLimited.
+      // A tiny Retry-After keeps the backoff fast.
+      return {
+        ok: false,
+        status: 429,
+        headers: { get: () => '0.001' },
+        json: async () => ({}),
+        text: async () => '',
+      } as unknown as Response;
+    }
+    if (url.includes('uta-net.com/search')) {
+      const html = `<table><tr>
+        <td><a href="/song/123/" class="d-block">Same Song</a></td>
+        <td><a href="/artist/1/">Artist</a></td>
+      </tr></table>`;
+      return { ok: true, status: 200, text: async () => html } as unknown as Response;
+    }
+    if (url.includes('uta-net.com/song/')) {
+      const html = `<div id="kashi_area">Line 1<br/>Line 2</div>`;
+      return { ok: true, status: 200, text: async () => html } as unknown as Response;
+    }
+    // PetitLyrics / anything else → miss.
+    return { ok: false, status: 404, json: async () => ({}), text: async () => '' } as unknown as Response;
+  }) as typeof fetch;
+  try {
+    const provider = builtinLyricsProvider();
+    const outcome = await provider.search({ title: 'Same Song', artists: ['Artist'] }, {});
+    // Uta-Net hit while LRCLIB was throttled.
+    assert.equal(outcome.status, 'hit');
+    assert.equal(outcome.candidates.length, 1);
+    // The outcome-level flag must survive so sync/import can retry later.
+    assert.equal(outcome.rateLimited, true);
+    // The candidate-level flag is kept too (backward compatible diagnostics).
+    assert.equal(outcome.candidates[0]?.rateLimited, true);
+  } finally {
+    globalThis.fetch = originalFetch as typeof fetch;
+  }
 });
