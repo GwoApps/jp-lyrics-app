@@ -34,8 +34,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   // Build the candidate config from the stored row + optional form snapshot.
   const baseUrl = normalizeProviderBaseUrl(body.base_url?.trim() || existing.baseUrl) ?? existing.baseUrl;
-  const authType = body.auth_type === 'bearer' ? 'bearer' : existing.authType;
-  let authSecret = existing.authType === 'bearer' && existing.authSecretCiphertext
+  // Honor an explicit auth_type in the snapshot (including switching to none),
+  // falling back to the stored type only when the field is absent/unknown.
+  const authType = body.auth_type === 'none' || body.auth_type === 'bearer'
+    ? body.auth_type
+    : existing.authType;
+  // Only carry the stored secret when the effective test auth is still bearer;
+  // a temporary switch to none must not leak the persisted token into the test.
+  let authSecret = authType === 'bearer' && existing.authSecretCiphertext
     ? await decryptProviderSecret(existing.authSecretCiphertext)
     : null;
   if (typeof body.auth_secret === 'string' && body.auth_secret.trim()) {

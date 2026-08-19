@@ -25,7 +25,13 @@ export async function POST(request: NextRequest) {
   }
 
   const db = getDB();
-  await reorderProviders(db, orderedIds);
+  try {
+    await reorderProviders(db, orderedIds);
+  } catch (err) {
+    // Partial / duplicate / unknown id sets are rejected by reorderProviders.
+    const msg = err instanceof Error ? err.message : 'reorder_failed';
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
 
   await writeAuditLog(db, {
     actorUserId: user.id,

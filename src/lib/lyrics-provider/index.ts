@@ -5,7 +5,7 @@
  * the builtin chain + admin HTTP providers in one effective chain. The rest of
  * the exports are used by the admin API/UI and tests.
  */
-export { fetchLyricsWithChain, providerDisplayName, type ProviderChainOptions } from './orchestrator.ts';
+export { fetchLyricsWithChain, type ProviderChainOptions } from './orchestrator.ts';
 export type {
   LyricsProvider,
   LyricsProviderQuery,

@@ -310,7 +310,10 @@ export async function searchHttpProvider(
       const c = parseCandidate(raw);
       if (c) candidates.push(c);
     }
-    return { status: 'hit', candidates };
+    // HTTP 200 with an empty (or all-invalid) candidate list is a normal
+    // no-match — surface it as `empty` so diagnostics can tell "no lyrics"
+    // apart from a real hit, instead of the previous always-`hit` mapping.
+    return candidates.length === 0 ? { status: 'empty', candidates } : { status: 'hit', candidates };
   } catch (err) {
     // Caller cancellation must propagate (not be swallowed as a timeout).
     if (err instanceof Error && err.name === 'AbortError' && callerSignal?.aborted) {

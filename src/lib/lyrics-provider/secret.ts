@@ -12,6 +12,10 @@
 const KEY_ALGO = { name: 'AES-GCM', length: 256 };
 const IV_LENGTH = 12;
 
+/** Cached derived key, invalidated when LYRICS_PROVIDER_SECRET_KEY changes. */
+let cachedKey: CryptoKey | null = null;
+let cachedKeySecret: string | undefined;
+
 export function hasProviderSecretKey(): boolean {
   return typeof process.env.LYRICS_PROVIDER_SECRET_KEY === 'string'
     && process.env.LYRICS_PROVIDER_SECRET_KEY.trim().length > 0;
@@ -19,6 +23,12 @@ export function hasProviderSecretKey(): boolean {
 
 async function deriveKey(): Promise<CryptoKey> {
   const secret = process.env.LYRICS_PROVIDER_SECRET_KEY!;
+  // Reuse the derived key across calls as long as the secret is unchanged.
+  // PBKDF2 with 100k iterations is expensive on Cloudflare Workers (CPU-time
+  // sensitive) and runs on every provider decrypt; the derived CryptoKey is
+  // deterministic per secret, so cache it module-level to avoid re-deriving
+  // for every song × bearer-provider combination.
+  if (cachedKey && cachedKeySecret === secret) return cachedKey;
   const enc = new TextEncoder();
   const material = await crypto.subtle.importKey(
     'raw',
@@ -30,13 +40,16 @@ async function deriveKey(): Promise<CryptoKey> {
   // A fixed salt is acceptable here: the secret key itself is the deployment
   // secret; the salt simply diversifies the derived key deterministically.
   const salt = enc.encode('jplrc-provider-secret-v1');
-  return crypto.subtle.deriveKey(
+  const key = await crypto.subtle.deriveKey(
     { name: 'PBKDF2', salt, iterations: 100_000, hash: 'SHA-256' },
     material,
     KEY_ALGO,
     false,
     ['encrypt', 'decrypt'],
   );
+  cachedKey = key;
+  cachedKeySecret = secret;
+  return key;
 }
 
 /** Encrypt a bearer token; returns null when no secret key is configured. */

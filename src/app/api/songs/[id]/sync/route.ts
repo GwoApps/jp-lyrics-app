@@ -285,6 +285,7 @@ async function runFreshSync(
   // cancel / SSE disconnect) always wins and stops remaining requests.
   const { result, source, confidence, durationMismatch, match, rateLimited } = await fetchLyricsWithChain(song.title, song.artist, {
     spotifyCanonical,
+    spotifyTrackId: spotifyTrack?.id ?? null,
     spotify: spotifyTrack
       ? { durationMs: spotifyTrack.durationMs, album: spotifyTrack.album }
       : undefined,

@@ -17,6 +17,7 @@ import {
   resolveProviderTimeoutMs,
 } from './lyrics-provider/budget.ts';
 import { parseManifest, parseCandidate, searchHttpProvider } from './lyrics-provider/http-client.ts';
+import { assertFullOrderedSet } from './lyrics-provider/reorder.ts';
 import { MAX_CANDIDATES_PER_PROVIDER } from './lyrics-provider/normalize.ts';
 import { normalizeCandidateLyrics } from './lyrics-provider/normalize.ts';
 import { hasProviderSecretKey, maskSecret } from './lyrics-provider/secret.ts';
@@ -342,6 +343,60 @@ test('searchHttpProvider returns a timeout outcome on provider timeout without c
   }
 });
 
+test('searchHttpProvider maps HTTP 200 with an empty candidate list to empty, not hit', async () => {
+  const originalFetch = globalThis.fetch as unknown;
+  globalThis.fetch = (async (_input: unknown, init?: { signal?: AbortSignal }) => {
+    assert.ok(init?.signal, 'fetch should be wired to an abort signal');
+    const body = JSON.stringify({ protocol_version: 1, candidates: [] });
+    return {
+      ok: true,
+      status: 200,
+      text: async () => body,
+      arrayBuffer: async () => new TextEncoder().encode(body).buffer,
+    } as unknown as Response;
+  }) as typeof fetch;
+  try {
+    const outcome = await searchHttpProvider(
+      { baseUrl: 'https://8.8.8.8/x', authType: 'none', timeoutMs: 500 },
+      { title: 't', artists: ['a'] },
+      500,
+      'req-id',
+    );
+    // An empty result set must be surfaced as `empty` so diagnostics can tell a
+    // normal no-match apart from a real hit.
+    assert.equal(outcome.status, 'empty');
+    assert.deepEqual(outcome.candidates, []);
+  } finally {
+    globalThis.fetch = originalFetch as typeof fetch;
+  }
+});
+
+test('searchHttpProvider keeps a non-empty candidate list as a hit', async () => {
+  const originalFetch = globalThis.fetch as unknown;
+  const body = JSON.stringify({
+    protocol_version: 1,
+    candidates: [{ title: 'Same Song', artists: ['Artist'], plain_lyrics: 'line' }],
+  });
+  globalThis.fetch = (async () => ({
+    ok: true,
+    status: 200,
+    text: async () => body,
+    arrayBuffer: async () => new TextEncoder().encode(body).buffer,
+  } as unknown as Response)) as typeof fetch;
+  try {
+    const outcome = await searchHttpProvider(
+      { baseUrl: 'https://8.8.8.8/x', authType: 'none', timeoutMs: 500 },
+      { title: 'Same Song', artists: ['Artist'] },
+      500,
+      'req-id',
+    );
+    assert.equal(outcome.status, 'hit');
+    assert.equal(outcome.candidates.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch as typeof fetch;
+  }
+});
+
 // ─── Admin CSRF / Origin guard ────────────────────────────────
 
 test('isSameOriginRequest rejects mismatched Origin and allows same-origin / missing', () => {
@@ -371,4 +426,24 @@ test('hasProviderSecretKey reflects the env var', () => {
   } finally {
     if (prev === undefined) delete process.env.LYRICS_PROVIDER_SECRET_KEY; else process.env.LYRICS_PROVIDER_SECRET_KEY = prev;
   }
+});
+
+// ─── reorderProviders: full-set validation ────────────────────
+
+test('assertFullOrderedSet rejects a partial ordered list that does not cover every provider', () => {
+  // Only p1 supplied → the set is incomplete.
+  assert.throws(() => assertFullOrderedSet(['p1', 'p2'], ['p1']), /every provider id exactly once/);
+});
+
+test('assertFullOrderedSet rejects duplicate ids in the ordered list', () => {
+  assert.throws(() => assertFullOrderedSet(['p1', 'p2'], ['p1', 'p1']), /every provider id exactly once/);
+});
+
+test('assertFullOrderedSet rejects unknown ids not present in the stored set', () => {
+  assert.throws(() => assertFullOrderedSet(['p1', 'p2'], ['p1', 'p3']), /every provider id exactly once/);
+});
+
+test('assertFullOrderedSet accepts a full ordered list', () => {
+  // Full set, any order, no duplicates → valid.
+  assert.doesNotThrow(() => assertFullOrderedSet(['p1', 'p2'], ['p2', 'p1']));
 });

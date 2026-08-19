@@ -9,6 +9,7 @@
  */
 import { and, asc, eq } from 'drizzle-orm';
 import { getDB, schema } from '../db.ts';
+import { assertFullOrderedSet } from './reorder.ts';
 
 export interface ProviderConfigRow {
   id: string;
@@ -97,13 +98,29 @@ export async function deleteProviderConfig(db: DB, id: string): Promise<void> {
   await db.delete(schema.lyricsProviderConfigs).where(eq(schema.lyricsProviderConfigs.id, id)).run();
 }
 
-/** Reorder provider priorities in one pass (admin drag-to-sort). */
+/**
+ * Reorder provider priorities in one pass (admin drag-to-sort).
+ *
+ * Runs atomically through the Drizzle public `db.batch()` (which internally
+ * prepares+binds each statement, so it works on both libsql/Turso and D1 —
+ * unlike `db.$client.batch()` which takes driver-specific statement types).
+ *
+ * The caller must pass the FULL ordered set of provider ids; the set is
+ * validated against every stored provider so a partial list can never leave
+ * duplicated priorities behind.
+ */
 export async function reorderProviders(db: DB, orderedIds: string[]): Promise<void> {
-  const batch: Array<{ sql: string; args: unknown[] }> = orderedIds.map((id, index) => ({
-    sql: `UPDATE lyrics_provider_configs SET priority = ?, updated_at = ? WHERE id = ?`,
-    args: [index, new Date().toISOString(), id],
-  }));
-  await db.$client.batch(batch);
+  const stored = await listProviderConfigs(db);
+  assertFullOrderedSet(stored.map((row) => row.id), orderedIds);
+
+  const now = new Date().toISOString();
+  await db.batch(
+    orderedIds.map((id, index) =>
+      db.update(schema.lyricsProviderConfigs)
+        .set({ priority: index, updatedAt: now })
+        .where(eq(schema.lyricsProviderConfigs.id, id)),
+    ),
+  );
 }
 
 /** Non-secret diagnostic state used by the admin UI list. */

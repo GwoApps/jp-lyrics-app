@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
     spotifyCanonical: spotifyTrack
       ? { name: spotifyTrack.title, artist: spotifyTrack.artist }
       : null,
+    spotifyTrackId: spotifyTrack?.id ?? null,
     spotify: spotifyTrack
       ? { durationMs: spotifyTrack.durationMs, album: spotifyTrack.album }
       : undefined,

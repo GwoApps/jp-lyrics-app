@@ -13,6 +13,16 @@ import { encryptProviderSecret, hasProviderSecretKey, maskSecret } from '@/lib/l
 
 const UPDATE_FIELDS = new Set(['name', 'base_url', 'auth_type', 'auth_secret', 'auth_secret_clear', 'enabled', 'priority', 'timeout_ms']);
 
+/** Tolerate a corrupt manifest JSON (migration / manual DB edits) instead of 500ing. */
+function parseManifestJson(raw: string | null): unknown {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null; // corrupt value → treat as no manifest, consistent with `manifest: null`
+  }
+}
+
 function toWire(row: { id: string; name: string; baseUrl: string; authType: string; authSecretCiphertext: string | null; enabled: number; priority: number; timeoutMs: number | null; protocolVersion: number; manifestJson: string | null; lastCheckStatus: string; lastCheckCode: string | null; lastCheckLatencyMs: number | null; checkedAt: string | null; createdAt: string; updatedAt: string }) {
   return {
     id: row.id,
@@ -25,7 +35,7 @@ function toWire(row: { id: string; name: string; baseUrl: string; authType: stri
     priority: row.priority,
     timeout_ms: row.timeoutMs ?? null,
     protocol_version: row.protocolVersion,
-    manifest: row.manifestJson ? JSON.parse(row.manifestJson) : null,
+    manifest: parseManifestJson(row.manifestJson),
     last_check_status: row.lastCheckStatus,
     last_check_code: row.lastCheckCode ?? null,
     last_check_latency_ms: row.lastCheckLatencyMs ?? null,

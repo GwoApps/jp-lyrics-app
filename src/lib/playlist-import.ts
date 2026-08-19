@@ -335,6 +335,7 @@ export async function processTrack(
     const controller = new AbortController();
     const r = await withTimeout(
       fetchLyricsWithChain(track.title, track.artist, {
+        spotifyTrackId: track.id,
         spotify: {
           durationMs: track.durationMs,
           album: track.album || undefined,

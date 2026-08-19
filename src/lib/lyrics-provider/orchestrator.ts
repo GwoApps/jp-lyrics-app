@@ -27,6 +27,8 @@ import { getDB } from '../db.ts';
 export interface ProviderChainOptions {
   spotifyCanonical?: { name: string; artist: string } | null;
   spotify?: { durationMs?: number; album?: string };
+  /** Spotify track id forwarded to HTTP providers (also used by the builtin LRCLIB bridge when present). */
+  spotifyTrackId?: string | null;
   onStage?: ProviderChainOnStage;
   signal?: AbortSignal;
 }
@@ -129,7 +131,7 @@ export async function fetchLyricsWithChain(
     artists: artist ? [artist] : [],
     album: opts?.spotify?.album,
     durationMs: opts?.spotify?.durationMs,
-    spotifyTrackId: opts?.spotifyCanonical?.name ? undefined : undefined,
+    spotifyTrackId: opts?.spotifyTrackId ?? undefined,
   };
 
   // Unified provider chain (Phase 1 abstraction): the builtin chain is exposed
@@ -227,11 +229,4 @@ export async function fetchLyricsWithChain(
     clearTimeout(chainTimer);
     opts?.signal?.removeEventListener('abort', onChainAbort);
   }
-}
-
-/** Stable source identifier → display name for UI (config/manifest-driven). */
-export function providerDisplayName(source: string): string | null {
-  const m = /^plugin:([^:]+):\d+$/.exec(source);
-  if (!m) return null;
-  return m[1]; // config id; caller maps to the provider's configured name.
 }
