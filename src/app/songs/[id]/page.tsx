@@ -75,6 +75,7 @@ function SyncCandidatePreview({
   lines: number;
   text: string;
 }) {
+  const { t } = useI18n();
   const previewLines = text
     .split('\n')
     .map((line) => line.replace(/^\[\d{2}:\d{2}(?:\.\d{1,3})?\]\s*/g, '').trim())
@@ -83,8 +84,7 @@ function SyncCandidatePreview({
   return (
     <div className="confirm-dialog-children">
       <div className="preview-meta">
-        {sourceLabel}
-        {' · '}{confidence}% · {lines} 行
+        {t('song.syncCandidatePreview', { source: sourceLabel, confidence: String(confidence), lines: String(lines) })}
       </div>
       <div className="preview-lines">{shown.join('\n')}{previewLines.length > 6 ? '\n…' : ''}</div>
     </div>

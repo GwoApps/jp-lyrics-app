@@ -126,6 +126,7 @@
     "loadFailed": "載入失敗，請檢查網路後重試",
     "retry": "重試",
     "synced": "歌詞同步完成 ({source}，{lines}行)",
+    "syncCandidatePreview": "{source} · {confidence}% · {lines} 行",
     "lyricsSaved": "歌詞已儲存",
     "saveFailed": "儲存失敗",
     "importFailed": "匯入失敗",

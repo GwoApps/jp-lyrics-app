@@ -126,6 +126,7 @@
     "loadFailed": "加载失败，请检查网络后重试",
     "retry": "重试",
     "synced": "歌词同步完成 ({source}，{lines}行)",
+    "syncCandidatePreview": "{source} · {confidence}% · {lines} 行",
     "lyricsSaved": "歌词已保存",
     "saveFailed": "保存失败",
     "importFailed": "导入失败",

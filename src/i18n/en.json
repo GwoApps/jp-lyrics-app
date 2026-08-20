@@ -126,6 +126,7 @@
     "loadFailed": "Failed to load. Please check your network and try again.",
     "retry": "Retry",
     "synced": "Lyrics synced ({source}, {lines} lines)",
+    "syncCandidatePreview": "{source} · {confidence}% · {lines} lines",
     "lyricsSaved": "Lyrics saved",
     "saveFailed": "Save failed",
     "importFailed": "Import failed",
