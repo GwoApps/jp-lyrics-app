@@ -217,7 +217,11 @@ export default function TranslationEditPage() {
           const next = prev.slice();
           translations.forEach((value, i) => {
             const idx = run.start + i;
-            if (idx < next.length) next[idx] = value;
+            // Only overwrite lines that are still empty — preserve any manual
+            // edits the user made while AI was processing earlier groups.
+            if (idx < next.length && !(next[idx] ?? '').trim()) {
+              next[idx] = value;
+            }
           });
           return next;
         });
