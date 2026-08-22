@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { LYRICS_SOURCE_KEYS } from './lyrics-source.ts';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -46,6 +47,21 @@ test('common.* values used as aria-labels never leak the raw translation key', (
     const common = loadDict(locale).common ?? {};
     for (const [key, value] of Object.entries(common)) {
       assert.notEqual(value, `common.${key}`, `${locale}.json common.${key} leaks the raw key`);
+    }
+  }
+});
+
+test('every LYRICS_SOURCE_KEYS value exists in all locale files', () => {
+  const sourceValues = Object.values(LYRICS_SOURCE_KEYS);
+  for (const locale of LOCALES) {
+    const lyricsSources = loadDict(locale).lyricsSources ?? {};
+    for (const dottedKey of sourceValues) {
+      // dottedKey is like 'lyricsSources.manual'; strip the namespace prefix
+      const leafKey = dottedKey.split('.').slice(1).join('.');
+      assert.ok(
+        leafKey in lyricsSources,
+        `${locale}.json is missing lyricsSources.${leafKey} (referenced by LYRICS_SOURCE_KEYS)`,
+      );
     }
   }
 });

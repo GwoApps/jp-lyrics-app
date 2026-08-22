@@ -11,6 +11,7 @@ import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { extractLrcMetadata } from '@/lib/lrc';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import type { ReadingScheme } from '@/lib/types';
+import { LYRICS_SOURCE_KEYS } from '@/lib/lyrics-source';
 
 interface SongData {
   id: string;
@@ -32,18 +33,6 @@ interface SongData {
   spotify_track_id?: string | null;
   spotify_album?: string | null;
 }
-
-/** Map a stored lyrics source key onto an i18n label under the `lyricsSources` namespace. */
-const LYRICS_SOURCE_KEYS: Record<string, string> = {
-  manual: 'lyricsSources.manual',
-  none: 'lyricsSources.none',
-  'lrclib-exact': 'lyricsSources.lrclibExact',
-  'lrclib-canonical': 'lyricsSources.lrclibCanonical',
-  'lrclib-search': 'lyricsSources.lrclibSearch',
-  petitlyrics: 'lyricsSources.petitlyrics',
-  utanet: 'lyricsSources.utanet',
-  ytmusic: 'lyricsSources.ytmusic',
-};
 
 type SubDataKey = 'furigana' | 'translation' | 'reasoning' | 'glossary';
 

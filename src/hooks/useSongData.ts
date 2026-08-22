@@ -25,17 +25,7 @@ import {
   resolveFuriganaReading,
   splitLyricScriptRuns,
 } from '@/lib/romaji';
-
-const LYRICS_SOURCE_KEYS: Record<string, string> = {
-  manual: 'lyricsSources.manual',
-  none: 'lyricsSources.none',
-  'lrclib-exact': 'lyricsSources.lrclibExact',
-  'lrclib-canonical': 'lyricsSources.lrclibCanonical',
-  'lrclib-search': 'lyricsSources.lrclibSearch',
-  petitlyrics: 'lyricsSources.petitlyrics',
-  utanet: 'lyricsSources.utanet',
-  ytmusic: 'lyricsSources.ytmusic',
-};
+import { LYRICS_SOURCE_KEYS } from '@/lib/lyrics-source';
 
 // The sync response is an untyped union of outcomes (not-found, plain-hit
 // preview, low-confidence preview, direct write, rate-limit…). Its shape is

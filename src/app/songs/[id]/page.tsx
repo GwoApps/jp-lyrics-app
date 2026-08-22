@@ -35,6 +35,7 @@ import { getCachedSong } from '@/lib/song-list-cache';
 import type { FuriganaLine } from '@/lib/types';
 import { useAuthSession } from '@/lib/auth-session';
 import type { SyncRefs } from '@/hooks/useSpotifySync';
+import { LYRICS_SOURCE_KEYS } from '@/lib/lyrics-source';
 
 /** Reusable button class builder */
 function btnCls(active?: boolean, variant?: 'danger') {
@@ -57,17 +58,6 @@ function btnTextCls(active?: boolean, variant?: 'danger') {
       : 'song-accent-button';
   return `${base} ${colors}`;
 }
-
-const LYRICS_SOURCE_KEYS: Record<string, string> = {
-  manual: 'lyricsSources.manual',
-  none: 'lyricsSources.none',
-  'lrclib-exact': 'lyricsSources.lrclibExact',
-  'lrclib-canonical': 'lyricsSources.lrclibCanonical',
-  'lrclib-search': 'lyricsSources.lrclibSearch',
-  petitlyrics: 'lyricsSources.petitlyrics',
-  utanet: 'lyricsSources.utanet',
-  ytmusic: 'lyricsSources.ytmusic',
-};
 
 /**
  * Build the lyric preview block shown inside the low-confidence / plain-text
