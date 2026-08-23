@@ -1,10 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Loader2, LogIn, Save, Check } from 'lucide-react';
 import { useI18n, LOCALE_META, type Locale } from '@/lib/i18n';
 import { useAuthSession } from '@/lib/auth-session';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { normalizeTheme, normalizeReadingMode, normalizeBoolean, normalizeFontSize, normalizeLocale } from '@/lib/settings-utils';
 import {
   isSyncEnabled,
@@ -53,7 +53,6 @@ function Row({ label, hint, control }: { label: string; hint?: string; control: 
 }
 
 export default function SettingsPage() {
-  const router = useRouter();
   const { t, setLocale } = useI18n();
   const { setTheme } = useTheme();
   const { session } = useAuthSession();
@@ -63,6 +62,14 @@ export default function SettingsPage() {
   const [toast, setToast] = useState<ToastState>(null);
   const [dirty, setDirty] = useState(false);
   const [syncEnabled, setSyncEnabledState] = useState<boolean>(() => isSyncEnabled());
+
+  // Unified unsaved-changes guard covering in-app <Link> clicks (top navigation),
+  // browser back/forward, `router.push` and tab close/refresh, matching the
+  // translation and timeline editors. The dialog is rendered at the bottom.
+  const { dialog: unsavedDialog, guard: guardNavigate } = useUnsavedChangesGuard({
+    confirmHref: '/',
+    dirty,
+  });
 
   const user = session?.user ?? null;
 
@@ -192,7 +199,7 @@ export default function SettingsPage() {
         <h1 className="text-lg font-semibold tracking-tight">{t('settings.title')}</h1>
         <p className="mt-2 max-w-xs text-sm text-[var(--muted-foreground)]">{t('settings.loginRequired')}</p>
         <button
-          onClick={() => router.push('/')}
+          onClick={() => guardNavigate('/')}
           className="mt-5 rounded-md bg-[var(--primary)] px-4 py-2 text-xs font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90"
         >
           {t('settings.backToHome')}
@@ -406,6 +413,8 @@ export default function SettingsPage() {
           <span className={toast.type === 'success' ? 'text-[var(--success)]' : 'text-[var(--destructive)]'}>{toast.msg}</span>
         </div>
       )}
+
+      {unsavedDialog}
     </div>
   );
 }
