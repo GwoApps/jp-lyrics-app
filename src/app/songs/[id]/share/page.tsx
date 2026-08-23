@@ -8,6 +8,7 @@ import { ArrowLeft, Download, Link2, Loader2, Check, Smartphone, Monitor, Refres
 import { useI18n } from '@/lib/i18n';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { drawCard, getLyricLines, LANDSCAPE_H, LANDSCAPE_W, type Orientation, type ShareSong } from '@/lib/share-card';
+import { copyToClipboard } from '@/lib/clipboard';
 
 export default function SharePage() {
   const params = useParams();
@@ -168,13 +169,10 @@ export default function SharePage() {
   };
 
   const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(pageUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // ignore
-    }
+    const ok = await copyToClipboard(pageUrl);
+    if (!ok) return; // ignore silent failure
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   };
 
   if (loading) {

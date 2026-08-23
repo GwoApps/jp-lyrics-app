@@ -26,6 +26,7 @@ import {
   splitLyricScriptRuns,
 } from '@/lib/romaji';
 import { LYRICS_SOURCE_KEYS } from '@/lib/lyrics-source';
+import { copyToClipboard } from '@/lib/clipboard';
 
 // The sync response is an untyped union of outcomes (not-found, plain-hit
 // preview, low-confidence preview, direct write, rate-limit…). Its shape is
@@ -1191,14 +1192,14 @@ export function useSongData(id: string): UseSongDataReturn {
     } else {
       text = song.lyrics_raw || furiganaLines.map(l => l.segments.map(s => s.text).join('')).join('\n');
     }
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      showToast('success', t('share.copied'));
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
+    const ok = await copyToClipboard(text);
+    if (!ok) {
       showToast('error', t('song.copyFailed'));
+      return;
     }
+    setCopied(true);
+    showToast('success', t('share.copied'));
+    setTimeout(() => setCopied(false), 2000);
   }, [song, furiganaLines, translations, t, showToast]);
 
   /** Copy the translation reasoning (live or persisted) to the clipboard. */
@@ -1208,12 +1209,8 @@ export function useSongData(id: string): UseSongDataReturn {
       showToast('error', t('song.copyReasoningEmpty'));
       return;
     }
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast('success', t('share.copied'));
-    } catch {
-      showToast('error', t('song.copyFailed'));
-    }
+    const ok = await copyToClipboard(text);
+    showToast(ok ? 'success' : 'error', ok ? t('share.copied') : t('song.copyFailed'));
   }, [translationReasoning, t, showToast]);
 
   const handleImportPlaying = useCallback(async (spotify: SpotifyState | null) => {

@@ -36,6 +36,7 @@ import type { FuriganaLine } from '@/lib/types';
 import { useAuthSession } from '@/lib/auth-session';
 import type { SyncRefs } from '@/hooks/useSpotifySync';
 import { LYRICS_SOURCE_KEYS } from '@/lib/lyrics-source';
+import { copyToClipboard } from '@/lib/clipboard';
 
 /** Reusable button class builder */
 function btnCls(active?: boolean, variant?: 'danger') {
@@ -473,24 +474,8 @@ export default function SongViewPage() {
   const copyLyricLine = async (line: FuriganaLine) => {
     const text = line.segments.map((segment) => segment.text).join('');
     if (!text) return;
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        const copied = document.execCommand('copy');
-        textarea.remove();
-        if (!copied) throw new Error('copy_failed');
-      }
-      data.showToast('success', t('share.copied'));
-    } catch {
-      data.showToast('error', t('song.copyFailed'));
-    }
+    const ok = await copyToClipboard(text);
+    data.showToast(ok ? 'success' : 'error', ok ? t('share.copied') : t('song.copyFailed'));
   };
 
   const copyLyricTranslation = async (index: number) => {
@@ -499,24 +484,8 @@ export default function SongViewPage() {
       data.showToast('error', t('song.copyTranslationEmpty'));
       return;
     }
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        const copied = document.execCommand('copy');
-        textarea.remove();
-        if (!copied) throw new Error('copy_failed');
-      }
-      data.showToast('success', t('share.copied'));
-    } catch {
-      data.showToast('error', t('song.copyFailed'));
-    }
+    const ok = await copyToClipboard(text);
+    data.showToast(ok ? 'success' : 'error', ok ? t('share.copied') : t('song.copyFailed'));
   };
 
   return (
