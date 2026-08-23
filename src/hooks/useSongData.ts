@@ -8,6 +8,7 @@ import type { ProviderStage } from '@/lib/lyrics-provider/types';
 import { mapTimelineTimestamps, parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
 import { readTranslationStream, type TranslationProgress } from '@/lib/translation-stream';
+import { readSseFrames } from '@/lib/sse-reader';
 import { TRANSLATION_ERROR_KEYS } from '@/lib/translation-errors';
 import { useI18n } from '@/lib/i18n';
 import { buildManualCreateUrl } from '@/lib/song-prefill';
@@ -44,42 +45,25 @@ async function readSyncEventStream(
   res: Response,
   onStage: (stage: SyncStage | ProviderStage) => void,
 ): Promise<{ status: number; body: any }> {
-  const reader = res.body?.getReader();
-  if (!reader) {
+  const body = res.body;
+  if (!body) {
     // Not a stream (e.g. an early JSON error before streaming began) — read as JSON.
-    const body = await res.json();
-    return { status: res.status, body };
+    const jsonBody = await res.json();
+    return { status: res.status, body: jsonBody };
   }
-  const decoder = new TextDecoder();
-  let buffer = '';
   let terminal: { status: number; body: any } | null = null;
-  while (terminal === null) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let boundary: number;
-    // SSE frames are separated by a blank line.
-    while ((boundary = buffer.indexOf('\n\n')) !== -1) {
-      const frame = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
-      let event = 'message';
-      const dataLines: string[] = [];
-      for (const line of frame.split('\n')) {
-        if (line.startsWith('event:')) event = line.slice(6).trim();
-        else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
-      }
-      if (dataLines.length === 0) continue;
-      let payload: { status?: number; stage?: SyncStage | ProviderStage; body?: any };
-      try {
-        payload = JSON.parse(dataLines.join('\n'));
-      } catch {
-        continue;
-      }
-      if (event === 'stage' && payload.stage) {
-        onStage(payload.stage);
-      } else if (event === 'result' || event === 'error') {
-        terminal = { status: payload.status ?? res.status, body: payload.body ?? payload };
-      }
+  for await (const { event, data: dataStr } of readSseFrames(body)) {
+    let payload: { status?: number; stage?: SyncStage | ProviderStage; body?: any };
+    try {
+      payload = JSON.parse(dataStr);
+    } catch {
+      continue;
+    }
+    if (event === 'stage' && payload.stage) {
+      onStage(payload.stage);
+    } else if (event === 'result' || event === 'error') {
+      terminal = { status: payload.status ?? res.status, body: payload.body ?? payload };
+      break;
     }
   }
   // Defensive: if the stream ended without a terminal event, surface a generic error.
