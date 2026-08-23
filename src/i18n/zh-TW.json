@@ -237,6 +237,7 @@
     "requestPublicCancel": "取消申請",
     "requestPublicCancelled": "已取消申請",
     "requestPublicPending": "公開申請審核中",
+    "requestPublicFailed": "公開申請失敗",
     "timelineEdit": "編輯時間軸",
     "info": "歌曲資訊",
     "lyricsSource": "歌詞來源：{source}",

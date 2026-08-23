@@ -523,7 +523,10 @@ export default function SongViewPage() {
                             data.refreshSong();
                             data.showToast('success', t('song.requestPublicSuccess'));
                           }
-                        } catch {}
+                        } catch (error) {
+                          console.error('申请公开失败', error);
+                          data.showToast('error', t('song.requestPublicFailed'));
+                        }
                       }}
                       className="text-[var(--song-accent)] hover:text-[var(--song-accent)]/80 underline transition-colors"
                     >
@@ -545,7 +548,10 @@ export default function SongViewPage() {
                           data.refreshSong();
                           data.showToast('success', t('song.requestPublicCancelled'));
                         }
-                      } catch {}
+                      } catch (error) {
+                        console.error('取消申请公开失败', error);
+                        data.showToast('error', t('song.requestPublicFailed'));
+                      }
                     }}
                     className="text-[10px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] underline transition-colors"
                   >
@@ -560,7 +566,10 @@ export default function SongViewPage() {
                           data.refreshSong();
                           data.showToast('success', t('song.requestPublicSuccess'));
                         }
-                      } catch {}
+                      } catch (error) {
+                        console.error('申请公开失败', error);
+                        data.showToast('error', t('song.requestPublicFailed'));
+                      }
                     }}
                     className="text-[10px] text-[var(--song-accent)] hover:text-[var(--song-accent)]/80 underline transition-colors"
                   >

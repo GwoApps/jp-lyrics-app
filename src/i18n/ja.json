@@ -237,6 +237,7 @@
     "requestPublicCancel": "申請を取り消し",
     "requestPublicCancelled": "申請を取り消しました",
     "requestPublicPending": "公開申請中",
+    "requestPublicFailed": "公開申請に失敗しました",
     "timelineEdit": "タイムラインを編集",
     "info": "曲の情報",
     "lyricsSource": "歌詞ソース：{source}",

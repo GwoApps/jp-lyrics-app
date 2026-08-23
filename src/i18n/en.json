@@ -237,6 +237,7 @@
     "requestPublicCancel": "Cancel request",
     "requestPublicCancelled": "Request cancelled",
     "requestPublicPending": "Public request pending",
+    "requestPublicFailed": "Public request failed",
     "timelineEdit": "Edit timeline",
     "info": "Song information",
     "lyricsSource": "Lyrics source: {source}",

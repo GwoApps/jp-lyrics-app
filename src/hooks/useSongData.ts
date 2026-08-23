@@ -536,7 +536,9 @@ export function useSongData(id: string): UseSongDataReturn {
         if (data.lyrics_synced) setSyncLines(parseLrc(data.lyrics_synced));
         return data;
       }
-    } catch {}
+    } catch (error) {
+      console.error('刷新歌曲数据失败', error);
+    }
     return undefined;
   }, [id]);
 
@@ -1238,7 +1240,8 @@ export function useSongData(id: string): UseSongDataReturn {
         return;
       }
       router.push(`/songs/${data.id}`);
-    } catch {
+    } catch (error) {
+      console.error('导入当前播放歌曲失败', error);
       showToast('error', t('song.importFailed'));
     } finally {
       setImporting(false);
