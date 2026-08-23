@@ -7,6 +7,8 @@
  * Works with fetch's ReadableStream — EventSource can't POST.
  */
 
+import { readSseFrames } from '@/lib/sse-reader';
+
 export interface TranslationProgress {
   /** Distinct lines the model has finished in THIS request. */
   requestDone: number;
@@ -42,74 +44,58 @@ export async function readTranslationStream(
   onReasoning: (delta: string) => void,
   onProgress?: (progress: TranslationProgress) => void,
 ): Promise<TranslationStreamResult> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
   let translations: string[] | null = null;
   let streamLang: string | null = null;
   let streamError: string | null = null;
   let errorProgress: TranslationProgress | null = null;
   let finished = false;
 
-  while (!finished) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const events = buffer.split('\n\n');
-    buffer = events.pop() ?? '';
-    for (const evt of events) {
-      let eventName = 'message';
-      let dataStr = '';
-      for (const line of evt.split('\n')) {
-        if (line.startsWith('event:')) eventName = line.slice(6).trim();
-        else if (line.startsWith('data:')) dataStr += line.slice(5).trim();
-      }
-      if (!dataStr) continue;
-      let payload: {
-        text?: string;
-        translations?: string[];
-        error?: string;
-        lang?: string;
-        requestDone?: number;
-        requestTotal?: number;
-        covered?: number;
-        coverable?: number;
-        // legacy fields from older server builds — kept for forward compatibility
-        done?: number;
-        total?: number;
-      };
-      try {
-        payload = JSON.parse(dataStr);
-      } catch {
-        continue;
-      }
-      const toProgress = (p: typeof payload): TranslationProgress | null => {
-        const hasNew = typeof p.requestDone === 'number' && typeof p.requestTotal === 'number'
-          && typeof p.covered === 'number' && typeof p.coverable === 'number';
-        if (hasNew) {
-          return { requestDone: p.requestDone!, requestTotal: p.requestTotal!, covered: p.covered!, coverable: p.coverable! };
-        }
-        // Backward-compatible fallback for servers that only sent { done, total }.
-        if (typeof p.done === 'number' && typeof p.total === 'number') {
-          return { requestDone: p.done, requestTotal: p.total, covered: p.done, coverable: p.total };
-        }
-        return null;
-      };
-      if (eventName === 'reasoning' && typeof payload.text === 'string') {
-        onReasoning(payload.text);
-      } else if (eventName === 'progress') {
-        const progress = toProgress(payload);
-        if (progress) onProgress?.(progress);
-      } else if (eventName === 'done' && Array.isArray(payload.translations)) {
-        translations = payload.translations;
-        if (typeof payload.lang === 'string') streamLang = payload.lang;
-        finished = true;
-      } else if (eventName === 'error' && payload.error) {
-        streamError = payload.error;
-        errorProgress = toProgress(payload);
-        finished = true;
-      }
+  for await (const { event: eventName, data: dataStr } of readSseFrames(body)) {
+    let payload: {
+      text?: string;
+      translations?: string[];
+      error?: string;
+      lang?: string;
+      requestDone?: number;
+      requestTotal?: number;
+      covered?: number;
+      coverable?: number;
+      // legacy fields from older server builds — kept for forward compatibility
+      done?: number;
+      total?: number;
+    };
+    try {
+      payload = JSON.parse(dataStr);
+    } catch {
+      continue;
     }
+    const toProgress = (p: typeof payload): TranslationProgress | null => {
+      const hasNew = typeof p.requestDone === 'number' && typeof p.requestTotal === 'number'
+        && typeof p.covered === 'number' && typeof p.coverable === 'number';
+      if (hasNew) {
+        return { requestDone: p.requestDone!, requestTotal: p.requestTotal!, covered: p.covered!, coverable: p.coverable! };
+      }
+      // Backward-compatible fallback for servers that only sent { done, total }.
+      if (typeof p.done === 'number' && typeof p.total === 'number') {
+        return { requestDone: p.done, requestTotal: p.total, covered: p.done, coverable: p.total };
+      }
+      return null;
+    };
+    if (eventName === 'reasoning' && typeof payload.text === 'string') {
+      onReasoning(payload.text);
+    } else if (eventName === 'progress') {
+      const progress = toProgress(payload);
+      if (progress) onProgress?.(progress);
+    } else if (eventName === 'done' && Array.isArray(payload.translations)) {
+      translations = payload.translations;
+      if (typeof payload.lang === 'string') streamLang = payload.lang;
+      finished = true;
+    } else if (eventName === 'error' && payload.error) {
+      streamError = payload.error;
+      errorProgress = toProgress(payload);
+      finished = true;
+    }
+    if (finished) break;
   }
 
   return { translations, lang: streamLang, error: streamError, progress: errorProgress };

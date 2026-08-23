@@ -385,6 +385,10 @@ export default function TranslationEditPage() {
         <span>{t('translation.translatedColumn')}</span>
       </div>
 
+      <p className="mb-2 px-3 text-[11px] text-[var(--muted-foreground)]">
+        {t('translation.keyboardHint')}
+      </p>
+
       <div className="space-y-1.5 pb-24">
         {rawLines.map((raw, i) => {
           const isEmptyLine = !raw.trim();
@@ -405,10 +409,21 @@ export default function TranslationEditPage() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    for (let j = i + 1; j < rawLines.length; j += 1) {
-                      if (rawLines[j].trim()) {
-                        inputRefs.current[j]?.focus();
-                        break;
+                    if (e.shiftKey) {
+                      // 向上跳转到上一个有内容的行
+                      for (let j = i - 1; j >= 0; j -= 1) {
+                        if (rawLines[j].trim()) {
+                          inputRefs.current[j]?.focus();
+                          break;
+                        }
+                      }
+                    } else {
+                      // 向下跳转（现有行为）
+                      for (let j = i + 1; j < rawLines.length; j += 1) {
+                        if (rawLines[j].trim()) {
+                          inputRefs.current[j]?.focus();
+                          break;
+                        }
                       }
                     }
                   }

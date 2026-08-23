@@ -14,6 +14,7 @@ import {
   type SettingsPayload,
 } from '@/lib/sync-settings';
 import { useTheme } from '@/lib/theme';
+import Toast from '@/components/Toast';
 
 type ToastState = { type: 'success' | 'error'; msg: string } | null;
 
@@ -408,11 +409,7 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {toast && (
-        <div className="fixed bottom-6 right-6 rounded-lg border border-[var(--border)] bg-[var(--card)] px-4 py-2.5 shadow-lg text-xs">
-          <span className={toast.type === 'success' ? 'text-[var(--success)]' : 'text-[var(--destructive)]'}>{toast.msg}</span>
-        </div>
-      )}
+      {toast && <Toast type={toast.type} message={toast.msg} />}
 
       {unsavedDialog}
     </div>
