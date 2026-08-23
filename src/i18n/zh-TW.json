@@ -762,6 +762,7 @@
     "translatedColumn": "翻譯",
     "emptyLine": "空行",
     "inputPlaceholder": "輸入翻譯…",
+    "keyboardHint": "Enter 下一行 · Shift+Enter 上一行",
     "saved": "翻譯已儲存",
     "saveFailed": "儲存失敗",
     "unsavedConfirm": "有未儲存的修改，確定離開？",
