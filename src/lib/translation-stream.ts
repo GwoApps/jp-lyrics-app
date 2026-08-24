@@ -43,6 +43,7 @@ export async function readTranslationStream(
   body: ReadableStream<Uint8Array>,
   onReasoning: (delta: string) => void,
   onProgress?: (progress: TranslationProgress) => void,
+  onStage?: (stage: string) => void,
 ): Promise<TranslationStreamResult> {
   let translations: string[] | null = null;
   let streamLang: string | null = null;
@@ -56,6 +57,7 @@ export async function readTranslationStream(
       translations?: string[];
       error?: string;
       lang?: string;
+      stage?: string;
       requestDone?: number;
       requestTotal?: number;
       covered?: number;
@@ -83,6 +85,8 @@ export async function readTranslationStream(
     };
     if (eventName === 'reasoning' && typeof payload.text === 'string') {
       onReasoning(payload.text);
+    } else if (eventName === 'stage' && typeof payload.stage === 'string') {
+      onStage?.(payload.stage);
     } else if (eventName === 'progress') {
       const progress = toProgress(payload);
       if (progress) onProgress?.(progress);

@@ -35,6 +35,18 @@ test('readTranslationStream surfaces a unified progress payload with request + c
   assert.equal(result.error, null);
 });
 
+test('readTranslationStream forwards a stage event to the onStage callback', async () => {
+  const stages: string[] = [];
+  const stream = sseBody([
+    'event: stage\ndata: {"stage":"glossary_extraction"}\n\n',
+    'event: done\ndata: {"translations":["a"],"requestDone":1,"requestTotal":1,"covered":1,"coverable":1}\n\n',
+  ]);
+  const result = await readTranslationStream(stream, () => {}, undefined, (s) => stages.push(s));
+
+  assert.deepEqual(stages, ['glossary_extraction']);
+  assert.deepEqual(result.translations, ['a']);
+});
+
 test('readTranslationStream parses an error event with consistent request + coverage', async () => {
   const progresses: TranslationProgress[] = [];
   const stream = sseBody([

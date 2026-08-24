@@ -182,6 +182,7 @@
     "translationTargetDefault": "システム既定に従う",
     "reTranslate": "再翻訳",
     "translating": "翻訳中…",
+    "translationPreparing": "翻訳を準備しています…",
     "translationReasoning": "思考プロセス",
     "translationReasoningShow": "思考を表示",
     "translationReasoningHide": "閉じる",

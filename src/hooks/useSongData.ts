@@ -169,6 +169,10 @@ export interface UseSongDataReturn {
   translationSaving: boolean;
   translationError: string | null;
   translationProgress: TranslationProgress | null;
+  /** Opaque preparation stage reported by the server before streaming starts
+   *  (e.g. glossary extraction) — surfaced to the user as a generic
+   *  "preparing" notice, never the internal stage name (issue #172). */
+  translationStage: string | null;
   translationReasoning: string;
   showTranslationReasoning: boolean;
   setShowTranslationReasoning: (show: boolean) => void;
@@ -274,6 +278,10 @@ export function useSongData(id: string): UseSongDataReturn {
   const [translationSaving, setTranslationSaving] = useState(false);
   const [translationError, setTranslationError] = useState<string | null>(null);
   const [translationProgress, setTranslationProgress] = useState<TranslationProgress | null>(null);
+  // Opaque preparation stage shown while the server warms up before streaming
+  // (glossary extraction). Only a boolean-ish "preparing" notice is surfaced
+  // to the user — the raw stage name never is (issue #172).
+  const [translationStage, setTranslationStage] = useState<string | null>(null);
   const [translationReasoning, setTranslationReasoning] = useState('');
   // Tracks the in-flight translate request so the user can cancel a long
   // whole-song translation (or stop an accidental one) without reloading.
@@ -923,6 +931,7 @@ export function useSongData(id: string): UseSongDataReturn {
     setHasSavedReasoning(false);
     reasoningUserHiddenRef.current = false;
     setTranslationProgress(null);
+    setTranslationStage(null);
     translationDoneRef.current = 0;
     // Own the cancellation signal for this request — the user can abort a
     // long/accidental whole-song translation via the overlay's cancel button.
@@ -953,6 +962,8 @@ export function useSongData(id: string): UseSongDataReturn {
       // (covered/coverable, duplicates expanded, blank lines skipped). Track
       // the request count for the cancellation ref; the UI shows coverage.
       const onProgress = (progress: TranslationProgress) => {
+        // Real translation output has started — the preparation stage is over.
+        setTranslationStage(null);
         translationDoneRef.current = progress.requestDone;
         setTranslationProgress(progress);
       };
@@ -966,11 +977,15 @@ export function useSongData(id: string): UseSongDataReturn {
           setTranslationReasoning((prev) => prev + delta);
         },
         onProgress,
+        // The raw stage name stays internal — the UI only ever surfaces a
+        // generic "正在准备翻译" notice (issue #172).
+        () => setTranslationStage('preparing'),
       );
       const reasoningStreamed = streamedReasoning.length > 0;
 
       if (translations) {
         setTranslationProgress(null);
+        setTranslationStage(null);
         // Only advertise the persisted-reasoning menu row when the model
         // actually produced reasoning (cached hits stream none). The panel
         // stays open on its own — don't fight an explicit collapse.
@@ -1026,6 +1041,7 @@ export function useSongData(id: string): UseSongDataReturn {
       } else {
         setTranslationProgress(null);
       }
+      setTranslationStage(null);
       // The server persists whatever reasoning streamed before the failure;
       // keep the flag on so the menu can re-open it even after an error.
       if (reasoningStreamed) setHasSavedReasoning(true);
@@ -1531,6 +1547,7 @@ export function useSongData(id: string): UseSongDataReturn {
     translationSaving,
     translationError,
     translationProgress,
+    translationStage,
     translationReasoning,
     showTranslationReasoning,
     setShowTranslationReasoning,

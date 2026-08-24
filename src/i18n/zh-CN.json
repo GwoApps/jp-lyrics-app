@@ -182,6 +182,7 @@
     "translationTargetDefault": "跟随系统默认",
     "reTranslate": "重新翻译",
     "translating": "翻译中…",
+    "translationPreparing": "正在准备翻译…",
     "translationReasoning": "思考过程",
     "translationReasoningShow": "查看思考",
     "translationReasoningHide": "收起",

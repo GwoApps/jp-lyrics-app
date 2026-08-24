@@ -1037,6 +1037,7 @@ export default function SongViewPage() {
         translationSaving={data.translationSaving}
         translationProgress={data.translationProgress}
         translationError={data.translationError}
+        translationStage={data.translationStage}
         translationReasoning={data.translationReasoning}
         showTranslationReasoning={data.showTranslationReasoning}
         onToggleReasoning={data.toggleTranslationReasoning}

@@ -17,6 +17,10 @@ interface TranslationStatusOverlayProps {
     coverable: number;
   } | null;
   translationError: string | null;
+  /** Opaque preparation stage while the server warms up before streaming
+   *  (glossary extraction). Surfaced only as a generic "正在准备翻译" notice —
+   *  the internal stage name is never shown (issue #172). */
+  translationStage: string | null;
   translationReasoning: string;
   showTranslationReasoning: boolean;
   onToggleReasoning: () => void;
@@ -45,6 +49,7 @@ export default function TranslationStatusOverlay({
   translationSaving,
   translationProgress,
   translationError,
+  translationStage,
   translationReasoning,
   showTranslationReasoning,
   onToggleReasoning,
@@ -175,7 +180,12 @@ export default function TranslationStatusOverlay({
             <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[var(--primary)]" />
             {translationProgress
               ? t('song.translatingProgress', { done: translationProgress.covered, total: translationProgress.coverable })
-              : t('song.translating')}
+              : translationStage
+                // During the server's pre-stream warm-up (glossary extraction)
+                // show a generic "preparing" notice — the internal stage is
+                // never exposed (issue #172).
+                ? t('song.translationPreparing')
+                : t('song.translating')}
             <button
               type="button"
               onClick={onCancel}

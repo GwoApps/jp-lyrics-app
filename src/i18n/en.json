@@ -182,6 +182,7 @@
     "translationTargetDefault": "Use system default",
     "reTranslate": "Re-translate",
     "translating": "Translating…",
+    "translationPreparing": "Preparing translation…",
     "translationReasoning": "Reasoning",
     "translationReasoningShow": "View reasoning",
     "translationReasoningHide": "Hide",

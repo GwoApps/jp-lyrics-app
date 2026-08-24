@@ -215,7 +215,16 @@ export async function POST(
       /* ignored */
     }
   }
-  if (glossary === null) {
+  // Extract (or reuse) the terminology glossary from the full song.
+  // Streaming mode calls this INSIDE the SSE stream — right after emitting a
+  // `stage` event — so a first translation of a long song gets immediate
+  // feedback instead of a silent 0-byte stall while the glossary LLM call
+  // runs (issue #172). Non-streaming mode calls it directly.
+  // Returns [ok, errorCode, status]. `ok === false` means a fatal error the
+  // caller must abort on: `errorCode` is the API error key and `status` the
+  // HTTP status for non-streaming responses (stale source / deleted song).
+  const ensureGlossary = async (): Promise<[boolean, string | null, number | null]> => {
+    if (glossary !== null) return [true, null, null];
     const extracted = await extractLyricsGlossary(existing.title, existing.artist, lines, config);
     if (extracted !== null) {
       // Only persist a SUCCESSFUL extraction. A failure returns null and is
@@ -233,19 +242,20 @@ export async function POST(
         // Lyrics were edited while we extracted the glossary — the source the
         // user is now looking at no longer matches this request. Persisting
         // the translation would resurrect stale output; abort instead.
-        const error = glossaryWrite.reason === 'stale_source'
-          ? 'stale_annotation_source'
-          : 'song_not_found';
-        return NextResponse.json({ error }, { status: glossaryWrite.reason === 'stale_source' ? 409 : 404 });
+        const stale = glossaryWrite.reason === 'stale_source';
+        return [false, stale ? 'stale_annotation_source' : 'song_not_found', stale ? 409 : 404];
       }
     } else {
       // Degrade to "no terminology" for THIS run only; extraction is retried
       // on the next request. Still observable in the logs for triage.
       console.warn(`[translate] glossary extraction failed for "${existing.title}" — translating without terminology; will retry next time`);
     }
-  }
+    return [true, null, null];
+  };
 
-  const ctx = {
+  // Build the per-request prompt context once the glossary is resolved
+  // (glossary may be filled in by ensureGlossary inside the SSE stream).
+  const buildCtx = () => ({
     title: existing.title,
     artist: existing.artist,
     glossary: glossary ?? undefined,
@@ -255,7 +265,7 @@ export async function POST(
     // of guessing from an isolated line (issue #146). The model still outputs
     // exactly the requested lines (alignment preserved).
     ...(isSlice ? { fullLyrics: lines, targetIndices: needTranslation.map((i) => start + i) } : {}),
-  };
+  });
 
   /**
    * Expand duplicates from their first occurrence's result and PERSIST the
@@ -360,6 +370,21 @@ export async function POST(
           }
         };
         try {
+          // Emit the preparation stage BEFORE the potentially slow glossary
+          // extraction so the client gets immediate feedback instead of a
+          // silent 0-byte stall. The stage is surfaced to the user as a
+          // generic "preparing" notice — the glossary internals stay opaque
+          // (issue #172).
+          send('stage', { stage: 'glossary_extraction' });
+          const [glossaryOk, glossaryCode] = await ensureGlossary();
+          if (!glossaryOk) {
+            // Stale source / deleted song detected during extraction — the
+            // write could not be committed, so abort the stream with the real
+            // error code so the client can surface the right notice.
+            send('error', { error: glossaryCode ?? 'translation_failed' });
+            return;
+          }
+          const ctx = buildCtx();
           const translations = requestTotal > 0
             ? await streamTranslateLyricLines(uniqueLines, config, (chunk) => {
               if (chunk.type === 'translation') emitProgress(chunk.text);
@@ -502,7 +527,13 @@ export async function POST(
     return new Response(stream, { headers: SSE_HEADERS });
   }
 
-  // Non-streaming path (unchanged behaviour).
+  // Non-streaming path. The glossary is resolved here directly (no SSE stage
+  // feedback for the non-streaming caller).
+  const [glossaryOk, glossaryCode, glossaryStatus] = await ensureGlossary();
+  if (!glossaryOk && glossaryCode) {
+    return NextResponse.json({ error: glossaryCode }, { status: glossaryStatus ?? 500 });
+  }
+  const ctx = buildCtx();
   let translations: string[];
   try {
     translations = uniqueLines.length > 0
