@@ -16,6 +16,11 @@ export interface LyricsProviderQuery {
   isrc?: string;
   spotifyTrackId?: string;
   locale?: string;
+  /**
+   * Spotify canonical CJK name/artist, used by the builtin LRCLIB adapter's
+   * second exact pass (same behaviour as the legacy chain).
+   */
+  spotifyCanonical?: { name: string; artist: string } | null;
 }
 
 /** A single candidate lyric hit returned by a provider. */

@@ -449,28 +449,12 @@ test('assertFullOrderedSet accepts a full ordered list', () => {
   assert.doesNotThrow(() => assertFullOrderedSet(['p1', 'p2'], ['p2', 'p1']));
 });
 
-// ─── Builtin provider: rateLimited preserved on a hit ────────
+// ─── Builtin provider: Uta-Net adapter resolves a hit through the shared chain ──
 
-test('builtinLyricsProvider keeps rateLimited on a hit (LRCLIB 429 → Uta-Net hit)', async () => {
+test('builtinLyricsProvider(uta-net row) returns a pre-scored Uta-Net hit', async () => {
   const originalFetch = globalThis.fetch as unknown;
-  // Drive the builtin chain with mocks: LRCLIB is always 429 (so the preferred
-  // timed source is throttled), PetitLyrics misses, and Uta-Net hits. The hit
-  // must still carry the outcome-level `rateLimited` flag so the orchestrator
-  // (`fetchLyricsWithChain`) does not drop it — this is the regression from the
-  // third-round review where `rateLimited` was only put on the candidate.
   globalThis.fetch = (async (input: unknown) => {
     const url = String(input);
-    if (url.includes('lrclib.net')) {
-      // Always 429 → after the single retry the source reports rateLimited.
-      // A tiny Retry-After keeps the backoff fast.
-      return {
-        ok: false,
-        status: 429,
-        headers: { get: () => '0.001' },
-        json: async () => ({}),
-        text: async () => '',
-      } as unknown as Response;
-    }
     if (url.includes('uta-net.com/search')) {
       const html = `<table><tr>
         <td><a href="/song/123/" class="d-block">Same Song</a></td>
@@ -486,15 +470,13 @@ test('builtinLyricsProvider keeps rateLimited on a hit (LRCLIB 429 → Uta-Net h
     return { ok: false, status: 404, json: async () => ({}), text: async () => '' } as unknown as Response;
   }) as typeof fetch;
   try {
-    const provider = builtinLyricsProvider();
+    const provider = builtinLyricsProvider({ id: 'builtin:uta-net', name: 'Uta-Net' });
     const outcome = await provider.search({ title: 'Same Song', artists: ['Artist'] }, {});
-    // Uta-Net hit while LRCLIB was throttled.
     assert.equal(outcome.status, 'hit');
     assert.equal(outcome.candidates.length, 1);
-    // The outcome-level flag must survive so sync/import can retry later.
-    assert.equal(outcome.rateLimited, true);
-    // The candidate-level flag is kept too (backward compatible diagnostics).
-    assert.equal(outcome.candidates[0]?.rateLimited, true);
+    assert.equal(outcome.candidates[0]?.candidateId, 'uta-net');
+    // Pre-scored confidence from the same evidence pipeline as before.
+    assert.equal(typeof outcome.candidates[0]?.confidence, 'number');
   } finally {
     globalThis.fetch = originalFetch as typeof fetch;
   }

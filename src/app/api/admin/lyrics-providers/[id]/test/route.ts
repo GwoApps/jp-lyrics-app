@@ -32,6 +32,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     auth_secret?: string;
   };
 
+  // Builtin providers have no transport URL to test — the test endpoint is
+  // HTTP-plugin-only. (The UI hides the test button for kind=builtin rows.)
+  if (!existing.baseUrl) {
+    return NextResponse.json({ ok: false, code: 'builtin_no_manifest', insecure: false }, { status: 200 });
+  }
+
   // Build the candidate config from the stored row + optional form snapshot.
   const baseUrl = normalizeProviderBaseUrl(body.base_url?.trim() || existing.baseUrl) ?? existing.baseUrl;
   // Honor an explicit auth_type in the snapshot (including switching to none),

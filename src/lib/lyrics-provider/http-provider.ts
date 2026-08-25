@@ -24,7 +24,7 @@ export function httpLyricsProvider(cfg: ProviderConfigRow, authSecret: string | 
       });
       return searchHttpProvider(
         {
-          baseUrl: cfg.baseUrl,
+          baseUrl: cfg.baseUrl!, // orchestrator guarantees non-null for HTTP rows
           authType: cfg.authType,
           authSecret,
           timeoutMs,

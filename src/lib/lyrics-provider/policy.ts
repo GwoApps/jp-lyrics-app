@@ -237,7 +237,8 @@ export async function validateProviderBaseUrl(
 }
 
 /** True when the given base_url would be served over insecure plaintext HTTP. */
-export function isInsecureTransport(baseUrl: string): boolean {
+export function isInsecureTransport(baseUrl: string | null): boolean {
+  if (!baseUrl) return false; // builtin providers have no transport URL
   try {
     return new URL(baseUrl).protocol === 'http:';
   } catch {

@@ -1,76 +1,175 @@
 /**
- * Builtin lyrics source adapter (ISSUE #148, Phase 1 unified abstraction).
+ * Builtin lyrics source adapters (ISSUE #148, unified abstraction).
  *
- * Wraps the legacy single-body builtin chain (LRCLIB → PetitLyrics → Uta-Net →
- * ytmusic) behind the same `LyricsProvider` contract used by runtime HTTP
- * plugins, so both classes of sources flow through one shared orchestrator
- * loop. The builtin chain keeps its exact default order + confidence rules for
- * full backward compatibility: candidates carry a pre-scored `confidence` and
- * the orchestrator accepts them directly instead of re-scoring.
+ * Each trusted builtin source (LRCLIB → PetitLyrics → Uta-Net → ytmusic) is
+ * exposed as an individual `LyricsProvider` backed by a `builtin:*` row in
+ * `lyrics_provider_configs`, so admins can enable/disable and reorder them in
+ * the same 歌词源 panel as runtime HTTP plugins. The legacy behaviour (default
+ * order, confidence rules, source labels such as `lrclib` / `uta-net`) is
+ * preserved by the seed migration + the per-source search functions below.
  */
 import type { LyricsProvider, LyricsProviderQuery, ProviderContext, ProviderOutcome } from './types.ts';
-import { fetchLyrics, syncStageToDynamicProviderStage, type SyncStage } from '../lyrics-fetcher.ts';
+import {
+  fetchFromLrclib,
+  searchLrclib,
+  fetchFromPetitLyrics,
+  fetchFromUtaNet,
+  fetchFromYtMusic,
+  lrclibConfidence,
+  utaNetConfidence,
+} from '../lyrics-fetcher.ts';
 
-/** Stable source identifier prefix used for builtin provider stage ids. */
-export const BUILTIN_SOURCE_ID = 'builtin';
+/** Stable row ids used by the seed migration — never rename these. */
+export const BUILTIN_PROVIDER_IDS = ['builtin:lrclib', 'builtin:petitlyrics', 'builtin:uta-net', 'builtin:ytmusic'] as const;
+export type BuiltinSourceKey = 'lrclib' | 'petitlyrics' | 'uta-net' | 'ytmusic';
 
-/** Adapter that presents the builtin chain as a single `LyricsProvider`. */
-export function builtinLyricsProvider(opts?: {
-  spotifyCanonical?: { name: string; artist: string } | null;
-  spotify?: { durationMs?: number; album?: string };
-}): LyricsProvider {
+/** Row id (`builtin:<key>`) → legacy source key kept for display/diagnostics. */
+export function builtinRowIdToKey(rowId: string): BuiltinSourceKey | null {
+  switch (rowId) {
+    case 'builtin:lrclib': return 'lrclib';
+    case 'builtin:petitlyrics': return 'petitlyrics';
+    case 'builtin:uta-net': return 'uta-net';
+    case 'builtin:ytmusic': return 'ytmusic';
+    default: return null;
+  }
+}
+
+/** Display names shown in the admin panel / SSE stage for each builtin source. */
+export function builtinSourceDisplayName(key: BuiltinSourceKey): string {
+  switch (key) {
+    case 'lrclib': return 'LRCLIB';
+    case 'petitlyrics': return 'PetitLyrics';
+    case 'uta-net': return 'Uta-Net';
+    case 'ytmusic': return 'YouTube Music';
+  }
+}
+
+/** Build the `LyricsProvider` adapter for one stored builtin provider row. */
+export function builtinLyricsProvider(cfg: { id: string; name: string; timeoutMs?: number | null }): LyricsProvider {
+  const key = builtinRowIdToKey(cfg.id);
+  if (!key) throw new Error(`unknown builtin provider id: ${cfg.id}`);
   return {
-    id: BUILTIN_SOURCE_ID,
-    displayName: 'Builtin',
+    id: cfg.id,
+    displayName: cfg.name || builtinSourceDisplayName(key),
     kind: 'builtin',
     async search(query: LyricsProviderQuery, context: ProviderContext): Promise<ProviderOutcome> {
-      const res = await fetchLyrics(query.title, query.artists[0] ?? '', {
-        spotifyCanonical: opts?.spotifyCanonical,
-        spotify: opts?.spotify,
-        signal: context.signal,
-        // Bridge the legacy builtin string stages to the dynamic ProviderStage
-        // contract used by the unified orchestrator loop.
-        onStage: (s) => {
-          if (typeof s === 'object') {
-            context.onStage?.(s);
-          } else {
-            context.onStage?.(syncStageToDynamicProviderStage(s as SyncStage));
+      context.onStage?.({ id: cfg.id, displayName: cfg.name || builtinSourceDisplayName(key), kind: 'builtin' });
+      const signal = context.signal;
+      const artist = query.artists[0] ?? '';
+      try {
+        switch (key) {
+          case 'lrclib':
+            return await searchBuiltinLrclib(query, signal);
+          case 'petitlyrics': {
+            const pl = await fetchFromPetitLyrics(query.title, artist, signal);
+            if (!pl || (!pl.synced && !pl.plain)) return { status: 'empty', candidates: [] };
+            return {
+              status: 'hit',
+              candidates: [{
+                candidateId: 'petitlyrics',
+                title: query.title,
+                artists: query.artists,
+                plainLyrics: pl.plain || undefined,
+                syncedLyrics: pl.synced || undefined,
+                confidence: pl.synced ? 90 : 82,
+              }],
+            };
           }
-        },
-      });
-      if (!res.result) {
-        return {
-          status: 'empty',
-          candidates: [],
-          ...(res.rateLimited ? { rateLimited: true } : {}),
-        };
+          case 'uta-net': {
+            const un = await fetchFromUtaNet(query.title, artist, signal);
+            if (!un) return { status: 'empty', candidates: [] };
+            return {
+              status: 'hit',
+              candidates: [{
+                candidateId: 'uta-net',
+                title: query.title,
+                artists: query.artists,
+                plainLyrics: un.result.plain || undefined,
+                syncedLyrics: un.result.synced || undefined,
+                confidence: utaNetConfidence(un.score),
+                match: { title: un.matchedTitle, artist: un.matchedArtist, link: un.link, ambiguous: un.ambiguous },
+              }],
+            };
+          }
+          case 'ytmusic': {
+            const yt = await fetchFromYtMusic(query.title, artist, signal);
+            if (!yt) return { status: 'empty', candidates: [] };
+            return {
+              status: 'hit',
+              candidates: [{
+                candidateId: 'ytmusic',
+                title: query.title,
+                artists: query.artists,
+                plainLyrics: yt.plain || undefined,
+                syncedLyrics: yt.synced || undefined,
+                confidence: yt.synced ? 74 : 68,
+              }],
+            };
+          }
+        }
+      } catch (err) {
+        // Caller cancel must keep propagating (orchestrator rethrows it).
+        if (signal?.aborted) throw signal.reason ?? err;
+        return { status: 'error', candidates: [], diagnostic: err instanceof Error ? err.message.slice(0, 200) : 'error' };
       }
-      return {
-        status: 'hit',
-        // Keep the rate-limit flag at the outcome level too (mirroring the miss
-        // branch and the HTTP provider): the legacy `fetchLyrics` preserves
-        // `rateLimited` on a hit (e.g. LRCLIB 429 → Uta-Net hit), so the builtin
-        // adapter must surface it the same way or the orchestrator would drop it
-        // (it only reads `outcome.rateLimited`). This keeps sync/import able to
-        // distinguish "preferred timed source throttled, retry later" from a
-        // normal hit.
-        ...(res.rateLimited ? { rateLimited: true } : {}),
-        candidates: [
-          {
-            // Keep the legacy builtin source key (e.g. `lrclib`, `uta-net`) so
-            // downstream source labels and diagnostics stay backward compatible.
-            candidateId: res.source,
-            title: query.title,
-            artists: query.artists,
-            plainLyrics: res.result.plain || undefined,
-            syncedLyrics: res.result.synced || undefined,
-            confidence: res.confidence,
-            match: res.match,
-            rateLimited: res.rateLimited,
-            durationMismatch: res.durationMismatch,
-          },
-        ],
-      };
     },
+  };
+}
+
+/** LRCLIB exact → Spotify canonical exact/fuzzy → fuzzy search, mirroring the legacy chain. */
+async function searchBuiltinLrclib(
+  query: LyricsProviderQuery,
+  signal?: AbortSignal,
+): Promise<ProviderOutcome> {
+  const evidence = query.durationMs != null || query.album != null
+    ? { durationMs: query.durationMs, album: query.album }
+    : undefined;
+  let rateLimited = false;
+
+  let outcome = await fetchFromLrclib(query.title, query.artists[0] ?? '', evidence, signal);
+  rateLimited = rateLimited || outcome.rateLimited;
+  if (outcome.hit) {
+    return lrclibHitOutcome(outcome.hit.result, 'lrclib', lrclibConfidence(outcome.hit, 98, true));
+  }
+
+  if (query.spotifyCanonical) {
+    outcome = await fetchFromLrclib(query.spotifyCanonical.name, query.spotifyCanonical.artist, evidence, signal);
+    rateLimited = rateLimited || outcome.rateLimited;
+    if (outcome.hit) {
+      return lrclibHitOutcome(outcome.hit.result, 'lrclib', lrclibConfidence(outcome.hit, 96, true));
+    }
+    outcome = await searchLrclib(`${query.spotifyCanonical.name} ${query.spotifyCanonical.artist}`, query.spotifyCanonical.name, query.spotifyCanonical.artist, evidence, signal);
+    rateLimited = rateLimited || outcome.rateLimited;
+    if (outcome.hit) {
+      return lrclibHitOutcome(outcome.hit.result, 'lrclib-search', lrclibConfidence(outcome.hit, 82, false));
+    }
+  }
+
+  outcome = await searchLrclib(`${query.title} ${query.artists[0] ?? ''}`, query.title, query.artists[0] ?? '', evidence, signal);
+  rateLimited = rateLimited || outcome.rateLimited;
+  if (outcome.hit) {
+    return lrclibHitOutcome(outcome.hit.result, 'lrclib-search', lrclibConfidence(outcome.hit, 78, false));
+  }
+
+  return { status: 'empty', candidates: [], ...(rateLimited ? { rateLimited: true } : {}) };
+}
+
+function lrclibHitOutcome(
+  result: { synced: string; plain: string },
+  candidateId: string,
+  confidence: number,
+): ProviderOutcome {
+  return {
+    status: 'hit',
+    candidates: [{
+      candidateId,
+      // Title/artists are echoed back as requested; LRCLIB evidence was already
+      // applied to the pre-scored confidence above.
+      title: '',
+      artists: [],
+      plainLyrics: result.plain || undefined,
+      syncedLyrics: result.synced || undefined,
+      confidence,
+    }],
   };
 }

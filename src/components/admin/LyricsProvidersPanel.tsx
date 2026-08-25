@@ -11,7 +11,8 @@ import { useI18n } from '@/lib/i18n';
 interface ProviderWire {
   id: string;
   name: string;
-  base_url: string;
+  kind: 'builtin' | 'http';
+  base_url: string | null;
   auth_type: 'none' | 'bearer';
   has_secret: boolean;
   secret_masked: string | null;
@@ -118,7 +119,7 @@ export default function LyricsProvidersPanel() {
     setEditing(p);
     setForm({
       name: p.name,
-      base_url: p.base_url,
+      base_url: p.base_url ?? '',
       auth_type: p.auth_type,
       auth_secret: '',
       timeout_ms: p.timeout_ms != null ? String(p.timeout_ms) : '',
@@ -176,12 +177,14 @@ export default function LyricsProvidersPanel() {
   };
 
   const remove = async (p: ProviderWire) => {
+    if (p.kind === 'builtin') return; // UI guard; the API rejects it anyway
     if (!window.confirm(t('admin.lyricsProviderDeleteConfirm', { name: p.name }))) return;
     const res = await fetch(`/api/admin/lyrics-providers/${p.id}`, { method: 'DELETE' });
     if (res.ok) await load(true);
   };
 
   const testConnection = async (p: ProviderWire) => {
+    if (p.kind === 'builtin') return; // no manifest to fetch for builtin rows
     setTestingId(p.id);
     setTestResult((prev) => ({ ...prev, [p.id]: { ok: false } }));
     try {
@@ -279,6 +282,13 @@ export default function LyricsProvidersPanel() {
                 <GripVertical className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]/40" />
                 <span className={`h-2 w-2 shrink-0 rounded-full ${p.enabled ? 'bg-[var(--success)]' : 'bg-[var(--muted-foreground)]/40'}`} />
                 <span className="truncate text-sm font-medium">{p.name}</span>
+                <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  p.kind === 'builtin'
+                    ? 'bg-[var(--primary)]/10 text-[var(--primary)]'
+                    : 'bg-[var(--muted)] text-[var(--muted-foreground)]'
+                }`}>
+                  {p.kind === 'builtin' ? t('admin.lyricsProviderKindBuiltin') : t('admin.lyricsProviderKindHttp')}
+                </span>
                 {p.insecure_transport && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning)]/15 px-2 py-0.5 text-[10px] font-medium text-[var(--warning)]">
                     {t('admin.lyricsProviderInsecureTransport')}
@@ -299,8 +309,8 @@ export default function LyricsProvidersPanel() {
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-6 text-[11px] text-[var(--muted-foreground)]">
-                <span className="truncate font-mono">{p.base_url}</span>
-                <span>auth: {p.auth_type}</span>
+                {p.kind === 'http' && <span className="truncate font-mono">{p.base_url}</span>}
+                {p.kind === 'http' && <span>auth: {p.auth_type}</span>}
                 {p.has_secret && <span className="font-mono">{p.secret_masked}</span>}
                 <span className="inline-flex items-center gap-1">
                   {p.last_check_status === 'ok'
@@ -325,19 +335,23 @@ export default function LyricsProvidersPanel() {
                 )}
               </div>
               <div className="flex items-center gap-2 pl-6">
-                <button type="button" onClick={() => void testConnection(p)} disabled={testingId === p.id}
-                  className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-[11px] font-medium hover:bg-[var(--muted)] disabled:opacity-50">
-                  {testingId === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                  {t('admin.lyricsProviderTest')}
-                </button>
+                {p.kind === 'http' && (
+                  <button type="button" onClick={() => void testConnection(p)} disabled={testingId === p.id}
+                    className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-[11px] font-medium hover:bg-[var(--muted)] disabled:opacity-50">
+                    {testingId === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                    {t('admin.lyricsProviderTest')}
+                  </button>
+                )}
                 <button type="button" onClick={() => openEdit(p)}
                   className="rounded-md border border-[var(--border)] px-2 py-1 text-[11px] font-medium hover:bg-[var(--muted)]">
                   {t('common.edit')}
                 </button>
-                <button type="button" onClick={() => void remove(p)}
-                  className="inline-flex items-center gap-1 rounded-md border border-[var(--destructive)]/40 px-2 py-1 text-[11px] font-medium text-[var(--destructive)] hover:bg-[var(--destructive)]/10">
-                  <Trash2 className="h-3 w-3" /> {t('common.delete')}
-                </button>
+                {p.kind === 'http' && (
+                  <button type="button" onClick={() => void remove(p)}
+                    className="inline-flex items-center gap-1 rounded-md border border-[var(--destructive)]/40 px-2 py-1 text-[11px] font-medium text-[var(--destructive)] hover:bg-[var(--destructive)]/10">
+                    <Trash2 className="h-3 w-3" /> {t('common.delete')}
+                  </button>
+                )}
               </div>
             </li>
           ))}
@@ -381,38 +395,37 @@ export default function LyricsProvidersPanel() {
                 <input ref={formNameRef} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                   className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-sm outline-none focus:border-[var(--primary)]" />
               </label>
-              <label className="block">
-                <span className="mb-1 block text-xs font-medium">{t('admin.lyricsProviderBaseUrl')}</span>
-                <input value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })}
-                  placeholder="https://lyrics.example.com/providers/lrclib-proxy"
-                  className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 font-mono text-xs outline-none focus:border-[var(--primary)]" />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-xs font-medium">{t('admin.lyricsProviderAuthType')}</span>
-                <select value={form.auth_type} onChange={(e) => setForm({ ...form, auth_type: e.target.value as 'none' | 'bearer' })}
-                  className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-sm outline-none focus:border-[var(--primary)]">
-                  <option value="none">{t('admin.lyricsProviderAuthNone')}</option>
-                  <option value="bearer">{t('admin.lyricsProviderAuthBearer')}</option>
-                </select>
-              </label>
-              {form.auth_type === 'bearer' && (
-                <label className="block">
-                  <span className="mb-1 block text-xs font-medium">{t('admin.lyricsProviderAuthSecret')}</span>
-                  <input type="password" value={form.auth_secret} onChange={(e) => setForm({ ...form, auth_secret: e.target.value })}
-                    placeholder={editing?.has_secret ? t('admin.lyricsProviderAuthSecretKeep') : ''}
-                    className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-sm outline-none focus:border-[var(--primary)]" />
-                  <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]">{t('admin.lyricsProviderAuthSecretHint')}</span>
-                </label>
+              {editing?.kind === 'builtin' ? (
+                <p className="rounded-md bg-[var(--muted)]/50 px-3 py-2 text-[11px] text-[var(--muted-foreground)]">
+                  {t('admin.lyricsProviderBuiltinHint')}
+                </p>
+              ) : (
+                <>
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium">{t('admin.lyricsProviderBaseUrl')}</span>
+                    <input value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })}
+                      placeholder="https://lyrics.example.com/providers/lrclib-proxy"
+                      className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 font-mono text-xs outline-none focus:border-[var(--primary)]" />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium">{t('admin.lyricsProviderAuthType')}</span>
+                    <select value={form.auth_type} onChange={(e) => setForm({ ...form, auth_type: e.target.value as 'none' | 'bearer' })}
+                      className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-sm outline-none focus:border-[var(--primary)]">
+                      <option value="none">{t('admin.lyricsProviderAuthNone')}</option>
+                      <option value="bearer">{t('admin.lyricsProviderAuthBearer')}</option>
+                    </select>
+                  </label>
+                  {form.auth_type === 'bearer' && (
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-medium">{t('admin.lyricsProviderAuthSecret')}</span>
+                      <input type="password" value={form.auth_secret} onChange={(e) => setForm({ ...form, auth_secret: e.target.value })}
+                        placeholder={editing?.has_secret ? t('admin.lyricsProviderAuthSecretKeep') : ''}
+                        className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-sm outline-none focus:border-[var(--primary)]" />
+                      <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]">{t('admin.lyricsProviderAuthSecretHint')}</span>
+                    </label>
+                  )}
+                </>
               )}
-              <label className="block">
-                <span className="mb-1 block text-xs font-medium">{t('admin.lyricsProviderTimeout')}</span>
-                <input type="number" value={form.timeout_ms} onChange={(e) => setForm({ ...form, timeout_ms: e.target.value })}
-                  placeholder={data.budgets.defaultTimeoutMs ? `${data.budgets.defaultTimeoutMs / 1000}s (默认)` : ''}
-                  className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-sm outline-none focus:border-[var(--primary)]" />
-                <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]">
-                  {t('admin.lyricsProviderTimeoutHint', { min: 5, max: data.budgets.maxTimeoutMs / 1000 })}
-                </span>
-              </label>
               {notice && (
                 <p className={`flex items-center gap-1 text-xs ${notice.kind === 'ok' ? 'text-[var(--success)]' : 'text-[var(--destructive)]'}`}>
                   {notice.kind === 'ok' ? <CheckCircle2 className="h-3.5 w-3.5" /> : <CircleAlert className="h-3.5 w-3.5" />}
