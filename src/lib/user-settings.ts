@@ -14,6 +14,7 @@ import { getDB, schema } from './db';
 
 // Client-safe value normalizers shared with the /settings page.
 export { normalizeTheme, normalizeReadingMode, normalizeBoolean, normalizeFontSize, normalizeLocale } from './settings-utils';
+export { MAX_SETTING_VALUE_LENGTH, validateSettingValue, type SettingValidationError } from './settings-utils';
 
 export type SettingKey =
   | 'theme'                   // 'dark' | 'light'

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { getEffectiveTranslationConfig } from '@/lib/translation-settings';
-import { getUserSettings, setUserSettings, userTranslationTargetLang, USER_SETTING_KEYS, type UserSettingsMap } from '@/lib/user-settings';
+import { getUserSettings, setUserSettings, userTranslationTargetLang, USER_SETTING_KEYS, validateSettingValue, type SettingKey, type UserSettingsMap } from '@/lib/user-settings';
 
 // GET /api/me/settings — current user's personal settings (server-persisted).
 // Requires an authenticated session. Unauthenticated → 401.
@@ -37,13 +37,20 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'invalid_body' }, { status: 400 });
   }
 
-  // Reject unknown keys so users cannot inject arbitrary settings rows.
+  // Reject unknown keys so users cannot inject arbitrary settings rows, and
+  // validate every value so user overrides can't smuggle arbitrary strings
+  // (e.g. a forged `translation_target_lang`) into the translation prompt or
+  // bloat the table with oversized values. Invalid values → 400 + error code.
   const patch: UserSettingsMap = {};
   for (const key of Object.keys(body)) {
-    if ((USER_SETTING_KEYS as readonly string[]).includes(key)) {
-      const value = (body as Record<string, unknown>)[key];
-      if (typeof value === 'string') patch[key as keyof UserSettingsMap] = value;
+    if (!(USER_SETTING_KEYS as readonly string[]).includes(key)) continue;
+    const value = (body as Record<string, unknown>)[key];
+    if (typeof value !== 'string') continue;
+    const result = validateSettingValue(key as SettingKey, value);
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
     }
+    patch[key as keyof UserSettingsMap] = result.value;
   }
 
   const settings = await setUserSettings(user.id, patch);

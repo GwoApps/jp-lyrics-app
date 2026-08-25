@@ -28,6 +28,7 @@ import {
 } from '@/lib/romaji';
 import { LYRICS_SOURCE_KEYS } from '@/lib/lyrics-source';
 import { copyToClipboard } from '@/lib/clipboard';
+import { isKnownTargetLang } from '@/lib/target-lang';
 
 // The sync response is an untyped union of outcomes (not-found, plain-hit
 // preview, low-confidence preview, direct write, rate-limit…). Its shape is
@@ -343,6 +344,16 @@ export function useSongData(id: string): UseSongDataReturn {
   // The user's own translation-target override ('' = follow system default).
   const [targetLangOverride, setTargetLangOverride] = useState('');
 
+  // Defense-in-depth: only surface a known target language to the inline
+  // switch. Server-side validation already rejects dirty values; this guards
+  // against legacy rows that predate the fix, so a forged override can never
+  // be echoed into the UI. Admin/global custom values are resolved server-side
+  // for the actual translation request regardless of this display value.
+  const applyEffectiveLang = useCallback((code: string | undefined) => {
+    if (typeof code !== 'string' || !code.trim()) return;
+    const trimmed = code.trim();
+    if (isKnownTargetLang(trimmed)) setTargetLangState(trimmed);
+  }, []);
 
   // Persist font size
   useEffect(() => { localStorage.setItem('jplrc-font-size', String(fontSize)); }, [fontSize]);
@@ -682,12 +693,10 @@ export function useSongData(id: string): UseSongDataReturn {
   useEffect(() => {
     void fetchTargetLang().then((data) => {
       if (!data) return;
-      if (typeof data.effective_target_lang === 'string' && data.effective_target_lang.trim()) {
-        setTargetLangState(data.effective_target_lang.trim());
-      }
+      applyEffectiveLang(data.effective_target_lang);
       setTargetLangOverride(data.settings?.translation_target_lang ?? '');
     });
-  }, [fetchTargetLang]);
+  }, [fetchTargetLang, applyEffectiveLang]);
 
   // Persist a new translation target language and refresh the effective value.
   const setTargetLang = useCallback(async (code: string) => {
@@ -699,12 +708,10 @@ export function useSongData(id: string): UseSongDataReturn {
       });
       if (!res.ok) return;
       const data = await res.json() as { effective_target_lang?: string; settings?: { translation_target_lang?: string } };
-      if (typeof data.effective_target_lang === 'string' && data.effective_target_lang.trim()) {
-        setTargetLangState(data.effective_target_lang.trim());
-      }
+      applyEffectiveLang(data.effective_target_lang);
       setTargetLangOverride(data.settings?.translation_target_lang ?? '');
     } catch { /* keep previous value */ }
-  }, []);
+  }, [applyEffectiveLang]);
 
   // Handlers
   const applySyncResult = useCallback(async (data: {
