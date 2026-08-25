@@ -488,6 +488,20 @@ export default function SongViewPage() {
     data.showToast(ok ? 'success' : 'error', ok ? t('share.copied') : t('song.copyFailed'));
   };
 
+  // Map request-public API error codes to localized messages. Unknown codes
+  // fall back to a localized generic message (never surface raw error strings).
+  const requestPublicErrorMsg = (error: string | undefined, fallbackKey: string): string => {
+    const keyMap: Record<string, string> = {
+      already_public: 'song.requestPublicAlreadyPublic',
+      already_requested: 'song.requestPublicAlreadyRequested',
+      not_owner: 'song.requestPublicNotOwner',
+      song_not_found: 'song.notFound',
+      unauthorized: 'song.requestPublicUnauthorized',
+    };
+    const key = typeof error === 'string' ? keyMap[error] : undefined;
+    return key ? t(key) : t(fallbackKey);
+  };
+
   return (
     <div className={`song-view fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-visible sm:block sm:h-auto sm:pb-0${coverColor ? ' song-view--accented' : ''}`} style={songThemeStyle}>
       {/* Breadcrumb */}
@@ -522,6 +536,10 @@ export default function SongViewPage() {
                           if (res.ok) {
                             data.refreshSong();
                             data.showToast('success', t('song.requestPublicSuccess'));
+                          } else {
+                            const body = await res.json().catch(() => null);
+                            data.refreshSong();
+                            data.showToast('error', requestPublicErrorMsg(body?.error, 'song.requestPublicFailed'));
                           }
                         } catch (error) {
                           console.error('申请公开失败', error);
@@ -547,6 +565,10 @@ export default function SongViewPage() {
                         if (res.ok) {
                           data.refreshSong();
                           data.showToast('success', t('song.requestPublicCancelled'));
+                        } else {
+                          const body = await res.json().catch(() => null);
+                          data.refreshSong();
+                          data.showToast('error', requestPublicErrorMsg(body?.error, 'song.requestPublicFailed'));
                         }
                       } catch (error) {
                         console.error('取消申请公开失败', error);
@@ -565,6 +587,10 @@ export default function SongViewPage() {
                         if (res.ok) {
                           data.refreshSong();
                           data.showToast('success', t('song.requestPublicSuccess'));
+                        } else {
+                          const body = await res.json().catch(() => null);
+                          data.refreshSong();
+                          data.showToast('error', requestPublicErrorMsg(body?.error, 'song.requestPublicFailed'));
                         }
                       } catch (error) {
                         console.error('申请公开失败', error);

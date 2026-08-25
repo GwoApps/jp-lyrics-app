@@ -9,7 +9,7 @@ export async function POST(
 ) {
   const user = await getAuthUser(request);
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
   const db = getDB();
@@ -20,22 +20,22 @@ export async function POST(
   ) as { id: string; created_by: string; is_public: number; public_requested: number } | undefined;
 
   if (!song) {
-    return NextResponse.json({ error: 'Song not found' }, { status: 404 });
+    return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
   }
 
   // Only the song owner can request public
   if (song.created_by !== user.id) {
-    return NextResponse.json({ error: 'Only the song owner can request public visibility' }, { status: 403 });
+    return NextResponse.json({ error: 'not_owner' }, { status: 403 });
   }
 
   // Already public
   if (song.is_public === 1) {
-    return NextResponse.json({ error: 'Song is already public' }, { status: 400 });
+    return NextResponse.json({ error: 'already_public' }, { status: 400 });
   }
 
   // Already requested
   if (song.public_requested === 1) {
-    return NextResponse.json({ error: 'Public visibility already requested' }, { status: 400 });
+    return NextResponse.json({ error: 'already_requested' }, { status: 400 });
   }
 
   await db.run(sql`UPDATE songs SET public_requested = 1, updated_at = datetime('now', 'localtime') WHERE id = ${id}`);
@@ -49,7 +49,7 @@ export async function DELETE(
 ) {
   const user = await getAuthUser(request);
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 
   const db = getDB();
@@ -60,11 +60,11 @@ export async function DELETE(
   ) as { id: string; created_by: string } | undefined;
 
   if (!song) {
-    return NextResponse.json({ error: 'Song not found' }, { status: 404 });
+    return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
   }
 
   if (song.created_by !== user.id) {
-    return NextResponse.json({ error: 'Only the song owner can cancel' }, { status: 403 });
+    return NextResponse.json({ error: 'not_owner' }, { status: 403 });
   }
 
   await db.run(sql`UPDATE songs SET public_requested = 0, updated_at = datetime('now', 'localtime') WHERE id = ${id}`);
