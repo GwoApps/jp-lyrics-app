@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { lru } from 'tiny-lru';
 import { getAuthUser } from '@/lib/auth';
 
 const KANJI_RE = /[\u3400-\u4DBF\u4E00-\u9FFF]/;
 const MAX_TEXT_LENGTH = 32;
 const MAX_CANDIDATES = 8;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const readingCache = new Map<string, { candidates: string[]; expiresAt: number }>();
+const MAX_CACHE_SIZE = 1000;
+// LRU + TTL 缓存：容量超限自动淘汰最旧 key，条目到期自动失效，防止常驻进程内存无界增长。
+const readingCache = lru<string[]>(MAX_CACHE_SIZE, CACHE_TTL_MS);
 
 type JishoEntry = {
   japanese?: Array<{ word?: string; reading?: string }>;
@@ -28,8 +31,8 @@ export async function GET(request: NextRequest) {
   }
 
   const cached = readingCache.get(text);
-  if (cached && cached.expiresAt > Date.now()) {
-    return NextResponse.json({ candidates: cached.candidates });
+  if (cached) {
+    return NextResponse.json({ candidates: cached });
   }
 
   const controller = new AbortController();
@@ -52,7 +55,7 @@ export async function GET(request: NextRequest) {
         .map((form) => form.reading!)
     )].slice(0, MAX_CANDIDATES);
 
-    readingCache.set(text, { candidates, expiresAt: Date.now() + CACHE_TTL_MS });
+    readingCache.set(text, candidates);
     return NextResponse.json({ candidates });
   } catch (error) {
     // Suggestions are an enhancement. Manual editing remains available offline.
