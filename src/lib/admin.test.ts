@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clampLimit, validateReason, validateExpectedUpdatedAt, hasUnknownFields } from './admin.ts';
+import { clampLimit, validateReason, validateExpectedUpdatedAt, hasUnknownFields, parseJsonBody } from './admin.ts';
 
 test('clampLimit bounds limit to 1..50', () => {
   assert.equal(clampLimit(undefined, 25), 25);
@@ -37,4 +37,19 @@ test('hasUnknownFields rejects any key outside the allowlist', () => {
   assert.equal(hasUnknownFields({ action: 'publish', is_public: 1 }, allowed), true);
   assert.equal(hasUnknownFields({ is_admin: 1 }, new Set(['action'])), true);
   assert.equal(hasUnknownFields({}, allowed), false);
+});
+
+test('parseJsonBody parses a plain object and rejects illegal JSON with invalid_body (ISSUE #178)', async () => {
+  const ok = await parseJsonBody({ json: async () => ({ title: 'x', n: 1 }) });
+  assert.deepEqual(ok, { title: 'x', n: 1 });
+  assert.ok(!('error' in ok));
+
+  // Malformed JSON → request.json() rejects → clean { error: 'invalid_body' }.
+  const bad = await parseJsonBody({ json: async () => { throw new SyntaxError('Unexpected token'); } });
+  assert.deepEqual(bad, { error: 'invalid_body' });
+
+  // Valid JSON but not a plain object (array / scalar) is also rejected.
+  assert.deepEqual(await parseJsonBody({ json: async () => [1, 2, 3] }), { error: 'invalid_body' });
+  assert.deepEqual(await parseJsonBody({ json: async () => 'string' }), { error: 'invalid_body' });
+  assert.deepEqual(await parseJsonBody({ json: async () => null }), { error: 'invalid_body' });
 });

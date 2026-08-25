@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { getSpotifyTokenForUser } from '@/lib/spotify';
+import { parseJsonBody } from '@/lib/admin';
 
 // PUT /api/spotify/seek — seek to position in current playback
 export async function PUT(request: NextRequest) {
@@ -14,7 +15,11 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Spotify not connected' }, { status: 401 });
   }
 
-  const { position_ms } = await request.json();
+  const parsed = await parseJsonBody(request);
+  if ('error' in parsed) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 });
+  }
+  const { position_ms } = parsed as { position_ms?: unknown };
   if (typeof position_ms !== 'number' || position_ms < 0) {
     return NextResponse.json({ error: 'Invalid position_ms' }, { status: 400 });
   }

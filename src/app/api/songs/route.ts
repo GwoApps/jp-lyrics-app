@@ -4,6 +4,7 @@ import { getDB, schema, sql } from '@/lib/db';
 import { parseLrc, findLrcConflicts } from '@/lib/lrc';
 import { getAuthUser } from '@/lib/auth';
 import { getSpotifyTrack } from '@/lib/spotify';
+import { parseJsonBody } from '@/lib/admin';
 import type { SongListItem } from '@/lib/types';
 
 /** Look up Spotify display name from spotify_auth table */
@@ -87,7 +88,11 @@ export async function POST(request: NextRequest) {
   }
 
   const db = getDB();
-  const body = await request.json();
+  const parsed = await parseJsonBody(request);
+  if ('error' in parsed) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 });
+  }
+  const body = parsed as Record<string, unknown>;
   const {
     title,
     artist,

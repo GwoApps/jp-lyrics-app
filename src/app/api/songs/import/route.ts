@@ -7,6 +7,7 @@ import { fetchLyricsWithChain } from '@/lib/lyrics-provider';
 import { classifyLyricsHit } from '@/lib/lyrics-hit';
 import { parseLrc } from '@/lib/lrc';
 import { getSpotifyTrack, searchSpotifyTrack } from '@/lib/spotify';
+import { parseJsonBody } from '@/lib/admin';
 
 // POST /api/songs/import — import the current/canonical Spotify track through the shared source chain
 export async function POST(request: NextRequest) {
@@ -15,7 +16,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'login_required' }, { status: 401 });
   }
 
-  const body = await request.json();
+  const parsed = await parseJsonBody(request);
+  if ('error' in parsed) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 });
+  }
+  const body = parsed as Record<string, unknown>;
   const title = typeof body.title === 'string' ? body.title.trim() : '';
   const artist = typeof body.artist === 'string' ? body.artist.trim() : '';
   const spotifyTrackId = typeof body.spotify_track_id === 'string' ? body.spotify_track_id.trim() : '';

@@ -75,6 +75,21 @@ export function parseStrictJson(request: { json: () => Promise<unknown> }): Prom
   }).catch(() => ({ error: 'invalid_json' }));
 }
 
+/**
+ * Shared, language-neutral JSON body parser for the regular (non-admin) write
+ * routes. Unlike the admin-only `parseStrictJson`, this one uses the user-facing
+ * `invalid_body` error code (ISSUE #178), so a malformed body yields a clean 400
+ * instead of an uncaught `SyntaxError` surfacing as a noisy 500. Behaviour is
+ * aligned with `/api/me/settings` (which previously hand-rolled its own try/catch).
+ * Callers should short-circuit on `result.error` with `{ status: 400 }`.
+ */
+export function parseJsonBody(request: { json: () => Promise<unknown> }): Promise<Record<string, unknown> | { error: 'invalid_body' }> {
+  return request.json().then((raw) => {
+    if (!isPlainObject(raw)) return { error: 'invalid_body' };
+    return raw as Record<string, unknown>;
+  }).catch(() => ({ error: 'invalid_body' }));
+}
+
 export function validateReason(reason: unknown): { reason: string } | { error: string } {
   if (reason === undefined || reason === null || reason === '') return { reason: '' };
   if (typeof reason !== 'string' || reason.length > MAX_REASON_LENGTH) return { error: 'invalid_reason' };

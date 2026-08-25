@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDB, schema, sql } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { isSongVisibleToUser } from '@/lib/song-visibility';
+import { parseJsonBody } from '@/lib/admin';
 
 // GET /api/collections/[id]/songs — list songs in a collection
 export async function GET(
@@ -64,7 +65,11 @@ export async function POST(
   }
 
   const { id } = await params;
-  const { songId } = await request.json();
+  const parsed = await parseJsonBody(request);
+  if ('error' in parsed) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 });
+  }
+  const { songId } = parsed as { songId?: unknown };
 
   if (!songId) {
     return NextResponse.json({ error: 'songId is required' }, { status: 400 });

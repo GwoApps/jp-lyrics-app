@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getDB, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import { getAuthUser } from '@/lib/auth';
+import { parseJsonBody } from '@/lib/admin';
 import {
   PLAYLIST_CHUNK_SIZE,
   PLAYLIST_MAX_TRACKS,
@@ -71,8 +72,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'login_required' }, { status: 401 });
   }
 
-  const { playlistUrl } = await request.json();
-  const playlistId = extractPlaylistId(playlistUrl || '');
+  const parsed = await parseJsonBody(request);
+  if ('error' in parsed) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 });
+  }
+  const { playlistUrl } = parsed as { playlistUrl?: unknown };
+  const playlistId = extractPlaylistId(typeof playlistUrl === 'string' ? playlistUrl : '');
   if (!playlistId) {
     return NextResponse.json({ error: 'invalid_playlist_url' }, { status: 400 });
   }
@@ -112,9 +117,13 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'login_required' }, { status: 401 });
   }
 
-  const body = await request.json();
+  const parsed = await parseJsonBody(request);
+  if ('error' in parsed) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 });
+  }
+  const body = parsed as Record<string, unknown>;
   const jobId = typeof body.jobId === 'string' ? body.jobId : '';
-  const offset = Number.isFinite(body.offset) ? Math.max(0, Math.floor(body.offset)) : 0;
+  const offset = typeof body.offset === 'number' && Number.isFinite(body.offset) ? Math.max(0, Math.floor(body.offset)) : 0;
   if (!jobId) {
     return NextResponse.json({ error: 'invalid_job' }, { status: 400 });
   }
