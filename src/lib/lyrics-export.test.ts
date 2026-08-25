@@ -106,7 +106,9 @@ test('buildExport routes formats and extensions', () => {
 
   const lrc = buildExport(SONG, { format: 'lrc', includeTranslation: true, reading: 'furigana' });
   assert.equal(lrc.extension, 'lrc');
-  assert.equal(lrc.body, SONG.lyrics_synced); // LRC ignores reading/translation options
+  assert.equal(lrc.contentType, 'text/plain; charset=utf-8');
+  // LRC ignores reading/translation options but injects missing [ti:]/[ar:] metadata
+  assert.equal(lrc.body, `[ti:${SONG.title}]\n[ar:${SONG.artist}]\n${SONG.lyrics_synced}`);
 
   const html = buildExport(SONG, { format: 'html', includeTranslation: true, reading: 'furigana' });
   assert.equal(html.extension, 'html');
@@ -146,4 +148,35 @@ test('buildTextExport keeps line alignment when a stale null slot exists mid-cac
     withTranslation,
     '桜が舞う\nCherry blossoms dance\n\n明日へ\nToward tomorrow',
   );
+});
+
+test('buildExport LRC injects [ti:]/[ar:] metadata when missing', () => {
+  const lrc = buildExport(SONG, { format: 'lrc', includeTranslation: false });
+  assert.match(lrc.body, /^\[ti:桜\]\n/);
+  assert.match(lrc.body, /^\[ar:Example\]\n/m);
+  // Original synced rows are preserved after the injected tags
+  assert.match(lrc.body, /\[00:01\.000\]桜が舞う/);
+});
+
+test('buildExport LRC does not duplicate existing metadata tags', () => {
+  const synced = '[ti:原曲名]\n[ar:原歌手]\n[00:01.000]桜が舞う';
+  const lrc = buildExport({ ...SONG, lyrics_synced: synced }, { format: 'lrc', includeTranslation: false });
+  assert.equal(lrc.body, synced);
+});
+
+test('buildExport LRC keeps existing tags and only fills the missing one', () => {
+  const synced = '[ar:原歌手]\n[00:01.000]桜が舞う';
+  const lrc = buildExport({ ...SONG, lyrics_synced: synced }, { format: 'lrc', includeTranslation: false });
+  assert.match(lrc.body, /^\[ti:桜\]\n/);
+  assert.match(lrc.body, /^\[ar:原歌手\]\n/m);
+  // Only one [ti:] tag total
+  assert.equal((lrc.body.match(/\[ti:/g) ?? []).length, 1);
+});
+
+test('buildExport LRC omits metadata tags for missing title/artist', () => {
+  const lrc = buildExport(
+    { ...SONG, title: '', artist: '' },
+    { format: 'lrc', includeTranslation: false },
+  );
+  assert.equal(lrc.body, SONG.lyrics_synced);
 });

@@ -10,6 +10,7 @@
 import type { FuriganaLine, ReadingScheme } from './types.ts';
 import { normalizeFuriganaSegments, resolveFuriganaReading } from './romaji.ts';
 import { parseTranslationCache } from './translation/parse.ts';
+import { extractLrcMetadata } from './lrc.ts';
 
 export type ExportFormat = 'text' | 'lrc' | 'html';
 
@@ -206,13 +207,23 @@ export function buildExport(song: ExportSongData, options: ExportOptions): Expor
   const { format, includeTranslation, reading = 'none' } = options;
 
   if (format === 'lrc') {
-    const body = song.lyrics_synced ?? '';
+    let body = song.lyrics_synced ?? '';
     if (isEmptyAfterTrim(body)) {
       throw new ExportError(
         'lrc_no_synced_lyrics',
         'This song has no synced timeline; the LRC export would be an empty file.',
       );
     }
+    // Standard LRC metadata tags (`[ti:]` title, `[ar:]` artist) let players
+    // show the song info. LRCLIB synced lyrics usually carry them already, but
+    // timelines built in the editor (`serializeTimelineDraft`) or from other
+    // lyric sources often omit them — inject the tags when missing so the
+    // exported file stays player-friendly without duplicating existing tags.
+    const existingTags = extractLrcMetadata(body).tags;
+    const missingTags: string[] = [];
+    if (song.title && !existingTags.ti) missingTags.push(`[ti:${song.title}]`);
+    if (song.artist && !existingTags.ar) missingTags.push(`[ar:${song.artist}]`);
+    if (missingTags.length > 0) body = `${missingTags.join('\n')}\n${body}`;
     return {
       body,
       contentType: 'text/plain; charset=utf-8',
