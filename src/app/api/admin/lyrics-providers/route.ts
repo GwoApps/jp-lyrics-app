@@ -7,6 +7,7 @@ import {
   getProviderConfig,
   insertProviderConfig,
   listProviderConfigs,
+  type ProviderConfigRow,
 } from '@/lib/lyrics-provider/config';
 import { getNetworkPolicy, isInsecureTransport, normalizeProviderBaseUrl, validateProviderBaseUrl } from '@/lib/lyrics-provider/policy';
 import { getBudgetConfig, clampConfiguredTimeoutMs } from '@/lib/lyrics-provider/budget';
@@ -74,10 +75,11 @@ function parseManifestJson(raw: string | null): unknown {
 }
 
 /** Non-secret wire representation of a config row. */
-function toWire(row: { id: string; name: string; baseUrl: string; authType: string; authSecretCiphertext: string | null; enabled: number; priority: number; timeoutMs: number | null; protocolVersion: number; manifestJson: string | null; lastCheckStatus: string; lastCheckCode: string | null; lastCheckLatencyMs: number | null; checkedAt: string | null; createdAt: string; updatedAt: string }) {
+function toWire(row: ProviderConfigRow) {
   return {
     id: row.id,
     name: row.name,
+    kind: row.kind,
     base_url: row.baseUrl,
     auth_type: row.authType,
     has_secret: !!row.authSecretCiphertext,

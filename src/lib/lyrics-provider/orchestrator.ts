@@ -132,26 +132,26 @@ export async function fetchLyricsWithChain(
     album: opts?.spotify?.album,
     durationMs: opts?.spotify?.durationMs,
     spotifyTrackId: opts?.spotifyTrackId ?? undefined,
+    spotifyCanonical: opts?.spotifyCanonical ?? null,
   };
 
-  // Unified provider chain (Phase 1 abstraction): the builtin chain is exposed
-  // as a `LyricsProvider` (pre-scored confidence, backward compatible) and sits
-  // first so its default order + confidence rules are preserved; runtime HTTP
-  // providers follow by their configured priority. Every source is scheduled by
-  // the same loop and shares the caller's cancel signal.
+  // Unified provider chain: every enabled row in `lyrics_provider_configs` —
+  // builtin sources (kind='builtin', pre-scored confidence) and runtime HTTP
+  // plugins (kind='http', evidence-rescored) — is scheduled by priority in one
+  // loop sharing the caller's cancel signal. The seed migration inserts the
+  // builtin rows at priorities 0-3, so with default data the order matches the
+  // legacy chain exactly.
   try {
     const db = getDB();
-    const httpProviders = await listEffectiveProviders(db);
+    const effectiveRows = await listEffectiveProviders(db);
 
-    // Build the unified provider chain: builtin first (backward compatible),
-    // then each enabled HTTP provider with its decrypted secret + timeout.
-    const providers: LyricsProvider[] = [
-      builtinLyricsProvider({
-        spotifyCanonical: opts?.spotifyCanonical,
-        spotify: opts?.spotify,
-      }),
-    ];
-    for (const cfg of httpProviders) {
+    const providers: LyricsProvider[] = [];
+    for (const cfg of effectiveRows) {
+      if (cfg.kind === 'builtin') {
+        providers.push(builtinLyricsProvider({ id: cfg.id, name: cfg.name }));
+        continue;
+      }
+      if (!cfg.baseUrl) continue; // defensive: HTTP rows must carry a base URL
       const authSecret = cfg.authType === 'bearer' && cfg.authSecretCiphertext
         ? await decryptProviderSecret(cfg.authSecretCiphertext)
         : null;

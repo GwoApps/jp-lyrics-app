@@ -562,7 +562,7 @@ export function decodePetitLyricsLsyToLrc(payload: Uint8Array, plainLyrics: stri
   return lrcLines.join('\n');
 }
 
-async function fetchFromPetitLyrics(title: string, artist: string, signal?: AbortSignal): Promise<LyricsResult | null> {
+export async function fetchFromPetitLyrics(title: string, artist: string, signal?: AbortSignal): Promise<LyricsResult | null> {
   const url = 'https://p0.petitlyrics.com/api/GetPetitLyricsData.php';
   const headers = {
     'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
@@ -793,7 +793,7 @@ export async function fetchFromUtaNet(title: string, artist: string, signal?: Ab
 
 // ─── ytmusicapi sidecar ──
 
-async function fetchFromYtMusic(title: string, artist: string, signal?: AbortSignal): Promise<LyricsResult | null> {
+export async function fetchFromYtMusic(title: string, artist: string, signal?: AbortSignal): Promise<LyricsResult | null> {
   const sidecarUrl = process.env.YT_MUSIC_SIDECAR_URL;
   if (!sidecarUrl) return null;
   try {

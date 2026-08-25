@@ -101,7 +101,11 @@ export const settings = sqliteTable('settings', {
 export const lyricsProviderConfigs = sqliteTable('lyrics_provider_configs', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
-  baseUrl: text('base_url').notNull(),
+  // 'builtin' = trusted in-app source (LRCLIB / PetitLyrics / Uta-Net /
+  // ytmusic) managed like any other provider row; 'http' = runtime plugin.
+  kind: text('kind', { enum: ['builtin', 'http'] }).notNull().default('http'),
+  // Nullable for builtin providers (they have no external URL).
+  baseUrl: text('base_url'),
   authType: text('auth_type', { enum: ['none', 'bearer'] }).notNull().default('none'),
   // AES-GCM ciphertext (v1:<iv>:<cipher>); NEVER returned by GET / audit.
   authSecretCiphertext: text('auth_secret_ciphertext'),

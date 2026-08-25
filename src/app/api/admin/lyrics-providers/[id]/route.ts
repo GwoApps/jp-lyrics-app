@@ -6,6 +6,7 @@ import {
   deleteProviderConfig,
   getProviderConfig,
   updateProviderConfig,
+  type ProviderConfigRow,
 } from '@/lib/lyrics-provider/config';
 import { getNetworkPolicy, isInsecureTransport, normalizeProviderBaseUrl, validateProviderBaseUrl } from '@/lib/lyrics-provider/policy';
 import { getBudgetConfig, clampConfiguredTimeoutMs } from '@/lib/lyrics-provider/budget';
@@ -23,10 +24,11 @@ function parseManifestJson(raw: string | null): unknown {
   }
 }
 
-function toWire(row: { id: string; name: string; baseUrl: string; authType: string; authSecretCiphertext: string | null; enabled: number; priority: number; timeoutMs: number | null; protocolVersion: number; manifestJson: string | null; lastCheckStatus: string; lastCheckCode: string | null; lastCheckLatencyMs: number | null; checkedAt: string | null; createdAt: string; updatedAt: string }) {
+function toWire(row: ProviderConfigRow) {
   return {
     id: row.id,
     name: row.name,
+    kind: row.kind,
     base_url: row.baseUrl,
     auth_type: row.authType,
     has_secret: !!row.authSecretCiphertext,
@@ -77,6 +79,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const existing = await getProviderConfig(db, id);
   if (!existing) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
+  // Builtin rows are managed (rename / enable / reorder) but their transport
+  // identity is code-defined: base_url/auth/secret fields are HTTP-only.
+  const isBuiltin = existing.kind === 'builtin';
+
   const parsed = await parseStrictJson(request);
   if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
   if (hasUnknownFields(parsed, UPDATE_FIELDS)) {
@@ -92,6 +98,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   if ('base_url' in parsed) {
+    if (isBuiltin) return NextResponse.json({ error: 'builtin_readonly_field' }, { status: 400 });
     const baseUrl = normalizeProviderBaseUrl(typeof parsed.base_url === 'string' ? parsed.base_url.trim() : '');
     if (!baseUrl) return NextResponse.json({ error: 'invalid_base_url' }, { status: 400 });
     const policyError = await validateProviderBaseUrl(baseUrl, getNetworkPolicy());
@@ -100,6 +107,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     // A base-url change invalidates any cached manifest.
     patch.manifestJson = null;
     patch.lastCheckStatus = 'unchecked';
+  }
+
+  if (('auth_type' in parsed || 'auth_secret' in parsed || 'auth_secret_clear' in parsed) && isBuiltin) {
+    return NextResponse.json({ error: 'builtin_readonly_field' }, { status: 400 });
   }
 
   if ('auth_type' in parsed) {
@@ -168,6 +179,11 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   const db = getDB();
   const existing = await getProviderConfig(db, id);
   if (!existing) return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  // Builtin sources are code-defined; disabling (enabled=0) is the supported
+  // off-switch, deletion is reserved for HTTP plugin configs.
+  if (existing.kind === 'builtin') {
+    return NextResponse.json({ error: 'builtin_undeletable' }, { status: 400 });
+  }
 
   await deleteProviderConfig(db, id);
   await writeAuditLog(db, {

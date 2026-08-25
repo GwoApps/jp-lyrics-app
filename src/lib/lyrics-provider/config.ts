@@ -14,7 +14,8 @@ import { assertFullOrderedSet } from './reorder.ts';
 export interface ProviderConfigRow {
   id: string;
   name: string;
-  baseUrl: string;
+  kind: 'builtin' | 'http';
+  baseUrl: string | null;
   authType: 'none' | 'bearer';
   authSecretCiphertext: string | null;
   enabled: number;
