@@ -23,13 +23,21 @@ import {
 export const BUILTIN_PROVIDER_IDS = ['builtin:lrclib', 'builtin:petitlyrics', 'builtin:uta-net', 'builtin:ytmusic'] as const;
 export type BuiltinSourceKey = 'lrclib' | 'petitlyrics' | 'uta-net' | 'ytmusic';
 
-/** Row id (`builtin:<key>`) → legacy source key kept for display/diagnostics. */
+/**
+ * Row id (`builtin:<key>`) → legacy source key kept for display/diagnostics.
+ *
+ * Accepts the historical `builtin-<key>` (hyphen) form too: an earlier internal
+ * build seeded production rows with hyphen ids before the scheme settled on
+ * colons, so both spellings must resolve to the same adapter.
+ */
 export function builtinRowIdToKey(rowId: string): BuiltinSourceKey | null {
-  switch (rowId) {
-    case 'builtin:lrclib': return 'lrclib';
-    case 'builtin:petitlyrics': return 'petitlyrics';
-    case 'builtin:uta-net': return 'uta-net';
-    case 'builtin:ytmusic': return 'ytmusic';
+  const match = /^builtin[:-](.+)$/.exec(rowId);
+  if (!match) return null;
+  switch (match[1]) {
+    case 'lrclib': return 'lrclib';
+    case 'petitlyrics': return 'petitlyrics';
+    case 'uta-net': return 'uta-net';
+    case 'ytmusic': return 'ytmusic';
     default: return null;
   }
 }
