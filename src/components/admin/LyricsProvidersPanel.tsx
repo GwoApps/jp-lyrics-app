@@ -532,19 +532,23 @@ function SortableProviderRow({ p, testResult, dragging, onMoveUp, onMoveDown, on
         {p.kind === 'http' && <span className="truncate font-mono">{p.base_url}</span>}
         {p.kind === 'http' && <span>auth: {p.auth_type}</span>}
         {p.has_secret && <span className="font-mono">{p.secret_masked}</span>}
-        <span className="inline-flex items-center gap-1">
-          {p.last_check_status === 'ok'
-            ? <CheckCircle2 className="h-3 w-3 text-[var(--success)]" />
-            : p.last_check_status === 'failed'
-              ? <CircleAlert className="h-3 w-3 text-[var(--destructive)]" />
-              : <span className="h-3 w-3 rounded-full border border-[var(--border)]" />}
-          {p.last_check_status === 'ok'
-            ? t('admin.lyricsProviderCheckOk')
-            : p.last_check_status === 'failed'
-              ? (p.last_check_code || t('admin.lyricsProviderCheckFailed'))
-              : t('admin.lyricsProviderCheckUnchecked')}
-          {p.last_check_latency_ms != null && ` · ${p.last_check_latency_ms}ms`}
-        </span>
+        {/* Manifest health check is HTTP-plugin-only: builtin sources have no
+            base_url to probe, so the status row would be stuck at "unchecked". */}
+        {p.kind === 'http' && (
+          <span className="inline-flex items-center gap-1">
+            {p.last_check_status === 'ok'
+              ? <CheckCircle2 className="h-3 w-3 text-[var(--success)]" />
+              : p.last_check_status === 'failed'
+                ? <CircleAlert className="h-3 w-3 text-[var(--destructive)]" />
+                : <span className="h-3 w-3 rounded-full border border-[var(--border)]" />}
+            {p.last_check_status === 'ok'
+              ? t('admin.lyricsProviderCheckOk')
+              : p.last_check_status === 'failed'
+                ? (p.last_check_code || t('admin.lyricsProviderCheckFailed'))
+                : t('admin.lyricsProviderCheckUnchecked')}
+            {p.last_check_latency_ms != null && ` · ${p.last_check_latency_ms}ms`}
+          </span>
+        )}
         <TestResultBadge result={testResult} />
       </div>
       <div className="flex items-center gap-2 pl-6">
