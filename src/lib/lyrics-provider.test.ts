@@ -17,7 +17,7 @@ import {
   resolveProviderTimeoutMs,
 } from './lyrics-provider/budget.ts';
 import { parseManifest, parseCandidate, searchHttpProvider } from './lyrics-provider/http-client.ts';
-import { builtinLyricsProvider } from './lyrics-provider/builtin-provider.ts';
+import { builtinLyricsProvider, builtinRowIdToKey } from './lyrics-provider/builtin-provider.ts';
 import { assertFullOrderedSet } from './lyrics-provider/reorder.ts';
 import { MAX_CANDIDATES_PER_PROVIDER } from './lyrics-provider/normalize.ts';
 import { normalizeCandidateLyrics } from './lyrics-provider/normalize.ts';
@@ -480,4 +480,13 @@ test('builtinLyricsProvider(uta-net row) returns a pre-scored Uta-Net hit', asyn
   } finally {
     globalThis.fetch = originalFetch as typeof fetch;
   }
+});
+
+test('builtinRowIdToKey resolves both colon and legacy hyphen row ids', () => {
+  assert.equal(builtinRowIdToKey('builtin:uta-net'), 'uta-net');
+  assert.equal(builtinRowIdToKey('builtin-uta-net'), 'uta-net');
+  assert.equal(builtinRowIdToKey('builtin-lrclib'), 'lrclib');
+  assert.equal(builtinRowIdToKey('builtin-ytmusic'), 'ytmusic');
+  assert.equal(builtinRowIdToKey('plugin:abc:1'), null);
+  assert.equal(builtinRowIdToKey('builtin-unknown'), null);
 });
