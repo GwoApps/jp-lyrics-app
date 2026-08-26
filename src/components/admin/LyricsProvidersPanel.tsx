@@ -2,7 +2,18 @@
 
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState, type DragEvent as ReactDragEvent } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import {
+  DndContext, DragOverlay, KeyboardSensor, PointerSensor,
+  closestCenter, useSensor, useSensors,
+  type DragEndEvent, type DragStartEvent,
+} from '@dnd-kit/core';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import {
+  SortableContext, sortableKeyboardCoordinates, useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   CheckCircle2, ChevronDown, ChevronUp, CircleAlert, GripVertical, Loader2, Plus, Plug, RefreshCw, Trash2, X,
 } from 'lucide-react';
@@ -73,10 +84,9 @@ export default function LyricsProvidersPanel() {
   // Dialog visibility is a dedicated flag so create (editing=null) and edit
   // (editing!=null) both work through the same dialog.
   const [dialogOpen, setDialogOpen] = useState(false);
-  // Drag-to-reorder state: the dragged row id + the row currently hovered as
-  // drop target (used only for the insertion indicator styling).
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  // dnd-kit sortable: id of the row currently being dragged (drives the
+  // DragOverlay preview + the placeholder styling on the source row).
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const dialogTitleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
   const formNameRef = useRef<HTMLInputElement>(null);
@@ -219,7 +229,10 @@ export default function LyricsProvidersPanel() {
     });
   };
 
-  /** Reorder by dropping the dragged row onto `targetIndex` (HTML5 DnD). */
+  /**
+   * Reorder by dropping the dragged row onto `targetIndex` (dnd-kit sortable).
+   * Shared by drag-drop and the up/down arrow buttons.
+   */
   const moveTo = async (fromId: string, targetIndex: number) => {
     if (!data) return;
     const fromIndex = data.providers.findIndex((p) => p.id === fromId);
@@ -235,31 +248,26 @@ export default function LyricsProvidersPanel() {
     });
   };
 
-  // HTML5 DnD handlers. Dragging is initiated only from the handle
-  // (`draggable` is toggled per-row via onPointerDown/onPointerUp on the grip
-  // icon) so text selection and button clicks inside a row keep working.
-  const onDragStart = (e: ReactDragEvent, p: ProviderWire) => {
-    if (!dragId) { e.preventDefault(); return; } // drag not armed via handle
-    setDragOverId(p.id);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', p.id);
+  // dnd-kit sensors: pointer for mouse/touch (8px activation so clicks on row
+  // buttons never turn into drags), keyboard for accessible reordering.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const onDragStart = (event: DragStartEvent) => {
+    setActiveDragId(String(event.active.id));
   };
-  const onDragOver = (e: ReactDragEvent, p: ProviderWire) => {
-    if (!dragId || dragId === p.id) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setDragOverId(p.id);
-  };
-  const onDrop = async (e: ReactDragEvent, p: ProviderWire, index: number) => {
-    e.preventDefault();
-    if (!dragId || dragId === p.id) {
-      setDragId(null);
-      setDragOverId(null);
-      return;
-    }
-    setDragId(null);
-    setDragOverId(null);
-    await moveTo(dragId, index);
+
+  const onDragEnd = async (event: DragEndEvent) => {
+    setActiveDragId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    if (!data) return;
+    const fromIndex = data.providers.findIndex((p) => p.id === active.id);
+    const toIndex = data.providers.findIndex((p) => p.id === over.id);
+    if (fromIndex < 0 || toIndex < 0) return;
+    await moveTo(String(active.id), toIndex);
   };
 
   if (loading) {
@@ -322,109 +330,46 @@ export default function LyricsProvidersPanel() {
       {data.providers.length === 0 ? (
         <p className="text-xs text-[var(--muted-foreground)]">{t('admin.lyricsProviderEmpty')}</p>
       ) : (
-        <ul className="space-y-2">
-          {data.providers.map((p, index) => (
-            <li
-              key={p.id}
-              draggable={dragId === p.id}
-              onDragStart={(e) => onDragStart(e, p)}
-              onDragOver={(e) => onDragOver(e, p)}
-              onDragLeave={() => setDragOverId((cur) => (cur === p.id ? null : cur))}
-              onDrop={(e) => void onDrop(e, p, index)}
-              onDragEnd={() => { setDragId(null); setDragOverId(null); }}
-              className={`flex flex-col gap-2 rounded-md border bg-[var(--muted)]/30 px-3 py-2 transition-colors ${
-                dragId === p.id ? 'border-[var(--primary)] opacity-50' : 'border-[var(--border)]'
-              } ${dragOverId === p.id && dragId && dragId !== p.id ? 'ring-2 ring-[var(--primary)]/40' : ''}`}
-            >
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  aria-label={t('admin.lyricsProviderMoveUp')}
-                  title={t('admin.lyricsProviderMoveUp')}
-                  className="cursor-grab touch-none text-[var(--muted-foreground)]/40 hover:text-[var(--muted-foreground)] active:cursor-grabbing"
-                  // Arm dragging only when the gesture starts on the grip icon,
-                  // so row text/buttons stay selectable & clickable.
-                  onPointerDown={() => setDragId(p.id)}
-                  onPointerUp={() => setDragId(null)}
-                >
-                  <GripVertical className="h-4 w-4" />
-                </button>
-                <span className={`h-2 w-2 shrink-0 rounded-full ${p.enabled ? 'bg-[var(--success)]' : 'bg-[var(--muted-foreground)]/40'}`} />
-                <span className="truncate text-sm font-medium">{p.name}</span>
-                <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                  p.kind === 'builtin'
-                    ? 'bg-[var(--primary)]/10 text-[var(--primary)]'
-                    : 'bg-[var(--muted)] text-[var(--muted-foreground)]'
-                }`}>
-                  {p.kind === 'builtin' ? t('admin.lyricsProviderKindBuiltin') : t('admin.lyricsProviderKindHttp')}
-                </span>
-                {p.insecure_transport && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning)]/15 px-2 py-0.5 text-[10px] font-medium text-[var(--warning)]">
-                    {t('admin.lyricsProviderInsecureTransport')}
-                  </span>
-                )}
-                {p.manifest?.version && (
-                  <span className="hidden font-mono text-[10px] text-[var(--muted-foreground)] sm:inline">v{p.manifest.version}</span>
-                )}
-                <span className="ml-auto inline-flex items-center gap-1">
-                  <button type="button" onClick={() => void move(index, -1)} aria-label={t('admin.lyricsProviderMoveUp')}
-                    className="rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--muted)]"><ChevronUp className="h-3.5 w-3.5" /></button>
-                  <button type="button" onClick={() => void move(index, 1)} aria-label={t('admin.lyricsProviderMoveDown')}
-                    className="rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--muted)]"><ChevronDown className="h-3.5 w-3.5" /></button>
-                  <button type="button" onClick={() => void toggleEnabled(p)}
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${p.enabled ? 'bg-[var(--success)]/15 text-[var(--success)]' : 'bg-[var(--muted)] text-[var(--muted-foreground)]'}`}>
-                    {p.enabled ? t('admin.lyricsProviderEnabled') : t('admin.lyricsProviderDisabled')}
-                  </button>
-                </span>
-              </div>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-6 text-[11px] text-[var(--muted-foreground)]">
-                {p.kind === 'http' && <span className="truncate font-mono">{p.base_url}</span>}
-                {p.kind === 'http' && <span>auth: {p.auth_type}</span>}
-                {p.has_secret && <span className="font-mono">{p.secret_masked}</span>}
-                <span className="inline-flex items-center gap-1">
-                  {p.last_check_status === 'ok'
-                    ? <CheckCircle2 className="h-3 w-3 text-[var(--success)]" />
-                    : p.last_check_status === 'failed'
-                      ? <CircleAlert className="h-3 w-3 text-[var(--destructive)]" />
-                      : <span className="h-3 w-3 rounded-full border border-[var(--border)]" />}
-                  {p.last_check_status === 'ok'
-                    ? t('admin.lyricsProviderCheckOk')
-                    : p.last_check_status === 'failed'
-                      ? (p.last_check_code || t('admin.lyricsProviderCheckFailed'))
-                      : t('admin.lyricsProviderCheckUnchecked')}
-                  {p.last_check_latency_ms != null && ` · ${p.last_check_latency_ms}ms`}
-                </span>
-                {testResult[p.id] && (
-                  <span className={`inline-flex items-center gap-1 ${testResult[p.id].ok ? 'text-[var(--success)]' : 'text-[var(--destructive)]'}`}>
-                    {testResult[p.id].ok
-                      ? t('admin.lyricsProviderTestOk')
-                      : `${t('admin.lyricsProviderTestFail')} (${testResult[p.id].code})`}
-                    {testResult[p.id].latencyMs != null && ` · ${testResult[p.id].latencyMs}ms`}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2 pl-6">
-                {p.kind === 'http' && (
-                  <button type="button" onClick={() => void testConnection(p)} disabled={testingId === p.id}
-                    className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-[11px] font-medium hover:bg-[var(--muted)] disabled:opacity-50">
-                    {testingId === p.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                    {t('admin.lyricsProviderTest')}
-                  </button>
-                )}
-                <button type="button" onClick={() => openEdit(p)}
-                  className="rounded-md border border-[var(--border)] px-2 py-1 text-[11px] font-medium hover:bg-[var(--muted)]">
-                  {t('common.edit')}
-                </button>
-                {p.kind === 'http' && (
-                  <button type="button" onClick={() => void remove(p)}
-                    className="inline-flex items-center gap-1 rounded-md border border-[var(--destructive)]/40 px-2 py-1 text-[11px] font-medium text-[var(--destructive)] hover:bg-[var(--destructive)]/10">
-                    <Trash2 className="h-3 w-3" /> {t('common.delete')}
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={[restrictToVerticalAxis]}
+          onDragStart={onDragStart}
+          onDragEnd={(e) => void onDragEnd(e)}
+        >
+          <SortableContext items={data.providers.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+            <ul className="space-y-2">
+              {data.providers.map((p, index) => (
+                <SortableProviderRow
+                  key={p.id}
+                  p={p}
+                  testResult={testResult[p.id]}
+                  dragging={activeDragId === p.id}
+                  onMoveUp={() => void move(index, -1)}
+                  onMoveDown={() => void move(index, 1)}
+                  onToggle={() => void toggleEnabled(p)}
+                  onTest={p.kind === 'http' ? () => void testConnection(p) : undefined}
+                  testing={testingId === p.id}
+                  onEdit={() => openEdit(p)}
+                  onDelete={p.kind === 'http' ? () => void remove(p) : undefined}
+                />
+              ))}
+            </ul>
+          </SortableContext>
+          <DragOverlay modifiers={[restrictToVerticalAxis]} dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
+            {activeDragId ? (
+              (() => {
+                const p = data.providers.find((x) => x.id === activeDragId);
+                if (!p) return null;
+                return (
+                  <div className="w-full rounded-md border border-[var(--primary)] bg-[var(--card)] px-3 py-2 shadow-lg">
+                    <ProviderRowSummary p={p} />
+                  </div>
+                );
+              })()
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       )}
 
       {!data.secret_key_configured && (
@@ -523,4 +468,146 @@ export default function LyricsProvidersPanel() {
 function capCode(code: string | undefined): string {
   if (!code) return '';
   return code.replace(/_/g, '').replace(/^\w/, (c) => c.toUpperCase());
+}
+
+interface SortableRowProps {
+  p: ProviderWire;
+  /** Latest on-demand test outcome for this row, when present. */
+  testResult?: { ok: boolean; code?: string; latencyMs?: number };
+  /** True while this row is the active drag source. */
+  dragging: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onToggle: () => void;
+  onTest?: () => void;
+  testing: boolean;
+  onEdit: () => void;
+  onDelete?: () => void;
+}
+
+/**
+ * One sortable provider card (dnd-kit `useSortable`).
+ *
+ * While another row is dragged past this one, dnd-kit's transform transition
+ * animates this card smoothly out of the way; the drag source itself renders
+ * as a dimmed placeholder and the floating preview lives in `DragOverlay`.
+ */
+function SortableProviderRow({ p, testResult, dragging, onMoveUp, onMoveDown, onToggle, onTest, testing, onEdit, onDelete }: SortableRowProps) {
+  const { t } = useI18n();
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition } = useSortable({ id: p.id });
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`flex flex-col gap-2 rounded-md border bg-[var(--muted)]/30 px-3 py-2 ${
+        dragging ? 'border-[var(--primary)] opacity-30' : 'border-[var(--border)]'
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <button
+          ref={setActivatorNodeRef}
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label={t('admin.lyricsProviderMoveUp')}
+          title={t('admin.lyricsProviderMoveUp')}
+          className="cursor-grab touch-none text-[var(--muted-foreground)]/40 hover:text-[var(--muted-foreground)] active:cursor-grabbing"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <ProviderRowSummary p={p} />
+        <span className="ml-auto inline-flex items-center gap-1">
+          <button type="button" onClick={onMoveUp} aria-label={t('admin.lyricsProviderMoveUp')}
+            className="rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--muted)]"><ChevronUp className="h-3.5 w-3.5" /></button>
+          <button type="button" onClick={onMoveDown} aria-label={t('admin.lyricsProviderMoveDown')}
+            className="rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--muted)]"><ChevronDown className="h-3.5 w-3.5" /></button>
+          <button type="button" onClick={onToggle}
+            className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${p.enabled ? 'bg-[var(--success)]/15 text-[var(--success)]' : 'bg-[var(--muted)] text-[var(--muted-foreground)]'}`}>
+            {p.enabled ? t('admin.lyricsProviderEnabled') : t('admin.lyricsProviderDisabled')}
+          </button>
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-6 text-[11px] text-[var(--muted-foreground)]">
+        {p.kind === 'http' && <span className="truncate font-mono">{p.base_url}</span>}
+        {p.kind === 'http' && <span>auth: {p.auth_type}</span>}
+        {p.has_secret && <span className="font-mono">{p.secret_masked}</span>}
+        <span className="inline-flex items-center gap-1">
+          {p.last_check_status === 'ok'
+            ? <CheckCircle2 className="h-3 w-3 text-[var(--success)]" />
+            : p.last_check_status === 'failed'
+              ? <CircleAlert className="h-3 w-3 text-[var(--destructive)]" />
+              : <span className="h-3 w-3 rounded-full border border-[var(--border)]" />}
+          {p.last_check_status === 'ok'
+            ? t('admin.lyricsProviderCheckOk')
+            : p.last_check_status === 'failed'
+              ? (p.last_check_code || t('admin.lyricsProviderCheckFailed'))
+              : t('admin.lyricsProviderCheckUnchecked')}
+          {p.last_check_latency_ms != null && ` · ${p.last_check_latency_ms}ms`}
+        </span>
+        <TestResultBadge result={testResult} />
+      </div>
+      <div className="flex items-center gap-2 pl-6">
+        {onTest && (
+          <button type="button" onClick={onTest} disabled={testing}
+            className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-[11px] font-medium hover:bg-[var(--muted)] disabled:opacity-50">
+            {testing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+            {t('admin.lyricsProviderTest')}
+          </button>
+        )}
+        <button type="button" onClick={onEdit}
+          className="rounded-md border border-[var(--border)] px-2 py-1 text-[11px] font-medium hover:bg-[var(--muted)]">
+          {t('common.edit')}
+        </button>
+        {onDelete && (
+          <button type="button" onClick={onDelete}
+            className="inline-flex items-center gap-1 rounded-md border border-[var(--destructive)]/40 px-2 py-1 text-[11px] font-medium text-[var(--destructive)] hover:bg-[var(--destructive)]/10">
+            <Trash2 className="h-3 w-3" /> {t('common.delete')}
+          </button>
+        )}
+      </div>
+    </li>
+  );
+}
+
+/** Compact name + kind summary used by both the sortable row and the overlay. */
+function ProviderRowSummary({ p }: { p: ProviderWire }) {
+  const { t } = useI18n();
+  return (
+    <>
+      <span className={`inline-flex h-4 w-4 shrink-0 items-center justify-center`}>
+        <span className={`h-2 w-2 rounded-full ${p.enabled ? 'bg-[var(--success)]' : 'bg-[var(--muted-foreground)]/40'}`} />
+      </span>
+      <span className="truncate text-sm font-medium">{p.name}</span>
+      <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
+        p.kind === 'builtin'
+          ? 'bg-[var(--primary)]/10 text-[var(--primary)]'
+          : 'bg-[var(--muted)] text-[var(--muted-foreground)]'
+      }`}>
+        {p.kind === 'builtin' ? t('admin.lyricsProviderKindBuiltin') : t('admin.lyricsProviderKindHttp')}
+      </span>
+      {p.insecure_transport && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-[var(--warning)]/15 px-2 py-0.5 text-[10px] font-medium text-[var(--warning)]">
+          {t('admin.lyricsProviderInsecureTransport')}
+        </span>
+      )}
+      {p.manifest?.version && (
+        <span className="hidden font-mono text-[10px] text-[var(--muted-foreground)] sm:inline">v{p.manifest.version}</span>
+      )}
+    </>
+  );
+}
+
+/** Live on-demand test-result badge for a row. */
+function TestResultBadge({ result }: { result?: { ok: boolean; code?: string; latencyMs?: number } }) {
+  const { t } = useI18n();
+  if (!result) return null;
+  return (
+    <span className={`inline-flex items-center gap-1 ${result.ok ? 'text-[var(--success)]' : 'text-[var(--destructive)]'}`}>
+      {result.ok
+        ? t('admin.lyricsProviderTestOk')
+        : `${t('admin.lyricsProviderTestFail')} (${result.code})`}
+      {result.latencyMs != null && ` · ${result.latencyMs}ms`}
+    </span>
+  );
 }
