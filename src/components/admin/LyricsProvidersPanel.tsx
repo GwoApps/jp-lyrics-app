@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type DragEvent as ReactDragEvent } from 'react';
 import {
   CheckCircle2, ChevronDown, ChevronUp, CircleAlert, GripVertical, Loader2, Plus, Plug, RefreshCw, Trash2, X,
 } from 'lucide-react';
@@ -73,6 +73,10 @@ export default function LyricsProvidersPanel() {
   // Dialog visibility is a dedicated flag so create (editing=null) and edit
   // (editing!=null) both work through the same dialog.
   const [dialogOpen, setDialogOpen] = useState(false);
+  // Drag-to-reorder state: the dragged row id + the row currently hovered as
+  // drop target (used only for the insertion indicator styling).
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
   const dialogTitleId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
   const formNameRef = useRef<HTMLInputElement>(null);
@@ -215,6 +219,49 @@ export default function LyricsProvidersPanel() {
     });
   };
 
+  /** Reorder by dropping the dragged row onto `targetIndex` (HTML5 DnD). */
+  const moveTo = async (fromId: string, targetIndex: number) => {
+    if (!data) return;
+    const fromIndex = data.providers.findIndex((p) => p.id === fromId);
+    if (fromIndex < 0 || fromIndex === targetIndex) return;
+    const items = [...data.providers];
+    const [moved] = items.splice(fromIndex, 1);
+    items.splice(targetIndex, 0, moved);
+    setData({ ...data, providers: items });
+    await fetch('/api/admin/lyrics-providers/reorder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ordered_ids: items.map((p) => p.id) }),
+    });
+  };
+
+  // HTML5 DnD handlers. Dragging is initiated only from the handle
+  // (`draggable` is toggled per-row via onPointerDown/onPointerUp on the grip
+  // icon) so text selection and button clicks inside a row keep working.
+  const onDragStart = (e: ReactDragEvent, p: ProviderWire) => {
+    if (!dragId) { e.preventDefault(); return; } // drag not armed via handle
+    setDragOverId(p.id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', p.id);
+  };
+  const onDragOver = (e: ReactDragEvent, p: ProviderWire) => {
+    if (!dragId || dragId === p.id) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverId(p.id);
+  };
+  const onDrop = async (e: ReactDragEvent, p: ProviderWire, index: number) => {
+    e.preventDefault();
+    if (!dragId || dragId === p.id) {
+      setDragId(null);
+      setDragOverId(null);
+      return;
+    }
+    setDragId(null);
+    setDragOverId(null);
+    await moveTo(dragId, index);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-10">
@@ -277,9 +324,31 @@ export default function LyricsProvidersPanel() {
       ) : (
         <ul className="space-y-2">
           {data.providers.map((p, index) => (
-            <li key={p.id} className="flex flex-col gap-2 rounded-md border border-[var(--border)] bg-[var(--muted)]/30 px-3 py-2">
+            <li
+              key={p.id}
+              draggable={dragId === p.id}
+              onDragStart={(e) => onDragStart(e, p)}
+              onDragOver={(e) => onDragOver(e, p)}
+              onDragLeave={() => setDragOverId((cur) => (cur === p.id ? null : cur))}
+              onDrop={(e) => void onDrop(e, p, index)}
+              onDragEnd={() => { setDragId(null); setDragOverId(null); }}
+              className={`flex flex-col gap-2 rounded-md border bg-[var(--muted)]/30 px-3 py-2 transition-colors ${
+                dragId === p.id ? 'border-[var(--primary)] opacity-50' : 'border-[var(--border)]'
+              } ${dragOverId === p.id && dragId && dragId !== p.id ? 'ring-2 ring-[var(--primary)]/40' : ''}`}
+            >
               <div className="flex items-center gap-2">
-                <GripVertical className="h-4 w-4 shrink-0 text-[var(--muted-foreground)]/40" />
+                <button
+                  type="button"
+                  aria-label={t('admin.lyricsProviderMoveUp')}
+                  title={t('admin.lyricsProviderMoveUp')}
+                  className="cursor-grab touch-none text-[var(--muted-foreground)]/40 hover:text-[var(--muted-foreground)] active:cursor-grabbing"
+                  // Arm dragging only when the gesture starts on the grip icon,
+                  // so row text/buttons stay selectable & clickable.
+                  onPointerDown={() => setDragId(p.id)}
+                  onPointerUp={() => setDragId(null)}
+                >
+                  <GripVertical className="h-4 w-4" />
+                </button>
                 <span className={`h-2 w-2 shrink-0 rounded-full ${p.enabled ? 'bg-[var(--success)]' : 'bg-[var(--muted-foreground)]/40'}`} />
                 <span className="truncate text-sm font-medium">{p.name}</span>
                 <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
