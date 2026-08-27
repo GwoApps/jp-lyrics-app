@@ -164,8 +164,49 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs =
 const LRCLIB_MIN_INTERVAL_MS = 1200;
 /** Extra safety margin between the app's self-imposed interval and LRCLIB's cap. */
 const LRCLIB_MIN_INTERVAL_FUZZ_MS = 300;
+/** Default LRCLIB API base URL. */
+export const LRCLIB_DEFAULT_API_BASE = 'https://lrclib.net/api';
 
 let lrclibLastRequestAt = 0;
+
+/**
+ * Per-request LRCLIB adapter options (ISSUE #196). Fields are optional — when
+ * absent, the module-level defaults (legacy hardcoded constants) apply.
+ */
+export interface LrclibOptions {
+  /** Minimum spacing between LRCLIB requests, in ms. 0 disables throttling. */
+  rateLimitMs?: number;
+  /** LRCLIB API base URL override (proxy / self-hosted instance). */
+  apiBase?: string;
+  /** Whether to run the fuzzy-search fallback stage after exact misses. */
+  fuzzyEnabled?: boolean;
+  /** Single-request timeout in ms. */
+  timeoutMs?: number;
+}
+
+/** Effective per-call LRCLIB config merged from module defaults + row config. */
+interface LrclibSettings {
+  rateLimitMs: number;
+  apiBase: string;
+  fuzzyEnabled: boolean;
+  timeoutMs: number;
+}
+
+const LRCLIB_DEFAULT_SETTINGS: LrclibSettings = {
+  rateLimitMs: LRCLIB_MIN_INTERVAL_MS + LRCLIB_MIN_INTERVAL_FUZZ_MS,
+  apiBase: LRCLIB_DEFAULT_API_BASE,
+  fuzzyEnabled: true,
+  timeoutMs: 15000,
+};
+
+function resolveLrclibSettings(opts?: LrclibOptions): LrclibSettings {
+  return {
+    rateLimitMs: opts?.rateLimitMs ?? LRCLIB_DEFAULT_SETTINGS.rateLimitMs,
+    apiBase: opts?.apiBase?.trim() || LRCLIB_DEFAULT_SETTINGS.apiBase,
+    fuzzyEnabled: opts?.fuzzyEnabled ?? LRCLIB_DEFAULT_SETTINGS.fuzzyEnabled,
+    timeoutMs: opts?.timeoutMs ?? LRCLIB_DEFAULT_SETTINGS.timeoutMs,
+  };
+}
 
 /** Wait until `minIntervalMs` has elapsed since the previous LRCLIB request. */
 function throttleLrclib(minIntervalMs = LRCLIB_MIN_INTERVAL_MS + LRCLIB_MIN_INTERVAL_FUZZ_MS): Promise<void> {
@@ -196,14 +237,15 @@ async function lrclibFetch<T>(
   url: string,
   headers: Record<string, string>,
   parse: (res: Response) => Promise<T>,
+  settings: LrclibSettings,
   opts?: { notFoundMeansEmpty?: boolean },
   signal?: AbortSignal,
 ): Promise<LrclibRequestResult<T>> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    await throttleLrclib();
+    await throttleLrclib(settings.rateLimitMs);
     let res: Response;
     try {
-      res = await fetchWithTimeout(url, { headers, signal }, 15000);
+      res = await fetchWithTimeout(url, { headers, signal }, settings.timeoutMs);
     } catch {
       if (signal?.aborted) throw signal.reason;
       return { ok: false, rateLimited: false };
@@ -216,7 +258,7 @@ async function lrclibFetch<T>(
       // back to a fixed short backoff. Never wait longer than the caller will.
       const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
         ? Math.min(retryAfter * 1000, 5000)
-        : 1200;
+        : Math.max(settings.rateLimitMs, 1200); // never retry instantly on 429
       if (attempt === 0) {
         await new Promise((r) => setTimeout(r, waitMs));
         continue; // single retry
@@ -331,15 +373,15 @@ function toLrclibHit(track: LrclibTrack, evidence?: LrclibEvidence): LrclibHit |
   };
 }
 
-async function lrclibGet(params: URLSearchParams, signal?: AbortSignal): Promise<LrclibRequestResult<LrclibTrack | null>> {
+async function lrclibGet(params: URLSearchParams, settings: LrclibSettings, signal?: AbortSignal): Promise<LrclibRequestResult<LrclibTrack | null>> {
   const headers = { 'User-Agent': 'jp-lyrics-app/1.0' };
-  return lrclibFetch(`https://lrclib.net/api/get?${params}`, headers, async (res) => {
+  return lrclibFetch(`${settings.apiBase}/get?${params}`, headers, async (res) => {
     const data = await res.json();
     if (data && typeof data === 'object' && data.syncedLyrics) {
       return data as LrclibTrack;
     }
     return null;
-  }, { notFoundMeansEmpty: true }, signal);
+  }, settings, { notFoundMeansEmpty: true }, signal);
 }
 
 /** A lrclib lookup: the matched hit (or null) plus whether the source was rate-limited. */
@@ -367,18 +409,20 @@ export async function fetchFromLrclib(
   artist: string,
   evidence?: LrclibEvidence,
   signal?: AbortSignal,
+  opts?: LrclibOptions,
 ): Promise<LrclibFetchOutcome> {
+  const settings = resolveLrclibSettings(opts);
   const albumScoped = (): Promise<LrclibRequestResult<LrclibTrack | null>> => {
     if (!evidence?.album) return Promise.resolve({ ok: true, data: null });
     return lrclibGet(new URLSearchParams({
       track_name: title,
       artist_name: artist,
       album_name: evidence.album,
-    }), signal);
+    }), settings, signal);
   };
 
   // Pass 1 — bare exact match.
-  const plainRes = await lrclibGet(new URLSearchParams({ track_name: title, artist_name: artist }), signal);
+  const plainRes = await lrclibGet(new URLSearchParams({ track_name: title, artist_name: artist }), settings, signal);
   if (!plainRes.ok) return { hit: null, rateLimited: plainRes.rateLimited };
   const plain = plainRes.data;
   if (plain) {
@@ -421,12 +465,15 @@ export async function searchLrclib(
   artist: string,
   evidence?: LrclibEvidence,
   signal?: AbortSignal,
+  opts?: LrclibOptions,
 ): Promise<LrclibFetchOutcome> {
+  const settings = resolveLrclibSettings(opts);
   const headers = { 'User-Agent': 'jp-lyrics-app/1.0' };
   const res = await lrclibFetch(
-    `https://lrclib.net/api/search?q=${encodeURIComponent(query)}`,
+    `${settings.apiBase}/search?q=${encodeURIComponent(query)}`,
     headers,
     async (res) => res.json(),
+    settings,
     undefined,
     signal,
   );
@@ -495,6 +542,23 @@ interface PetitLyricsCandidate {
 
 const PETITLYRICS_SYNC_CANDIDATE_LIMIT = 4;
 
+/**
+ * Per-request PetitLyrics adapter options (ISSUE #196).
+ */
+export interface PetitLyricsOptions {
+  /** Number of indexed WYSIWYG/LSY candidates scanned before plain-text fallback. */
+  syncCandidateLimit?: number;
+  /** Single-request timeout in ms. */
+  timeoutMs?: number;
+}
+
+function resolvePetitLyricsSettings(opts?: PetitLyricsOptions): { syncCandidateLimit: number; timeoutMs: number } {
+  return {
+    syncCandidateLimit: opts?.syncCandidateLimit ?? PETITLYRICS_SYNC_CANDIDATE_LIMIT,
+    timeoutMs: opts?.timeoutMs ?? 8000,
+  };
+}
+
 function normalizePetitLyricsMetadata(value: string): string {
   return value.normalize('NFKC').toLocaleLowerCase('ja-JP').replace(/[\s\p{P}\p{S}]+/gu, '');
 }
@@ -562,7 +626,13 @@ export function decodePetitLyricsLsyToLrc(payload: Uint8Array, plainLyrics: stri
   return lrcLines.join('\n');
 }
 
-export async function fetchFromPetitLyrics(title: string, artist: string, signal?: AbortSignal): Promise<LyricsResult | null> {
+export async function fetchFromPetitLyrics(
+  title: string,
+  artist: string,
+  signal?: AbortSignal,
+  opts?: PetitLyricsOptions,
+): Promise<LyricsResult | null> {
+  const settings = resolvePetitLyricsSettings(opts);
   const url = 'https://p0.petitlyrics.com/api/GetPetitLyricsData.php';
   const headers = {
     'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
@@ -582,7 +652,7 @@ export async function fetchFromPetitLyrics(title: string, artist: string, signal
       logFlag: '0',
     });
     try {
-      const res = await fetchWithTimeout(url, { method: 'POST', headers, body, signal }, 8_000);
+      const res = await fetchWithTimeout(url, { method: 'POST', headers, body, signal }, settings.timeoutMs);
       if (!res.ok) return null;
       return parsePetitLyricsResponse(await res.text(), lyricsType);
     } catch {
@@ -593,7 +663,7 @@ export async function fetchFromPetitLyrics(title: string, artist: string, signal
 
   // The API only returns one result per request, even when maxcount is higher. Search a small
   // set of indexed WYSIWYG/LSY candidates first, otherwise a plain-text first result drops timing.
-  for (let index = 0; index < PETITLYRICS_SYNC_CANDIDATE_LIMIT; index += 1) {
+  for (let index = 0; index < settings.syncCandidateLimit; index += 1) {
     const synced = await fetchType(3, index);
     if (!synced) break;
     if (!isPetitLyricsMatch(synced, title, artist)) continue;
@@ -700,9 +770,9 @@ export function parseUtaNetCandidates(html: string): UtaNetCandidate[] {
 /**
  * Fetch the plain-text lyrics for a given Uta-Net song ID.
  */
-async function fetchUtaNetLyrics(songId: string, headers: Record<string, string>): Promise<LyricsResult | null> {
+async function fetchUtaNetLyrics(songId: string, headers: Record<string, string>, timeoutMs = 15000): Promise<LyricsResult | null> {
   try {
-    const res = await fetchWithTimeout(`https://www.uta-net.com/song/${songId}/`, { headers });
+    const res = await fetchWithTimeout(`https://www.uta-net.com/song/${songId}/`, { headers }, timeoutMs);
     if (!res.ok) return null;
     const html = await res.text();
     const kashiMatch = html.match(/<div[^>]*id="kashi_area"[^>]*>([\s\S]*?)<\/div>/i);
@@ -733,7 +803,13 @@ const UTA_NET_AMBIGUOUS_GAP = 0.10;
  * importing another song's lyrics. The winning candidate's metadata is exposed
  * for the low-confidence review flow.
  */
-export async function fetchFromUtaNet(title: string, artist: string, signal?: AbortSignal): Promise<UtaNetHit | null> {
+export async function fetchFromUtaNet(
+  title: string,
+  artist: string,
+  signal?: AbortSignal,
+  opts?: { timeoutMs?: number },
+): Promise<UtaNetHit | null> {
+  const timeoutMs = opts?.timeoutMs ?? 15000;
   const headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     'Accept-Language': 'ja,en;q=0.9',
@@ -742,7 +818,7 @@ export async function fetchFromUtaNet(title: string, artist: string, signal?: Ab
   let candidates: UtaNetCandidate[] = [];
   try {
     const q = encodeURIComponent(`${title} ${artist}`);
-    const res = await fetchWithTimeout(`https://www.uta-net.com/search/?Keyword=${q}&x=0&y=0&Aselect=2&Bselect=3`, { headers, signal });
+    const res = await fetchWithTimeout(`https://www.uta-net.com/search/?Keyword=${q}&x=0&y=0&Aselect=2&Bselect=3`, { headers, signal }, timeoutMs);
     if (!res.ok) return null;
     candidates = parseUtaNetCandidates(await res.text());
   } catch {
@@ -778,7 +854,7 @@ export async function fetchFromUtaNet(title: string, artist: string, signal?: Ab
   const ambiguous = scored.length > 1
     && best.score - scored[1].score < UTA_NET_AMBIGUOUS_GAP;
 
-  const lyrics = await fetchUtaNetLyrics(best.candidate.songId, headers);
+  const lyrics = await fetchUtaNetLyrics(best.candidate.songId, headers, timeoutMs);
   if (!lyrics) return null;
 
   return {
@@ -793,14 +869,20 @@ export async function fetchFromUtaNet(title: string, artist: string, signal?: Ab
 
 // ─── ytmusicapi sidecar ──
 
-export async function fetchFromYtMusic(title: string, artist: string, signal?: AbortSignal): Promise<LyricsResult | null> {
-  const sidecarUrl = process.env.YT_MUSIC_SIDECAR_URL;
+export async function fetchFromYtMusic(
+  title: string,
+  artist: string,
+  signal?: AbortSignal,
+  opts?: { sidecarUrl?: string; timeoutMs?: number },
+): Promise<LyricsResult | null> {
+  // Row-configured sidecar URL takes precedence; env var is the legacy fallback.
+  const sidecarUrl = opts?.sidecarUrl?.trim() || process.env.YT_MUSIC_SIDECAR_URL;
   if (!sidecarUrl) return null;
   try {
     const res = await fetchWithTimeout(
       `${sidecarUrl}/lyrics?q=${encodeURIComponent(`${title} ${artist}`)}`,
       { signal },
-      20000,
+      opts?.timeoutMs ?? 20000,
     );
     if (!res.ok) return null;
     const data = await res.json();

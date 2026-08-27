@@ -11,8 +11,19 @@ import {
 import { getNetworkPolicy, isInsecureTransport, normalizeProviderBaseUrl, validateProviderBaseUrl } from '@/lib/lyrics-provider/policy';
 import { getBudgetConfig, clampConfiguredTimeoutMs } from '@/lib/lyrics-provider/budget';
 import { encryptProviderSecret, hasProviderSecretKey, maskSecret } from '@/lib/lyrics-provider/secret';
+import { validateSourceConfig } from '@/lib/lyrics-provider/api-schema';
 
-const UPDATE_FIELDS = new Set(['name', 'base_url', 'auth_type', 'auth_secret', 'auth_secret_clear', 'enabled', 'priority', 'timeout_ms']);
+const UPDATE_FIELDS = new Set(['name', 'base_url', 'auth_type', 'auth_secret', 'auth_secret_clear', 'enabled', 'priority', 'timeout_ms', 'source_config']);
+
+/** Tolerate a corrupt JSON string instead of 500ing (migration / manual DB edits). */
+function safeParseJson(raw: string | null): unknown {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
 
 /** Tolerate a corrupt manifest JSON (migration / manual DB edits) instead of 500ing. */
 function parseManifestJson(raw: string | null): unknown {
@@ -36,6 +47,7 @@ function toWire(row: ProviderConfigRow) {
     enabled: !!row.enabled,
     priority: row.priority,
     timeout_ms: row.timeoutMs ?? null,
+    source_config: row.sourceConfig ? safeParseJson(row.sourceConfig) : null,
     protocol_version: row.protocolVersion,
     manifest: parseManifestJson(row.manifestJson),
     last_check_status: row.lastCheckStatus,
@@ -143,6 +155,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     patch.timeoutMs = clampConfiguredTimeoutMs(Number(parsed.timeout_ms), budget);
   }
 
+  // Builtin-only: per-source behaviour overrides validated against the schema.
+  if ('source_config' in parsed) {
+    if (!isBuiltin) {
+      return NextResponse.json({ error: 'http_provider_readonly_field' }, { status: 400 });
+    }
+    const result = await validateSourceConfig(id, parsed.source_config);
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+    const keys = Object.keys(result.config);
+    patch.sourceConfig = keys.length > 0 ? JSON.stringify(result.config) : null;
+  }
+
   await updateProviderConfig(db, id, patch);
 
   await writeAuditLog(db, {
@@ -158,6 +183,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       has_secret: 'authSecretCiphertext' in patch ? !!patch.authSecretCiphertext : !!existing.authSecretCiphertext,
       enabled: patch.enabled ?? existing.enabled,
       priority: patch.priority ?? existing.priority,
+      // source_config may carry admin-set upstream endpoints for builtin
+      // sources — include it so auditors can trace where traffic is routed.
+      source_config: 'sourceConfig' in patch ? safeParseJson(patch.sourceConfig as string | null) : safeParseJson(existing.sourceConfig),
     }),
     reason: '',
   });

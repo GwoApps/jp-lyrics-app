@@ -148,7 +148,15 @@ export async function fetchLyricsWithChain(
     const providers: LyricsProvider[] = [];
     for (const cfg of effectiveRows) {
       if (cfg.kind === 'builtin') {
-        providers.push(builtinLyricsProvider({ id: cfg.id, name: cfg.name }));
+        providers.push(builtinLyricsProvider({
+          id: cfg.id,
+          name: cfg.name,
+          // null means "use builtin per-source defaults" — do NOT force the HTTP
+          // plugin default timeout onto builtin adapters (they each have their own
+          // per-request budgets: PetitLyrics 8s, LRCLIB/Uta-Net 15s, ytmusic 20s).
+          timeoutMs: cfg.timeoutMs != null ? resolveProviderTimeoutMs(cfg.timeoutMs, chainBudget) : undefined,
+          sourceConfig: cfg.sourceConfig,
+        }));
         continue;
       }
       if (!cfg.baseUrl) continue; // defensive: HTTP rows must carry a base URL

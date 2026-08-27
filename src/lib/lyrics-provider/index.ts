@@ -47,3 +47,11 @@ export {
   providerHealthSnapshot,
   type ProviderConfigRow,
 } from './config.ts';
+export {
+  BUILTIN_SOURCE_SCHEMAS,
+  sourceSchemaForRowId,
+  validateSourceConfig,
+  type ProviderSchemaField,
+  type ProviderSourceSchema,
+} from './api-schema.ts';
+export { builtinLyricsProvider, parseSourceConfig, BUILTIN_PROVIDER_IDS, builtinRowIdToKey, builtinSourceDisplayName, type BuiltinSourceConfig } from './builtin-provider.ts';

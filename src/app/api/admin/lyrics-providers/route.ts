@@ -12,6 +12,7 @@ import {
 import { getNetworkPolicy, isInsecureTransport, normalizeProviderBaseUrl, validateProviderBaseUrl } from '@/lib/lyrics-provider/policy';
 import { getBudgetConfig, clampConfiguredTimeoutMs } from '@/lib/lyrics-provider/budget';
 import { encryptProviderSecret, hasProviderSecretKey, maskSecret } from '@/lib/lyrics-provider/secret';
+import { BUILTIN_SOURCE_SCHEMAS } from '@/lib/lyrics-provider/api-schema';
 
 // GET /api/admin/lyrics-providers — list global provider configs (admin only; secrets never returned).
 // POST /api/admin/lyrics-providers — create a new global provider (admin only, CSRF-checked, audited).
@@ -20,6 +21,15 @@ const CREATE_FIELDS = new Set(['name', 'base_url', 'auth_type', 'auth_secret', '
 
 /** Normalise + validate the shared create/update body. Returns error code or null. */
 async function validateBody(body: Record<string, unknown>): Promise<
+  | { error: string }
+  | { name: string; baseUrl: string; authType: 'none' | 'bearer'; authSecretCiphertext: string | null; enabled: number; priority: number; timeoutMs: number | null }
+> {
+  // source_config is handled separately (validated against builtin schema)
+  return validateCommonBody(body);
+}
+
+/** Shared create body validation (HTTP plugins). */
+async function validateCommonBody(body: Record<string, unknown>): Promise<
   | { error: string }
   | { name: string; baseUrl: string; authType: 'none' | 'bearer'; authSecretCiphertext: string | null; enabled: number; priority: number; timeoutMs: number | null }
 > {
@@ -64,6 +74,16 @@ async function validateBody(body: Record<string, unknown>): Promise<
   };
 }
 
+/** Tolerate a corrupt JSON string instead of 500ing (migration / manual DB edits). */
+function safeParseJson(raw: string | null): unknown {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 /** Tolerate a corrupt manifest JSON (migration / manual DB edits) instead of 500ing. */
 function parseManifestJson(raw: string | null): unknown {
   if (!raw) return null;
@@ -72,6 +92,45 @@ function parseManifestJson(raw: string | null): unknown {
   } catch {
     return null; // corrupt value → treat as no manifest, consistent with `manifest: null`
   }
+}
+
+/** Wire-safe representation of builtin source config schemas for the frontend. */
+function getBuiltinSourceSchemas(): Record<string, {
+  key: string;
+  display_name: string;
+  fields: {
+    key: string;
+    label_key: string;
+    type: string;
+    default: number | string | boolean | null;
+    min?: number;
+    max?: number;
+    step?: number;
+    placeholder_key?: string;
+    help_key?: string;
+    env_fallback?: string;
+  }[];
+}> {
+  const out: Record<string, ReturnType<typeof getBuiltinSourceSchemas>[string]> = {};
+  for (const [key, schema] of Object.entries(BUILTIN_SOURCE_SCHEMAS)) {
+    out[key] = {
+      key: schema.key,
+      display_name: schema.displayName,
+      fields: schema.fields.map((f) => ({
+        key: f.key,
+        label_key: f.labelKey,
+        type: f.type,
+        default: f.default,
+        ...(f.min !== undefined ? { min: f.min } : {}),
+        ...(f.max !== undefined ? { max: f.max } : {}),
+        ...(f.step !== undefined ? { step: f.step } : {}),
+        ...(f.placeholderKey ? { placeholder_key: f.placeholderKey } : {}),
+        ...(f.helpKey ? { help_key: f.helpKey } : {}),
+        ...(f.envFallback ? { env_fallback: f.envFallback } : {}),
+      })),
+    };
+  }
+  return out;
 }
 
 /** Non-secret wire representation of a config row. */
@@ -87,6 +146,7 @@ function toWire(row: ProviderConfigRow) {
     enabled: !!row.enabled,
     priority: row.priority,
     timeout_ms: row.timeoutMs ?? null,
+    source_config: row.sourceConfig ? safeParseJson(row.sourceConfig) : null,
     protocol_version: row.protocolVersion,
     manifest: parseManifestJson(row.manifestJson),
     last_check_status: row.lastCheckStatus,
@@ -106,11 +166,14 @@ export async function GET(request: NextRequest) {
   }
   const db = getDB();
   const rows = await listProviderConfigs(db);
+  // Include per-source schemas so the frontend can render dynamic forms for
+  // builtin providers without hardcoding field knowledge (ISSUE #196).
   return NextResponse.json({
     providers: rows.map(toWire),
     policy: getNetworkPolicy(),
     budgets: getBudgetConfig(),
     secret_key_configured: hasProviderSecretKey(),
+    source_schemas: getBuiltinSourceSchemas(),
   });
 }
 
@@ -146,6 +209,7 @@ export async function POST(request: NextRequest) {
     enabled: validated.enabled,
     priority: validated.priority,
     timeoutMs: validated.timeoutMs,
+    sourceConfig: null,
     protocolVersion: 1,
   });
 

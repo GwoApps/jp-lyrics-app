@@ -112,6 +112,9 @@ export const lyricsProviderConfigs = sqliteTable('lyrics_provider_configs', {
   enabled: integer('enabled').notNull().default(1),
   priority: integer('priority').notNull().default(0),
   timeoutMs: integer('timeout_ms'),
+  // Per-source behaviour overrides for builtin providers, stored as JSON.
+  // HTTP providers ignore this column.
+  sourceConfig: text('source_config'),
   protocolVersion: integer('protocol_version').notNull().default(1),
   manifestJson: text('manifest_json'),
   lastCheckStatus: text('last_check_status', { enum: ['ok', 'failed', 'unchecked'] }).notNull().default('unchecked'),

@@ -30,6 +30,7 @@ interface ProviderWire {
   enabled: boolean;
   priority: number;
   timeout_ms: number | null;
+  source_config: Record<string, unknown> | null;
   protocol_version: number;
   manifest: { id?: string; name?: string; version?: string; capabilities?: string[] } | null;
   last_check_status: 'ok' | 'failed' | 'unchecked';
@@ -50,11 +51,31 @@ interface BudgetWire {
   chainTimeoutMs: number;
 }
 
+interface SourceSchemaField {
+  key: string;
+  label_key: string;
+  type: 'number' | 'string' | 'boolean';
+  default: number | string | boolean | null;
+  min?: number;
+  max?: number;
+  step?: number;
+  placeholder_key?: string;
+  help_key?: string;
+  env_fallback?: string;
+}
+
+interface SourceSchema {
+  key: string;
+  display_name: string;
+  fields: SourceSchemaField[];
+}
+
 interface ListResponse {
   providers: ProviderWire[];
   policy: PolicyWire;
   budgets: BudgetWire;
   secret_key_configured: boolean;
+  source_schemas: Record<string, SourceSchema>;
 }
 
 const EMPTY_FORM = {
@@ -63,6 +84,7 @@ const EMPTY_FORM = {
   auth_type: 'none' as 'none' | 'bearer',
   auth_secret: '',
   timeout_ms: '',
+  source_config: {} as Record<string, unknown>,
 };
 
 /**
@@ -137,6 +159,7 @@ export default function LyricsProvidersPanel() {
       auth_type: p.auth_type,
       auth_secret: '',
       timeout_ms: p.timeout_ms != null ? String(p.timeout_ms) : '',
+      source_config: { ...(p.source_config ?? {}) },
     });
     setTestResult({});
     setDialogOpen(true);
@@ -160,10 +183,21 @@ export default function LyricsProvidersPanel() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: form.name,
-          base_url: form.base_url,
-          auth_type: form.auth_type,
-          ...(form.auth_secret ? { auth_secret: form.auth_secret } : {}),
-          ...(form.timeout_ms ? { timeout_ms: Number(form.timeout_ms) } : {}),
+          // HTTP-only fields: skip for builtin providers (the API rejects them
+          // with `builtin_readonly_field`).
+          ...(editing?.kind !== 'builtin'
+            ? {
+                base_url: form.base_url,
+                auth_type: form.auth_type,
+                ...(form.auth_secret ? { auth_secret: form.auth_secret } : {}),
+              }
+            : {}),
+          // Always send timeout_ms: empty string clears the stored override (null),
+          // a number sets a new value.
+          timeout_ms: form.timeout_ms === '' ? null : Number(form.timeout_ms),
+          ...(editing?.kind === 'builtin'
+            ? { source_config: form.source_config }
+            : {}),
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -410,9 +444,17 @@ export default function LyricsProvidersPanel() {
                   className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-sm outline-none focus:border-[var(--primary)]" />
               </label>
               {editing?.kind === 'builtin' ? (
-                <p className="rounded-md bg-[var(--muted)]/50 px-3 py-2 text-[11px] text-[var(--muted-foreground)]">
-                  {t('admin.lyricsProviderBuiltinHint')}
-                </p>
+                <>
+                  <p className="rounded-md bg-[var(--muted)]/50 px-3 py-2 text-[11px] text-[var(--muted-foreground)]">
+                    {t('admin.lyricsProviderBuiltinHint')}
+                  </p>
+                  <BuiltinSourceConfigFields
+                    provider={editing}
+                    form={form}
+                    setForm={setForm}
+                    schemas={data?.source_schemas}
+                  />
+                </>
               ) : (
                 <>
                   <label className="block">
@@ -440,6 +482,18 @@ export default function LyricsProvidersPanel() {
                   )}
                 </>
               )}
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium">{t('admin.lyricsProviderTimeout')}</span>
+                <input value={form.timeout_ms} onChange={(e) => setForm({ ...form, timeout_ms: e.target.value })}
+                  placeholder={String(data?.budgets.defaultTimeoutMs ?? 20000)}
+                  className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 font-mono text-xs outline-none focus:border-[var(--primary)]" />
+                <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]">
+                  {t('admin.lyricsProviderTimeoutHint', {
+                    min: '5',
+                    max: String((data?.budgets?.maxTimeoutMs ?? 60000) / 1000),
+                  })}
+                </span>
+              </label>
               {notice && (
                 <p className={`flex items-center gap-1 text-xs ${notice.kind === 'ok' ? 'text-[var(--success)]' : 'text-[var(--destructive)]'}`}>
                   {notice.kind === 'ok' ? <CheckCircle2 className="h-3.5 w-3.5" /> : <CircleAlert className="h-3.5 w-3.5" />}
@@ -451,7 +505,7 @@ export default function LyricsProvidersPanel() {
               <button type="button" onClick={closeDialog} className="rounded-md border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--muted)]">
                 {t('common.cancel')}
               </button>
-              <button type="button" onClick={() => void save()} disabled={saving || !form.name || !form.base_url}
+              <button type="button" onClick={() => void save()} disabled={saving || !form.name || (editing?.kind !== 'builtin' && !form.base_url)}
                 className="inline-flex items-center gap-1.5 rounded-md bg-[var(--primary)] px-3 py-1.5 text-xs font-medium text-[var(--primary-foreground)] hover:opacity-90 disabled:opacity-50">
                 {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 {t('common.save')}
@@ -461,6 +515,124 @@ export default function LyricsProvidersPanel() {
         </div>
       )}
     </section>
+  );
+}
+
+/** Dynamic source-config form for builtin providers, driven by the API schema. */
+function BuiltinSourceConfigFields({
+  provider,
+  form,
+  setForm,
+  schemas,
+}: {
+  provider: ProviderWire;
+  form: typeof EMPTY_FORM;
+  setForm: React.Dispatch<React.SetStateAction<typeof EMPTY_FORM>>;
+  schemas: Record<string, SourceSchema> | undefined;
+}) {
+  const { t } = useI18n();
+  const sourceKey = provider.id.replace(/^builtin[:-]/, '');
+  const schema = schemas?.[sourceKey];
+  if (!schema || schema.fields.length === 0) return null;
+
+  const setField = (key: string, value: unknown) => {
+    setForm((prev) => ({
+      ...prev,
+      source_config: { ...prev.source_config, [key]: value },
+    }));
+  };
+
+  return (
+    <div className="space-y-3 border-t border-[var(--border)] pt-3">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+        {t('admin.lyricsProviderSourceConfig')}
+      </p>
+      {schema.fields.map((field) => {
+        const current = form.source_config[field.key];
+
+        if (field.type === 'boolean') {
+          const checked = typeof current === 'boolean'
+            ? current
+            : Boolean(field.default);
+          return (
+            <label key={field.key} className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={(e) => setField(field.key, e.target.checked)}
+                className="h-4 w-4 rounded border-[var(--border)] accent-[var(--primary)]"
+              />
+              <span className="text-sm">{t(`admin.${field.label_key}`)}</span>
+              {field.help_key && (
+                <span className="ml-auto text-[11px] text-[var(--muted-foreground)]">{t(`admin.${field.help_key}`)}</span>
+              )}
+            </label>
+          );
+        }
+
+        if (field.type === 'number') {
+          return (
+            <label key={field.key} className="block">
+              <span className="mb-1 block text-xs font-medium">{t(`admin.${field.label_key}`)}</span>
+              <input
+                type="number"
+                value={typeof current === 'number' ? String(current) : ''}
+                placeholder={field.default != null ? String(field.default) : ''}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '') {
+                    // Remove the key to use the schema default.
+                    setForm((prev) => {
+                      const next = { ...prev.source_config };
+                      delete next[field.key];
+                      return { ...prev, source_config: next };
+                    });
+                  } else {
+                    setField(field.key, Number(v));
+                  }
+                }}
+                min={field.min}
+                max={field.max}
+                step={field.step ?? 1}
+                className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 font-mono text-xs outline-none focus:border-[var(--primary)]"
+              />
+              {field.help_key && (
+                <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]">{t(`admin.${field.help_key}`)}</span>
+              )}
+            </label>
+          );
+        }
+
+        // string type
+        return (
+          <label key={field.key} className="block">
+            <span className="mb-1 block text-xs font-medium">{t(`admin.${field.label_key}`)}</span>
+            <input
+              type="text"
+              value={typeof current === 'string' ? current : ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '') {
+                  // Remove the key to fall back to the schema default.
+                  setForm((prev) => {
+                    const next = { ...prev.source_config };
+                    delete next[field.key];
+                    return { ...prev, source_config: next };
+                  });
+                } else {
+                  setField(field.key, v);
+                }
+              }}
+              placeholder={field.placeholder_key ? t(`admin.${field.placeholder_key}`) : undefined}
+              className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 font-mono text-xs outline-none focus:border-[var(--primary)]"
+            />
+            {field.help_key && (
+              <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]">{t(`admin.${field.help_key}`)}</span>
+            )}
+          </label>
+        );
+      })}
+    </div>
   );
 }
 

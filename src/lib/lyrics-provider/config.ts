@@ -21,6 +21,7 @@ export interface ProviderConfigRow {
   enabled: number;
   priority: number;
   timeoutMs: number | null;
+  sourceConfig: string | null;
   protocolVersion: number;
   manifestJson: string | null;
   lastCheckStatus: 'ok' | 'failed' | 'unchecked';
@@ -62,6 +63,7 @@ export async function insertProviderConfig(db: DB, row: {
   enabled: number;
   priority: number;
   timeoutMs: number | null;
+  sourceConfig: string | null;
   protocolVersion: number;
 }): Promise<void> {
   await db.insert(schema.lyricsProviderConfigs).values(row).run();
@@ -78,6 +80,7 @@ export async function updateProviderConfig(
     enabled: number;
     priority: number;
     timeoutMs: number | null;
+    sourceConfig: string | null;
     manifestJson: string | null;
     lastCheckStatus: 'ok' | 'failed' | 'unchecked';
     lastCheckCode: string | null;
@@ -135,6 +138,7 @@ export function providerHealthSnapshot(row: ProviderConfigRow): Record<string, u
     enabled: !!row.enabled,
     priority: row.priority,
     timeout_ms: row.timeoutMs ?? null,
+    source_config: row.sourceConfig ?? null,
     protocol_version: row.protocolVersion,
     last_check_status: row.lastCheckStatus,
     last_check_code: row.lastCheckCode ?? null,
