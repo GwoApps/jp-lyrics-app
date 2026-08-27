@@ -15,7 +15,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
-  CheckCircle2, ChevronDown, ChevronUp, CircleAlert, GripVertical, Loader2, Plus, Plug, RefreshCw, Trash2, X,
+  CheckCircle2, ChevronDown, ChevronUp, CircleAlert, GripVertical, Loader2, Pencil, Plus, Plug, RefreshCw, Trash2, X,
 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
@@ -386,6 +386,7 @@ export default function LyricsProvidersPanel() {
                   testing={testingId === p.id}
                   onEdit={() => openEdit(p)}
                   onDelete={p.kind === 'http' ? () => void remove(p) : undefined}
+                  sourceSchema={data.source_schemas[p.id.replace(/^builtin[:-]/, '')]}
                 />
               ))}
             </ul>
@@ -655,6 +656,7 @@ interface SortableRowProps {
   testing: boolean;
   onEdit: () => void;
   onDelete?: () => void;
+  sourceSchema?: SourceSchema;
 }
 
 /**
@@ -664,12 +666,13 @@ interface SortableRowProps {
  * animates this card smoothly out of the way; the drag source itself renders
  * as a dimmed placeholder and the floating preview lives in `DragOverlay`.
  */
-function SortableProviderRow({ p, testResult, dragging, onMoveUp, onMoveDown, onToggle, onTest, testing, onEdit, onDelete }: SortableRowProps) {
+function SortableProviderRow({ p, testResult, dragging, onMoveUp, onMoveDown, onToggle, onTest, testing, onEdit, onDelete, sourceSchema }: SortableRowProps) {
   const { t } = useI18n();
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition } = useSortable({ id: p.id });
 
   return (
     <li
+      data-provider-id={p.id}
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={`flex flex-col gap-2 rounded-md border bg-[var(--muted)]/30 px-3 py-2 ${
@@ -689,7 +692,7 @@ function SortableProviderRow({ p, testResult, dragging, onMoveUp, onMoveDown, on
           <GripVertical className="h-4 w-4" />
         </button>
         <ProviderRowSummary p={p} />
-        <span className="ml-auto inline-flex items-center gap-1">
+        <span className="ml-auto inline-flex shrink-0 items-center gap-1">
           <button type="button" onClick={onMoveUp} aria-label={t('admin.lyricsProviderMoveUp')}
             className="rounded p-1 text-[var(--muted-foreground)] hover:bg-[var(--muted)]"><ChevronUp className="h-3.5 w-3.5" /></button>
           <button type="button" onClick={onMoveDown} aria-label={t('admin.lyricsProviderMoveDown')}
@@ -698,12 +701,14 @@ function SortableProviderRow({ p, testResult, dragging, onMoveUp, onMoveDown, on
             className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors ${p.enabled ? 'bg-[var(--success)]/15 text-[var(--success)]' : 'bg-[var(--muted)] text-[var(--muted-foreground)]'}`}>
             {p.enabled ? t('admin.lyricsProviderEnabled') : t('admin.lyricsProviderDisabled')}
           </button>
+          <button type="button" onClick={onEdit} aria-label={t('common.edit')}
+            className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] bg-[var(--card)] p-1.5 text-[11px] font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--muted)] sm:px-2 sm:py-1">
+            <Pencil className="h-3 w-3" />
+            <span className="hidden sm:inline">{t('common.edit')}</span>
+          </button>
         </span>
       </div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-6 text-[11px] text-[var(--muted-foreground)]">
-        {p.kind === 'http' && <span className="truncate font-mono">{p.base_url}</span>}
-        {p.kind === 'http' && <span>auth: {p.auth_type}</span>}
-        {p.has_secret && <span className="font-mono">{p.secret_masked}</span>}
         {/* Manifest health check is HTTP-plugin-only: builtin sources have no
             base_url to probe, so the status row would be stuck at "unchecked". */}
         {p.kind === 'http' && (
@@ -723,6 +728,7 @@ function SortableProviderRow({ p, testResult, dragging, onMoveUp, onMoveDown, on
         )}
         <TestResultBadge result={testResult} />
       </div>
+      <ProviderConfigPreview p={p} sourceSchema={sourceSchema} />
       <div className="flex items-center gap-2 pl-6">
         {onTest && (
           <button type="button" onClick={onTest} disabled={testing}
@@ -731,10 +737,6 @@ function SortableProviderRow({ p, testResult, dragging, onMoveUp, onMoveDown, on
             {t('admin.lyricsProviderTest')}
           </button>
         )}
-        <button type="button" onClick={onEdit}
-          className="rounded-md border border-[var(--border)] px-2 py-1 text-[11px] font-medium hover:bg-[var(--muted)]">
-          {t('common.edit')}
-        </button>
         {onDelete && (
           <button type="button" onClick={onDelete}
             className="inline-flex items-center gap-1 rounded-md border border-[var(--destructive)]/40 px-2 py-1 text-[11px] font-medium text-[var(--destructive)] hover:bg-[var(--destructive)]/10">
@@ -743,6 +745,84 @@ function SortableProviderRow({ p, testResult, dragging, onMoveUp, onMoveDown, on
         )}
       </div>
     </li>
+  );
+}
+
+/** Read-only snapshot of editable values; changes remain Dialog-only. */
+function ProviderConfigPreview({ p, sourceSchema }: { p: ProviderWire; sourceSchema?: SourceSchema }) {
+  const { t } = useI18n();
+  const items: Array<{ key: string; label: string; value: string; mono?: boolean; wide?: boolean }> = [];
+  const formatValue = (value: unknown, type: SourceSchemaField['type']) => {
+    if (type === 'boolean') return value ? t('admin.lyricsProviderOn') : t('admin.lyricsProviderOff');
+    if (typeof value === 'number') return value.toLocaleString();
+    return String(value);
+  };
+
+  if (p.kind === 'http') {
+    items.push({
+      key: 'base_url',
+      label: t('admin.lyricsProviderBaseUrl'),
+      value: p.base_url ?? t('admin.lyricsProviderPreviewDefault'),
+      mono: true,
+      wide: true,
+    });
+    items.push({
+      key: 'auth_type',
+      label: t('admin.lyricsProviderAuthType'),
+      value: p.auth_type === 'bearer'
+        ? `${t('admin.lyricsProviderAuthBearer')}${p.secret_masked ? ` (${p.secret_masked})` : ''}`
+        : t('admin.lyricsProviderAuthNone'),
+      mono: p.auth_type === 'bearer',
+    });
+  }
+
+  items.push({
+    key: 'timeout_ms',
+    label: t('admin.lyricsProviderTimeout'),
+    value: p.timeout_ms == null
+      ? t('admin.lyricsProviderPreviewDefault')
+      : `${p.timeout_ms.toLocaleString()} ms`,
+    mono: true,
+  });
+
+  if (p.kind === 'builtin' && sourceSchema) {
+    for (const field of sourceSchema.fields) {
+      const stored = p.source_config?.[field.key];
+      let value: string;
+      if (stored === undefined || stored === null || stored === '') {
+        if (field.env_fallback) {
+          value = t('admin.lyricsProviderPreviewEnvFallback', { name: field.env_fallback });
+        } else if (field.default !== null) {
+          value = `${formatValue(field.default, field.type)} (${t('admin.lyricsProviderPreviewDefault')})`;
+        } else if (field.placeholder_key) {
+          value = `${t(`admin.${field.placeholder_key}`)} (${t('admin.lyricsProviderPreviewDefault')})`;
+        } else {
+          value = t('admin.lyricsProviderPreviewDefault');
+        }
+      } else {
+        value = formatValue(stored, field.type);
+      }
+      items.push({
+        key: field.key,
+        label: t(`admin.${field.label_key}`),
+        value,
+        mono: field.type !== 'boolean',
+        wide: field.type === 'string',
+      });
+    }
+  }
+
+  return (
+    <dl data-provider-config-preview className="grid gap-x-4 gap-y-2 rounded-md border border-[var(--border)]/70 bg-[var(--card)]/60 px-3 py-2.5 sm:ml-6 sm:grid-cols-2 lg:grid-cols-3">
+      {items.map((item) => (
+        <div key={item.key} className={`min-w-0 ${item.wide ? 'sm:col-span-2' : ''}`}>
+          <dt className="text-[10px] font-medium text-[var(--muted-foreground)]">{item.label}</dt>
+          <dd className={`mt-0.5 truncate text-xs text-[var(--foreground)] ${item.mono ? 'font-mono' : ''}`} title={item.value}>
+            {item.value}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
