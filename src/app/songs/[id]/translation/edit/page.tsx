@@ -61,7 +61,7 @@ export default function TranslationEditPage() {
   const { session } = useAuthSession();
   const coverTheme = useCoverTheme(song?.cover_url);
   const coverColor = coverTheme.palette;
-  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const inputRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
   const auth: AuthState | null = session === null ? null : {
     authenticated: session.user !== null,
     isAdmin: session.user?.isAdmin === true,
@@ -397,8 +397,10 @@ export default function TranslationEditPage() {
               <div className="min-w-0 break-words text-sm leading-relaxed text-[var(--foreground)]">
                 {raw || <span className="text-xs text-[var(--muted-foreground)]">{t('translation.emptyLine')}</span>}
               </div>
-              <input
+              <textarea
                 ref={(el) => { inputRefs.current[i] = el; }}
+                rows={1}
+                wrap="soft"
                 value={draft[i] ?? ''}
                 onFocus={() => setLastFocusedLine(i)}
                 onChange={(e) => {
@@ -430,7 +432,8 @@ export default function TranslationEditPage() {
                 }}
                 disabled={isEmptyLine}
                 placeholder={isEmptyLine ? '' : t('translation.inputPlaceholder')}
-                className="w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-2.5 py-1.5 text-sm outline-none transition-colors focus:border-[var(--primary)] disabled:opacity-50"
+                className="w-full resize-none rounded-md border border-[var(--border)] bg-[var(--input)] px-2.5 py-1.5 text-sm leading-relaxed outline-none transition-colors focus:border-[var(--primary)] disabled:opacity-50"
+                style={{ fieldSizing: 'content', maxHeight: '12rem', overflowY: 'auto' }}
                 aria-label={t('translation.translatedColumn')}
               />
             </div>
