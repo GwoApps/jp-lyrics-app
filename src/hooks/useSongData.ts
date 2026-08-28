@@ -28,7 +28,7 @@ import {
 } from '@/lib/romaji';
 import { LYRICS_SOURCE_KEYS } from '@/lib/lyrics-source';
 import { copyToClipboard } from '@/lib/clipboard';
-import { isKnownTargetLang } from '@/lib/target-lang';
+import { isKnownTargetLang, targetLangDisplay } from '@/lib/target-lang';
 
 // The sync response is an untyped union of outcomes (not-found, plain-hit
 // preview, low-confidence preview, direct write, rate-limit…). Its shape is
@@ -1113,14 +1113,21 @@ export function useSongData(id: string): UseSongDataReturn {
       !translationPromptedRef.current
     ) {
       translationPromptedRef.current = true;
+      // The prompt names the language the translation will actually produce
+      // (issue #123/#187) so it never contradicts the user's target-language
+      // setting. When the effective language isn't loaded yet, fall back to a
+      // generic wording without naming a language.
+      const prompt = targetLang
+        ? t('song.translationPrompt', { lang: targetLangDisplay(targetLang) })
+        : t('song.translationPromptGeneric');
       // The business callback owns toast dismissal: tapping 「翻译」 hides the
       // prompt toast (the generic Toast component stays action-agnostic).
-      showToast('info', t('song.translationPrompt'), t('song.translate'), () => {
+      showToast('info', prompt, t('song.translate'), () => {
         setToast(null);
         void handleTranslate();
       });
     }
-  }, [showTranslation, song?.lyrics_raw, hasTranslation, translating, t, showToast, handleTranslate]);
+  }, [showTranslation, song?.lyrics_raw, hasTranslation, translating, t, showToast, handleTranslate, targetLang]);
 
 
   // Auto-open the reasoning panel as soon as the model starts streaming
