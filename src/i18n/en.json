@@ -507,7 +507,9 @@
     "noKanji": "No correctable annotations in this line",
     "loginRequired": "Please connect Spotify to edit annotations",
     "forbidden": "You don't have permission to edit this song",
-    "staleSource": "The lyrics or annotation scheme changed in another view. Reload before correcting annotations."
+    "staleSource": "The lyrics or annotation scheme changed in another view. Reload before correcting annotations.",
+    "suggestionsError": "Failed to load suggested readings",
+    "retry": "Retry"
   },
   "dialog": {
     "deleteConfirmTitle": "Delete「{title}」?",

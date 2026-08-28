@@ -507,7 +507,9 @@
     "noKanji": "這一行沒有可校正的注音",
     "loginRequired": "請先連接 Spotify 以編輯注音",
     "forbidden": "沒有權限修改這首歌詞",
-    "staleSource": "歌詞或注音方案已在其他頁面更新，請重新整理後再校正"
+    "staleSource": "歌詞或注音方案已在其他頁面更新，請重新整理後再校正",
+    "suggestionsError": "候選讀音取得失敗",
+    "retry": "重試"
   },
   "dialog": {
     "deleteConfirmTitle": "確定刪除「{title}」？",
