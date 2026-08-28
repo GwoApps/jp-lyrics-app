@@ -8,6 +8,7 @@
 import { eq } from 'drizzle-orm';
 import { getDB, schema } from './db';
 import { getTranslationConfig, type TranslationConfig, type TranslationProvider } from './translation';
+import { getUserSettings, applyUserTargetLang } from './user-settings';
 
 export const TRANSLATION_SETTINGS_KEY = 'translation_config';
 
@@ -89,4 +90,23 @@ export async function getEffectiveTranslationConfig(): Promise<TranslationConfig
   const db = getDB();
   const stored = await getStoredTranslationConfig(db);
   return resolveTranslationConfig(stored, getTranslationConfig());
+}
+
+/**
+ * Resolve the effective target language for a given user, following the full
+ * chain used by the translate pipeline: admin/global config (DB-stored over
+ * env) then the per-user target-language override.
+ *
+ * This is the single source of truth so every write path (AI translation and
+ * manual correction save) stamps `lyrics_translation_lang` with the SAME value
+ * the translate route compares against. Returns null when no translation
+ * config exists at all.
+ */
+export async function getEffectiveTargetLang(userId: string): Promise<string | null> {
+  const db = getDB();
+  const stored = await getStoredTranslationConfig(db);
+  const config = resolveTranslationConfig(stored, getTranslationConfig());
+  if (!config) return null;
+  const userSettings = await getUserSettings(userId);
+  return applyUserTargetLang(config, userSettings);
 }

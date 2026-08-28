@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDB, schema, sql } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { and, eq } from 'drizzle-orm';
+import { getEffectiveTargetLang } from '@/lib/translation-settings';
 
 // PUT /api/songs/[id]/translation — save manually corrected line-level translations.
 // Body: { translations: string[], source_lyrics: string }
@@ -51,11 +52,22 @@ export async function PUT(
   // Empty source lines must never carry a translation.
   const normalized = expected.map((source, i) => (source.trim() ? translations[i].trim() : ''));
 
+  // Resolve the effective target language the same way the translate pipeline
+  // does (admin/global config, then per-user override). A manual correction IS
+  // the user confirming the final form of these translations, so its language
+  // is by definition the current effective target language. "Whoever last wrote
+  // the cache refreshes the language stamp" must hold here too, otherwise an
+  // expired stamp marks the user's confirmed work as invalid and triggers a
+  // whole-song re-translation (#189 / #93). When no config exists we leave the
+  // stamp untouched (nothing to compare against anyway).
+  const targetLang = await getEffectiveTargetLang(user.id);
+
   // Manual corrections replace the AI output — the stored reasoning from the
   // original run no longer matches, so drop it.
   const updated = await db.update(schema.songs).set({
     lyricsTranslation: JSON.stringify(normalized),
     lyricsTranslationReasoning: null,
+    ...(targetLang ? { lyricsTranslationLang: targetLang } : {}),
     updatedAt: sql`(datetime('now', 'localtime'))`,
   }).where(and(
     eq(schema.songs.id, id),
