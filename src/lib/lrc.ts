@@ -225,12 +225,66 @@ export function mapTimelineTimestamps(
 ): (number | null)[] {
   const draft = createTimelineDraft(plainLyrics, syncedLyrics);
   let draftIndex = 0;
-  return renderedRows.map((text) => {
+  const timestamps = renderedRows.map((text) => {
     if (!text.trim()) return null;
     const timestamp = draft[draftIndex]?.timeMs ?? null;
     draftIndex += 1;
     return timestamp;
   });
+
+  return fillMissingTimestampsByText(timestamps, renderedRows, syncedLyrics);
+}
+
+/**
+ * Detail-page fallback for rendered lyric rows the strict order-preserving
+ * alignment left untimed.
+ *
+ * The rendered rows come from `lyrics_furigana` (server pre-computed), whose
+ * text can drift from `lyrics_raw` in full/half-width, bracketed notes, case or
+ * wording — e.g. the furigana was regenerated from a synced source. When such a
+ * row does not line up with any `lyrics_raw` line, its timestamps entry is null
+ * even though the synced LRC carries the correct lyric text with its own time.
+ * Rather than leave "has an LRC but can't highlight" dead zones, match the
+ * rendered text directly against the synced lines and fill the gap.
+ *
+ * This is a pure read-only overlay: it never writes to stored data, and it
+ * never reuses a timestamp the alignment already assigned elsewhere, so a
+ * repeated chorus line cannot double-highlight / double-seek.
+ */
+function fillMissingTimestampsByText(
+  timestamps: (number | null)[],
+  renderedRows: string[],
+  syncedLyrics: string,
+): (number | null)[] {
+  if (!timestamps.some((ts) => ts == null)) return timestamps;
+  const syncLines = parseLrc(syncedLyrics);
+  if (syncLines.length === 0) return timestamps;
+
+  const usedTimes = new Set<number>(timestamps.filter((ts): ts is number => ts != null));
+  const result = [...timestamps];
+  for (let i = 0; i < renderedRows.length; i += 1) {
+    if (result[i] != null) continue;
+    const text = renderedRows[i];
+    if (!text.trim()) continue;
+
+    let bestIndex = -1;
+    let bestDist = Infinity;
+    for (let j = 0; j < syncLines.length; j += 1) {
+      const candidate = syncLines[j];
+      if (usedTimes.has(candidate.timeMs)) continue;
+      if (!lineFuzzyMatch(text, candidate.text)) continue;
+      const dist = Math.abs(j - i);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIndex = j;
+      }
+    }
+    if (bestIndex >= 0) {
+      result[i] = syncLines[bestIndex].timeMs;
+      usedTimes.add(syncLines[bestIndex].timeMs);
+    }
+  }
+  return result;
 }
 
 /** Serialize a full or partial draft. Untimed rows remain plain so draft progress is not lost. */

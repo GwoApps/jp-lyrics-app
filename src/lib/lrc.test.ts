@@ -281,6 +281,29 @@ test('timeline timestamps stay aligned when rendered lyrics preserve blank separ
   assert.deepEqual(mapTimelineTimestamps(rendered, plain, synced), [1000, 2000, null, 3000, null, 4000]);
 });
 
+test('mapTimelineTimestamps falls back to LRC text for rendered rows from a different source', () => {
+  // lyrics_raw was hand-typed and does not match the synced LRC at all, so the
+  // strict alignment leaves every rendered row null. The rendered rows come
+  // from the pre-computed furigana source whose text matches the LRC exactly —
+  // the fallback must recover each timestamp from the LRC text itself.
+  const plain = '手打ちの近似テキスト';
+  const synced = '[00:05.000]正確な歌詞\n[00:10.000]二番の歌詞';
+  const rendered = ['正確な歌詞', '二番の歌詞'];
+
+  assert.deepEqual(mapTimelineTimestamps(rendered, plain, synced), [5000, 10000]);
+});
+
+test('mapTimelineTimestamps text fallback never reuses an existing timestamp', () => {
+  // Row 0 is aligned by the draft to `a` @1000. Row 1 also reads `a`, but the
+  // sole timed `a` line is already consumed — the fallback must NOT hand the
+  // same timestamp to a second row (that would double-highlight / double-seek).
+  const plain = 'a\nb';
+  const synced = '[00:01.000]a';
+  const rendered = ['a', 'a'];
+
+  assert.deepEqual(mapTimelineTimestamps(rendered, plain, synced), [1000, null]);
+});
+
 test('resolveTimelineSave accepts a timeline save matching the current plain lyrics', () => {
   const result = resolveTimelineSave(
     'first\nsecond',
