@@ -210,7 +210,7 @@ test('default system prompt keeps rhetoric conditional and carries a good/bad fe
   assert.ok(!rendered.includes('{{'));
 });
 
-test('few-shot quality example follows the target language (en / zh-TW / ja)', () => {
+test('few-shot quality example follows the target language (en / zh-TW / zh-HK / ja)', () => {
   const en = renderSystemPrompt(DEFAULT_SYSTEM_PROMPT, 'en');
   assert.match(en, /Japanese → English lyric line/);
   assert.match(en, /GOOD: If my voice could reach you before the tears fall/);
@@ -222,6 +222,13 @@ test('few-shot quality example follows the target language (en / zh-TW / ja)', (
   assert.match(tw, /Japanese → Traditional Chinese lyric line/);
   assert.match(tw, /若在淚水落下前，這聲音能傳到你身邊/);
   assert.ok(!tw.includes('泪落之前'), 'zh-TW must not use simplified zh example');
+
+  // zh-HK has its own Hong Kong anchor — must never fall back to the
+  // Simplified Chinese (zh) example (issue #204).
+  const hk = renderSystemPrompt(DEFAULT_SYSTEM_PROMPT, 'zh-HK');
+  assert.match(hk, /Japanese → Traditional Chinese \(Hong Kong\) lyric line/);
+  assert.match(hk, /若在淚水落下前，這聲音能傳到你身邊/);
+  assert.ok(!hk.includes('若在泪水落下前'), 'zh-HK must not use simplified zh example');
 
   const ja = renderSystemPrompt(DEFAULT_SYSTEM_PROMPT, 'ja');
   assert.match(ja, /Japanese → Japanese lyric line/);

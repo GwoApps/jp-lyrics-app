@@ -39,6 +39,12 @@ const FEW_SHOT_EXAMPLES: Record<string, FewShotExample> = {
     bad: '淚落之前傳聲來，韻腳雖齊意已乖',
     good: '若在淚水落下前，這聲音能傳到你身邊',
   },
+  'zh-HK': {
+    label: 'Japanese → Traditional Chinese (Hong Kong) lyric line',
+    input: '涙が落ちる前に、この声が届くなら',
+    bad: '淚落之前傳聲來，韻腳雖齊意已乖',
+    good: '若在淚水落下前，這聲音能傳到你身邊',
+  },
   en: {
     label: 'Japanese → English lyric line',
     input: '涙が落ちる前に、この声が届くなら',
@@ -54,7 +60,7 @@ const FEW_SHOT_EXAMPLES: Record<string, FewShotExample> = {
 };
 
 /** Ordered language-prefix keys, most specific first, so prefix matching wins correctly. */
-const FEW_SHOT_PREFIX_ORDER: readonly string[] = ['zh-TW', 'zh', 'en', 'ja'];
+const FEW_SHOT_PREFIX_ORDER: readonly string[] = ['zh-HK', 'zh-TW', 'zh', 'en', 'ja'];
 
 /**
  * Pick the few-shot example best matching a target-language tag. Falls back to
