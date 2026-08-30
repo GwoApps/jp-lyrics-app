@@ -5,7 +5,6 @@ import type { CoverPaletteJson, Song } from '@/lib/types';
 import { getAuthUser } from '@/lib/auth';
 import { isSongVisibleToUser } from '@/lib/song-visibility';
 import { resolveLrcTextUpdate, findLrcConflicts, resolveTimelineSave } from '@/lib/lrc';
-import type { ReadingScheme } from '@/lib/types';
 
 /** Strip internal email while exposing server-authoritative capabilities. */
 function sanitizeSong(song: Song, canEdit: boolean) {
@@ -201,7 +200,6 @@ export async function PUT(
   if (effectiveNewRaw !== undefined) set.lyricsRaw = effectiveNewRaw;
   if (hasSynced) set.lyricsSynced = lyrics_synced;
 
-  const nextScheme = (reading_scheme ?? existing.reading_scheme) as ReadingScheme;
 
   // --- Cross-field derived invalidation (SQL CASE against current DB values) ---
   // Each CASE compares the submitted value against the live column at write
@@ -249,11 +247,16 @@ export async function PUT(
 
   // reading_scheme_confirmed auto-reset: when lyrics content changes and the
   // active scheme is 'ja-kana', reset the flag (old reading is no longer
-  // accurate for the new text). The SQL CASE uses the DB's current scheme,
-  // not the request-time snapshot.
+  // accurate for the new text). When reading_scheme is submitted in the
+  // payload, compare against that submitted value; otherwise reference the
+  // DB's current reading_scheme column at write time — never a stale
+  // request-time snapshot.
   if (reading_scheme_confirmed === undefined && effectiveNewRaw !== undefined) {
+    const schemeCond = reading_scheme !== undefined
+      ? sql`${reading_scheme} = 'ja-kana'`
+      : sql`reading_scheme = 'ja-kana'`;
     set.readingSchemeConfirmed = sql`CASE
-      WHEN ${effectiveNewRaw} != lyrics_raw AND ${nextScheme} = 'ja-kana'
+      WHEN ${effectiveNewRaw} != lyrics_raw AND ${schemeCond}
       THEN 0 ELSE reading_scheme_confirmed END`;
   }
 

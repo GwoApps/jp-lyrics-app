@@ -107,7 +107,7 @@ function lyricsEditSql(newRaw: string) {
     lyrics_confidence = CASE WHEN ${newRaw} != lyrics_raw THEN 100 ELSE lyrics_confidence END,
     lyrics_needs_review = CASE WHEN ${newRaw} != lyrics_raw THEN 0 ELSE lyrics_needs_review END,
     lyrics_fetched_at = CASE WHEN ${newRaw} != lyrics_raw THEN NULL ELSE lyrics_fetched_at END,
-    reading_scheme_confirmed = CASE WHEN ${newRaw} != lyrics_raw AND 'ja-kana' = 'ja-kana'
+    reading_scheme_confirmed = CASE WHEN ${newRaw} != lyrics_raw AND reading_scheme = 'ja-kana'
       THEN 0 ELSE reading_scheme_confirmed END
   WHERE id = ${SONG_ID}`;
 }
@@ -211,4 +211,94 @@ test('same-value PUT does not clear derived caches', async () => {
   assert.equal(row.lyrics_raw, OLD_LYRICS);
   assert.equal(row.lyrics_furigana, OLD_FURIGANA, 'furigana must be preserved when lyrics unchanged');
   assert.equal(row.lyrics_translation, OLD_TRANSLATION, 'translation must be preserved when lyrics unchanged');
+});
+
+test('lyrics-only PUT respects concurrently-changed reading_scheme for confirmed auto-reset', async () => {
+  const t = makeTestDb(`/tmp/song-put-confirmed-reset-${process.pid}-${Date.now()}.db`);
+  await createTables(t);
+  await seedSong(t);
+
+  // Step 1: A lyrics-edit request reads the row (snapshot: reading_scheme='ja-kana').
+  const snapshot = await readSong(t);
+  assert.equal(snapshot.reading_scheme, 'ja-kana');
+  assert.equal(snapshot.reading_scheme_confirmed, 1);
+
+  // Step 2: A scheme-change request commits first, switching to yue-jyutping.
+  await t.db.run(sql`UPDATE songs SET
+    reading_scheme = 'yue-jyutping'
+  WHERE id = ${SONG_ID}`);
+
+  // Step 3: The delayed lyrics-edit request commits. Its reading_scheme_confirmed
+  // auto-reset must reference the DB's CURRENT scheme (yue-jyutping), NOT the
+  // request-time snapshot ('ja-kana'). Since the live scheme is yue-jyutping,
+  // the flag must NOT be auto-reset.
+  await t.db.run(lyricsEditSql(NEW_LYRICS));
+
+  const row = await readSong(t);
+  assert.equal(row.lyrics_raw, NEW_LYRICS, 'new lyrics must be written');
+  assert.equal(row.reading_scheme, 'yue-jyutping', 'concurrent scheme change must be preserved');
+  assert.equal(row.reading_scheme_confirmed, 1,
+    'reading_scheme_confirmed must NOT reset when live scheme is yue-jyutping');
+});
+
+test('lyrics-only PUT resets reading_scheme_confirmed when concurrent change made live scheme ja-kana', async () => {
+  const t = makeTestDb(`/tmp/song-put-confirmed-reset2-${process.pid}-${Date.now()}.db`);
+  await createTables(t);
+  await seedSong(t);
+
+  // Start with yue-jyutping + confirmed.
+  await t.db.run(sql`UPDATE songs SET
+    reading_scheme = 'yue-jyutping', reading_scheme_confirmed = 1
+  WHERE id = ${SONG_ID}`);
+
+  // Step 1: A lyrics-edit request reads the row (snapshot: reading_scheme='yue-jyutping').
+  const snapshot = await readSong(t);
+  assert.equal(snapshot.reading_scheme, 'yue-jyutping');
+  assert.equal(snapshot.reading_scheme_confirmed, 1);
+
+  // Step 2: A scheme-change request commits first, switching to ja-kana.
+  await t.db.run(sql`UPDATE songs SET
+    reading_scheme = 'ja-kana'
+  WHERE id = ${SONG_ID}`);
+
+  // Step 3: The delayed lyrics-edit request commits. Its auto-reset must see the
+  // live scheme is now 'ja-kana' and reset the confirmed flag.
+  await t.db.run(lyricsEditSql(NEW_LYRICS));
+
+  const row = await readSong(t);
+  assert.equal(row.lyrics_raw, NEW_LYRICS, 'new lyrics must be written');
+  assert.equal(row.reading_scheme, 'ja-kana', 'concurrent scheme change must be preserved');
+  assert.equal(row.reading_scheme_confirmed, 0,
+    'reading_scheme_confirmed must reset when live scheme is ja-kana');
+});
+
+test('lyrics PUT with explicit reading_scheme in payload uses submitted scheme for confirmed auto-reset', async () => {
+  const t = makeTestDb(`/tmp/song-put-confirmed-explicit-${process.pid}-${Date.now()}.db`);
+  await createTables(t);
+  await seedSong(t);
+
+  // Submit lyrics change WITH an explicit reading_scheme='yue-jyutping'.
+  // The auto-reset check must use the submitted value (yue-jyutping), so the
+  // flag must NOT be reset even though the DB currently has 'ja-kana'.
+  await t.db.run(sql`UPDATE songs SET
+    lyrics_raw = ${NEW_LYRICS},
+    reading_scheme = 'yue-jyutping',
+    lyrics_furigana = CASE WHEN ${NEW_LYRICS} != lyrics_raw THEN '[]' ELSE lyrics_furigana END,
+    lyrics_translation = CASE WHEN ${NEW_LYRICS} != lyrics_raw THEN '[]' ELSE lyrics_translation END,
+    lyrics_translation_lang = CASE WHEN ${NEW_LYRICS} != lyrics_raw THEN NULL ELSE lyrics_translation_lang END,
+    lyrics_translation_reasoning = CASE WHEN ${NEW_LYRICS} != lyrics_raw THEN NULL ELSE lyrics_translation_reasoning END,
+    lyrics_glossary = CASE WHEN ${NEW_LYRICS} != lyrics_raw THEN NULL ELSE lyrics_glossary END,
+    lyrics_source = CASE WHEN ${NEW_LYRICS} != lyrics_raw THEN 'manual' ELSE lyrics_source END,
+    lyrics_confidence = CASE WHEN ${NEW_LYRICS} != lyrics_raw THEN 100 ELSE lyrics_confidence END,
+    lyrics_needs_review = CASE WHEN ${NEW_LYRICS} != lyrics_raw THEN 0 ELSE lyrics_needs_review END,
+    lyrics_fetched_at = CASE WHEN ${NEW_LYRICS} != lyrics_raw THEN NULL ELSE lyrics_fetched_at END,
+    reading_scheme_confirmed = CASE WHEN ${NEW_LYRICS} != lyrics_raw AND 'yue-jyutping' = 'ja-kana'
+      THEN 0 ELSE reading_scheme_confirmed END
+  WHERE id = ${SONG_ID}`);
+
+  const row = await readSong(t);
+  assert.equal(row.lyrics_raw, NEW_LYRICS, 'new lyrics must be written');
+  assert.equal(row.reading_scheme, 'yue-jyutping', 'submitted scheme must be applied');
+  assert.equal(row.reading_scheme_confirmed, 1,
+    'confirmed must NOT reset when submitted scheme is yue-jyutping');
 });
