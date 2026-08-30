@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB, schema, sql } from '@/lib/db';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import type { CoverPaletteJson, Song } from '@/lib/types';
 import { getAuthUser } from '@/lib/auth';
 import { isSongVisibleToUser } from '@/lib/song-visibility';
@@ -157,75 +157,123 @@ export async function PUT(
       return NextResponse.json({ error: guard.error }, { status: guard.error === 'stale_timeline_source' ? 409 : 400 });
     }
   }
-  const newSynced = lyrics_synced !== undefined ? lyrics_synced : existing.lyrics_synced;
-  const syncedUpdate = lyrics_synced !== undefined
-    ? resolveLrcTextUpdate(existing.lyrics_raw, existing.lyrics_synced, lyrics_synced)
-    : { lyricsRaw: existing.lyrics_raw, contentChanged: false };
-  // Timestamp-only edits must not rewrite plain lyrics or erase manual furigana corrections.
-  const newRaw = lyrics_raw !== undefined ? lyrics_raw : syncedUpdate.lyricsRaw;
 
-  let lyricsFurigana = existing.lyrics_furigana;
-  const nextReadingScheme = (reading_scheme ?? existing.reading_scheme) as ReadingScheme;
-  const readingSchemeChanged = nextReadingScheme !== existing.reading_scheme;
-  // Clear furigana whenever the rendered plain lyrics change, or explicitly on request (debug tooling).
-  if (newRaw !== existing.lyrics_raw || readingSchemeChanged || clear_furigana === true) {
-    lyricsFurigana = '[]';
+  // ---------------------------------------------------------------------------
+  // Issue #211: construct the minimal set — only write fields present in the
+  // payload, plus derived-invalidation columns whose value depends on the DB's
+  // *current* state evaluated via SQL CASE at write time (never a stale
+  // request-time snapshot). Two concurrent PUTs touching different fields no
+  // longer overwrite each other: a cover-palette-only request writes only
+  // `cover_palette` (never resurrects old lyrics/furigana/translation), and a
+  // lyrics-only request compares its new text against the live `lyrics_raw`
+  // column rather than the snapshot it happened to read.
+  // ---------------------------------------------------------------------------
+  const set: Record<string, unknown> = {};
+
+  // --- Independent fields: write only when present in the payload ---
+  if (title !== undefined) set.title = title;
+  if (artist !== undefined) set.artist = artist;
+  if (cover_palette !== undefined) {
+    set.coverPalette = cover_palette === null ? null : JSON.stringify(cover_palette);
+  }
+  if (reading_scheme !== undefined) set.readingScheme = reading_scheme;
+  if (reading_scheme_confirmed !== undefined) {
+    set.readingSchemeConfirmed = Number(reading_scheme_confirmed);
   }
 
-  const lyricsContentChanged = newRaw !== existing.lyrics_raw;
-  // Line-aligned translations become stale whenever the lyrics text changes; drop them.
-  // Explicit clear (debug tooling) also wipes the cache regardless of content change.
-  const lyricsTranslation = clear_translation === true
-    ? '[]'
-    : lyricsContentChanged ? '[]' : existing.lyrics_translation;
-  // When the translation cache is cleared, its recorded language is cleared
-  // too — a future request re-translates from scratch (issue #93).
-  const lyricsTranslationLang = (clear_translation === true || lyricsContentChanged)
-    ? null
-    : existing.lyrics_translation_lang;
-  // Reasoning is tied to the translation run; wipe it whenever the translation
-  // cache is cleared, the lyrics content changes, or explicitly on request
-  // (the clear entry lives on the song editor page).
-  const lyricsTranslationReasoning = (clear_translation === true || lyricsContentChanged || clear_reasoning === true)
-    ? null
-    : existing.lyrics_translation_reasoning;
-  // The terminology glossary is tied to the lyrics content; invalidate it on
-  // change, or explicitly on request (the clear entry lives on the editor).
-  const lyricsGlossary = (lyricsContentChanged || clear_glossary === true) ? null : existing.lyrics_glossary;
-  const updatedRow = await db.update(schema.songs).set({
-    title: title !== undefined ? title : existing.title,
-    artist: artist !== undefined ? artist : existing.artist,
-    lyricsRaw: newRaw,
-    lyricsFurigana,
-    lyricsTranslation,
-    lyricsTranslationLang,
-    lyricsTranslationReasoning,
-    lyricsGlossary,
-    coverPalette: cover_palette !== undefined
-      ? cover_palette === null ? null : JSON.stringify(cover_palette)
-      : existing.cover_palette === null || existing.cover_palette === undefined
-        ? null
-        : typeof existing.cover_palette === 'string'
-          ? existing.cover_palette
-          : JSON.stringify(existing.cover_palette),
-    readingScheme: nextReadingScheme,
-    readingSchemeConfirmed: reading_scheme_confirmed !== undefined
-      ? Number(reading_scheme_confirmed)
-      : lyricsContentChanged && nextReadingScheme === 'ja-kana'
-        ? 0
-        : existing.reading_scheme_confirmed,
-    lyricsSynced: newSynced,
-    ...(lyricsContentChanged ? {
-      lyricsSource: 'manual',
-      lyricsConfidence: 100,
-      // A manual edit is an explicit human review — clear any pending flag.
-      lyricsNeedsReview: 0,
-      lyricsFetchedAt: null,
-    } : {}),
-    updatedAt: sql`(datetime('now', 'localtime'))`,
-  }).where(timelineGuarded
-    ? and(eq(schema.songs.id, id), eq(schema.songs.lyricsRaw, source_lyrics))
-    : eq(schema.songs.id, id))
+  // --- Lyrics fields ---
+  const hasRaw = lyrics_raw !== undefined;
+  const hasSynced = lyrics_synced !== undefined;
+
+  // Determine the effective new lyrics_raw (if any). For `lyrics_synced`,
+  // resolve whether its text content differs from the current plain lyrics —
+  // timestamp-only edits must not rewrite plain lyrics.
+  let effectiveNewRaw: string | undefined;
+  if (hasRaw) {
+    effectiveNewRaw = lyrics_raw;
+  } else if (hasSynced) {
+    const update = resolveLrcTextUpdate(existing.lyrics_raw, existing.lyrics_synced, lyrics_synced);
+    if (update.contentChanged) {
+      effectiveNewRaw = update.lyricsRaw;
+    }
+  }
+
+  if (effectiveNewRaw !== undefined) set.lyricsRaw = effectiveNewRaw;
+  if (hasSynced) set.lyricsSynced = lyrics_synced;
+
+  const nextScheme = (reading_scheme ?? existing.reading_scheme) as ReadingScheme;
+
+  // --- Cross-field derived invalidation (SQL CASE against current DB values) ---
+  // Each CASE compares the submitted value against the live column at write
+  // time. If another request already updated the column, the comparison uses
+  // the winner's value — never the stale request-time snapshot.
+
+  // Furigana: cleared when lyrics_raw changes, reading_scheme changes, or
+  // explicitly requested via clear_furigana.
+  if (clear_furigana === true) {
+    set.lyricsFurigana = '[]';
+  } else if (effectiveNewRaw !== undefined || reading_scheme !== undefined) {
+    const conds: unknown[] = [];
+    if (effectiveNewRaw !== undefined) conds.push(sql`${effectiveNewRaw} != lyrics_raw`);
+    if (reading_scheme !== undefined) conds.push(sql`${reading_scheme} != reading_scheme`);
+    const cond = conds.length === 1 ? conds[0] : or(...conds as Parameters<typeof or>);
+    set.lyricsFurigana = sql`CASE WHEN ${cond} THEN '[]' ELSE lyrics_furigana END`;
+  }
+
+  // Translation cache + language stamp: invalidated when lyrics content
+  // changes or explicitly via clear_translation.
+  if (clear_translation === true) {
+    set.lyricsTranslation = '[]';
+    set.lyricsTranslationLang = null;
+  } else if (effectiveNewRaw !== undefined) {
+    const cond = sql`${effectiveNewRaw} != lyrics_raw`;
+    set.lyricsTranslation = sql`CASE WHEN ${cond} THEN '[]' ELSE lyrics_translation END`;
+    set.lyricsTranslationLang = sql`CASE WHEN ${cond} THEN NULL ELSE lyrics_translation_lang END`;
+  }
+
+  // Reasoning: wiped when translation is cleared, lyrics content changes, or
+  // explicitly via clear_reasoning.
+  if (clear_translation === true || clear_reasoning === true) {
+    set.lyricsTranslationReasoning = null;
+  } else if (effectiveNewRaw !== undefined) {
+    set.lyricsTranslationReasoning = sql`CASE WHEN ${effectiveNewRaw} != lyrics_raw THEN NULL ELSE lyrics_translation_reasoning END`;
+  }
+
+  // Glossary: invalidated when lyrics content changes or explicitly via
+  // clear_glossary.
+  if (clear_glossary === true) {
+    set.lyricsGlossary = null;
+  } else if (effectiveNewRaw !== undefined) {
+    set.lyricsGlossary = sql`CASE WHEN ${effectiveNewRaw} != lyrics_raw THEN NULL ELSE lyrics_glossary END`;
+  }
+
+  // reading_scheme_confirmed auto-reset: when lyrics content changes and the
+  // active scheme is 'ja-kana', reset the flag (old reading is no longer
+  // accurate for the new text). The SQL CASE uses the DB's current scheme,
+  // not the request-time snapshot.
+  if (reading_scheme_confirmed === undefined && effectiveNewRaw !== undefined) {
+    set.readingSchemeConfirmed = sql`CASE
+      WHEN ${effectiveNewRaw} != lyrics_raw AND ${nextScheme} = 'ja-kana'
+      THEN 0 ELSE reading_scheme_confirmed END`;
+  }
+
+  // Metadata when lyrics content actually changes: mark as manual edit, full
+  // confidence, needs-review cleared, and drop the fetched-at stamp.
+  if (effectiveNewRaw !== undefined) {
+    set.lyricsSource = sql`CASE WHEN ${effectiveNewRaw} != lyrics_raw THEN 'manual' ELSE lyrics_source END`;
+    set.lyricsConfidence = sql`CASE WHEN ${effectiveNewRaw} != lyrics_raw THEN 100 ELSE lyrics_confidence END`;
+    set.lyricsNeedsReview = sql`CASE WHEN ${effectiveNewRaw} != lyrics_raw THEN 0 ELSE lyrics_needs_review END`;
+    set.lyricsFetchedAt = sql`CASE WHEN ${effectiveNewRaw} != lyrics_raw THEN NULL ELSE lyrics_fetched_at END`;
+  }
+
+  // Always bump the timestamp on any successful write.
+  set.updatedAt = sql`(datetime('now', 'localtime'))`;
+
+  const updatedRow = await db.update(schema.songs)
+    .set(set)
+    .where(timelineGuarded
+      ? and(eq(schema.songs.id, id), eq(schema.songs.lyricsRaw, source_lyrics))
+      : eq(schema.songs.id, id))
     .returning({ id: schema.songs.id }).get();
 
   // Atomicity backstop: the UPDATE above matched `id + lyrics_raw` at execution
