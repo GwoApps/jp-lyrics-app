@@ -195,10 +195,14 @@ export function isSameSpotifyTrack(
 /**
  * Find the best-matching DB song for a Spotify track.
  *
- * Priority:
- *   1. User's own songs (any visibility)
- *   2. Public songs from other users
- *   3. Never match non-public songs from other users
+ * Evidence priority:
+ *   1. Spotify Track ID exact match (strongest evidence — wins regardless of owner)
+ *   2. Fuzzy title/artist match — user's own songs preferred within this tier
+ *
+ * Visibility:
+ *   - Own songs (any visibility) are always eligible.
+ *   - Public songs from other users are eligible.
+ *   - Non-public songs from other users are never matched.
  *
  * Returns null if no song passes the threshold.
  */
@@ -209,10 +213,12 @@ export function findBestMatch(
 ): SongCandidate | null {
   if (!track) return null;
 
-  let bestOwn: SongCandidate | null = null;
-  let bestOwnScore = 0;
-  let bestPublic: SongCandidate | null = null;
-  let bestPublicScore = 0;
+  let bestOwnExact: SongCandidate | null = null;
+  let bestOwnFuzzy: SongCandidate | null = null;
+  let bestOwnFuzzyScore = 0;
+  let bestPublicExact: SongCandidate | null = null;
+  let bestPublicFuzzy: SongCandidate | null = null;
+  let bestPublicFuzzyScore = 0;
 
   for (const song of songs) {
     const score = songMatchScore(song, track);
@@ -220,22 +226,43 @@ export function findBestMatch(
 
     const isOwn = currentUserEmail && song.created_by === currentUserEmail;
     const isPublic = song.is_public === 1;
+    if (!isOwn && !isPublic) continue; // Non-public from others: ignored
 
-    if (isOwn) {
-      if (score > bestOwnScore) {
-        bestOwnScore = score;
-        bestOwn = song;
+    // Exact Track ID hit: both sides carry IDs and they are equal.
+    const isExactId = Boolean(track.id) && Boolean(song.spotify_track_id) &&
+      song.spotify_track_id === track.id;
+
+    if (isExactId) {
+      // All exact-ID matches have score 1; keep the first per owner group.
+      if (isOwn) {
+        if (!bestOwnExact) bestOwnExact = song;
+      } else {
+        if (!bestPublicExact) bestPublicExact = song;
       }
-    } else if (isPublic) {
-      if (score > bestPublicScore) {
-        bestPublicScore = score;
-        bestPublic = song;
+    } else {
+      // Fuzzy metadata match — keep the highest scoring candidate.
+      if (isOwn) {
+        if (score > bestOwnFuzzyScore) {
+          bestOwnFuzzyScore = score;
+          bestOwnFuzzy = song;
+        }
+      } else {
+        if (score > bestPublicFuzzyScore) {
+          bestPublicFuzzyScore = score;
+          bestPublicFuzzy = song;
+        }
       }
     }
-    // Non-public songs from other users are ignored
   }
 
-  return bestOwn || bestPublic || null;
+  // 1. Exact Track ID evidence is the strongest signal — it wins over any
+  //    fuzzy match regardless of owner vs public.
+  if (bestOwnExact || bestPublicExact) {
+    return bestOwnExact || bestPublicExact;
+  }
+
+  // 2. No exact ID hits — apply "own song priority" among fuzzy matches.
+  return bestOwnFuzzy || bestPublicFuzzy || null;
 }
 
 /**
