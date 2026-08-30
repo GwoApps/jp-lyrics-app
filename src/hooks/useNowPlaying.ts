@@ -191,6 +191,12 @@ export function useNowPlaying(enabled = true) {
     esRef.current?.close();
     checksumErrRef.current = 0;
 
+    // Track whether this full-refresh stream delivered a valid full message.
+    // Do NOT reuse the global gotMessageRef: it belongs to the regular SSE
+    // lifetime and may already be true from earlier messages, which would
+    // suppress fallback when this recovery stream fails.
+    let receivedFullMessage = false;
+
     const es = new EventSource('/api/spotify/now-playing/stream?full=true');
     esRef.current = es;
 
@@ -201,6 +207,7 @@ export function useNowPlaying(enabled = true) {
         if ((msg as unknown as { _heartbeat?: boolean })._heartbeat) return;
         const fullData = msg.d as unknown as NowPlayingData;
         if (fullData && typeof fullData.connected === 'boolean') {
+          receivedFullMessage = true;
           localDataRef.current = fullData;
           localSeqRef.current = msg.seq;
           handlePollSuccess(fullData);
@@ -215,7 +222,10 @@ export function useNowPlaying(enabled = true) {
 
     es.onerror = () => {
       es.close();
-      if (!gotMessageRef.current) startFallback('full refresh failed');
+      // If this full-refresh stream never delivered a valid full message,
+      // deterministically fall back to REST polling so recovery always has
+      // an active channel instead of leaving playback stale forever.
+      if (!receivedFullMessage) startFallback('full refresh failed');
     };
   }, [handlePollSuccess, startFallback, stopClientPolling]);
 
