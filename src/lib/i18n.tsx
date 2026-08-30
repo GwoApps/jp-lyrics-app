@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useSyncExternalStore, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useSyncExternalStore, ReactNode } from 'react';
 import ja from '@/i18n/ja.json';
 import en from '@/i18n/en.json';
 import zhCN from '@/i18n/zh-CN.json';
@@ -50,6 +50,13 @@ const subscribeHydration = () => () => {};
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(detectLocale);
   const ready = useSyncExternalStore(subscribeHydration, () => true, () => false);
+
+  // Keep <html lang> in sync with the active locale, including on initial
+  // detection / persistence restore, so screen readers and language tools
+  // announce the UI in the correct language.
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   const setLocale = useCallback((l: Locale) => {
     setLocaleState(l);
