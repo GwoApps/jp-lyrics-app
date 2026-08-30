@@ -134,7 +134,11 @@ export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSup
         {/* Original / Furigana — expands a menu like the desktop Languages menu */}
         <div className="relative" ref={langMenuRef}>
           <MobileIconButton
-            label={t(data.readingMode === 'original' ? 'song.readingOriginal' : 'song.readingFurigana')}
+            label={t(data.readingMode === 'original'
+              ? 'song.readingOriginal'
+              : song.reading_scheme === 'yue-jyutping'
+                ? 'song.readingJyutping'
+                : 'song.readingFurigana')}
             onClick={() => {
               setShowMenu(false);
               setShowCopyMenu(false);
