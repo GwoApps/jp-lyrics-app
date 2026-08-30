@@ -188,8 +188,38 @@ export async function saveTrackResult(
   jobId: string,
   track: PlaylistTrack,
   result: Omit<PlaylistTrackResult, 'title' | 'artist'>,
+  db: any = getDB(),
 ): Promise<void> {
-  const db = getDB();
+  // The track-result row is the source of truth. We insert it FIRST (idempotent
+  // via ON CONFLICT DO NOTHING) and only bump the job counters when the INSERT
+  // actually added a NEW row. A conflicting duplicate is a no-op for both the
+  // result table and the counters, so a client retry or a concurrent chunk
+  // submit never over-counts processed / imported / skipped / failed.
+  //
+  // Doing the insert first also removes the old "counted but no result" window:
+  // if the INSERT fails, the counters are never touched. Each write here is a
+  // single short statement (no multi-statement transaction), which keeps the
+  // update concurrency-safe — the pattern this codebase uses everywhere for D1
+  // / libsql writes (see ai-usage.ts, sync-write.ts).
+  const inserted = await db.insert(schema.playlistImportTrackResults).values({
+    jobId,
+    spotifyTrackId: track.id,
+    title: track.title,
+    artist: track.artist,
+    status: result.status,
+    needsReview: result.needsReview ? 1 : 0,
+  }).onConflictDoNothing().run();
+
+  // rowsAffected: libsql · changes / meta.changes: D1 — all drivers expose the
+  // affected-row count one way or another. 0 means the row already existed.
+  const insertedCount = Number(
+    (inserted as { rowsAffected?: number }).rowsAffected ??
+    (inserted as { changes?: number }).changes ??
+    (inserted as { meta?: { changes?: number } }).meta?.changes ??
+    0,
+  );
+  if (insertedCount === 0) return; // duplicate → counters already reflect it
+
   const inc = {
     imported: result.status === 'imported' ? 1 : 0,
     skipped: result.status === 'skipped' ? 1 : 0,
@@ -205,14 +235,6 @@ export async function saveTrackResult(
         updated_at = datetime('now', 'localtime')
     WHERE id = ${jobId}
   `);
-  await db.insert(schema.playlistImportTrackResults).values({
-    jobId,
-    spotifyTrackId: track.id,
-    title: track.title,
-    artist: track.artist,
-    status: result.status,
-    needsReview: result.needsReview ? 1 : 0,
-  }).onConflictDoNothing();
 }
 
 /** Create a fresh import job and return its summary. */
