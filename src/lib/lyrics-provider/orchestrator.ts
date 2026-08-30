@@ -44,10 +44,10 @@ export type ProviderChainOnStage = (stage: SyncStageOrDynamic) => void;
  * the builtin chain's evidence-based rules so HTTP providers get the same
  * quality gate. Returns the final LyricsFetchResult (or null when rejected).
  */
-function scoreCandidate(
+export function scoreCandidate(
   query: LyricsProviderQuery,
   evidence: { durationMs?: number; album?: string } | undefined,
-  candidate: { title: string; artists: string[]; plain?: string; synced?: string; durationMs?: number; album?: string },
+  candidate: { title: string; artists: string[]; plain?: string; synced?: string; durationMs?: number; album?: string; sourceUrl?: string },
   source: string,
 ): LyricsFetchResult | null {
   const hasRequestedArtist = query.artists.some((a) => a.trim().length > 0);
@@ -83,7 +83,6 @@ function scoreCandidate(
   const confidence = Math.round(40 + score * 50);
   // Reuse the same base confidence mapping as Uta-Net (plain/synced-aware).
   const finalConfidence = synced ? Math.min(90, confidence) : Math.min(82, confidence);
-  const isPlainHit = !synced;
 
   // Fall below the hard floor → wrong candidate; never persist silently.
   if (finalConfidence < 60) return null;
@@ -92,7 +91,7 @@ function scoreCandidate(
   // evidence — `parseCandidate` guarantees non-empty identity fields for HTTP
   // candidates, so a missing title here is treated as no trusted match.
   const match = candidate.title && candidate.artists[0]
-    ? { title: candidate.title, artist: candidate.artists[0], link: '' }
+    ? { title: candidate.title, artist: candidate.artists[0], link: candidate.sourceUrl || '' }
     : undefined;
 
   return {
@@ -100,7 +99,7 @@ function scoreCandidate(
     source,
     confidence: finalConfidence,
     durationMismatch: false, // conflict candidates are already dropped above
-    ...(match && !isPlainHit ? { match } : {}),
+    ...(match ? { match } : {}),
   };
 }
 
@@ -211,6 +210,7 @@ export async function fetchLyricsWithChain(
               synced: candidate.syncedLyrics,
               durationMs: candidate.durationMs,
               album: candidate.album,
+              sourceUrl: candidate.sourceUrl,
             },
             provider.id,
           );

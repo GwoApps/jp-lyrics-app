@@ -23,6 +23,7 @@ import { MAX_CANDIDATES_PER_PROVIDER } from './lyrics-provider/normalize.ts';
 import { normalizeCandidateLyrics } from './lyrics-provider/normalize.ts';
 import { hasProviderSecretKey, maskSecret } from './lyrics-provider/secret.ts';
 import { isSameOriginRequest } from './admin.ts';
+import { scoreCandidate } from './lyrics-provider/orchestrator.ts';
 
 // ─── Policy: private IP detection ─────────────────────────────
 
@@ -489,4 +490,63 @@ test('builtinRowIdToKey resolves both colon and legacy hyphen row ids', () => {
   assert.equal(builtinRowIdToKey('builtin-ytmusic'), 'ytmusic');
   assert.equal(builtinRowIdToKey('plugin:abc:1'), null);
   assert.equal(builtinRowIdToKey('builtin-unknown'), null);
+});
+
+
+// ─── scoreCandidate: HTTP provider source_url propagation (ISSUE #215) ────
+
+test('scoreCandidate keeps sourceUrl in match.link for a synced candidate', () => {
+  const result = scoreCandidate(
+    { title: 'Same Song', artists: ['Artist'] },
+    undefined,
+    {
+      title: 'Same Song',
+      artists: ['Artist'],
+      synced: '[00:01.00]Line one\n[00:02.00]Line two',
+      sourceUrl: 'https://provider.example/song/123',
+    },
+    'plugin:test:1',
+  );
+  assert.ok(result, 'synced candidate must be accepted');
+  assert.ok(result.match, 'synced candidate must carry match metadata');
+  assert.equal(result.match?.link, 'https://provider.example/song/123');
+  assert.equal(result.match?.title, 'Same Song');
+  assert.equal(result.match?.artist, 'Artist');
+});
+
+test('scoreCandidate keeps sourceUrl and identity metadata for a plain-only candidate', () => {
+  const result = scoreCandidate(
+    { title: 'Same Song', artists: ['Artist'] },
+    undefined,
+    {
+      title: 'Same Song',
+      artists: ['Artist'],
+      plain: 'Just plain lyrics for review',
+      sourceUrl: 'https://provider.example/song/123',
+    },
+    'plugin:test:1',
+  );
+  assert.ok(result, 'plain candidate must be accepted');
+  assert.ok(result.match, 'plain candidate must carry match metadata for review');
+  assert.equal(result.match?.link, 'https://provider.example/song/123');
+  assert.equal(result.match?.title, 'Same Song');
+  assert.equal(result.match?.artist, 'Artist');
+});
+
+test('scoreCandidate falls back to empty link when sourceUrl is missing', () => {
+  const result = scoreCandidate(
+    { title: 'Same Song', artists: ['Artist'] },
+    undefined,
+    {
+      title: 'Same Song',
+      artists: ['Artist'],
+      synced: '[00:01.00]Line one\n[00:02.00]Line two',
+    },
+    'plugin:test:1',
+  );
+  assert.ok(result, 'candidate without sourceUrl must still be accepted');
+  assert.ok(result.match, 'candidate without sourceUrl must still carry match');
+  assert.equal(result.match?.link, '');
+  assert.equal(result.match?.title, 'Same Song');
+  assert.equal(result.match?.artist, 'Artist');
 });
