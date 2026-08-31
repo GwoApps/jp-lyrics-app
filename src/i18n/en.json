@@ -118,7 +118,17 @@
     "openSong": "Open song {title}",
     "addToFavorites": "Add {title} to favorites",
     "removeFromFavorites": "Remove {title} from favorites",
-    "deleteSongLabel": "Delete song {title}"
+    "deleteSongLabel": "Delete song {title}",
+    "deleteFailed": "Delete failed, please retry",
+    "favoriteToggleFailed": "Failed to update favorite, please retry",
+    "collectionCreateFailed": "Failed to create collection, please retry",
+    "collectionDeleteFailed": "Failed to delete collection, please retry",
+    "collectionCreated": "Collection created",
+    "collectionsEmpty": "No collections yet - enter a name to create the first one",
+    "errorLoginRequired": "Please sign in first",
+    "errorForbidden": "You do not have permission to do that",
+    "collectionNotFound": "Collection not found or already deleted",
+    "collectionNameRequired": "Please enter a collection name"
   },
   "song": {
     "notFound": "Song not found",

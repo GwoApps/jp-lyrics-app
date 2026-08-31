@@ -118,7 +118,17 @@
     "openSong": "曲「{title}」を開く",
     "addToFavorites": "「{title}」をお気に入りに追加",
     "removeFromFavorites": "「{title}」をお気に入りから削除",
-    "deleteSongLabel": "曲「{title}」を削除"
+    "deleteSongLabel": "曲「{title}」を削除",
+    "deleteFailed": "削除に失敗しました。もう一度お試しください",
+    "favoriteToggleFailed": "お気に入りの更新に失敗しました。もう一度お試しください",
+    "collectionCreateFailed": "コレクションの作成に失敗しました。もう一度お試しください",
+    "collectionDeleteFailed": "コレクションの削除に失敗しました。もう一度お試しください",
+    "collectionCreated": "コレクションを作成しました",
+    "collectionsEmpty": "コレクションはまだありません。名前を入力して最初の1つを作成してください",
+    "errorLoginRequired": "先にログインしてください",
+    "errorForbidden": "この操作を行う権限がありません",
+    "collectionNotFound": "コレクションが見つからないか、既に削除されています",
+    "collectionNameRequired": "コレクション名を入力してください"
   },
   "song": {
     "notFound": "曲が見つかりません",

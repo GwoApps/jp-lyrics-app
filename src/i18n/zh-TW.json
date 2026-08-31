@@ -118,7 +118,17 @@
     "openSong": "開啟歌曲「{title}」",
     "addToFavorites": "加入收藏「{title}」",
     "removeFromFavorites": "取消收藏「{title}」",
-    "deleteSongLabel": "刪除歌曲「{title}」"
+    "deleteSongLabel": "刪除歌曲「{title}」",
+    "deleteFailed": "刪除失敗，請重試",
+    "favoriteToggleFailed": "收藏操作失敗，請重試",
+    "collectionCreateFailed": "建立收藏集失敗，請重試",
+    "collectionDeleteFailed": "刪除收藏集失敗，請重試",
+    "collectionCreated": "收藏集已建立",
+    "collectionsEmpty": "還沒有收藏集，輸入名稱建立第一個",
+    "errorLoginRequired": "請先登入",
+    "errorForbidden": "沒有權限執行此操作",
+    "collectionNotFound": "收藏集不存在或已刪除",
+    "collectionNameRequired": "請輸入收藏集名稱"
   },
   "song": {
     "notFound": "找不到歌曲",

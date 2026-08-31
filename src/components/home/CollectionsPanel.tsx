@@ -15,7 +15,7 @@ interface CollectionsPanelProps {
   filterCollection: string | null;
   onFilterChange: (id: string | null) => void;
   onDelete: (id: string) => void;
-  onCreate: (name: string) => Promise<void>;
+  onCreate: (name: string) => Promise<boolean>;
 }
 
 /**
@@ -38,8 +38,14 @@ export default function CollectionsPanel({
     if (!name.trim() || creating) return;
     setCreating(true);
     try {
-      await onCreate(name.trim());
-      setName('');
+      // onCreate surfaces its own success/error feedback (toast). Only clear the
+      // input once the server acknowledged creation, so a failed attempt keeps
+      // the typed name for the user to retry.
+      const ok = await onCreate(name.trim());
+      if (ok) setName('');
+    } catch {
+      // Guard against any unexpected rejection: the panel must never leave an
+      // unhandled Promise rejection, and onCreate already reports the error.
     } finally {
       setCreating(false);
     }
@@ -92,23 +98,29 @@ export default function CollectionsPanel({
             </button>
           </div>
           <div className="space-y-1">
-            {collections.map((c) => (
-              <div
-                key={c.id}
-                className={`flex items-center justify-between rounded-md px-3 py-2 text-xs cursor-pointer transition-colors ${
-                  filterCollection === c.id ? 'bg-[var(--primary)]/10 text-[var(--primary)]' : 'hover:bg-[var(--accent)]'
-                }`}
-                onClick={() => onFilterChange(filterCollection === c.id ? null : c.id)}
-              >
-                <span>{c.name} ({c.songCount})</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onDelete(c.id); }}
-                  className="text-[var(--muted-foreground)] hover:text-[var(--destructive)]"
+            {collections.length === 0 ? (
+              <p className="rounded-md bg-[var(--muted)] px-3 py-2.5 text-xs text-[var(--muted-foreground)]">
+                {t('home.collectionsEmpty')}
+              </p>
+            ) : (
+              collections.map((c) => (
+                <div
+                  key={c.id}
+                  className={`flex items-center justify-between rounded-md px-3 py-2 text-xs cursor-pointer transition-colors ${
+                    filterCollection === c.id ? 'bg-[var(--primary)]/10 text-[var(--primary)]' : 'hover:bg-[var(--accent)]'
+                  }`}
+                  onClick={() => onFilterChange(filterCollection === c.id ? null : c.id)}
                 >
-                  <Trash className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
+                  <span>{c.name} ({c.songCount})</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onDelete(c.id); }}
+                    className="text-[var(--muted-foreground)] hover:text-[var(--destructive)]"
+                  >
+                    <Trash className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}

@@ -84,6 +84,7 @@ export default function HomePage() {
     return success === 'connected' ? { type: 'success', msg: t('home.spotifyConnected') } : null;
   });
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [importAlert, setImportAlert] = useState<ImportAlertState>(null);
   const [importReview, setImportReview] = useState<ImportReviewState | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -122,6 +123,33 @@ export default function HomePage() {
 
   const showToast = (type: 'success' | 'error', msg: string) => {
     setToast({ type, msg });
+  };
+
+  // Extract the language-independent error code from a failed write response
+  // (mirrors the song detail page's requestPublicErrorMsg error-code mapping).
+  // Network errors and non-JSON bodies surface as `undefined`.
+  const readErrorCode = async (res: Response): Promise<string | undefined> => {
+    try {
+      const body = await res.json();
+      return typeof body?.error === 'string' ? body.error : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  // Map write-operation error codes to localized messages. Unknown codes fall
+  // back to the per-operation fallback key — never surface raw error strings.
+  const writeErrorMsg = (code: string | undefined, fallbackKey: string): string => {
+    const keyMap: Record<string, string> = {
+      login_required: 'home.errorLoginRequired',
+      unauthorized: 'home.errorLoginRequired',
+      forbidden: 'home.errorForbidden',
+      song_not_found: 'song.notFound',
+      collection_not_found: 'home.collectionNotFound',
+      name_required: 'home.collectionNameRequired',
+    };
+    const key = typeof code === 'string' ? keyMap[code] : undefined;
+    return key ? t(key) : t(fallbackKey);
   };
 
   const applySongListResult = useCallback((result: { songs: SongItem[]; ok: boolean }) => {
@@ -199,16 +227,27 @@ export default function HomePage() {
 
   const handleDelete = (id: string, title: string) => {
     setDeleteTarget({ id, title });
+    setDeleteError(null);
   };
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    const res = await fetch(`/api/songs/${deleteTarget.id}`, { method: 'DELETE' });
-    if (res.ok) {
-      setSongs((prev) => prev.filter((s) => s.id !== deleteTarget.id));
-      showToast('success', t('home.deleted'));
+    try {
+      const res = await fetch(`/api/songs/${deleteTarget.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setSongs((prev) => prev.filter((s) => s.id !== deleteTarget.id));
+        setDeleteTarget(null);
+        setDeleteError(null);
+        showToast('success', t('home.deleted'));
+      } else {
+        // Keep the dialog open and surface the failure inline so the user can
+        // retry — never close as if the delete had succeeded.
+        const code = await readErrorCode(res);
+        setDeleteError(writeErrorMsg(code, 'home.deleteFailed'));
+      }
+    } catch {
+      setDeleteError(t('home.deleteFailed'));
     }
-    setDeleteTarget(null);
   };
 
   const handleDisconnect = async () => {
@@ -292,36 +331,60 @@ export default function HomePage() {
   const handleToggleFavorite = async (songId: string) => {
     try {
       const res = await fetch(`/api/songs/${songId}/favorite`, { method: 'POST' });
-      const data = await res.json();
-      setFavorites((prev) => {
-        const next = new Set(prev);
-        if (data.favorited) next.add(songId);
-        else next.delete(songId);
-        return next;
-      });
-    } catch { /* */ }
+      const data = await res.json().catch(() => null);
+      if (res.ok && data && typeof data.favorited === 'boolean') {
+        setFavorites((prev) => {
+          const next = new Set(prev);
+          if (data.favorited) next.add(songId);
+          else next.delete(songId);
+          return next;
+        });
+      } else {
+        // The server rejected the toggle (auth / permission / unknown song).
+        // Leave local favorites unchanged so state stays in sync with the server.
+        showToast('error', writeErrorMsg(data?.error, 'home.favoriteToggleFailed'));
+      }
+    } catch {
+      showToast('error', t('home.favoriteToggleFailed'));
+    }
   };
 
-  const handleCreateCollection = async (name: string) => {
+  const handleCreateCollection = async (name: string): Promise<boolean> => {
     try {
       const res = await fetch('/api/collections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
       });
+      const data = await res.json().catch(() => null);
       if (res.ok) {
-        const data = await res.json();
         setCollections((prev) => [...prev, { ...data, songCount: 0 }]);
+        showToast('success', t('home.collectionCreated'));
+        return true;
       }
-    } catch { /* */ }
+      showToast('error', writeErrorMsg(data?.error, 'home.collectionCreateFailed'));
+      return false;
+    } catch {
+      showToast('error', t('home.collectionCreateFailed'));
+      return false;
+    }
   };
 
   const handleDeleteCollection = async (collectionId: string) => {
     try {
-      await fetch(`/api/collections/${collectionId}`, { method: 'DELETE' });
-      setCollections((prev) => prev.filter((c) => c.id !== collectionId));
-      if (filterCollection === collectionId) setFilterCollection(null);
-    } catch { /* */ }
+      const res = await fetch(`/api/collections/${collectionId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setCollections((prev) => prev.filter((c) => c.id !== collectionId));
+        if (filterCollection === collectionId) setFilterCollection(null);
+      } else {
+        // Only remove from the UI when the server actually deleted it; a failed
+        // DELETE after a refresh would otherwise resurrect the collection.
+        const code = await readErrorCode(res);
+        showToast('error', writeErrorMsg(code, 'home.collectionDeleteFailed'));
+      }
+    } catch {
+      showToast('error', t('home.collectionDeleteFailed'));
+    }
   };
 
   // Find matching song in DB for currently playing track (uses title + artist scoring)
@@ -488,7 +551,7 @@ export default function HomePage() {
       />
 
       {/* Collections */}
-      {currentUser && collections.length > 0 && (
+      {currentUser && (
         <CollectionsPanel
           collections={collections}
           filterCollection={filterCollection}
@@ -641,12 +704,12 @@ export default function HomePage() {
       <ConfirmDialog
         open={!!deleteTarget}
         title={t('dialog.deleteConfirmTitle', { title: deleteTarget?.title || '' })}
-        body={t('dialog.deleteConfirmBody')}
+        body={deleteError ? `${t('dialog.deleteConfirmBody')}\n${deleteError}` : t('dialog.deleteConfirmBody')}
         confirmLabel={t('common.delete')}
         cancelLabel={t('common.cancel')}
         variant="danger"
         onConfirm={confirmDelete}
-        onCancel={() => setDeleteTarget(null)}
+        onCancel={() => { setDeleteTarget(null); setDeleteError(null); }}
       />
 
       <ConfirmDialog

@@ -11,7 +11,7 @@ export async function POST(
   const db = getDB();
   const user = await getAuthUser(request);
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'login_required' }, { status: 401 });
   }
 
   const { id } = await params;
@@ -23,7 +23,7 @@ export async function POST(
     sql`SELECT id, created_by, is_public FROM songs WHERE id = ${id}`
   ) as { id: string; created_by: string; is_public: number } | undefined;
   if (!song || !isSongVisibleToUser(song, user)) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
   }
 
   // Check if already favorited

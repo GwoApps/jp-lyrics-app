@@ -33,12 +33,12 @@ export async function POST(request: NextRequest) {
   const db = getDB();
   const user = await getAuthUser(request);
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'login_required' }, { status: 401 });
   }
 
   const { name } = await request.json();
   if (!name?.trim()) {
-    return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+    return NextResponse.json({ error: 'name_required' }, { status: 400 });
   }
 
   const id = uuidv4();

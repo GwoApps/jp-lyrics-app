@@ -10,7 +10,7 @@ export async function DELETE(
   const db = getDB();
   const user = await getAuthUser(request);
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'login_required' }, { status: 401 });
   }
 
   const { id } = await params;
@@ -21,7 +21,7 @@ export async function DELETE(
   );
 
   if (!collection) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    return NextResponse.json({ error: 'collection_not_found' }, { status: 404 });
   }
 
   // Delete collection (cascade will handle collection_songs)

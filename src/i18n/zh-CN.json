@@ -118,7 +118,17 @@
     "openSong": "打开歌曲「{title}」",
     "addToFavorites": "添加到收藏「{title}」",
     "removeFromFavorites": "取消收藏「{title}」",
-    "deleteSongLabel": "删除歌曲「{title}」"
+    "deleteSongLabel": "删除歌曲「{title}」",
+    "deleteFailed": "删除失败，请重试",
+    "favoriteToggleFailed": "收藏操作失败，请重试",
+    "collectionCreateFailed": "创建收藏夹失败，请重试",
+    "collectionDeleteFailed": "删除收藏夹失败，请重试",
+    "collectionCreated": "收藏夹已创建",
+    "collectionsEmpty": "还没有收藏夹，输入名称创建第一个",
+    "errorLoginRequired": "请先登录",
+    "errorForbidden": "没有权限执行此操作",
+    "collectionNotFound": "收藏夹不存在或已删除",
+    "collectionNameRequired": "请输入收藏夹名称"
   },
   "song": {
     "notFound": "找不到歌曲",
