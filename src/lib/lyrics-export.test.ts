@@ -107,8 +107,12 @@ test('buildExport routes formats and extensions', () => {
   const lrc = buildExport(SONG, { format: 'lrc', includeTranslation: true, reading: 'furigana' });
   assert.equal(lrc.extension, 'lrc');
   assert.equal(lrc.contentType, 'text/plain; charset=utf-8');
-  // LRC ignores reading/translation options but injects missing [ti:]/[ar:] metadata
-  assert.equal(lrc.body, `[ti:${SONG.title}]\n[ar:${SONG.artist}]\n${SONG.lyrics_synced}`);
+  // LRC ignores the reading option but injects missing [ti:]/[ar:] metadata and
+  // pairs each timed row with its translation on the same timestamp.
+  assert.equal(
+    lrc.body,
+    `[ti:${SONG.title}]\n[ar:${SONG.artist}]\n[00:01.000]桜が舞う\n[00:01.000]Cherry blossoms dance\n[00:05.000]明日へ\n[00:05.000]Toward tomorrow`,
+  );
 
   const html = buildExport(SONG, { format: 'html', includeTranslation: true, reading: 'furigana' });
   assert.equal(html.extension, 'html');
@@ -179,4 +183,65 @@ test('buildExport LRC omits metadata tags for missing title/artist', () => {
     { format: 'lrc', includeTranslation: false },
   );
   assert.equal(lrc.body, SONG.lyrics_synced);
+});
+
+test('buildExport LRC with translation skips blank source lines and keeps index alignment', () => {
+  // lyrics_raw = '桜が舞う\n\n明日へ' — the blank separator line (index 1) must
+  // NOT consume a synced row, so 'Toward tomorrow' (index 2) pairs with the
+  // SECOND timed row, not the first.
+  const song = { ...SONG, lyrics_raw: '桜が舞う\n\n明日へ' };
+  const lrc = buildExport(song, { format: 'lrc', includeTranslation: true });
+  assert.equal(
+    lrc.body,
+    `[ti:${SONG.title}]\n[ar:${SONG.artist}]\n[00:01.000]桜が舞う\n[00:01.000]Cherry blossoms dance\n[00:05.000]明日へ\n[00:05.000]Toward tomorrow`,
+  );
+});
+
+test('buildExport LRC with translation does not emit a redundant line for untranslated rows', () => {
+  const song = {
+    ...SONG,
+    // The second timed row ('明日へ') has no translation -> no extra line.
+    lyrics_translation: JSON.stringify(['Cherry blossoms dance', '', '']),
+  };
+  const lrc = buildExport(song, { format: 'lrc', includeTranslation: true });
+  assert.equal(
+    lrc.body,
+    `[ti:${SONG.title}]\n[ar:${SONG.artist}]\n[00:01.000]桜が舞う\n[00:01.000]Cherry blossoms dance\n[00:05.000]明日へ`,
+  );
+});
+
+test('buildExport LRC with translation keeps alignment when a stale null slot sits mid-cache', () => {
+  const song = {
+    ...SONG,
+    // Index 1 is a null slot: index 2 ('Toward tomorrow') must still pair with
+    // the second timed row instead of shifting up to the first.
+    lyrics_translation: JSON.stringify(['Cherry blossoms dance', null, 'Toward tomorrow']),
+  };
+  const lrc = buildExport(song, { format: 'lrc', includeTranslation: true });
+  assert.match(lrc.body, /\[00:01\.000\]Cherry blossoms dance\n\[00:05\.000\]明日へ\n\[00:05\.000\]Toward tomorrow/);
+  // The null slot must not produce a translation under the first timed row.
+  assert.doesNotMatch(lrc.body, /\[00:01\.000\]\n/);
+});
+
+test('buildExport LRC with translation preserves existing metadata tags and reuses their timestamps', () => {
+  const synced = '[ar:原歌手]\n[00:01.000]桜が舞う';
+  const lrc = buildExport({ ...SONG, lyrics_synced: synced }, { format: 'lrc', includeTranslation: true });
+  assert.equal(
+    lrc.body,
+    `[ti:${SONG.title}]\n[ar:原歌手]\n[00:01.000]桜が舞う\n[00:01.000]Cherry blossoms dance`,
+  );
+});
+
+test('buildExport LRC with translation keeps untimed rows and multi-timestamp prefixes intact', () => {
+  // Multi-timestamp row: the translation reuses the whole `[..][..]` prefix so it
+  // stays lined up with the player highlight; an untimed row is left untouched.
+  const synced = '[00:01.000][00:02.000]桜が舞う\n未标记行';
+  const lrc = buildExport(
+    { ...SONG, lyrics_synced: synced, lyrics_raw: '桜が舞う\n未标记行' },
+    { format: 'lrc', includeTranslation: true },
+  );
+  assert.equal(
+    lrc.body,
+    `[ti:${SONG.title}]\n[ar:${SONG.artist}]\n[00:01.000][00:02.000]桜が舞う\n[00:01.000][00:02.000]Cherry blossoms dance\n未标记行`,
+  );
 });

@@ -240,7 +240,7 @@
     "exportTranslationLabel": "Include Chinese translation",
     "exportTranslationHint": "Pairs each lyric line with its translation below",
     "exportDownloadBtn": "Download",
-    "exportLrcHint": "LRC is a timed format — synced lyrics only, no readings or translations",
+    "exportLrcHint": "LRC is a timed format — synced lyrics with an optional translation per line; no readings",
     "exportLrcUnavailable": "This song has no synced timeline, so the LRC export would be an empty file. LRC has been disabled.",
     "exportLrcDisabledTitle": "LRC is unavailable — this song has no synced timeline",
     "requestPublic": "Request Public",

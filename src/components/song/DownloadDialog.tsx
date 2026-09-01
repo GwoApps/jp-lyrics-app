@@ -49,7 +49,9 @@ export default function DownloadDialog({
   });
 
   const showReadingOptions = hasReadingData && format !== 'lrc';
-  const showTranslationOption = hasTranslation && format !== 'lrc';
+  // LRC now supports pairing each timed row with its translation, so the
+  // translation toggle is offered for every format (requires a stored translation).
+  const showTranslationOption = hasTranslation;
   const lrcDisabled = !hasSynced;
   // The dialog always mounts fresh with a clean selection (see above), and the
   // LRC button is disabled when `lrcDisabled`, so `format` can never stay

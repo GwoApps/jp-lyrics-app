@@ -10,7 +10,7 @@
 import type { FuriganaLine, ReadingScheme } from './types.ts';
 import { normalizeFuriganaSegments, resolveFuriganaReading } from './romaji.ts';
 import { parseTranslationCache } from './translation/parse.ts';
-import { extractLrcMetadata } from './lrc.ts';
+import { extractLrcMetadata, isLrcMetadataLine } from './lrc.ts';
 
 export type ExportFormat = 'text' | 'lrc' | 'html';
 
@@ -33,7 +33,8 @@ export interface ExportOptions {
   includeTranslation: boolean;
   /**
    * Reading mode for `.txt` / `.html`. `.lrc` always emits the raw synced
-   * timeline and ignores this option.
+   * timeline and ignores this option; when `includeTranslation` is set it
+   * additionally appends a translated line after each timed row (same timestamp).
    */
   reading?: ExportReadingMode;
 }
@@ -102,6 +103,41 @@ export function renderFuriganaLineToHtml(
 /** Render one plain (unannotated) source line to HTML. */
 export function renderPlainLineToHtml(line: string): string {
   return `<p>${line ? escapeHtml(line) : '&nbsp;'}</p>`;
+}
+
+/** Regex matching the full leading timestamp prefix of one synced LRC row. */
+const LRC_LEADING_TIMESTAMPS_RE = /^(?:\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]\s*)+/;
+
+/**
+ * Append a translation line after each timed lyric row, reusing the exact same
+ * timestamp prefix so players keep the highlight synchronized. Translations are
+ * index-aligned to `lyrics_raw`; synced rows are paired with non-empty source
+ * lines in order (blank separator lines carry no translation and do not consume
+ * a synced row). Rows without a translation are left untouched so no redundant
+ * blank line is emitted.
+ */
+function appendLrcTranslations(lyrics: string, translations: string[], rawLyrics: string): string {
+  const sourceLineIndexes: number[] = [];
+  (rawLyrics ?? '').split('\n').forEach((line, index) => {
+    if (line.trim()) sourceLineIndexes.push(index);
+  });
+
+  let lyricRow = 0;
+  return lyrics.split('\n').map((raw) => {
+    const trimmed = raw.trim();
+    // Metadata tags ([ti:]/[ar:]/…) and blank lines are never lyric rows.
+    if (!trimmed || isLrcMetadataLine(trimmed)) return raw;
+    const prefix = trimmed.match(LRC_LEADING_TIMESTAMPS_RE)?.[0] ?? '';
+    const text = trimmed.slice(prefix.length).trim();
+    // Untimed row (e.g. an unmarkable line) or a timestamp with no text: keep
+    // it as-is — there is no reliable index to pair, so no translation row.
+    if (!prefix || !text) return raw;
+    const sourceIndex = sourceLineIndexes[lyricRow];
+    lyricRow += 1;
+    const translation = sourceIndex != null ? translations[sourceIndex]?.trim() : '';
+    if (!translation) return raw;
+    return `${raw}\n${prefix}${translation}`;
+  }).join('\n');
 }
 
 /** Emit a `.txt` document (original / furigana / romaji with optional translations). */
@@ -224,6 +260,9 @@ export function buildExport(song: ExportSongData, options: ExportOptions): Expor
     if (song.title && !existingTags.ti) missingTags.push(`[ti:${song.title}]`);
     if (song.artist && !existingTags.ar) missingTags.push(`[ar:${song.artist}]`);
     if (missingTags.length > 0) body = `${missingTags.join('\n')}\n${body}`;
+    if (includeTranslation) {
+      body = appendLrcTranslations(body, parseTranslations(song.lyrics_translation), song.lyrics_raw);
+    }
     return {
       body,
       contentType: 'text/plain; charset=utf-8',

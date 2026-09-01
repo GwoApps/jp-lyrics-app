@@ -240,7 +240,7 @@
     "exportTranslationLabel": "中国語訳を含める",
     "exportTranslationHint": "各行の歌詞の下に翻訳を出力",
     "exportDownloadBtn": "ダウンロード",
-    "exportLrcHint": "LRC はタイムスタンプ形式で、同期歌詞のみ含み、読みや翻訳は含みません",
+    "exportLrcHint": "LRC はタイムスタンプ形式で、同期歌詞を含み、各行の翻訳を任意で追加できます（読みは含みません）",
     "exportLrcUnavailable": "この曲には同期タイムラインがないため、LRC エクスポートは空ファイルになります。LRC を無効にしました。",
     "exportLrcDisabledTitle": "同期タイムラインがないため、LRC は利用できません",
     "requestPublic": "公開申請",

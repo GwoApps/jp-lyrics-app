@@ -240,7 +240,7 @@
     "exportTranslationLabel": "包含中文翻译",
     "exportTranslationHint": "在每行歌词下方输出对应的翻译",
     "exportDownloadBtn": "下载",
-    "exportLrcHint": "LRC 为时间轴格式，仅包含同步歌词，不含注音与翻译",
+    "exportLrcHint": "LRC 为时间轴格式，包含同步歌词，可选附加每行译文，不含注音",
     "exportLrcUnavailable": "此歌曲没有同步时间轴，LRC 导出将得到空文件，因此已禁用 LRC 格式",
     "exportLrcDisabledTitle": "此歌曲没有同步时间轴，LRC 不可用",
     "requestPublic": "申请公开",
