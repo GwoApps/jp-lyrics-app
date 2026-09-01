@@ -1,13 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, ArrowDown, Minus, Plus, Music, Download, Loader2, ExternalLink, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2, Info, X, CircleAlert, Eraser, Palette, SlidersHorizontal, Brain, FlaskConical } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { RefreshCw, Loader2, Languages, Brain } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { useSongData } from '@/hooks/useSongData';
-import { useSpotifySync } from '@/hooks/useSpotifySync';
-import { TARGET_LANG_PRESETS, targetLangDisplay } from '@/lib/target-lang';
-import ConfirmDialog from '@/components/ConfirmDialog';
+
 
 function btnTextCls(active?: boolean, variant?: 'danger') {
   const base = 'inline-flex items-center justify-center gap-1.5 rounded-xl sm:rounded-md transition-colors disabled:opacity-50 text-xs font-medium px-3 py-2';
@@ -39,10 +36,6 @@ export function buildReadingMenuItems(
   t: ReturnType<typeof useI18n>['t'],
   canEdit: boolean,
 ): ToolbarMenuItem[] {
-  // The effective target language the next translation will be produced in
-  // (user setting → global default). Shown in the entry label so the user
-  // knows what language they'll get before triggering it (issue #123).
-  const displayLang = targetLangDisplay(data.targetLang);
   return [
     ...([
       ['original', 'song.readingOriginal'],
@@ -63,27 +56,20 @@ export function buildReadingMenuItems(
     }]),
     {
       icon: data.translating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Languages className="h-3.5 w-3.5" />,
-      // Issue #100: a partially translated song keeps a persistent resume
-      // entry here —「继续翻译（剩余 N 行）」— instead of only offering the
-      // show/hide toggle. Only a fully translated song falls back to the
-      // plain display toggle.
-      // The label surfaces the effective target language so the user knows
-      // what they'll get (issue #123): untranslated/partial → 「翻译成{lang}」,
-      // fully translated → plain toggle with the target language in the status.
       label: data.translating
         ? t('song.translating')
         : !data.hasTranslation
-          ? (displayLang ? t('song.translateTo', { lang: displayLang }) : t('song.translation'))
+          ? t('song.translation')
           : data.untranslatedCount > 0
             ? t('song.translationContinueRemain', { count: String(data.untranslatedCount) })
             : t('song.translation'),
       status: data.translating
         ? undefined
         : !data.hasTranslation
-          ? (displayLang ? t('song.translationTarget', { lang: displayLang }) : undefined)
+          ? undefined
           : data.untranslatedCount > 0
             ? t('song.translationPartial', { done: String(data.translatedCount), total: String(data.translatedCount + data.untranslatedCount) })
-            : (displayLang ? `${displayLang} · ${t(data.showTranslation ? 'common.on' : 'common.off')}` : t(data.showTranslation ? 'common.on' : 'common.off')),
+            : t(data.showTranslation ? 'common.on' : 'common.off'),
       onClick: () => {
         // Fully translated → toggle display. Untranslated / partial → start
         // (or resume) the translation, which the server continues from the
@@ -112,30 +98,6 @@ export function buildReadingMenuItems(
       onClick: () => data.openSavedReasoning(),
       keepOpen: true,
     } as ToolbarMenuItem] : []),
-    // Target-language quick switch (issue #123): change the translation target
-    // inline on the song page instead of jumping to /settings. Writing the
-    // override to translation_target_lang is enough — the translate route
-    // re-translates when the recorded cache language no longer matches.
-    {
-      icon: <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--muted-foreground)]/40" />,
-      label: t('song.translationTargetSection'),
-      disabled: true,
-      keepOpen: true,
-    },
-    ...TARGET_LANG_PRESETS.map((p) => ({
-      icon: <Languages className="h-3.5 w-3.5" />,
-      label: p.label,
-      active: data.targetLangOverride === p.value,
-      onClick: () => void data.setTargetLang(p.value),
-      keepOpen: true,
-    }) as ToolbarMenuItem),
-    {
-      icon: <Languages className="h-3.5 w-3.5" />,
-      label: t('song.translationTargetDefault'),
-      active: data.targetLangOverride === '',
-      onClick: () => void data.setTargetLang(''),
-      keepOpen: true,
-    },
   ];
 }
 

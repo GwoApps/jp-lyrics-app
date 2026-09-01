@@ -55,6 +55,8 @@
     "albumView": "Album view",
     "unclassifiedAlbum": "Unclassified",
     "albumTrackCount": "{count} tracks",
+    "collapseAll": "Collapse all",
+    "expandAll": "Expand all",
     "mine": "My songs",
     "favorites": "Favorites",
     "all": "All",

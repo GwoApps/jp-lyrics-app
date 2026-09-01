@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Music, Plus, Unlink, Download, ExternalLink, Loader2, Search, X, User, Star, FolderPlus, Trash, LayoutGrid, List, Disc3, RefreshCw } from 'lucide-react';
+import { Music, Plus, Unlink, Download, ExternalLink, Loader2, Search, Disc3, RefreshCw, ChevronRight } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import SongItemCard from '@/components/SongItemCard';
 import NowPlayingMetadata from '@/components/NowPlayingMetadata';
@@ -90,6 +90,7 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [songViewMode, setSongViewMode] = useState<SongViewMode>(getSongViewMode);
+  const [collapsedAlbums, setCollapsedAlbums] = useState<Set<string>>(new Set());
   const [mySongsOnly, setMySongsOnly] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [showPlaylistImport, setShowPlaylistImport] = useState(false);
@@ -403,7 +404,18 @@ export default function HomePage() {
     }
     return true;
   });
+  const toggleAlbumCollapse = useCallback((key: string) => {
+    setCollapsedAlbums((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }, []);
   const albumView = songViewMode === 'album' ? groupSongsByAlbum(filteredSongs) : { entries: [], unclassified: [] };
+  const collapseAllAlbums = () => {
+    setCollapsedAlbums(new Set(albumView.entries.filter((e) => e.type === 'group').map((e) => e.group.key)));
+  };
+  const expandAllAlbums = () => setCollapsedAlbums(new Set());
   const visibleSongIds = filteredSongs.map((song) => song.id).join(',');
   const songListRef = useRef<HTMLDivElement>(null);
   const previousSongRectsRef = useRef<Map<string, DOMRect>>(new Map());
@@ -673,13 +685,24 @@ export default function HomePage() {
       ) : (
         <div ref={songListRef} className={songViewMode === 'grid' ? 'song-grid grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4' : 'space-y-1.5 sm:space-y-2'}>
           {songViewMode === 'album' ? (<>
+            {albumView.entries.length > 0 && (
+              <div className="flex justify-end gap-1.5 px-1 mb-1.5">
+                <button type="button" onClick={collapseAllAlbums} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors" aria-label={t('home.collapseAll')}>
+                  <ChevronRight className="h-3 w-3 -rotate-90" /> {t('home.collapseAll')}
+                </button>
+                <button type="button" onClick={expandAllAlbums} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors" aria-label={t('home.expandAll')}>
+                  <ChevronRight className="h-3 w-3 rotate-90" /> {t('home.expandAll')}
+                </button>
+              </div>
+            )}
             {albumView.entries.map((entry) => {
               if (entry.type !== 'group') return null;
               const group = entry.group;
               const coverUrl = group.songs.find((song) => song.cover_url)?.cover_url;
+              const isCollapsed = collapsedAlbums.has(group.key);
               return (
                 <section key={group.key} className="album-group rounded-lg border border-[var(--border)] bg-[var(--card)]/40 p-2.5 sm:p-3">
-                  <header className="mb-2.5 flex min-w-0 items-center gap-2.5 px-1">
+                  <header className="flex min-w-0 cursor-pointer items-center gap-2.5 px-1 select-none transition-[margin] duration-200 ease-in-out" style={{ marginBottom: isCollapsed ? 0 : '0.625rem' }} onClick={() => toggleAlbumCollapse(group.key)} aria-expanded={!isCollapsed}>
                     {coverUrl ? (
                       <img src={coverUrl} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover bg-[var(--muted)]" loading="lazy" />
                     ) : (
@@ -689,8 +712,13 @@ export default function HomePage() {
                       <h2 className="truncate text-sm font-semibold tracking-tight">{group.album}</h2>
                       <p className="truncate text-xs text-[var(--muted-foreground)]">{group.artist ? `${group.artist} · ${t('home.albumTrackCount', { count: group.songs.length })}` : t('home.albumTrackCount', { count: group.songs.length })}</p>
                     </div>
+                    <ChevronRight className={`h-4 w-4 shrink-0 text-[var(--muted-foreground)] transition-transform ${!isCollapsed ? 'rotate-90' : ''}`} />
                   </header>
-                  <div className="space-y-1.5">{group.songs.map((song) => renderSongCard(song, 'list', true))}</div>
+                  <div className="overflow-hidden transition-[grid-template-rows] duration-200 ease-in-out" style={{ display: 'grid', gridTemplateRows: isCollapsed ? '0fr' : '1fr' }}>
+                    <div className="min-h-0 space-y-1.5">
+                      {group.songs.map((song) => renderSongCard(song, 'list', true))}
+                    </div>
+                  </div>
                 </section>
               );
             })}

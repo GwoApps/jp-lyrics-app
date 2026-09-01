@@ -55,6 +55,8 @@
     "albumView": "專輯模式",
     "unclassifiedAlbum": "未分類",
     "albumTrackCount": "{count} 首",
+    "collapseAll": "全部摺疊",
+    "expandAll": "全部展開",
     "mine": "我的",
     "favorites": "收藏",
     "all": "全部",

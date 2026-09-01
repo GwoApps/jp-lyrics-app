@@ -55,6 +55,8 @@
     "albumView": "アルバム表示",
     "unclassifiedAlbum": "未分類",
     "albumTrackCount": "{count} 曲",
+    "collapseAll": "すべて折りたたむ",
+    "expandAll": "すべて展開",
     "mine": "自分の曲",
     "favorites": "お気に入り",
     "all": "すべて",
