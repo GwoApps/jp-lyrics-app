@@ -543,7 +543,6 @@ export default function HomePage() {
       {/* Playlist Import */}
       <PlaylistImportDialog
         open={showPlaylistImport}
-        onClose={() => setShowPlaylistImport(false)}
         onImported={handlePlaylistImported}
       />
 
@@ -704,6 +703,8 @@ export default function HomePage() {
                 <section key={group.key} className="album-group rounded-lg border border-[var(--border)] bg-[var(--card)]/40 p-2.5 sm:p-3">
                   <header className="flex min-w-0 cursor-pointer items-center gap-2.5 px-1 select-none transition-[margin] duration-200 ease-in-out" style={{ marginBottom: isCollapsed ? 0 : '0.625rem' }} onClick={() => toggleAlbumCollapse(group.key)} aria-expanded={!isCollapsed}>
                     {coverUrl ? (
+                      // Provider cover hosts are dynamic and cannot be enumerated for next/image.
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={coverUrl} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover bg-[var(--muted)]" loading="lazy" />
                     ) : (
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[var(--accent)] text-[var(--muted-foreground)]"><Disc3 className="h-4 w-4" /></div>

@@ -37,7 +37,6 @@ import {
   type GlossaryEntry,
   type TranslationConfig,
   type TranslationContext,
-  type TranslationProvider,
   type TranslationTestResult,
 } from './config.ts';
 import { DEFAULT_SYSTEM_PROMPT, GLOSSARY_PROMPT, renderSystemPrompt } from './prompts.ts';
@@ -624,7 +623,6 @@ async function streamOpenAI(
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
-    let reasoning = '';
     let content = '';
     while (true) {
       const { done, value } = await reader.read();
@@ -644,7 +642,6 @@ async function streamOpenAI(
           const delta = parsed.choices?.[0]?.delta;
           if (!delta) continue;
           if (typeof delta.reasoning_content === 'string' && delta.reasoning_content) {
-            reasoning += delta.reasoning_content;
             onDelta({ type: 'reasoning', text: delta.reasoning_content });
           }
           if (typeof delta.content === 'string' && delta.content) {

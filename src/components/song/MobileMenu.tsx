@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Download, Loader2, PictureInPicture, Copy, Check, MoreVertical, Languages, ChevronDown, Info, X, Palette, SlidersHorizontal, FlaskConical, Share2 } from 'lucide-react';
+import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Download, PictureInPicture, Copy, Check, MoreVertical, Languages, ChevronDown, Info, Palette, SlidersHorizontal, FlaskConical, Share2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useI18n } from '@/lib/i18n';
 import { useSongData } from '@/hooks/useSongData';

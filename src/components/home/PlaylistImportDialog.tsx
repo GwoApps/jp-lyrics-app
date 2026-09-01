@@ -10,7 +10,6 @@ import Toast from '@/components/Toast';
 
 interface PlaylistImportDialogProps {
   open: boolean;
-  onClose: () => void;
   /** Fired with the refreshed song list after a successful import. */
   onImported: (songs: SongItem[]) => void;
 }
@@ -59,7 +58,7 @@ interface ResumeState {
  * progress, supports cancel, and can resume an interrupted import from
  * localStorage (a timed-out / crashed / refreshed page is not lost).
  */
-export default function PlaylistImportDialog({ open, onClose, onImported }: PlaylistImportDialogProps) {
+export default function PlaylistImportDialog({ open, onImported }: PlaylistImportDialogProps) {
   const { t } = useI18n();
   const [url, setUrl] = useState('');
   const [importing, setImporting] = useState(false);

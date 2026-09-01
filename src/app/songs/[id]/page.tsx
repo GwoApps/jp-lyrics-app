@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useCallback, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
 import Link from 'next/link';
-import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, ArrowDown, Minus, Plus, Music, Download, Loader2, ExternalLink, PictureInPicture, Repeat, Copy, Check, MoreVertical, Languages, ChevronDown, Share2, Info, X, CircleAlert, Palette, SlidersHorizontal, Brain, FlaskConical } from 'lucide-react';
+import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, PictureInPicture, Repeat, Copy, Check, Languages, ChevronDown, Share2, Info, X, Palette, SlidersHorizontal, FlaskConical } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import FuriganaLineView from '@/components/FuriganaLine';
@@ -15,7 +15,7 @@ import ExperimentsPanel from '@/components/ExperimentsPanel';
 import Toast from '@/components/Toast';
 import TranslationStatusOverlay from '@/components/TranslationStatusOverlay';
 import SyncStatusOverlay from '@/components/SyncStatusOverlay';
-import { ToolbarMenu, buildReadingMenuItems, type ToolbarMenuItem } from '@/components/song/ToolbarMenu';
+import { ToolbarMenu, buildReadingMenuItems } from '@/components/song/ToolbarMenu';
 import { MobileMenu } from '@/components/song/MobileMenu';
 import DownloadDialog from '@/components/song/DownloadDialog';
 import { useModalFocus } from '@/hooks/useModalFocus';
@@ -50,15 +50,6 @@ function btnCls(active?: boolean, variant?: 'danger') {
   return `${base} ${size} ${colors}`;
 }
 
-function btnTextCls(active?: boolean, variant?: 'danger') {
-  const base = 'inline-flex items-center justify-center gap-1.5 rounded-xl sm:rounded-md transition-colors disabled:opacity-50 text-xs font-medium px-3 py-2';
-  const colors = variant === 'danger'
-    ? 'text-[var(--destructive)] bg-[var(--destructive)]/10 hover:bg-[var(--destructive)]/20'
-    : active
-      ? 'song-accent-button song-accent-button--active'
-      : 'song-accent-button';
-  return `${base} ${colors}`;
-}
 
 /**
  * Build the lyric preview block shown inside the low-confidence / plain-text
@@ -227,6 +218,9 @@ export default function SongViewPage() {
         animateSmoothScroll(container, lineTop - container.clientHeight / 2 + lineEl.offsetHeight / 2);
       }
     }
+  // activeLine changes are already scrolled by useSpotifySync; this effect is
+  // intentionally only for the debug toggle transition.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.debug]);
 
   // PiP detection
@@ -257,11 +251,13 @@ export default function SongViewPage() {
   }, []);
   const [dotParams, setDotParams] = useState<DotGridParams>(DEFAULT_DOT_GRID_PARAMS);
   const coverUrl = data.song?.cover_url ?? fallbackCoverUrl;
+  const paletteSong = data.song;
+  const refreshSong = data.refreshSong;
 
   /** Persist a freshly extracted palette to the server (skip when unchanged). */
   const handlePaletteExtracted = useCallback((palette: CoverPalette | null) => {
-    if (!palette || !data.song) return;
-    const server = data.song.cover_palette;
+    if (!palette || !paletteSong) return;
+    const server = paletteSong.cover_palette;
     if (server && JSON.stringify(server) === JSON.stringify(palette)) return;
     void fetch(`/api/songs/${id}`, {
       method: 'PUT',
@@ -269,10 +265,10 @@ export default function SongViewPage() {
       body: JSON.stringify({ cover_palette: palette }),
     }).then((res) => res.json()).then((updated) => {
       if (updated?.cover_palette) {
-        data.refreshSong();
+        void refreshSong();
       }
     }).catch(() => { /* server cache is best-effort; localStorage already has it */ });
-  }, [id, data.song]);
+  }, [id, paletteSong, refreshSong]);
 
   const coverTheme = useCoverTheme(coverUrl, coverRefresh, data.song?.cover_palette ?? null, id, handlePaletteExtracted);
   const coverColor = coverTheme.palette;

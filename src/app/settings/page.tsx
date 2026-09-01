@@ -92,6 +92,9 @@ export default function SettingsPage() {
     if (!syncEnabled) {
       // Preserve whatever is already in localStorage as the current truth and
       // seed the form from it so the page reflects the local-only preferences.
+      // This effect intentionally synchronizes the form with an external store
+      // when the persisted master switch changes after saving.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSettings({
         theme: localStorage.getItem('jplrc-theme') ?? undefined,
         locale: localStorage.getItem('jplrc-locale') ?? undefined,

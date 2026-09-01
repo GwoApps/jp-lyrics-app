@@ -110,6 +110,9 @@ export function useSpotifySync(
   // Close PiP on unmount
   useEffect(() => {
     return () => {
+      // Intentionally close the latest PiP window, not the value captured when
+      // this effect mounted; users can open PiP at any later time.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       try { pipWindowRef.current?.close(); } catch { /* */ }
     };
   }, []);

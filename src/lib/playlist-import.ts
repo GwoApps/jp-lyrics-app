@@ -188,7 +188,7 @@ export async function saveTrackResult(
   jobId: string,
   track: PlaylistTrack,
   result: Omit<PlaylistTrackResult, 'title' | 'artist'>,
-  db: any = getDB(),
+  db: ReturnType<typeof getDB> = getDB(),
 ): Promise<void> {
   // The track-result row is the source of truth. We insert it FIRST (idempotent
   // via ON CONFLICT DO NOTHING) and only bump the job counters when the INSERT

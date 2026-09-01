@@ -152,7 +152,7 @@ test('concurrent duplicate submits never over-count', async () => {
   // 8 concurrent "requests", each with its own connection, all submitting the
   // same (job, track). Exactly one must win the insert and the counter bump.
   const attempts = 8;
-  await Promise.all(Array.from({ length: attempts }, async (_, i) => {
+  await Promise.all(Array.from({ length: attempts }, async () => {
     const own = makeTestDb(t.path, { fresh: false });
     try {
       await own.client.execute('PRAGMA busy_timeout=15000');
