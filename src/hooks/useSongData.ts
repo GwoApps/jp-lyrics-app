@@ -8,7 +8,6 @@ import type { ProviderStage } from '@/lib/lyrics-provider/types';
 import { mapTimelineTimestamps, parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
 import { readTranslationStream, type TranslationProgress } from '@/lib/translation-stream';
-import { readSseFrames } from '@/lib/sse-reader';
 import { TRANSLATION_ERROR_KEYS } from '@/lib/translation-errors';
 import { useI18n } from '@/lib/i18n';
 import { buildManualCreateUrl } from '@/lib/song-prefill';
@@ -19,76 +18,14 @@ import {
   type CantoneseDetectionResult,
 } from '@/lib/lyrics-reading';
 import { parseTranslationCache } from '@/lib/translation/parse';
-import {
-  isKatakanaReadingSegment,
-  isKoreanReadingSegment,
-  normalizeFuriganaSegments,
-  resolveFuriganaReading,
-  splitLyricScriptRuns,
-} from '@/lib/romaji';
 import { LYRICS_SOURCE_KEYS } from '@/lib/lyrics-source';
 import { copyToClipboard } from '@/lib/clipboard';
 import { isKnownTargetLang, targetLangDisplay } from '@/lib/target-lang';
-
-// The sync response is an untyped union of outcomes (not-found, plain-hit
-// preview, low-confidence preview, direct write, rate-limit…). Its shape is
-// intentionally loose (mirrors the previous `res.json()` behaviour), so the
-// result body is typed `any`; the exact fields are read in flag-checked
-// branches in `runSync`.
-/* eslint-disable @typescript-eslint/no-explicit-any -- SSE payload is intentionally untyped. */
-/**
- * Read the Server-Sent Events response produced by the sync route. Emits each
- * `stage` event to `onStage` (so the UI can show "正在查询 LRCLIB…" live) and
- * resolves with the payload of the terminal `result` / `error` event — the same
- * object the previous plain-JSON response carried, plus its HTTP status.
- */
-async function readSyncEventStream(
-  res: Response,
-  onStage: (stage: SyncStage | ProviderStage) => void,
-): Promise<{ status: number; body: any }> {
-  const body = res.body;
-  if (!body) {
-    // Not a stream (e.g. an early JSON error before streaming began) — read as JSON.
-    const jsonBody = await res.json();
-    return { status: res.status, body: jsonBody };
-  }
-  let terminal: { status: number; body: any } | null = null;
-  for await (const { event, data: dataStr } of readSseFrames(body)) {
-    let payload: { status?: number; stage?: SyncStage | ProviderStage; body?: any };
-    try {
-      payload = JSON.parse(dataStr);
-    } catch {
-      continue;
-    }
-    if (event === 'stage' && payload.stage) {
-      onStage(payload.stage);
-    } else if (event === 'result' || event === 'error') {
-      terminal = { status: payload.status ?? res.status, body: payload.body ?? payload };
-      break;
-    }
-  }
-  // Defensive: if the stream ended without a terminal event, surface a generic error.
-  if (!terminal) {
-    return { status: res.status || 500, body: { synced: false, error: 'network_error' } };
-  }
-  return terminal;
-}
-/* eslint-enable @typescript-eslint/no-explicit-any */
-
-const escapeHtml = (value: string) => value
-  .replaceAll('&', '&amp;')
-  .replaceAll('<', '&lt;')
-  .replaceAll('>', '&gt;')
-  .replaceAll('"', '&quot;')
-  .replaceAll("'", '&#39;');
-
-function createPlainFuriganaLines(rawLyrics: string): FuriganaLine[] {
-  return rawLyrics.split('\n').map((line) => ({
-    segments: line.trim()
-      ? splitLyricScriptRuns(line).map((text) => ({ text, reading: '' }))
-      : [],
-  }));
-}
+import { escapeHtml } from '@/lib/escape-html';
+import { createPlainFuriganaLines } from '@/lib/furigana-plain';
+import { readSyncEventStream } from '@/lib/sync-sse-reader';
+import { renderPipLyricsHtml } from '@/lib/pip-render';
+import { useReadingPreferences } from './useReadingPreferences';
 
 interface SongData {
   id: string;
@@ -251,6 +188,13 @@ export interface UseSongDataReturn {
 export function useSongData(id: string): UseSongDataReturn {
   const router = useRouter();
   const { t } = useI18n();
+  const {
+    readingMode, setReadingMode,
+    romanizeFurigana, setRomanizeFurigana,
+    showTranslation, setShowTranslation,
+    debug, setDebug,
+    fontSize, setFontSize,
+  } = useReadingPreferences();
 
   const [song, setSong] = useState<SongData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -258,21 +202,6 @@ export function useSongData(id: string): UseSongDataReturn {
   // network/timeout). A 404 (genuinely absent song) keeps `song=null` and is
   // shown as "not found" — distinct from a load error.
   const [loadError, setLoadError] = useState(false);
-  const [readingMode, setReadingMode] = useState<ReadingMode>(() => {
-    if (typeof window === 'undefined') return 'furigana';
-    const saved = localStorage.getItem('jplrc-reading-mode');
-    return saved === 'original' ? 'original' : 'furigana';
-  });
-  const [romanizeFurigana, setRomanizeFurigana] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('jplrc-romanize-furigana') === 'true'
-      || localStorage.getItem('jplrc-reading-mode') === 'romaji';
-  });
-  const [debug, setDebug] = useState(false);
-  const [showTranslation, setShowTranslation] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('jplrc-show-translation') === 'true';
-  });
   const [translating, setTranslating] = useState(false);
   // True while re-reading the server's final persisted result after a cancel /
   // error so the UI can show "正在保存已完成部分" instead of a guessed number.
@@ -331,13 +260,6 @@ export function useSongData(id: string): UseSongDataReturn {
     match?: ImportReviewState['match'];
   } | null>(null);
   const [copied, setCopied] = useState(false);
-  const [fontSize, setFontSize] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('jplrc-font-size');
-      if (saved) { const n = parseInt(saved); if (n >= 14 && n <= 32) return n; }
-    }
-    return 20;
-  });
   // Effective target language for translation (user setting → global default).
   // null until the settings are loaded.
   const [targetLang, setTargetLangState] = useState<string | null>(null);
@@ -356,10 +278,6 @@ export function useSongData(id: string): UseSongDataReturn {
   }, []);
 
   // Persist font size
-  useEffect(() => { localStorage.setItem('jplrc-font-size', String(fontSize)); }, [fontSize]);
-  useEffect(() => { localStorage.setItem('jplrc-reading-mode', readingMode); }, [readingMode]);
-  useEffect(() => { localStorage.setItem('jplrc-romanize-furigana', String(romanizeFurigana)); }, [romanizeFurigana]);
-  useEffect(() => { localStorage.setItem('jplrc-show-translation', String(showTranslation)); }, [showTranslation]);
 
   // Derived
   const serverFurigana = useMemo<FuriganaLine[]>(() => {
@@ -1094,7 +1012,7 @@ export function useSongData(id: string): UseSongDataReturn {
       translateAbortRef.current = null;
       setTranslating(false);
     }
-  }, [id, song, furiganaLines, t, showToast, translating, refreshSong, coverageOf]);
+  }, [id, song, furiganaLines, t, showToast, translating, refreshSong, coverageOf, setShowTranslation]);
 
   /** Abort the in-flight translation request (cancel button on the overlay). */
   const cancelTranslate = useCallback(() => {
@@ -1310,37 +1228,6 @@ export function useSongData(id: string): UseSongDataReturn {
   // window (the callback receives it per call, but the effect needs it too).
   const pipWindowRefInternal = useRef<React.MutableRefObject<Window | null> | null>(null);
 
-  /** Render the PiP lyrics list HTML for the given reading settings. */
-  const renderPipLyricsHtml = useCallback((
-    furiganaLinesArg: FuriganaLine[],
-    songArg: SongData | null,
-    rm: ReadingMode,
-    roma: boolean,
-    timestamps?: (number | null)[],
-  ): string => {
-    return furiganaLinesArg.map((line, i) => {
-      if (line.segments.length === 0) return `<div class="line empty" data-line="${i}"></div>`;
-      const html = normalizeFuriganaSegments(line.segments).map(seg => {
-        if (rm === 'original') return escapeHtml(seg.text);
-        const scheme = normalizeReadingScheme(songArg?.reading_scheme);
-        const reading = resolveFuriganaReading(seg.text, seg.reading, roma, scheme);
-        if (!reading) return escapeHtml(seg.text);
-        const rubyClass = scheme === 'yue-jyutping'
-          ? 'cantonese-reading'
-          : roma && isKoreanReadingSegment(seg.text)
-            ? 'korean-word'
-            : roma && isKatakanaReadingSegment(seg.text) ? 'katakana-chunk' : '';
-        const className = rubyClass ? ` class="${rubyClass}"` : '';
-        const language = scheme === 'yue-jyutping' ? ' lang="yue-Latn"' : '';
-        return `<ruby${className}>${escapeHtml(seg.text)}<rp>(</rp><rt${language}>${escapeHtml(reading)}</rt><rp>)</rp></ruby>`;
-      }).join('');
-      const ts = timestamps?.[i];
-      const tsAttr = ts != null ? ` data-ts="${ts}"` : '';
-      const tsClass = ts != null ? ' has-ts' : '';
-      return `<div class="line${tsClass}" data-line="${i}"${tsAttr}>${html}</div>`;
-    }).join('');
-  }, []);
-
   // PiP is complex and needs external refs, so it's a callback the page calls with context
   const openPiP = useCallback(async (
     furiganaLinesArg: FuriganaLine[],
@@ -1410,7 +1297,7 @@ export function useSongData(id: string): UseSongDataReturn {
         <body>
           <div id="pip-header"><span class="title">${title}</span>${artist ? ` — ${artist}` : ''}</div>
           <div id="pip-lyrics">
-            ${renderPipLyricsHtml(furiganaLinesArg, songArg, readingMode, romanizeFurigana, timestamps)}
+            ${renderPipLyricsHtml(furiganaLinesArg, songArg?.reading_scheme, readingMode, romanizeFurigana, timestamps)}
           </div>
         </body>
       `;
@@ -1510,7 +1397,7 @@ export function useSongData(id: string): UseSongDataReturn {
       console.error('PiP failed:', e);
       showToast('error', t('song.pipFailed'));
     }
-  }, [fontSize, readingMode, romanizeFurigana, t, showToast, renderPipLyricsHtml]);
+  }, [fontSize, readingMode, romanizeFurigana, t, showToast]);
 
   // Keep an already-open PiP window in sync with the main page.
   // Font size is applied live via the CSS variable (no rebuild needed).
@@ -1533,10 +1420,10 @@ export function useSongData(id: string): UseSongDataReturn {
     } catch { /* window gone */ }
     pipWin.postMessage({
       type: 'pip-lyrics-render',
-      html: renderPipLyricsHtml(furiganaLines, song, readingMode, romanizeFurigana, lineTimestamps),
+      html: renderPipLyricsHtml(furiganaLines, song?.reading_scheme, readingMode, romanizeFurigana, lineTimestamps),
       activeLine,
     }, '*');
-  }, [readingMode, romanizeFurigana, song, furiganaLines, lineTimestamps, renderPipLyricsHtml]);
+  }, [readingMode, romanizeFurigana, song, furiganaLines, lineTimestamps]);
 
   // Re-center when debug mode toggled off
   useEffect(() => {
