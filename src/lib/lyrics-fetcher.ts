@@ -25,13 +25,6 @@ export function unescapeLyrics(value: string): string {
   return decodeHtmlEntity(value);
 }
 
-function unescapeLyricsResult(result: LyricsResult): LyricsResult {
-  return {
-    synced: unescapeLyrics(result.synced),
-    plain: unescapeLyrics(result.plain),
-  };
-}
-
 export interface LyricsFetchResult {
   result: LyricsResult | null;
   source: string;
@@ -58,22 +51,6 @@ export interface LyricsFetchResult {
    * later" apart from "this song genuinely has no lyrics".
    */
   rateLimited?: boolean;
-}
-
-function fetchedResult(
-  result: LyricsResult,
-  source: string,
-  confidence: number,
-  durationMismatch?: boolean,
-  match?: LyricsFetchResult['match'],
-): LyricsFetchResult {
-  return {
-    result: unescapeLyricsResult(result),
-    source,
-    confidence,
-    ...(durationMismatch ? { durationMismatch } : {}),
-    ...(match ? { match } : {}),
-  };
 }
 
 /**
@@ -909,17 +886,9 @@ export type SyncStage =
   | 'uta-net'
   | 'ytmusic';
 
-/**
- * Dynamic provider stage used by the SSE UI. Keeps the legacy `SyncStage`
- * string keys for backward compatibility while also carrying a display name
- * and kind so third-party HTTP providers can surface their own name without
- * hardcoding third-party strings into i18n (ISSUE #148).
- */
-export type DynamicStage = ProviderStage;
-
-/** Map a legacy SyncStage to a display name used by the SSE stage events. */
-export function syncStageToProviderStage(stage: SyncStage): ProviderStage {
-  const names: Record<SyncStage, string> = {
+/** Map a legacy SyncStage string to a display name used by the SSE stage events. */
+export function syncStageToDynamicProviderStage(stage: string): ProviderStage {
+  const names: Record<string, string> = {
     'lrclib': 'LRCLIB',
     'lrclib-search': 'LRCLIB',
     'petitlyrics': 'PetitLyrics',
@@ -927,105 +896,4 @@ export function syncStageToProviderStage(stage: SyncStage): ProviderStage {
     'ytmusic': 'YouTube Music',
   };
   return { id: stage, displayName: names[stage] ?? 'Lyrics', kind: 'builtin' };
-}
-
-/** Same as {@link syncStageToProviderStage} but accepts any string (unknown keys fall back). */
-export function syncStageToDynamicProviderStage(stage: string): ProviderStage {
-  return syncStageToProviderStage(stage as SyncStage);
-}
-
-export interface FetchLyricsOptions {
-  /** Use Spotify canonical name for CJK variant matching */
-  spotifyCanonical?: { name: string; artist: string } | null;
-  /** Spotify-side evidence (album + durationMs) used to disambiguate recordings. */
-  spotify?: LrclibEvidence;
-  /**
-   * Invoked right before each source is queried, letting a streaming caller
-   * surface which provider is being contacted. No-op when omitted (import /
-   * playlist-import keep the existing behaviour). Receives either a legacy
-   * string stage (backward compatible) or a dynamic provider stage.
-   */
-  onStage?: (stage: SyncStage | ProviderStage) => void;
-  /**
-   * Caller-provided abort signal propagated to every builtin + HTTP provider.
-   * A cancelled sync must actually stop subsequent network requests (issue #129
-   * hardening).
-   */
-  signal?: AbortSignal;
-}
-
-/**
- * Fetch lyrics from all sources in order.
- * Returns { result, source } or { result: null, source: '' } if all fail.
- */
-export async function fetchLyrics(
-  title: string,
-  artist: string,
-  opts?: FetchLyricsOptions,
-): Promise<LyricsFetchResult> {
-  const evidence = opts?.spotify;
-
-  // Tracks whether lrclib (the preferred timed-lyrics source) was throttled.
-  // When every source fails AND lrclib was rate-limited we want to report a
-  // distinct "retry later" outcome instead of a misleading "no lyrics found".
-  let rateLimited = false;
-  const signal = opts?.signal;
-  const stage = opts?.onStage;
-  // A stage callback may accept either a legacy string or a dynamic provider
-  // stage; pass the legacy string for the builtin chain (backward compatible).
-  const emit = (s: SyncStage) => stage?.(s);
-
-  // 1. LRCLIB exact
-  emit('lrclib');
-  let outcome = await fetchFromLrclib(title, artist, evidence, signal);
-  rateLimited = rateLimited || outcome.rateLimited;
-  if (outcome.hit) return fetchedResult(outcome.hit.result, 'lrclib', lrclibConfidence(outcome.hit, 98, true), outcome.hit.duration === 'conflict');
-
-  // 2. LRCLIB with Spotify canonical name
-  if (opts?.spotifyCanonical) {
-    emit('lrclib');
-    outcome = await fetchFromLrclib(opts.spotifyCanonical.name, opts.spotifyCanonical.artist, evidence, signal);
-    rateLimited = rateLimited || outcome.rateLimited;
-    if (outcome.hit) return fetchedResult(outcome.hit.result, 'lrclib', lrclibConfidence(outcome.hit, 96, true), outcome.hit.duration === 'conflict');
-    emit('lrclib-search');
-    outcome = await searchLrclib(`${opts.spotifyCanonical.name} ${opts.spotifyCanonical.artist}`, opts.spotifyCanonical.name, opts.spotifyCanonical.artist, evidence, signal);
-    rateLimited = rateLimited || outcome.rateLimited;
-    if (outcome.hit) return fetchedResult(outcome.hit.result, 'lrclib-search', lrclibConfidence(outcome.hit, 82, false));
-  }
-
-  // 3. LRCLIB fuzzy search
-  emit('lrclib-search');
-  outcome = await searchLrclib(`${title} ${artist}`, title, artist, evidence, signal);
-  rateLimited = rateLimited || outcome.rateLimited;
-  if (outcome.hit) return fetchedResult(outcome.hit.result, 'lrclib-search', lrclibConfidence(outcome.hit, 78, false));
-
-  // 4. PetitLyrics
-  emit('petitlyrics');
-  const pl = await fetchFromPetitLyrics(title, artist, signal);
-  if (pl && (pl.synced || pl.plain)) {
-    return { ...fetchedResult(pl, 'petitlyrics', pl.synced ? 90 : 82), rateLimited };
-  }
-
-  // 5. Uta-Net
-  emit('uta-net');
-  const un = await fetchFromUtaNet(title, artist, signal);
-  if (un) {
-    return {
-      ...fetchedResult(
-        un.result,
-        'uta-net',
-        utaNetConfidence(un.score),
-        false,
-        { title: un.matchedTitle, artist: un.matchedArtist, link: un.link, ambiguous: un.ambiguous },
-      ),
-      rateLimited,
-    };
-  }
-
-  // 6. ytmusicapi
-  emit('ytmusic');
-  const yt = await fetchFromYtMusic(title, artist, signal);
-  if (yt) return { ...fetchedResult(yt, 'ytmusic', yt.synced ? 74 : 68), rateLimited };
-
-  return { result: null, source: '', confidence: 0, rateLimited };
 }
