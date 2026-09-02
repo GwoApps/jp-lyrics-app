@@ -242,7 +242,7 @@ export function useTranslation(deps: UseTranslationDeps): UseTranslationReturn {
         const msg = partial
           ? t('song.translationReadyPartial', { done: String(translatedNow), total: String(total) })
           : streamLang
-            ? t('song.translationReadyLang', { lang: streamLang })
+            ? t('song.translationReadyLang', { lang: targetLangDisplay(streamLang) })
             : t('song.translationReady');
         showToast(partial ? 'info' : 'success', msg);
         return;
