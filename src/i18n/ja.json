@@ -321,6 +321,8 @@
     "copyReasoning": "思考をコピー",
     "copyReasoningEmpty": "思考内容がありません",
     "clearReasoning": "思考をクリア",
+    "exportReasoning": "エクスポート",
+    "reasoningExported": "思考プロセスをエクスポートしました",
     "reasoningCleared": "思考をクリアしました",
     "clearGlossary": "用語集をクリア",
     "glossaryCleared": "用語集をクリアしました",

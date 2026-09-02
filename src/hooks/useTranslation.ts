@@ -41,6 +41,7 @@ export interface UseTranslationReturn {
   hasSavedReasoning: boolean;
   openSavedReasoning: () => void;
   copyReasoning: () => Promise<void>;
+  exportReasoning: () => void;
   dismissTranslationError: () => void;
   clearReasoning: () => Promise<void>;
   handleTranslate: (force?: boolean) => Promise<void>;
@@ -378,8 +379,51 @@ export function useTranslation(deps: UseTranslationDeps): UseTranslationReturn {
     showToast(ok ? 'success' : 'error', ok ? t('share.copied') : t('song.copyFailed'));
   }, [translationReasoning, t, showToast]);
 
+
+  // Build a Markdown document from the persisted model thinking and download
+  // it as {artist} - {title}.md so the reasoning can be archived/shared offline.
+  const exportReasoning = useCallback(() => {
+    const text = translationReasoning.trim();
+    if (!text) {
+      showToast('error', t('song.copyReasoningEmpty'));
+      return;
+    }
+    const title = song?.title?.trim() || '';
+    const artist = song?.artist?.trim() || '';
+    const target = targetLang ? targetLangDisplay(targetLang) : '';
+    // Compose a readable, self-contained Markdown file with song metadata.
+    const parts = [
+      `# ${title}`,
+      artist ? `## ${artist}` : '',
+      target ? `> ${t('song.translationTargetSection')}: ${target}` : '',
+      '---',
+      text,
+      '',
+    ].filter(Boolean);
+    const markdown = parts.join('\n\n');
+
+    // Strip characters that are unsafe / illegal in file names across the
+    // target platforms (windows reserved ones, separators, quotes).
+    const safeName = (s: string) =>
+      s.replace(/[\\/:*?"<>|\n\r\t]/g, ' ').replace(/\s+/g, ' ').trim();
+    const base = [artist, title, t('song.translationReasoning')].map(safeName).filter(Boolean).join(' - ');
+    const filename = `${base || 'reasoning'}.md`;
+
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+    showToast('success', t('song.reasoningExported'));
+  }, [translationReasoning, song, targetLang, t, showToast]);
+
   return {
     translations,
+
     hasTranslation,
     untranslatedCount,
     translatedCount,
@@ -395,6 +439,7 @@ export function useTranslation(deps: UseTranslationDeps): UseTranslationReturn {
     hasSavedReasoning,
     openSavedReasoning,
     copyReasoning,
+    exportReasoning,
     dismissTranslationError,
     clearReasoning,
     handleTranslate,

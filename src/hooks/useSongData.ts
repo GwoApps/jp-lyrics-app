@@ -63,6 +63,7 @@ export interface UseSongDataReturn {
   hasSavedReasoning: boolean;
   openSavedReasoning: () => void;
   copyReasoning: () => Promise<void>;
+  exportReasoning: () => void;
   dismissTranslationError: () => void;
   clearReasoning: () => Promise<void>;
   handleTranslate: (force?: boolean) => Promise<void>;
@@ -242,7 +243,7 @@ export function useSongData(id: string): UseSongDataReturn {
     translating, translationSaving, translationError, translationProgress,
     translationStage, translationReasoning, showTranslationReasoning,
     setShowTranslationReasoning, toggleTranslationReasoning, hasSavedReasoning,
-    openSavedReasoning, copyReasoning, dismissTranslationError, clearReasoning,
+    openSavedReasoning, copyReasoning, exportReasoning, dismissTranslationError, clearReasoning,
     handleTranslate, cancelTranslate, targetLang, targetLangOverride, setTargetLang,
     seedFromLoad,
   } = useTranslation({
@@ -386,6 +387,7 @@ export function useSongData(id: string): UseSongDataReturn {
     hasSavedReasoning,
     openSavedReasoning,
     copyReasoning,
+    exportReasoning,
     dismissTranslationError,
     clearReasoning,
     handleTranslate,

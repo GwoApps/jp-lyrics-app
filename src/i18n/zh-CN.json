@@ -321,6 +321,8 @@
     "copyReasoning": "复制思考",
     "copyReasoningEmpty": "暂无思考内容",
     "clearReasoning": "清除思考",
+    "exportReasoning": "导出",
+    "reasoningExported": "思考已导出",
     "reasoningCleared": "思考已清除",
     "clearGlossary": "清除术语表",
     "glossaryCleared": "术语表已清除",

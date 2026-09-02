@@ -1066,6 +1066,7 @@ export default function SongViewPage() {
         onDismissError={data.dismissTranslationError}
         onCloseReasoning={() => data.setShowTranslationReasoning(false)}
         onCopyReasoning={() => void data.copyReasoning()}
+        onExportReasoning={() => void data.exportReasoning()}
         onClearReasoning={() => void data.clearReasoning()}
         onContinue={() => void data.handleTranslate()}
         onCancel={data.cancelTranslate}

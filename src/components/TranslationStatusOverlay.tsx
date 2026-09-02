@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDown, Brain, CircleAlert, Copy, Eraser, Loader2, X } from 'lucide-react';
+import { ArrowDown, Brain, CircleAlert, Copy, Download, Eraser, Loader2, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
 interface TranslationStatusOverlayProps {
@@ -27,6 +27,7 @@ interface TranslationStatusOverlayProps {
   onDismissError: () => void;
   onCloseReasoning: () => void;
   onCopyReasoning: () => void;
+  onExportReasoning: () => void;
   onClearReasoning?: () => void;
   onContinue: () => void;
   onCancel: () => void;
@@ -56,6 +57,7 @@ export default function TranslationStatusOverlay({
   onDismissError,
   onCloseReasoning,
   onCopyReasoning,
+  onExportReasoning,
   onClearReasoning,
   onContinue,
   onCancel,
@@ -104,6 +106,15 @@ export default function TranslationStatusOverlay({
             >
               <Copy className="h-3 w-3" />
               {t('song.copyReasoning')}
+            </button>
+            <button
+              type="button"
+              onClick={onExportReasoning}
+              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--background)]/80 px-2 py-0.5 text-[10px] font-medium text-[var(--muted-foreground)] transition-colors hover:bg-[var(--primary)]/10 hover:text-[var(--primary)]"
+              title={t('song.exportReasoning')}
+            >
+              <Download className="h-3 w-3" />
+              {t('song.exportReasoning')}
             </button>
             {!translating && onClearReasoning && (
               <button
