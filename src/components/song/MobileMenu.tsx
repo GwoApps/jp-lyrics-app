@@ -1,13 +1,31 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Download, PictureInPicture, Copy, Check, MoreVertical, Languages, ChevronDown, Info, Palette, SlidersHorizontal, FlaskConical, Share2 } from 'lucide-react';
+import { useState } from 'react';
+import { RefreshCw, Bug, Clock3, Pencil, Trash2, Download, PictureInPicture, Copy, Check, MoreVertical, Languages, ChevronRight, Info, Palette, SlidersHorizontal, FlaskConical, Share2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useI18n } from '@/lib/i18n';
 import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { MobileIconButton, buildReadingMenuItems, type ToolbarMenuItem } from './ToolbarMenu';
+
+/** Shared visual class for the song-page mobile menu popovers. */
+function mobileContentCls() {
+  return 'rounded-xl border border-[var(--border)] bg-[var(--card)] p-1.5 shadow-xl min-w-[200px]';
+}
+
+/** Shared visual class for a normal (non-danger, non-active) mobile menu item. */
+const mobileItemBase =
+  'song-menu-item flex w-full items-center gap-3 rounded-md px-4 py-2.5 text-left text-sm text-[var(--foreground)] data-[highlighted]:bg-[var(--accent)] data-[disabled]:opacity-50';
 
 export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported, onOpenPiP, onShowSongInfo, onRecolorCover, onToggleDotParams, onOpenExperiments, onOpenDownload, canEdit }: {
   data: ReturnType<typeof useSongData>;
@@ -26,48 +44,43 @@ export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSup
   canEdit: boolean;
 }) {
   const { t } = useI18n();
-  const [showCopyMenu, setShowCopyMenu] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
-  const [showLangMenu, setShowLangMenu] = useState(false);
-  const [showEditMenu, setShowEditMenu] = useState(false);
   const [showSyncConfirm, setShowSyncConfirm] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const langMenuRef = useRef<HTMLDivElement>(null);
-  const copyMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close menus on outside tap
-  useEffect(() => {
-    if (!showMenu && !showLangMenu && !showCopyMenu) return;
-    const handler = (e: TouchEvent | MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setShowMenu(false);
-      }
-      if (langMenuRef.current && !langMenuRef.current.contains(e.target as Node)) {
-        setShowLangMenu(false);
-      }
-      if (copyMenuRef.current && !copyMenuRef.current.contains(e.target as Node)) {
-        setShowCopyMenu(false);
-      }
-    };
-    document.addEventListener('touchstart', handler);
-    document.addEventListener('mousedown', handler);
-    return () => { document.removeEventListener('touchstart', handler); document.removeEventListener('mousedown', handler); };
-  }, [showMenu, showLangMenu, showCopyMenu]);
-
-  const menuItems: ToolbarMenuItem[] = [
+  // The <DropdownMenuItem> items in the top-level 3-dot menu (kept open when
+  // the "edit" submenu is toggled / toggles without closing).
+  const mainMenuItems: ToolbarMenuItem[] = [
     { icon: <Info className="h-4 w-4" />, label: t('song.info'), onClick: onShowSongInfo },
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: t('song.pipBtn'), onClick: onOpenPiP }] : []),
     { icon: <Bug className="h-4 w-4" />, label: t('song.debug'), status: t(data.debug ? 'common.on' : 'common.off'), onClick: () => data.setDebug(!data.debug), keepOpen: true },
     { icon: <FlaskConical className="h-4 w-4" />, label: t('song.experimentsTitle'), onClick: () => onOpenExperiments() },
     { icon: <Download className="h-4 w-4" />, label: t('song.downloadWithEllipsis'), onClick: onOpenDownload },
-    ...(canEdit ? [{
-      icon: <Pencil className="h-4 w-4" />,
-      label: t('common.edit'),
-      status: <ChevronDown className="h-3.5 w-3.5 -rotate-90" />,
-      onClick: () => { setShowEditMenu(true); },
-      keepOpen: true,
-    }] : []),
   ];
+
+  const renderItemBody = (item: ToolbarMenuItem) => (
+    <>
+      {item.icon}
+      <span className="min-w-0 flex-1">{item.label}</span>
+      {item.status && <span className="ml-auto text-[11px] text-[var(--muted-foreground)]">{item.status}</span>}
+    </>
+  );
+
+  const renderMainMenuItem = (item: ToolbarMenuItem, key: number | string) => (
+    <DropdownMenuItem
+      key={key}
+      disabled={'disabled' in item ? item.disabled : false}
+      className={
+        'danger' in item && item.danger
+          ? `${mobileItemBase} text-[var(--destructive)] data-[highlighted]:bg-[var(--destructive)]/15 data-[highlighted]:text-[var(--destructive)]`
+          : mobileItemBase
+      }
+      onSelect={(e) => {
+        if ('keepOpen' in item && item.keepOpen) e.preventDefault();
+        item.onClick?.();
+      }}
+    >
+      {renderItemBody(item)}
+    </DropdownMenuItem>
+  );
 
   return (
     <div className="fixed bottom-0 left-0 right-0 sm:hidden z-50 bg-[var(--background)]/95 backdrop-blur-sm border-t border-[var(--border)]">
@@ -80,109 +93,69 @@ export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSup
         </div>
 
         {/* Copy — original / translation */}
-        <div className="relative" ref={copyMenuRef}>
-          <MobileIconButton
-            label={data.copied ? t('share.copied') : t('song.copy')}
-            onClick={() => {
-              setShowMenu(false);
-              setShowLangMenu(false);
-              setShowCopyMenu((v) => !v);
-            }}
-            className={`${data.copied ? 'text-[var(--success)]' : ''} ${showCopyMenu ? 'song-mobile-button--active' : ''}`}
-            data-open={showCopyMenu}
-            aria-haspopup="menu"
-            aria-expanded={showCopyMenu}
-          >
-            {data.copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
-          </MobileIconButton>
-          <div
-            role="menu"
-            aria-hidden={!showCopyMenu}
-            data-open={showCopyMenu}
-            className="song-menu-popover song-menu-popover--mobile absolute right-0 bottom-full z-50 mb-2 min-w-[200px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)] py-1.5 shadow-xl"
-          >
-            <button
-              type="button"
-              role="menuitem"
-              data-menu-item
-              onClick={() => {
-                setShowCopyMenu(false);
-                void data.handleCopy('original');
-              }}
-              className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <MobileIconButton
+              label={data.copied ? t('share.copied') : t('song.copy')}
+              className={data.copied ? 'text-[var(--success)]' : ''}
+            >
+              {data.copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
+            </MobileIconButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="end" className={mobileContentCls()}>
+            <DropdownMenuItem
+              className={mobileItemBase}
+              onSelect={() => void data.handleCopy('original')}
             >
               <Copy className="h-4 w-4" />
               <span>{t('song.copyOriginal')}</span>
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              data-menu-item
-              onClick={() => {
-                setShowCopyMenu(false);
-                void data.handleCopy('translation');
-              }}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className={mobileItemBase}
               disabled={!data.hasTranslation}
-              className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)] disabled:opacity-50"
+              onSelect={() => void data.handleCopy('translation')}
             >
               <Languages className="h-4 w-4" />
               <span>{t('song.copyTranslation')}</span>
-            </button>
-          </div>
-        </div>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Original / Furigana — expands a menu like the desktop Languages menu */}
-        <div className="relative" ref={langMenuRef}>
-          <MobileIconButton
-            label={t(data.readingMode === 'original'
-              ? 'song.readingOriginal'
-              : song.reading_scheme === 'yue-jyutping'
-                ? 'song.readingJyutping'
-                : 'song.readingFurigana')}
-            onClick={() => {
-              setShowMenu(false);
-              setShowCopyMenu(false);
-              setShowLangMenu((v) => !v);
-            }}
-            className={`${data.readingMode !== 'furigana' ? 'song-mobile-button--active' : ''} ${showLangMenu ? 'song-mobile-button--active' : ''}`}
-            data-open={showLangMenu}
-            aria-haspopup="menu"
-            aria-expanded={showLangMenu}
-          >
-            <Languages className="h-5 w-5" />
-          </MobileIconButton>
-          <div
-            role="menu"
-            aria-hidden={!showLangMenu}
-            data-open={showLangMenu}
-            className="song-menu-popover song-menu-popover--mobile absolute right-0 bottom-full z-50 mb-2 min-w-[200px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)] py-1.5 shadow-xl"
-          >
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <MobileIconButton
+              label={t(data.readingMode === 'original'
+                ? 'song.readingOriginal'
+                : song.reading_scheme === 'yue-jyutping'
+                  ? 'song.readingJyutping'
+                  : 'song.readingFurigana')}
+              className={data.readingMode !== 'furigana' ? 'song-mobile-button--active' : ''}
+            >
+              <Languages className="h-5 w-5" />
+            </MobileIconButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="end" className={mobileContentCls()}>
             {buildReadingMenuItems(data, song, t, canEdit).map((item, i) => {
-              const base = "song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm";
-              const cls = item.active
-                ? `${base} text-[var(--song-accent)] bg-[var(--song-accent)]/10`
-                : `${base} text-[var(--foreground)] hover:bg-[var(--accent)]`;
+              const activeCls = item.active
+                ? 'text-[var(--song-accent)] bg-[var(--song-accent)]/10 data-[highlighted]:bg-[var(--song-accent)]/10'
+                : '';
               return (
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-menu-item
+                <DropdownMenuItem
                   key={i}
-                  onClick={() => {
-                    item.onClick?.();
-                    if (!item.keepOpen) setShowLangMenu(false);
-                  }}
                   disabled={item.disabled}
-                  className={`${cls} disabled:opacity-50`}
+                  className={`${mobileItemBase} ${activeCls}`}
+                  onSelect={(e) => {
+                    if (item.keepOpen) e.preventDefault();
+                    item.onClick?.();
+                  }}
                 >
-                  {item.icon}
-                  <span className="min-w-0 flex-1">{item.label}</span>
-                  {item.status && <span className="ml-auto text-[11px] text-[var(--muted-foreground)]">{item.status}</span>}
-                </button>
+                  {renderItemBody(item)}
+                </DropdownMenuItem>
               );
             })}
-          </div>
-        </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Share */}
         <MobileIconButton
@@ -193,176 +166,93 @@ export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSup
         </MobileIconButton>
 
         {/* 3-dot menu */}
-        <div className="relative" ref={menuRef}>
-          <MobileIconButton
-            label={t('song.more')}
-            onClick={() => {
-              if (showMenu) {
-                setShowMenu(false);
-              } else {
-                setShowEditMenu(false);
-                setShowLangMenu(false);
-                setShowCopyMenu(false);
-                setShowMenu(true);
-              }
-            }}
-            className={`song-mobile-menu-trigger ${showMenu ? 'song-mobile-button--active' : ''}`}
-            data-open={showMenu}
-            aria-haspopup="menu"
-            aria-expanded={showMenu}
-          >
-            <MoreVertical className="h-5 w-5" />
-          </MobileIconButton>
-          <div
-            role="menu"
-            aria-hidden={!showMenu}
-            data-open={showMenu}
-            className="song-menu-popover song-menu-popover--mobile absolute right-0 bottom-full z-50 mb-2 min-w-[200px] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)] py-1.5 shadow-xl"
-          >
-            {showEditMenu ? (
-              <div key="edit" className="song-menu-page song-menu-page--forward">
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-menu-item
-                  onClick={() => setShowEditMenu(false)}
-                  className="song-menu-item flex w-full items-center gap-3 border-b border-[var(--border)] px-4 py-2.5 text-left text-sm font-medium text-[var(--foreground)] hover:bg-[var(--accent)]"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  <span>{t('common.edit')}</span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-menu-item
-                  onClick={() => router.push(`/songs/${id}/edit`)}
-                  className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
-                >
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <MobileIconButton
+              label={t('song.more')}
+              className="song-mobile-menu-trigger"
+            >
+              <MoreVertical className="h-5 w-5" />
+            </MobileIconButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="end" className={mobileContentCls()}>
+            {mainMenuItems.map((item, i) => renderMainMenuItem(item, i))}
+            {canEdit && (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className={`${mobileItemBase} gap-3 data-[state=open]:bg-[var(--accent)]`}>
                   <Pencil className="h-4 w-4" />
-                  <span>{t('common.edit')}</span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-menu-item
-                  onClick={() => router.push(`/songs/${id}/furigana/edit`)}
-                  className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
-                >
-                  <Languages className="h-4 w-4" />
-                  <span>{t('furigana.title')}</span>
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-menu-item
-                  onClick={() => router.push(`/songs/${id}/translation/edit`)}
-                  className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
-                >
-                  <Languages className="h-4 w-4" />
-                  <span>{t('song.translationEdit')}</span>
-                </button>
-                {song.lyrics_raw && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    data-menu-item
-                    onClick={() => router.push(`/songs/${id}/timeline/edit`)}
-                    className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
+                  <span className="min-w-0 flex-1">{t('common.edit')}</span>
+                  <ChevronRight className="h-3.5 w-3.5 opacity-60" />
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent sideOffset={4} className={mobileContentCls()}>
+                  <DropdownMenuItem
+                    className={mobileItemBase}
+                    onSelect={() => router.push(`/songs/${id}/edit`)}
                   >
-                    <Clock3 className="h-4 w-4" />
-                    <span>{t('song.timelineEdit')}</span>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-menu-item
-                  onClick={() => {
-                    setShowEditMenu(false);
-                    setShowSyncConfirm(true);
-                  }}
-                  disabled={data.syncing}
-                  className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)] disabled:opacity-50"
-                >
-                  <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />
-                  <span>{data.syncing ? t('song.syncing') : t('song.sync')}</span>
-                </button>
-                {data.debug && (
-                  <>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-menu-item
-                      onClick={() => {
-                        setShowEditMenu(false);
-                        onRecolorCover();
-                      }}
-                      className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
-                    >
-                      <Palette className="h-4 w-4" />
-                      <span>{t('song.recolorCover')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-menu-item
-                      onClick={() => {
-                        setShowEditMenu(false);
-                        onToggleDotParams();
-                      }}
-                      className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--foreground)] hover:bg-[var(--accent)]"
-                    >
-                      <SlidersHorizontal className="h-4 w-4" />
-                      <span>{t('song.dotParams')}</span>
-                    </button>
-                  </>
-                )}
-                <button
-                  type="button"
-                  role="menuitem"
-                  data-menu-item
-                  onClick={() => {
-                    setShowMenu(false);
-                    data.handleDelete();
-                  }}
-                  className="song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-[var(--destructive)] hover:bg-[var(--destructive)]/10"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span>{t('common.delete')}</span>
-                </button>
-              </div>
-            ) : (
-              <div key="main" className="song-menu-page song-menu-page--back">
-                {menuItems.map((item, i) => (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    data-menu-item
-                    key={i}
-                    onClick={() => {
-                      item.onClick?.();
-                      if (!('keepOpen' in item && item.keepOpen)) {
-                        setShowMenu(false);
-                      }
-                    }}
-                    disabled={'disabled' in item ? item.disabled : false}
-                    className={`song-menu-item flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm disabled:opacity-50 ${
-                      'danger' in item && item.danger
-                        ? 'text-[var(--destructive)] hover:bg-[var(--destructive)]/10'
-                        : 'text-[var(--foreground)] hover:bg-[var(--accent)]'
-                    }`}
+                    <Pencil className="h-4 w-4" />
+                    <span>{t('common.edit')}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className={mobileItemBase}
+                    onSelect={() => router.push(`/songs/${id}/furigana/edit`)}
                   >
-                    {item.icon}
-                    <span className="min-w-0 flex-1">{item.label}</span>
-                    {'status' in item && item.status && (
-                      <span className="ml-auto text-[11px] text-[var(--muted-foreground)]">{item.status}</span>
-                    )}
-                  </button>
-                ))}
-              </div>
+                    <Languages className="h-4 w-4" />
+                    <span>{t('furigana.title')}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className={mobileItemBase}
+                    onSelect={() => router.push(`/songs/${id}/translation/edit`)}
+                  >
+                    <Languages className="h-4 w-4" />
+                    <span>{t('song.translationEdit')}</span>
+                  </DropdownMenuItem>
+                  {song.lyrics_raw && (
+                    <DropdownMenuItem
+                      className={mobileItemBase}
+                      onSelect={() => router.push(`/songs/${id}/timeline/edit`)}
+                    >
+                      <Clock3 className="h-4 w-4" />
+                      <span>{t('song.timelineEdit')}</span>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem
+                    className={mobileItemBase}
+                    disabled={data.syncing}
+                    onSelect={() => setShowSyncConfirm(true)}
+                  >
+                    <RefreshCw className={`h-4 w-4 ${data.syncing ? 'animate-spin' : ''}`} />
+                    <span>{data.syncing ? t('song.syncing') : t('song.sync')}</span>
+                  </DropdownMenuItem>
+                  {data.debug && (
+                    <>
+                      <DropdownMenuItem
+                        className={mobileItemBase}
+                        onSelect={() => onRecolorCover()}
+                      >
+                        <Palette className="h-4 w-4" />
+                        <span>{t('song.recolorCover')}</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className={mobileItemBase}
+                        onSelect={() => onToggleDotParams()}
+                      >
+                        <SlidersHorizontal className="h-4 w-4" />
+                        <span>{t('song.dotParams')}</span>
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  <DropdownMenuItem
+                    className={`${mobileItemBase} text-[var(--destructive)] data-[highlighted]:bg-[var(--destructive)]/15 data-[highlighted]:text-[var(--destructive)]`}
+                    onSelect={() => data.handleDelete()}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span>{t('common.delete')}</span>
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             )}
-          </div>
-        </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <ConfirmDialog

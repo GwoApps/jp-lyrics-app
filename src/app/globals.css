@@ -1033,7 +1033,9 @@ textarea {
   pointer-events: none;
 }
 
-/* Song detail menus keep their surface mounted so both opening and closing can animate. */
+/* Song detail menus (desktop toolbar + mobile popovers) use @radix-ui/react-dropdown-menu,
+   which unmounts the closed content so hidden items are never focusable. Radix marks the
+   open trigger with data-state="open", which drives the chevron rotation below. */
 .song-menu-trigger {
   transition:
     color 160ms ease,
@@ -1045,36 +1047,13 @@ textarea {
 .song-menu-trigger span > svg:last-child {
   transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
+.song-menu-trigger[data-state="open"] span > svg:last-child,
 .song-menu-trigger[data-open="true"] span > svg:last-child { transform: rotate(180deg); }
 .song-mobile-menu-trigger > svg {
   transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
+.song-mobile-menu-trigger[data-state="open"] > svg,
 .song-mobile-menu-trigger[data-open="true"] > svg { transform: rotate(90deg); }
-.song-menu-popover {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  will-change: opacity, transform;
-  transition:
-    opacity 160ms ease,
-    transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
-    visibility 0s linear 200ms;
-}
-.song-menu-popover--desktop {
-  transform: translateY(-5px) scale(0.965);
-  transform-origin: top right;
-}
-.song-menu-popover--mobile {
-  transform: translateY(7px) scale(0.965);
-  transform-origin: bottom right;
-}
-.song-menu-popover[data-open="true"] {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transform: translateY(0) scale(1);
-  transition-delay: 0s;
-}
 .song-menu-item {
   transition:
     color 140ms ease,
@@ -1082,45 +1061,15 @@ textarea {
     opacity 150ms ease,
     transform 170ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.song-menu-popover:not([data-open="true"]) [data-menu-item] {
-  opacity: 0;
-  transform: translateY(-3px);
-}
-.song-menu-popover[data-open="true"] [data-menu-item] {
-  opacity: 1;
-  transform: translateY(0);
-}
-.song-menu-popover[data-open="true"] [data-menu-item]:nth-child(2) { transition-delay: 16ms; }
-.song-menu-popover[data-open="true"] [data-menu-item]:nth-child(3) { transition-delay: 28ms; }
-.song-menu-popover[data-open="true"] [data-menu-item]:nth-child(4) { transition-delay: 40ms; }
-.song-menu-popover[data-open="true"] [data-menu-item]:nth-child(5) { transition-delay: 52ms; }
-.song-menu-popover[data-open="true"] [data-menu-item]:nth-child(6) { transition-delay: 64ms; }
-.song-menu-popover[data-open="true"] [data-menu-item]:nth-child(7) { transition-delay: 76ms; }
 .song-menu-item > svg { transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1); }
 .song-menu-item:hover:not(:disabled) > svg { transform: translateX(2px) scale(1.04); }
 .song-menu-item:active:not(:disabled) { transform: scale(0.985); }
-.song-menu-page--forward {
-  animation: songMenuPageForward 190ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.song-menu-page--back {
-  animation: songMenuPageBack 190ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-@keyframes songMenuPageForward {
-  from { opacity: 0; transform: translateX(12px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-@keyframes songMenuPageBack {
-  from { opacity: 0; transform: translateX(-12px); }
-  to { opacity: 1; transform: translateX(0); }
-}
 @media (prefers-reduced-motion: reduce) {
   .song-menu-trigger,
   .song-menu-trigger svg,
   .song-mobile-menu-trigger svg,
-  .song-menu-popover,
   .song-menu-item,
-  .song-menu-item > svg,
-  .song-menu-page {
+  .song-menu-item > svg {
     animation: none !important;
     transition: none !important;
   }

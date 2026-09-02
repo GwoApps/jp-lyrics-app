@@ -1,6 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import React, { useEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { RefreshCw, Loader2, Languages, Brain } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { useSongData } from '@/hooks/useSongData';
@@ -102,7 +108,10 @@ export function buildReadingMenuItems(
 }
 
 /** Icon-only mobile controls reveal their localized action on a touch long-press. */
-export function MobileIconButton({ label, className = '', children, onClick, ...props }: React.ComponentProps<'button'> & { label: string }) {
+export const MobileIconButton = React.forwardRef<
+  HTMLButtonElement,
+  React.ComponentProps<'button'> & { label: string }
+>(function MobileIconButton({ label, className = '', children, onClick, ...props }, ref) {
   const [showLabel, setShowLabel] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressedRef = useRef(false);
@@ -117,6 +126,7 @@ export function MobileIconButton({ label, className = '', children, onClick, ...
   return (
     <button
       {...props}
+      ref={ref}
       aria-label={label}
       title={label}
       className={`song-mobile-button relative flex items-center justify-center rounded-lg p-2 ${className}`}
@@ -156,73 +166,52 @@ export function MobileIconButton({ label, className = '', children, onClick, ...
       {showLabel && <span role="status" className="song-mobile-tooltip">{label}</span>}
     </button>
   );
-}
+});
 
 export function ToolbarMenu({ label, items, triggerClassName }: { label: ReactNode; items: ToolbarMenuItem[]; triggerClassName?: string }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
   return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className={triggerClassName ?? `${btnTextCls(open)} song-menu-trigger`}
-        data-open={open}
-        aria-haspopup="menu"
-        aria-expanded={open}
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className={triggerClassName ?? `${btnTextCls(false)} song-menu-trigger`}
       >
         {label}
-      </button>
-      <div
-        role="menu"
-        aria-hidden={!open}
-        data-open={open}
-        className="song-menu-popover song-menu-popover--desktop absolute right-0 top-full z-50 mt-1 min-w-[160px] rounded-lg border border-[var(--border)] bg-[var(--card)] py-1 shadow-lg"
-      >
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[160px] p-1">
         {items.map((item, i) => {
-          const base = "song-menu-item w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left disabled:opacity-50";
+          const base = "song-menu-item w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs text-left";
           const cls = item.danger
-            ? `${base} text-[var(--destructive)] hover:bg-[var(--destructive)]/10`
+            ? `${base} text-[var(--destructive)] data-[highlighted]:bg-[var(--destructive)]/15`
             : item.active
-              ? `${base} text-[var(--song-accent)] bg-[var(--song-accent)]/10`
-              : `${base} text-[var(--foreground)] hover:bg-[var(--accent)]`;
+              ? `${base} text-[var(--song-accent)] bg-[var(--song-accent)]/10 data-[highlighted]:bg-[var(--song-accent)]/15`
+              : `${base} text-[var(--foreground)] data-[highlighted]:bg-[var(--accent)]`;
           if (item.href) {
             return (
-              <a key={i} role="menuitem" data-menu-item href={item.href} onClick={() => setOpen(false)} className={cls}>
-                {item.icon}
-                <span className="min-w-0 flex-1">{item.label}</span>
-                {item.status && <span className="ml-auto text-[10px] text-[var(--muted-foreground)]">{item.status}</span>}
-              </a>
+              <DropdownMenuItem key={i} asChild className={cls}>
+                <a href={item.href}>
+                  {item.icon}
+                  <span className="min-w-0 flex-1">{item.label}</span>
+                  {item.status && <span className="ml-auto text-[10px] text-[var(--muted-foreground)]">{item.status}</span>}
+                </a>
+              </DropdownMenuItem>
             );
           }
           return (
-            <button
-              type="button"
-              role="menuitem"
-              data-menu-item
+            <DropdownMenuItem
               key={i}
-              onClick={() => { item.onClick?.(); if (!item.keepOpen) setOpen(false); }}
               disabled={item.disabled}
               className={cls}
+              onSelect={(e) => {
+                if (item.keepOpen) e.preventDefault();
+                item.onClick?.();
+              }}
             >
               {item.icon}
               <span className="min-w-0 flex-1">{item.label}</span>
               {item.status && <span className="ml-auto text-[10px] text-[var(--muted-foreground)]">{item.status}</span>}
-            </button>
+            </DropdownMenuItem>
           );
         })}
-      </div>
-    </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
-
