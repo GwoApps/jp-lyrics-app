@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB, schema } from '@/lib/db';
 import { and, eq } from 'drizzle-orm';
-import type { CoverPaletteJson, Song } from '@/lib/types';
+import type { CoverPaletteJson, Song, SongData } from '@/lib/types';
 import { getAuthUser } from '@/lib/auth';
 import { isSongVisibleToUser } from '@/lib/song-visibility';
 import { findLrcConflicts, resolveTimelineSave } from '@/lib/lrc';
 import { buildSongUpdateSet } from '@/lib/song-update';
 
 /** Strip internal email while exposing server-authoritative capabilities. */
-function sanitizeSong(song: Song, canEdit: boolean) {
+function sanitizeSong(song: Song, canEdit: boolean): SongData {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { created_by, ...rest } = song;
   return { ...rest, permissions: { can_edit: canEdit } };

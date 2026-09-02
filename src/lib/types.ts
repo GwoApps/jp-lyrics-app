@@ -10,6 +10,7 @@ export interface Song {
   lyrics_translation: string;
   lyrics_translation_lang?: string | null;
   lyrics_translation_reasoning?: string | null;
+  lyrics_glossary?: string | null;
   cover_url?: string | null;
   cover_palette?: CoverPaletteJson | null;
   spotify_track_id?: string | null;
@@ -29,6 +30,9 @@ export interface Song {
   created_at: string;
   updated_at: string;
 }
+
+/** Song detail as returned by the API: DB model minus internal `created_by`, plus per-user permissions. */
+export type SongData = Omit<Song, 'created_by'> & { permissions?: { can_edit: boolean } };
 
 export interface FuriganaSegment {
   text: string;

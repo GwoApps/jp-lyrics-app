@@ -10,6 +10,7 @@ import Toast from '@/components/Toast';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useI18n } from '@/lib/i18n';
 import type { SongItem } from '@/lib/types';
+import type { ImportAlertState, ImportReviewState } from '@/hooks/models';
 import { importErrorMsg } from '@/lib/import-errors';
 import SongFilterBar, { type SongViewMode } from '@/components/home/SongFilterBar';
 import CollectionsPanel from '@/components/home/CollectionsPanel';
@@ -24,20 +25,6 @@ import { requestSongList } from '@/lib/song-list-fetch';
 import { groupSongsByAlbum } from '@/lib/song-albums';
 
 type ToastState = { type: 'success' | 'error'; msg: string } | null;
-type ImportAlertState = { message: string; manualCreateUrl?: string } | null;
-/** Pending low-confidence import candidate waiting for explicit user confirmation. */
-interface ImportReviewState {
-  title: string;
-  artist: string;
-  spotifyTrackId?: string;
-  source: string;
-  confidence: number;
-  lines: number;
-  preview: string;
-  synced: boolean;
-  /** Metadata of the actually-matched song (e.g. Uta-Net) for human judgment. */
-  match?: { title: string; artist: string; link: string; ambiguous?: boolean };
-}
 const EMPTY_SONG_IDS = new Set<string>();
 
 const SONG_VIEW_MODE_KEY = 'jplrc:songs:view-mode';
@@ -85,7 +72,7 @@ export default function HomePage() {
   });
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [importAlert, setImportAlert] = useState<ImportAlertState>(null);
+  const [importAlert, setImportAlert] = useState<ImportAlertState | null>(null);
   const [importReview, setImportReview] = useState<ImportReviewState | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);

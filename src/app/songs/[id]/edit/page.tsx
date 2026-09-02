@@ -10,29 +10,8 @@ import { useI18n } from '@/lib/i18n';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { extractLrcMetadata } from '@/lib/lrc';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
-import type { ReadingScheme } from '@/lib/types';
+import type { SongData } from '@/lib/types';
 import { LYRICS_SOURCE_KEYS } from '@/lib/lyrics-source';
-
-interface SongData {
-  id: string;
-  title: string;
-  artist: string;
-  lyrics_raw: string;
-  lyrics_synced: string;
-  lyrics_furigana: string;
-  lyrics_translation: string;
-  lyrics_translation_reasoning?: string | null;
-  lyrics_glossary?: string | null;
-  cover_url?: string | null;
-  reading_scheme: ReadingScheme;
-  lyrics_source: string;
-  lyrics_confidence: number;
-  lyrics_needs_review: number;
-  created_at: string;
-  updated_at: string;
-  spotify_track_id?: string | null;
-  spotify_album?: string | null;
-}
 
 type SubDataKey = 'furigana' | 'translation' | 'reasoning' | 'glossary';
 

@@ -12,21 +12,11 @@ import FuriganaEditor from '@/components/FuriganaEditor';
 import Toast from '@/components/Toast';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { convertLyricsReading, normalizeReadingScheme } from '@/lib/lyrics-reading';
-import type { FuriganaLine, ReadingScheme } from '@/lib/types';
+import type { FuriganaLine, SongData } from '@/lib/types';
 import { useAuthSession } from '@/lib/auth-session';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { furiganaLinesMatchSource } from '@/lib/furigana-validation';
-
-interface SongData {
-  id: string;
-  title: string;
-  artist: string;
-  lyrics_raw: string;
-  lyrics_furigana: string;
-  reading_scheme: ReadingScheme;
-  cover_url?: string | null;
-}
 
 interface AuthState {
   authenticated: boolean;

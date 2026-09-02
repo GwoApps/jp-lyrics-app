@@ -14,15 +14,7 @@ import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { parseTranslationCache } from '@/lib/translation/parse';
 import { TRANSLATION_ERROR_KEYS } from '@/lib/translation-errors';
-
-interface SongData {
-  id: string;
-  title: string;
-  artist: string;
-  lyrics_raw: string;
-  lyrics_translation: string;
-  cover_url?: string | null;
-}
+import type { SongData } from '@/lib/types';
 
 interface AuthState {
   authenticated: boolean;
