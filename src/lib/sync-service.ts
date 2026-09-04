@@ -152,7 +152,7 @@ export async function runFreshSync(
   // Route through the effective chain (builtin + admin HTTP providers). The
   // chain applies its own 180s budget, but the caller's AbortSignal (user
   // cancel / SSE disconnect) always wins and stops remaining requests.
-  const { result, source, confidence, durationMismatch, match, rateLimited } = await fetchLyricsWithChain(song.title, song.artist, {
+  const { result, source, confidence, durationMismatch, match, rateLimited, timedOut } = await fetchLyricsWithChain(song.title, song.artist, {
     spotifyCanonical,
     spotifyTrackId: spotifyTrack?.id ?? null,
     spotify: spotifyTrack
@@ -163,6 +163,13 @@ export async function runFreshSync(
   });
 
   if (!result) {
+    // A chain-budget timeout is a temporary, retryable failure (up to the
+    // whole 180s chain budget) — NOT "this song has no lyrics". Surface it as
+    // a distinct 504 so the client can say "search timed out, try again later"
+    // instead of a misleading "not found" (issue #241).
+    if (timedOut) {
+      return { status: 504, body: { synced: false, error: 'lyrics_timeout' } };
+    }
     // Distinguish a rate-limited lyric source (retry later) from a song that
     // genuinely has no lyrics — reusing "not found" for 429 was misleading.
     if (rateLimited) {

@@ -5,6 +5,8 @@
 const importErrorKeyMap: Record<string, string> = {
   title_required: 'home.importTitleRequired',
   lyrics_not_found: 'home.importLyricsNotFound',
+  lyrics_rate_limited: 'apiErrors.lyricsRateLimited',
+  lyrics_timeout: 'apiErrors.lyricsTimeout',
   login_required: 'home.importLoginRequired',
   invalid_playlist_url: 'home.importInvalidPlaylistUrl',
   spotify_not_connected: 'home.importSpotifyNotConnected',

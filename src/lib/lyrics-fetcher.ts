@@ -51,6 +51,14 @@ export interface LyricsFetchResult {
    * later" apart from "this song genuinely has no lyrics".
    */
   rateLimited?: boolean;
+  /**
+   * True when the WHOLE provider chain hit its deployment budget
+   * (`LYRICS_PROVIDER_CHAIN_TIMEOUT_MS`) without a caller cancel. Set as soon
+   * as the chain budget expires, so callers can tell a temporary, retryable
+   * "search timed out" apart from "no lyrics" (`result: null`, `timedOut`
+   * unset) — mirroring the existing `rateLimited` distinction for HTTP 429.
+   */
+  timedOut?: boolean;
 }
 
 /**

@@ -171,10 +171,15 @@ export async function fetchLyricsWithChain(
 
     let best: LyricsFetchResult | null = null;
     let rateLimited = false;
+    let timedOut = false;
 
     for (const provider of providers) {
       if (combinedSignal.aborted) {
         if (opts?.signal?.aborted) throw opts.signal.reason;
+        // Chain budget expired without a caller cancel → a soft, retryable
+        // timeout, NOT a "no lyrics" verdict. Track it so the miss below is
+        // reported distinctly from a genuine empty result.
+        timedOut = true;
         break;
       }
 
@@ -223,12 +228,14 @@ export async function fetchLyricsWithChain(
     }
 
     // No source produced a trusted hit → report a miss (or the rate-limit flag).
-    return { result: null, source: '', confidence: 0, rateLimited };
+    // A chain-budget timeout carries `timedOut` so callers can tell a
+    // retryable "search timed out" apart from a genuine no-lyrics miss.
+    return { result: null, source: '', confidence: 0, rateLimited, ...(timedOut ? { timedOut: true } : {}) };
   } catch (err) {
     if (isAbortError(err)) {
       // Chain budget expired without a caller cancel → report a soft timeout.
       if (!opts?.signal?.aborted) {
-        return { result: null, source: '', confidence: 0, rateLimited: false };
+        return { result: null, source: '', confidence: 0, rateLimited: false, timedOut: true };
       }
       throw err;
     }

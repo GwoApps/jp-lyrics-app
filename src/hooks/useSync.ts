@@ -157,21 +157,24 @@ export function useSync(deps: UseSyncDeps): UseSyncReturn {
         await applySyncResult(data);
       } else {
         // Mid-fetch failure surfaced over SSE (or a stale/non-2xx result).
-        if (data.error === 'network_error' || status >= 500) {
-          setImportAlert({ message: t('song.networkErrorAlert') });
-          return;
-        }
+        // Specific transient errors (rate-limit / chain timeout) take priority
+        // over the generic `status >= 500` network fallback so the user gets the
+        // retryable message instead of a blanket network error (issue #241).
         const errorKey: Record<string, string> = {
           lyrics_not_found: 'apiErrors.lyricsNotFound',
           lyrics_rate_limited: 'apiErrors.lyricsRateLimited',
+          lyrics_timeout: 'apiErrors.lyricsTimeout',
           forbidden: 'apiErrors.forbidden',
           login_required: 'apiErrors.loginRequired',
           stale_source: 'song.syncStale',
         };
-        const message = data.error && errorKey[data.error]
-          ? t(errorKey[data.error])
-          : t('song.syncNotFound');
-        setImportAlert({ message });
+        if (data.error && errorKey[data.error]) {
+          setImportAlert({ message: t(errorKey[data.error]) });
+        } else if (data.error === 'network_error' || status >= 500) {
+          setImportAlert({ message: t('song.networkErrorAlert') });
+        } else {
+          setImportAlert({ message: t('song.syncNotFound') });
+        }
         if (data.error === 'stale_source') {
           // Another tab saved different lyrics while this sync was in flight —
           // the server wrote nothing. Re-fetch so the user sees the current

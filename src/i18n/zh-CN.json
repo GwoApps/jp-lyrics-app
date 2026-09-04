@@ -415,6 +415,7 @@
   "apiErrors": {
     "lyricsNotFound": "未找到歌词",
     "lyricsRateLimited": "歌词源已限流，请稍候片刻再重试。",
+    "lyricsTimeout": "歌词搜索超时，请稍候片刻再重试。",
     "forbidden": "你没有权限编辑这首歌曲",
     "loginRequired": "请先登录再继续"
   },

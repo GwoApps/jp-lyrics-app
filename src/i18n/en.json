@@ -415,6 +415,7 @@
   "apiErrors": {
     "lyricsNotFound": "No lyrics were found",
     "lyricsRateLimited": "The lyrics source is rate-limited. Please wait a moment and try again.",
+    "lyricsTimeout": "The lyrics search timed out. Please wait a moment and try again.",
     "forbidden": "You do not have permission to edit this song",
     "loginRequired": "Please sign in before continuing"
   },

@@ -64,6 +64,7 @@ export function useImport(deps: UseImportDeps): UseImportReturn {
           title_required: 'home.importTitleRequired',
           lyrics_not_found: 'home.importLyricsNotFound',
           lyrics_rate_limited: 'apiErrors.lyricsRateLimited',
+          lyrics_timeout: 'apiErrors.lyricsTimeout',
           login_required: 'home.importLoginRequired',
         };
         setImportAlert({

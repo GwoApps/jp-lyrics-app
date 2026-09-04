@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ id: existing.id, alreadyExists: true });
   }
 
-  const { result, source, confidence, durationMismatch, match, rateLimited } = await fetchLyricsWithChain(title, artist, {
+  const { result, source, confidence, durationMismatch, match, rateLimited, timedOut } = await fetchLyricsWithChain(title, artist, {
     spotifyCanonical: spotifyTrack
       ? { name: spotifyTrack.title, artist: spotifyTrack.artist }
       : null,
@@ -65,6 +65,12 @@ export async function POST(request: NextRequest) {
     signal: request.signal,
   });
   if (!result) {
+    // A chain-budget timeout is a temporary, retryable failure — NOT "no
+    // lyrics". Return a distinct 504 so the client says "search timed out"
+    // instead of a misleading "not found" (issue #241).
+    if (timedOut) {
+      return NextResponse.json({ error: 'lyrics_timeout', hasLyrics: false }, { status: 504 });
+    }
     // A rate-limited source is not "no lyrics" — tell the user to retry.
     if (rateLimited) {
       return NextResponse.json({ error: 'lyrics_rate_limited', hasLyrics: false }, { status: 503 });

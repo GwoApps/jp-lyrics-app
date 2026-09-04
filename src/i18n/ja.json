@@ -415,6 +415,7 @@
   "apiErrors": {
     "lyricsNotFound": "歌詞が見つかりませんでした",
     "lyricsRateLimited": "歌詞ソースが制限されています。少し待ってから再試行してください。",
+    "lyricsTimeout": "歌詞の検索がタイムアウトしました。少し待ってから再試行してください。",
     "forbidden": "この曲を編集する権限がありません",
     "loginRequired": "続行する前にログインしてください"
   },
