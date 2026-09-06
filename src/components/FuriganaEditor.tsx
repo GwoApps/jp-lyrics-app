@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { FuriganaLine, FuriganaSegment, ReadingScheme } from '@/lib/types';
 import { useI18n } from '@/lib/i18n';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { getCantoneseReadingCandidates } from '@/lib/lyrics-reading';
 
 interface FuriganaEditorProps {
@@ -51,6 +52,7 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
   const [readingCandidatesLoading, setReadingCandidatesLoading] = useState(false);
   const [candidatesError, setCandidatesError] = useState(false);
   const [candidatesRetry, setCandidatesRetry] = useState(0);
+  const [confirmApplyAll, setConfirmApplyAll] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
   const locatedRef = useRef(false);
@@ -241,32 +243,62 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
     );
   }, [active, lines, updateLineSegments, readingScheme]);
 
+  // Batch-apply guard: spreading one reading across every identical kanji
+  // segment is dangerous because the same kanji may read differently in
+  // different contexts (e.g. 「生」 in 人生 / 生まれる / 生きる). We keep the
+  // default scope tight to the current line (where context is consistent),
+  // and gate whole-song application behind an explicit confirmation that
+  // warns about multi-reading kanji and shows how many segments will be
+  // rewritten. See issue #245.
+  const { lineWordCount, otherLineWordCount } = useMemo(() => {
+    if (!activeSeg || !active) return { lineWordCount: 0, otherLineWordCount: 0 };
+    const currentReading = draft.trim();
+    let lineCount = 0;
+    let otherCount = 0;
+    lines.forEach((lineData, li) => {
+      lineData.segments.forEach((seg, si) => {
+        if (seg.text !== activeSeg.text) return;
+        if (seg.reading === currentReading) return;
+        if (li === active.lineIndex && si === active.segIndex) return;
+        if (li === active.lineIndex) lineCount += 1;
+        else otherCount += 1;
+      });
+    });
+    return { lineWordCount: lineCount, otherLineWordCount: otherCount };
+  }, [active, activeSeg, draft, lines]);
+
+  const reading = draft.trim();
+
+  // Apply the edited reading to every identical segment *within the current
+  // line only* — the safe default. Cross-line context may differ, so this is
+  // deliberately scoped to the line being edited (issue #245 recommendation 3).
+  const applyLine = useCallback(() => {
+    if (!active || !activeSeg || !reading) return;
+    const li = active.lineIndex;
+    const next = lines.map((line, index) =>
+      index === li
+        ? { ...line, segments: line.segments.map((seg) =>
+            seg.text === activeSeg.text && seg.reading !== reading ? { ...seg, reading } : seg
+          ) }
+        : line
+    );
+    onChange(next);
+    setActive(null);
+  }, [active, activeSeg, reading, lines, onChange]);
+
+  // Apply the edited reading to every identical segment across the whole song.
+  // Reached only through the confirmation dialog below (recommendation 2).
   const applyAll = useCallback(() => {
-    if (!activeSeg || !active) return;
-    const targetText = activeSeg.text;
-    const reading = draft.trim();
+    if (!active || !activeSeg || !reading) return;
     const next = lines.map((line) => ({
       ...line,
       segments: line.segments.map((seg) =>
-        seg.text === targetText && seg.reading !== reading ? { ...seg, reading } : seg
+        seg.text === activeSeg.text && seg.reading !== reading ? { ...seg, reading } : seg
       ),
     }));
     onChange(next);
     setActive(null);
-  }, [active, activeSeg, draft, lines, onChange]);
-
-  const sameWordCount = useMemo(() => {
-    if (!activeSeg || !active) return 0;
-    const reading = draft.trim();
-    return lines.reduce(
-      (sum, line, li) =>
-        sum +
-        line.segments.filter(
-          (seg, si) => seg.text === activeSeg.text && seg.reading !== reading && (li !== active.lineIndex || si !== active.segIndex)
-        ).length,
-      0
-    );
-  }, [active, activeSeg, draft, lines]);
+  }, [active, activeSeg, reading, lines, onChange]);
 
   const hasAnyReading = lines.some((line) => line.segments.some((seg) => seg.reading));
 
@@ -431,13 +463,22 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
                     {t('furigana.merge')}
                   </button>
                 )}
-                {sameWordCount > 0 && (
+                {reading !== '' && lineWordCount > 0 && (
                   <button
                     type="button"
-                    onClick={applyAll}
+                    onClick={applyLine}
                     className="rounded-md px-3 py-1.5 text-xs font-medium text-[var(--song-accent)] bg-[var(--song-accent)]/10 hover:bg-[var(--song-accent)]/20 transition-colors"
                   >
-                    {t('furigana.applyAll', { count: String(sameWordCount) })}
+                    {t('furigana.applyToLine', { count: String(lineWordCount) })}
+                  </button>
+                )}
+                {reading !== '' && otherLineWordCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmApplyAll(true)}
+                    className="rounded-md px-3 py-1.5 text-xs font-medium text-[var(--song-accent)] bg-[var(--song-accent)]/10 hover:bg-[var(--song-accent)]/20 transition-colors"
+                  >
+                    {t('furigana.applyAll', { count: String(lineWordCount + otherLineWordCount) })}
                   </button>
                 )}
               </div>
@@ -445,6 +486,21 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
           </div>
         );
       })}
+
+      <ConfirmDialog
+        open={confirmApplyAll}
+        title={t('furigana.applyAllConfirmTitle', { count: String(lineWordCount + otherLineWordCount) })}
+        body={t('furigana.applyAllConfirmBody', {
+          reading,
+          count: String(lineWordCount + otherLineWordCount),
+          line: String(lineWordCount),
+          others: String(otherLineWordCount),
+        })}
+        confirmLabel={t('furigana.applyAllConfirm')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={() => { setConfirmApplyAll(false); applyAll(); }}
+        onCancel={() => setConfirmApplyAll(false)}
+      />
     </div>
   );
 }
