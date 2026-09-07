@@ -348,6 +348,13 @@ textarea {
 }
 .confirm-dialog-children .preview-meta { font-weight: 600; color: var(--foreground); margin-bottom: 6px; }
 .confirm-dialog-children .preview-lines { opacity: 0.85; }
+.confirm-dialog-children .preview-toggle {
+  display: block; margin-top: 8px; width: 100%; text-align: left;
+  padding: 4px 8px; border-radius: 6px; border: none;
+  background: transparent; color: var(--primary); font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: background 0.15s;
+}
+.confirm-dialog-children .preview-toggle:hover { background: var(--accent); }
 .confirm-dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .confirm-dialog-btn {
   padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 500;

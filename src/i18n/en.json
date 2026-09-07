@@ -139,6 +139,8 @@
     "retry": "Retry",
     "synced": "Lyrics synced ({source}, {lines} lines)",
     "syncCandidatePreview": "{source} · {confidence}% · {lines} lines",
+    "syncCandidatePreviewExpand": "Show all {count} lines",
+    "syncCandidatePreviewCollapse": "Collapse",
     "lyricsSaved": "Lyrics saved",
     "saveFailed": "Save failed",
     "importFailed": "Import failed",

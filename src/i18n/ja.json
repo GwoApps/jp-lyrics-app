@@ -139,6 +139,8 @@
     "retry": "再試行",
     "synced": "歌詞同期完了 ({source}, {lines}行)",
     "syncCandidatePreview": "{source} · {confidence}% · {lines} 行",
+    "syncCandidatePreviewExpand": "全 {count} 行を表示",
+    "syncCandidatePreviewCollapse": "折りたたむ",
     "lyricsSaved": "歌詞を保存しました",
     "saveFailed": "保存に失敗しました",
     "importFailed": "取込に失敗しました",

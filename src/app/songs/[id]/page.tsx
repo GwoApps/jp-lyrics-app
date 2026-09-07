@@ -68,17 +68,32 @@ function SyncCandidatePreview({
   text: string;
 }) {
   const { t } = useI18n();
+  const [expanded, setExpanded] = useState(false);
   const previewLines = text
     .split('\n')
     .map((line) => line.replace(/^\[\d{2}:\d{2}(?:\.\d{1,3})?\]\s*/g, '').trim())
     .filter((line) => line && !/^\[[a-z]+:[^\]]*\]$/i.test(line));
-  const shown = previewLines.slice(0, 6);
+  const total = previewLines.length;
+  // Show all lines once expanded; otherwise default to a compact 6-line preview
+  // so the user can review the full candidate before the destructive write-back.
+  const shown = expanded ? previewLines : previewLines.slice(0, 6);
   return (
     <div className="confirm-dialog-children">
       <div className="preview-meta">
         {t('song.syncCandidatePreview', { source: sourceLabel, confidence: String(confidence), lines: String(lines) })}
       </div>
-      <div className="preview-lines">{shown.join('\n')}{previewLines.length > 6 ? '\n…' : ''}</div>
+      <div className="preview-lines">{shown.join('\n')}{!expanded && total > 6 ? '\n…' : ''}</div>
+      {total > 6 && (
+        <button
+          type="button"
+          className="preview-toggle"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded
+            ? t('song.syncCandidatePreviewCollapse')
+            : t('song.syncCandidatePreviewExpand', { count: String(total) })}
+        </button>
+      )}
     </div>
   );
 }
