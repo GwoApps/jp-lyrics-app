@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { FuriganaLine } from '@/lib/types';
 import { isSameSpotifyTrack } from '@/lib/match';
 import { useNowPlaying, type SyncState } from './useNowPlaying';
@@ -104,6 +104,30 @@ export function useSpotifySync(
   const matchTokenRef = useRef(0);
   const pipWindowRef = useRef<Window | null>(null);
 
+  // ── rAF loop lifecycle (issue #244) ──────────────────────────────
+  // The 60fps interpolation loop must run ONLY while a Spotify track matching
+  // this page's song is actively playing. Start/stop handles are exposed via
+  // refs so the lifecycle + visibility handlers can (re)start / pause it,
+  // instead of the loop idling every frame when nothing is being followed.
+  const startRafRef = useRef<() => void>(() => {});
+  const stopRafRef = useRef<() => void>(() => {});
+  const rafEligibleRef = useRef(false);
+  // Mirror of `isSameSong` for the visibilitychange handler (runs outside render).
+  const isSameSongRef = useRef(isSameSong);
+  // Tiny identity memo so the loop doesn't re-run NFKC/normalize scoring on the
+  // identical (song, track) pair on every frame (issue #244).
+  const matchCacheRef = useRef<Map<string, boolean>>(new Map());
+  const isSameTrackCached = useCallback((track: { id?: string; name: string; artist: string }): boolean => {
+    const song = currentSongRef(syncRefs.current);
+    const key = `${song.spotify_track_id ?? song.id}||${song.title}||${song.artist}||${track.id ?? ''}||${track.name}||${track.artist}`;
+    const hit = matchCacheRef.current.get(key);
+    if (hit !== undefined) return hit;
+    const result = isSameSpotifyTrack(song, track);
+    matchCacheRef.current.set(key, result);
+    return result;
+  }, [syncRefs, matchCacheRef]);
+  useEffect(() => { isSameSongRef.current = isSameSong; });
+
   // Persist follow-playing preference
   useEffect(() => { localStorage.setItem('jplrc-follow-playing', String(followPlaying)); }, [followPlaying]);
 
@@ -174,25 +198,30 @@ export function useSpotifySync(
     }
   }, [nowPlayingData, syncRefs]);
 
-  // Smooth rAF interpolation loop — runs at display refresh rate between polls
-  // Reads from refs to avoid stale closures; no React re-render per frame
+  // Smooth rAF interpolation loop — runs at display refresh rate between polls,
+  // but ONLY while the matched track is actively playing. When idle (paused /
+  // different song / tab hidden) the loop does NOT reschedule itself, avoiding
+  // wasteful 60fps spinning (issue #244). Start/stop are driven by the lifecycle
+  // effect below and the visibility handler.
   useEffect(() => {
     const tick = () => {
       const { progressMs, pollTime, isPlaying, trackName, trackId, trackArtist } = interpRef.current;
       const refs = syncRefs.current;
       const songTitle = refs.songTitle;
 
-      // Not playing or song mismatch → clear highlight. Identity reuses the same
-      // matching rule as the page badge / seek / share (ID-authoritative).
-      if (!isPlaying || !songTitle || !isSameSpotifyTrack(
-        currentSongRef(refs),
-        { id: trackId || undefined, name: trackName, artist: trackArtist },
-      )) {
+      // Not following (paused / no song loaded / track mismatch): clear the
+      // highlight and STOP the loop — do NOT reschedule. Identity reuses the
+      // same matching rule as the page badge / seek / share (ID-authoritative).
+      if (
+        !isPlaying ||
+        !songTitle ||
+        !isSameTrackCached({ id: trackId || undefined, name: trackName, artist: trackArtist })
+      ) {
         if (highlightRef.current !== -1) {
           highlightRef.current = -1;
           setActiveLine(-1);
         }
-        rafRef.current = requestAnimationFrame(tick);
+        rafRef.current = 0;
         return;
       }
 
@@ -244,12 +273,77 @@ export function useSpotifySync(
         } catch { /* PiP window closed */ }
       }
 
+      // Keep interpolating while still following.
       rafRef.current = requestAnimationFrame(tick);
     };
 
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [lineRefs, lyricsRef, syncRefs]);
+    const start = () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    const stop = () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+    };
+    startRafRef.current = start;
+    stopRafRef.current = stop;
+
+    // Kick off once — tick immediately decides whether to keep running.
+    start();
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+      startRafRef.current = () => {};
+      stopRafRef.current = () => {};
+    };
+  }, [lineRefs, lyricsRef, syncRefs, isSameTrackCached]);
+
+  // Start/stop the rAF loop whenever playback/identity eligibility flips
+  // (became the same song: the page song loaded or playback started; stopped
+  // being the same: paused or a different/next track). The loop only runs while
+  // it is truly needed, so idle pages no longer spin at 60fps (issue #244).
+  useEffect(() => {
+    if (isSameSong) {
+      if (!rafEligibleRef.current) {
+        // Song/track identity may have changed since the last run — drop stale
+        // cached match results before restarting the loop.
+        matchCacheRef.current.clear();
+        startRafRef.current();
+      }
+      rafEligibleRef.current = true;
+    } else {
+      if (rafEligibleRef.current) {
+        stopRafRef.current();
+        if (highlightRef.current !== -1) {
+          highlightRef.current = -1;
+          setActiveLine(-1);
+        }
+      }
+      rafEligibleRef.current = false;
+    }
+  }, [isSameSong]);
+
+  // Pause the loop while the tab is hidden, and resume it when the user returns
+  // and the matched track is still playing (issue #244). rAF is already throttled
+  // in the background, but pausing explicitly is cleaner and saves CPU/battery.
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.hidden) {
+        stopRafRef.current();
+        if (highlightRef.current !== -1) {
+          highlightRef.current = -1;
+          setActiveLine(-1);
+        }
+      } else if (isSameSongRef.current) {
+        matchCacheRef.current.clear();
+        startRafRef.current();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+
 
   return {
     spotify,
