@@ -82,7 +82,7 @@ export default function SongForm({
   const [readingScheme, setReadingScheme] = useState<ReadingScheme>(initialReadingScheme);
   const [readingSchemeConfirmed, setReadingSchemeConfirmed] = useState(initialReadingSchemeConfirmed);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; msg: string } | null>(null);
 
   // Edit-mode change tracking (create mode always submits these fields).
   const [lyricsChanged, setLyricsChanged] = useState(false);
@@ -123,7 +123,7 @@ export default function SongForm({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverFileRef = useRef<HTMLInputElement>(null);
 
-  const showToast = (type: 'success' | 'error', msg: string) => {
+  const showToast = (type: 'success' | 'error' | 'info', msg: string) => {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 3000);
   };
@@ -283,19 +283,25 @@ export default function SongForm({
       // Saving succeeded — the submitted fields are now the new baseline.
       setBaseline(serializeFields());
       // Create mode: upload the pending cover now that the song exists.
-      // Leaving the cover empty keeps whatever the server resolved (e.g.
-      // Spotify artwork) — a failed upload never blocks navigation.
+      // Cover is an optional attachment — upload failure must NOT block the
+      // create flow. The song is already saved; show a toast and still
+      // navigate to the new song page so the user isn't left stuck.
+      let coverUploadFailed = false;
       if (mode === 'create' && pendingCoverFile) {
-        const form = new FormData();
-        form.append('file', pendingCoverFile);
-        const res = await fetch(`/api/songs/${song.id}/cover`, { method: 'POST', body: form });
-        const result = await res.json().catch(() => null);
-        if (!res.ok || !result?.cover_url) {
-          showToast('error', t('song.coverUploadFailed'));
-          return;
+        try {
+          const form = new FormData();
+          form.append('file', pendingCoverFile);
+          const res = await fetch(`/api/songs/${song.id}/cover`, { method: 'POST', body: form });
+          const result = await res.json().catch(() => null);
+          if (!res.ok || !result?.cover_url) {
+            coverUploadFailed = true;
+          }
+        } catch {
+          coverUploadFailed = true;
         }
       }
-      showToast('success', t(`${ns}.saved`));
+      showToast(coverUploadFailed ? 'error' : 'success',
+        coverUploadFailed ? t('song.savedCoverUploadFailed') : t(`${ns}.saved`));
       setTimeout(() => router.push(`/songs/${song.id}`), 800);
     } catch (error: unknown) {
       const message = error instanceof Error && error.message === 'timestamps_not_ordered'

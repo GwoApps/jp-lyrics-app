@@ -319,6 +319,7 @@
     "coverUnsupported": "不支持的图片格式",
     "coverHint": "支持 JPG / PNG / WebP / GIF；大图会自动压缩后上传",
     "coverCreateHint": "可选；留空时若关联 Spotify 将自动获取封面",
+    "savedCoverUploadFailed": "歌曲已保存，但封面上传失败",
     "translationReasoningView": "查看翻译过程",
     "copyReasoning": "复制思考",
     "copyReasoningEmpty": "暂无思考内容",

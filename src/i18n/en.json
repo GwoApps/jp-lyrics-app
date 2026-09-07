@@ -319,6 +319,7 @@
     "coverUnsupported": "Unsupported image format",
     "coverHint": "JPG / PNG / WebP / GIF; large images are auto-compressed before upload",
     "coverCreateHint": "Optional; if left empty and linked to Spotify, artwork is fetched automatically",
+    "savedCoverUploadFailed": "Song saved, but cover upload failed",
     "translationReasoningView": "View reasoning",
     "copyReasoning": "Copy reasoning",
     "copyReasoningEmpty": "No reasoning available",
