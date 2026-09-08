@@ -40,23 +40,20 @@ export default function TimelineLineRow({
       : 'border-transparent hover:bg-[var(--accent)]';
 
   return (
-    <div ref={registerRow} onClick={onSelect} className={`mb-1 grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_72px] items-center gap-2 rounded-lg border px-2 py-2 transition-colors sm:grid-cols-[32px_112px_minmax(0,1fr)_72px] sm:gap-3 sm:px-3 ${rowCls}`}>
+    <div ref={registerRow} onClick={onSelect} className={`mb-1 grid cursor-pointer grid-cols-[28px_96px_minmax(0,1fr)_72px] items-center gap-2 rounded-lg border px-2 py-2 transition-colors sm:grid-cols-[32px_112px_minmax(0,1fr)_72px] sm:gap-3 sm:px-3 ${rowCls}`}>
       <div className="flex justify-center">{line.timeMs == null ? <Circle className="h-4 w-4 text-[var(--muted-foreground)]/50" /> : <CheckCircle2 className="h-4 w-4 text-[var(--success)]" />}</div>
-      <div className="hidden sm:block">
-        <input key={`${index}-${line.timeMs ?? 'empty'}`} defaultValue={line.timeMs == null ? '' : fmtMs(line.timeMs)} placeholder="--:--.---" onClick={(event) => event.stopPropagation()} onBlur={(event) => {
-          const value = event.currentTarget.value.trim();
-          if (!value) {
-            if (line.timeMs != null) onSetTime(index, null);
-            return;
-          }
-          const parsed = parseLrcTimestamp(value);
-          if (parsed != null) onSetTime(index, parsed);
-          else event.currentTarget.value = line.timeMs == null ? '' : fmtMs(line.timeMs);
-        }} className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-2 font-mono text-[11px] tabular-nums outline-none focus:border-[var(--song-accent)]" aria-label={t('timeline.timestamp', { line: String(index + 1) })} />
-      </div>
+      <input key={`${index}-${line.timeMs ?? 'empty'}`} defaultValue={line.timeMs == null ? '' : fmtMs(line.timeMs)} placeholder="--:--.---" onClick={(event) => event.stopPropagation()} onBlur={(event) => {
+        const value = event.currentTarget.value.trim();
+        if (!value) {
+          if (line.timeMs != null) onSetTime(index, null);
+          return;
+        }
+        const parsed = parseLrcTimestamp(value);
+        if (parsed != null) onSetTime(index, parsed);
+        else event.currentTarget.value = line.timeMs == null ? '' : fmtMs(line.timeMs);
+      }} className="h-8 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-2 font-mono text-[11px] tabular-nums outline-none focus:border-[var(--song-accent)]" aria-label={t('timeline.timestamp', { line: String(index + 1) })} />
       <div className="min-w-0">
         <div className={`truncate text-sm ${selected ? 'font-medium text-[var(--foreground)]' : 'text-[var(--muted-foreground)]'}`}>{line.text}</div>
-        <div className="mt-0.5 font-mono text-[10px] text-[var(--muted-foreground)] sm:hidden">{line.timeMs == null ? t('timelineWorkspace.unmarked') : fmtMs(line.timeMs)}</div>
       </div>
       <div className="flex justify-end gap-1">
         {line.timeMs != null && (

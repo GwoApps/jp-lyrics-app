@@ -1,8 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { ChevronDown, ChevronUp, LocateFixed } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
-import { fmtMs } from '@/lib/lrc';
+import { fmtMs, parseLrcTimestamp } from '@/lib/lrc';
 import type { TimelineDraftLine } from '@/lib/lrc';
 
 interface MarkCurrentLineCardProps {
@@ -12,11 +13,13 @@ interface MarkCurrentLineCardProps {
   liveProgress: number;
   canUseSpotifyTime: boolean;
   onMark: () => void;
+  onMarkManual: (timeMs: number) => void;
   onSelectPrev: () => void;
   onSelectNext: () => void;
 }
 
-/** Sticky current-line card: navigation, live text, and the mark-at button. */
+/** Sticky current-line card: navigation, live text, live mark-at, and a
+ * Spotify-independent manual timestamp entry. */
 export default function MarkCurrentLineCard({
   currentIndex,
   totalLines,
@@ -24,10 +27,19 @@ export default function MarkCurrentLineCard({
   liveProgress,
   canUseSpotifyTime,
   onMark,
+  onMarkManual,
   onSelectPrev,
   onSelectNext,
 }: MarkCurrentLineCardProps) {
   const { t } = useI18n();
+  const [manualDraft, setManualDraft] = useState('');
+
+  const submitManual = () => {
+    const parsed = parseLrcTimestamp(manualDraft);
+    if (parsed == null) return;
+    onMarkManual(parsed);
+    setManualDraft('');
+  };
 
   return (
     <section className="sticky top-14 z-40 mb-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:p-5">
@@ -44,6 +56,10 @@ export default function MarkCurrentLineCard({
         <LocateFixed className="h-5 w-5" />
         {canUseSpotifyTime ? t('timelineWorkspace.markAt', { time: fmtMs(liveProgress) }) : t('timelineWorkspace.waitingSpotify')}
       </button>
+      <form className="mx-auto mt-3 flex max-w-md items-center gap-2" onSubmit={(event) => { event.preventDefault(); submitManual(); }}>
+        <input value={manualDraft} onChange={(event) => setManualDraft(event.target.value)} placeholder={t('timelineWorkspace.manualTimePlaceholder')} className="h-10 min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--input)] px-3 font-mono text-xs tabular-nums outline-none focus:border-[var(--song-accent)]" aria-label={t('timelineWorkspace.manualTimePlaceholder')} />
+        <button type="submit" className="song-accent-button inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md px-3 text-xs font-medium" aria-label={t('timelineWorkspace.setManualTime')}>{t('timelineWorkspace.setManualTime')}</button>
+      </form>
       <div className="mt-3 hidden items-center justify-center gap-4 text-[10px] text-[var(--muted-foreground)] sm:flex">
         <span>{t('timelineWorkspace.shortcutMark')}</span><span>{t('timelineWorkspace.shortcutNavigate')}</span><span>{t('timelineWorkspace.shortcutSave')}</span>
       </div>
