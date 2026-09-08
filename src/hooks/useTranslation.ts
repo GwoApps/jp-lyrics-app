@@ -238,9 +238,13 @@ export function useTranslation(deps: UseTranslationDeps): UseTranslationReturn {
         } : prev);
         setShowTranslation(true);
         const translatedNow = seed.filter((s) => (s ?? '').trim() !== '').length;
-        const partial = translatedNow < total;
+        // 分母排除空行：与 translatedCount/untranslatedCount 及 coverageOf 口径一致
+        const coverable = song?.lyrics_raw
+          ? song.lyrics_raw.split('\n').filter((line) => line.trim() !== '').length
+          : total;
+        const partial = translatedNow < coverable;
         const msg = partial
-          ? t('song.translationReadyPartial', { done: String(translatedNow), total: String(total) })
+          ? t('song.translationReadyPartial', { done: String(translatedNow), total: String(coverable) })
           : streamLang
             ? t('song.translationReadyLang', { lang: targetLangDisplay(streamLang) })
             : t('song.translationReady');
