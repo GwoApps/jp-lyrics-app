@@ -170,12 +170,16 @@ export default function TranslationEditPage() {
    * `force: true` disables the server's cache reuse so the requested lines are
    * re-translated even when a previous translation is stored — the draft, not
    * the stored cache, decides what is missing (issue #125).
+   * `persist: false` returns the slice without writing it into the stored cache,
+   * so the editor's AI fill / re-translate stays inside the draft
+   * 「保存/放弃」boundary — the user persists the whole draft via PUT
+   * /translation on save (issue #251).
    */
   const runAiSlice = useCallback(async (start: number, count: number): Promise<string[]> => {
     const res = await fetch(`/api/songs/${id}/translate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ start, count, force: true }),
+      body: JSON.stringify({ start, count, force: true, persist: false }),
     });
     if (!res.ok) {
       // Surface the same localized error codes as the song page (quota,

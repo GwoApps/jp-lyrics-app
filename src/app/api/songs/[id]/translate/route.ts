@@ -16,7 +16,7 @@ const SSE_HEADERS = {
   'X-Accel-Buffering': 'no',
 };
 // POST /api/songs/[id]/translate — translate lyrics via the configured LLM provider and cache the result.
-// Body: { force?: boolean, start?: number, count?: number, stream?: boolean }
+// Body: { force?: boolean, start?: number, count?: number, stream?: boolean, persist?: boolean }
 //   - Without `start`: translate the whole song (cache hit short-circuits unless `force`).
 //   - With `start`: translate only lines [start, start + count); the result is MERGED into the
 //     stored cache so partial translations survive failures (resume/continue support).
@@ -26,6 +26,10 @@ const SSE_HEADERS = {
 //     reasoning/translation deltas are forwarded live as `reasoning` and
 //     `translation` events, then a final `done` event carries the aligned
 //     translations array. Errors arrive as `error` events.
+//   - With `persist: false`: returns the translated slice WITHOUT merging it into the stored
+//     cache (and without persisting glossary/reasoning). Used by the editor's AI fill /
+//     single-line re-translate so results stay inside the「草稿 + 保存/放弃」boundary — the
+//     user persists the whole draft via PUT /translation on save. Defaults to `true`.
 // Response (non-stream): { start, count, translations } — the translated slice, aligned to lyric lines.
 //
 // Optimization: repeated lines (choruses) are translated once per distinct
@@ -53,7 +57,7 @@ export async function POST(
     return NextResponse.json({ error: 'login_required' }, { status: 401 });
   }
 
-  let body: { force?: boolean; start?: number; count?: number; stream?: boolean } = {};
+  let body: { force?: boolean; start?: number; count?: number; stream?: boolean; persist?: boolean } = {};
   try {
     body = await request.json();
   } catch { /* empty body is fine */ }
@@ -110,6 +114,11 @@ export async function POST(
   const start = Math.max(0, body.start ?? 0);
   const isSlice = body.start !== undefined;
   const force = body.force === true;
+  // When `persist: false` the translated slice is returned WITHOUT being merged
+  // into the stored cache (and without persisting glossary/reasoning), so the
+  // editor's AI fill / single-line re-translate stays inside the draft
+  // 「保存/放弃」boundary — the user persists the whole draft on save (#251).
+  const persist = body.persist !== false;
   if (!isSlice && !force && cacheLangMatches && existing.lyricsTranslation) {
     try {
       const cached = JSON.parse(existing.lyricsTranslation);
@@ -233,17 +242,22 @@ export async function POST(
       // CAS on the request-start lyrics so a mid-flight lyrics edit can never
       // be pinned to a glossary derived from the OLD text.
       glossary = extracted;
-      const glossaryWrite = await writeSongField(db, {
-        id,
-        sourceLyrics: existing.lyricsRaw,
-        patch: { lyricsGlossary: JSON.stringify(glossary) },
-      });
-      if (!glossaryWrite.ok) {
-        // Lyrics were edited while we extracted the glossary — the source the
-        // user is now looking at no longer matches this request. Persisting
-        // the translation would resurrect stale output; abort instead.
-        const stale = glossaryWrite.reason === 'stale_source';
-        return [false, stale ? 'stale_annotation_source' : 'song_not_found', stale ? 409 : 404];
+      // With `persist: false` we use the freshly-extracted glossary for THIS
+      // request's prompt but do NOT write it back — the caller is a draft-only
+      // editor flow and must not mutate the stored glossary either (#251).
+      if (persist) {
+        const glossaryWrite = await writeSongField(db, {
+          id,
+          sourceLyrics: existing.lyricsRaw,
+          patch: { lyricsGlossary: JSON.stringify(glossary) },
+        });
+        if (!glossaryWrite.ok) {
+          // Lyrics were edited while we extracted the glossary — the source the
+          // user is now looking at no longer matches this request. Persisting
+          // the translation would resurrect stale output; abort instead.
+          const stale = glossaryWrite.reason === 'stale_source';
+          return [false, stale ? 'stale_annotation_source' : 'song_not_found', stale ? 409 : 404];
+        }
       }
     } else {
       // Degrade to "no terminology" for THIS run only; extraction is retried
@@ -294,6 +308,21 @@ export async function POST(
       resolved[i] = fromBatch ?? (first < cache.length ? cache[first] : '');
     });
     const finalSlice = resolved.map((v) => v ?? '');
+
+    // With `persist: false` return the expanded slice WITHOUT touching the
+    // stored cache. The editor (AI fill / single-line re-translate) keeps the
+    // result in its draft and writes it via PUT /translation on save (#251).
+    // Coverage is computed from the in-memory merged array (cache + slice).
+    if (!persist) {
+      const merged = cache.slice(0, lines.length);
+      resolved.forEach((tr, i) => { if (tr !== null && start + i < merged.length) merged[start + i] = tr; });
+      while (merged.length < lines.length) merged.push('');
+      return {
+        finalSlice,
+        result: { ok: true, cache: merged },
+        coverage: computeCoverage(lines, merged),
+      };
+    }
 
     const result = await mergeSliceIntoCache(db, {
       id,
@@ -417,7 +446,9 @@ export async function POST(
           // translation so it survives a page reload / can be re-opened later.
           // Guarded by the same source-lyrics CAS: a lyrics edit mid-flight
           // clears reasoning + translation, and this must not resurrect them.
-          if (reasoningBuffer.trim()) {
+          // With `persist: false` the draft-only editor flow does not store
+          // reasoning either (#251).
+          if (persist && reasoningBuffer.trim()) {
             const reasoningWrite = await writeSongField(db, {
               id,
               sourceLyrics: existing.lyricsRaw,
@@ -453,7 +484,8 @@ export async function POST(
           // see how far the model got (quota / network / output diagnostics).
           // Source-CAS guarded so a mid-flight lyrics edit can't be pinned
           // with reasoning derived from the old text.
-          if (reasoningBuffer.trim()) {
+          // With `persist: false` skip persisting reasoning (draft-only flow).
+          if (persist && reasoningBuffer.trim()) {
             const reasoningWrite = await writeSongField(db, {
               id,
               sourceLyrics: existing.lyricsRaw,
@@ -472,48 +504,57 @@ export async function POST(
           // and coverage stay on consistent, separately-labelled scales.
           let coverage = computeCoverage(lines, cache);
           if (partial.length > 0) {
-            try {
-              // Map partial line translations to their slice indices, then
-              // merge into the stored cache through the same CAS path as success.
-              pending.forEach((sliceIndex, j) => {
-                if (j < partial.length) resolved[sliceIndex] = partial[j];
-              });
-              // Duplicate copies reuse their first occurrence's translation
-              // (or an earlier cached value) exactly like expandAndMerge.
-              slice.forEach((line, i) => {
-                if (resolved[i] !== null) return;
-                const key = line.trim();
-                if (!key) { resolved[i] = ''; return; }
-                const first = firstOccurrence.get(key)!;
-                // Same representative fallback as expandAndMerge: a line
-                // translated for this batch whose first occurrence lies
-                // outside it must read its own pending entry, not the cache.
-                const fromPartial = pending.indexOf(first - start);
-                const ownPartial = pending.indexOf(i);
-                resolved[i] = fromPartial >= 0
-                  ? (partial[fromPartial] ?? '')
-                  : ownPartial >= 0
-                    ? (partial[ownPartial] ?? '')
-                    : (first < cache.length ? cache[first] : '');
-              });
-              const result = await mergeSliceIntoCache(db, {
-                id,
-                sourceLyrics: existing.lyricsRaw,
-                totalLines: lines.length,
-                start,
-                resolved,
-                lang: config.targetLang,
-              });
-              if (result.ok) {
-                partialDone = partial.length;
-                coverage = computeCoverage(lines, result.cache);
-              } else if (result.reason === 'stale_source') {
-                // Lyrics were edited mid-flight — the partial lines were
-                // generated from the OLD text and must not be written.
-                console.warn('[translate] partial translation not persisted (source lyrics changed mid-flight)');
+            // Map partial line translations to their slice indices (in memory).
+            pending.forEach((sliceIndex, j) => {
+              if (j < partial.length) resolved[sliceIndex] = partial[j];
+            });
+            // Duplicate copies reuse their first occurrence's translation
+            // (or an earlier cached value) exactly like expandAndMerge.
+            slice.forEach((line, i) => {
+              if (resolved[i] !== null) return;
+              const key = line.trim();
+              if (!key) { resolved[i] = ''; return; }
+              const first = firstOccurrence.get(key)!;
+              // Same representative fallback as expandAndMerge: a line
+              // translated for this batch whose first occurrence lies
+              // outside it must read its own pending entry, not the cache.
+              const fromPartial = pending.indexOf(first - start);
+              const ownPartial = pending.indexOf(i);
+              resolved[i] = fromPartial >= 0
+                ? (partial[fromPartial] ?? '')
+                : ownPartial >= 0
+                  ? (partial[ownPartial] ?? '')
+                  : (first < cache.length ? cache[first] : '');
+            });
+            // With `persist: false` report the partial progress/coverage from
+            // the in-memory merge without writing anything to the DB (#251).
+            if (!persist) {
+              const merged = cache.slice(0, lines.length);
+              resolved.forEach((tr, i) => { if (tr !== null && start + i < merged.length) merged[start + i] = tr; });
+              while (merged.length < lines.length) merged.push('');
+              partialDone = partial.length;
+              coverage = computeCoverage(lines, merged);
+            } else {
+              try {
+                const result = await mergeSliceIntoCache(db, {
+                  id,
+                  sourceLyrics: existing.lyricsRaw,
+                  totalLines: lines.length,
+                  start,
+                  resolved,
+                  lang: config.targetLang,
+                });
+                if (result.ok) {
+                  partialDone = partial.length;
+                  coverage = computeCoverage(lines, result.cache);
+                } else if (result.reason === 'stale_source') {
+                  // Lyrics were edited mid-flight — the partial lines were
+                  // generated from the OLD text and must not be written.
+                  console.warn('[translate] partial translation not persisted (source lyrics changed mid-flight)');
+                }
+              } catch (mergeError) {
+                console.warn('[translate] failed to persist partial translation:', mergeError);
               }
-            } catch (mergeError) {
-              console.warn('[translate] failed to persist partial translation:', mergeError);
             }
           }
           send('error', { error: code, ...progressPayload(partialDone, coverage) });
