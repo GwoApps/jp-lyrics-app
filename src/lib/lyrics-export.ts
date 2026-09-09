@@ -129,11 +129,18 @@ function appendLrcTranslations(lyrics: string, translations: string[], rawLyrics
     if (!trimmed || isLrcMetadataLine(trimmed)) return raw;
     const prefix = trimmed.match(LRC_LEADING_TIMESTAMPS_RE)?.[0] ?? '';
     const text = trimmed.slice(prefix.length).trim();
-    // Untimed row (e.g. an unmarkable line) or a timestamp with no text: keep
-    // it as-is — there is no reliable index to pair, so no translation row.
-    if (!prefix || !text) return raw;
+    // A timestamp with no text carries no lyric, so it consumes no source row.
+    if (!text) return raw;
+    // The k-th text-bearing synced row corresponds to the k-th non-empty source
+    // line, so every text row (timed or untimed) consumes exactly one source
+    // index. A partially-marked timeline mixes untimed rows among timed ones;
+    // if untimed rows skipped the count, every following translation would
+    // shift left by one line and land on the wrong lyric.
     const sourceIndex = sourceLineIndexes[lyricRow];
     lyricRow += 1;
+    // An untimed row (unmarkable line) cannot carry a timestamped translation,
+    // but it still consumed a source index so later rows stay aligned.
+    if (!prefix) return raw;
     const translation = sourceIndex != null ? translations[sourceIndex]?.trim() : '';
     if (!translation) return raw;
     return `${raw}\n${prefix}${translation}`;
