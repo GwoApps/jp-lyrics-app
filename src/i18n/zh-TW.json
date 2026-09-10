@@ -829,7 +829,10 @@
     "fillMissingDone": "已補齊 {count} 行翻譯",
     "fillMissingEmpty": "沒有缺失的翻譯行",
     "retranslateLine": "重新翻譯此行",
-    "retranslateLineDone": "已重新翻譯此行"
+    "retranslateLineDone": "已重新翻譯此行",
+    "retranslateLineEmpty": "此行未回傳譯文，已保留原有譯文",
+    "retranslateConfirmTitle": "覆蓋此行已有譯文？",
+    "retranslateConfirmBody": "重新翻譯會用 AI 結果覆蓋此行已有的譯文。"
   },
   "settings": {
     "title": "個人設定",

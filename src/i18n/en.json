@@ -829,7 +829,10 @@
     "fillMissingDone": "Filled {count} lines with AI",
     "fillMissingEmpty": "No missing translation lines",
     "retranslateLine": "Re-translate this line",
-    "retranslateLineDone": "This line was re-translated"
+    "retranslateLineDone": "This line was re-translated",
+    "retranslateLineEmpty": "No translation was returned for this line; the existing translation was kept",
+    "retranslateConfirmTitle": "Overwrite this line's translation?",
+    "retranslateConfirmBody": "Re-translating replaces this line's existing translation with the AI result."
   },
   "settings": {
     "title": "Personal Settings",

@@ -8,11 +8,13 @@ import Link from 'next/link';
 import { ArrowLeft, RefreshCw, RotateCcw, Sparkles } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import Toast from '@/components/Toast';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useAuthSession } from '@/lib/auth-session';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { parseTranslationCache } from '@/lib/translation/parse';
+import { mergeTranslatedSlice, shouldConfirmRetranslate } from '@/lib/translation-draft';
 import { TRANSLATION_ERROR_KEYS } from '@/lib/translation-errors';
 import type { SongData } from '@/lib/types';
 
@@ -49,6 +51,9 @@ export default function TranslationEditPage() {
   const [saving, setSaving] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [lastFocusedLine, setLastFocusedLine] = useState<number | null>(null);
+  // Line index waiting for the user to confirm overwriting its existing
+  // translation (「重新翻译此行」); null while no confirmation is pending.
+  const [pendingRetranslate, setPendingRetranslate] = useState<number | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; msg: string } | null>(null);
   const { session } = useAuthSession();
   const coverTheme = useCoverTheme(song?.cover_url);
@@ -208,19 +213,11 @@ export default function TranslationEditPage() {
         // Count the target lines that actually received a non-empty translation.
         translations.forEach((value) => { if (value.trim()) filled += 1; });
         // Merge only the requested slice back into the draft; other lines the
-        // user is typing in are left untouched.
-        setDraft((prev) => {
-          const next = prev.slice();
-          translations.forEach((value, i) => {
-            const idx = run.start + i;
-            // Only overwrite lines that are still empty — preserve any manual
-            // edits the user made while AI was processing earlier groups.
-            if (idx < next.length && !(next[idx] ?? '').trim()) {
-              next[idx] = value;
-            }
-          });
-          return next;
-        });
+        // user is typing in are left untouched. The merge is shared with
+        //「重新翻译此行」so both AI entry points obey the same protection rules
+        // (blank model output never written, lines with content never
+        // overwritten here) — see mergeTranslatedSlice (issue #269).
+        setDraft((prev) => mergeTranslatedSlice(prev, run.start, translations, { onlyFillBlank: true }));
       }
       showToast('success', t('translation.fillMissingDone', { count: String(filled) }));
     } catch (e: unknown) {
@@ -230,25 +227,45 @@ export default function TranslationEditPage() {
     }
   }, [aiBusy, id, missingLines, runAiSlice, showToast, t]);
 
-  /** Re-translate the currently focused line (「重新翻译此行」, issue #125). */
-  const handleAiRetranslateLine = useCallback(async (lineIndex: number) => {
-    if (aiBusy || !id) return;
+  /**
+   * Re-translate one line and merge the result into the draft.
+   *
+   * A blank model answer never clears the line: mergeTranslatedSlice drops it
+   * and we report that the existing translation was kept instead of showing the
+   * usual success toast (issue #269).
+   */
+  const runAiRetranslateLine = useCallback(async (lineIndex: number) => {
     setAiBusy(true);
     try {
       const translations = await runAiSlice(lineIndex, 1);
       const value = translations[0] ?? '';
-      setDraft((prev) => {
-        const next = prev.slice();
-        if (lineIndex < next.length) next[lineIndex] = value;
-        return next;
-      });
+      if (!value.trim()) {
+        showToast('info', t('translation.retranslateLineEmpty'));
+        return;
+      }
+      setDraft((prev) => mergeTranslatedSlice(prev, lineIndex, translations, { onlyFillBlank: false }));
       showToast('success', t('translation.retranslateLineDone'));
     } catch (e: unknown) {
       showToast('error', e instanceof Error ? e.message : t('song.translationFailed'));
     } finally {
       setAiBusy(false);
     }
-  }, [aiBusy, id, runAiSlice, showToast, t]);
+  }, [runAiSlice, showToast, t]);
+
+  /**
+   * 「重新翻译此行」(issue #125). Runs immediately for a still-empty line, and
+   * asks first when the line already holds a translation — the result replaces
+   * it outright, so an accidental click would silently discard content (issue #269).
+   */
+  const handleAiRetranslateLine = useCallback((lineIndex: number) => {
+    if (aiBusy || !id) return;
+    if (lineIndex < 0 || lineIndex >= draft.length) return;
+    if (shouldConfirmRetranslate(draft[lineIndex])) {
+      setPendingRetranslate(lineIndex);
+      return;
+    }
+    void runAiRetranslateLine(lineIndex);
+  }, [aiBusy, id, draft, runAiRetranslateLine]);
 
   if (loading || auth === null) {
     return (
@@ -438,6 +455,19 @@ export default function TranslationEditPage() {
       </div>
 
       {toast && <Toast type={toast.type} message={toast.msg} />}
+      <ConfirmDialog
+        open={pendingRetranslate !== null}
+        title={t('translation.retranslateConfirmTitle')}
+        body={t('translation.retranslateConfirmBody')}
+        confirmLabel={t('translation.retranslateLine')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={() => {
+          const lineIndex = pendingRetranslate;
+          setPendingRetranslate(null);
+          if (lineIndex !== null) void runAiRetranslateLine(lineIndex);
+        }}
+        onCancel={() => setPendingRetranslate(null)}
+      />
       {unsavedDialog}
     </div>
   );
