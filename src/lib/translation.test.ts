@@ -32,6 +32,26 @@ function openAIBody(captured: CapturedCall): { model: string; reasoning_effort?:
   return JSON.parse(String(captured.init.body)) as { model: string; reasoning_effort?: string; messages: { role: string; content: string }[] };
 }
 
+/** Mock an OpenAI-compatible SSE stream whose content is `chunks` concatenated. */
+function openAIStreamFetch(chunks: string[]): typeof fetch {
+  return (async () => {
+    const encoder = new TextEncoder();
+    let i = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (i >= chunks.length) {
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+          return;
+        }
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: chunks[i] } }] })}\n\n`));
+        i += 1;
+      },
+    });
+    return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+  }) as typeof fetch;
+}
+
 const CFG: TranslationConfig = {
   provider: 'openai',
   baseUrl: 'https://api.deepseek.com/v1',
@@ -133,6 +153,105 @@ test('falls back to newline-separated text when JSON parsing fails', async () =>
     mockFetch(200, { choices: [{ message: { content: '第一行\n第二行\n' } }] }),
   );
   assert.deepEqual(out, ['第一行', '第二行', '']);
+});
+
+test('plain-text fallback aligns against non-blank source lines (issue #271)', async () => {
+  // Plain-text output normally omits the blank source lines; pasting it back by
+  // index would shift every translation after a blank line.
+  const out = await translateLyricLines(
+    ['風が', '', '吹く'],
+    CFG,
+    mockFetch(200, { choices: [{ message: { content: '风\n吹' } }] }),
+  );
+  assert.deepEqual(out, ['风', '', '吹']);
+});
+
+test('plain-text fallback with extra lines is rejected instead of shifting translations (issue #271)', async () => {
+  // Preamble + one line per translation: mapping this onto the lyric lines
+  // would write the preamble as line 1 and shift everything down.
+  await assert.rejects(
+    translateLyricLines(
+      ['a', 'b'],
+      CFG,
+      mockFetch(200, { choices: [{ message: { content: 'Here are the translations:\n第一\n第二' } }] }),
+    ),
+    (error: unknown) => error instanceof TranslationError && error.code === 'translation_invalid_response',
+  );
+});
+
+test('plain-text fallback with missing lines is rejected (issue #271)', async () => {
+  await assert.rejects(
+    translateLyricLines(['a', 'b', 'c'], CFG, mockFetch(200, {
+      choices: [{ message: { content: '只有一行' } }],
+    })),
+    (error: unknown) => error instanceof TranslationError && error.code === 'translation_invalid_response',
+  );
+});
+
+test('salvages complete items from a max_tokens-truncated JSON array (issue #271)', async () => {
+  const out = await translateLyricLines(
+    ['一つ', '二つ', '三つ'],
+    CFG,
+    mockFetch(200, { choices: [{ message: { content: '["第一","第二",' } }] }),
+  );
+  // Complete items are kept; the cut-off line stays empty so it can be
+  // re-translated instead of receiving `["第一","第二",` as its translation.
+  assert.deepEqual(out, ['第一', '第二', '']);
+  assert.ok(!out.some((line) => /[[\]"]/.test(line)), 'no JSON syntax may leak into a translation');
+});
+
+test('salvages a JSON array with a trailing comma instead of line-splitting it (issue #271)', async () => {
+  const out = await translateLyricLines(
+    ['一つ', '二つ'],
+    CFG,
+    mockFetch(200, { choices: [{ message: { content: '["第一","第二",]' } }] }),
+  );
+  assert.deepEqual(out, ['第一', '第二']);
+});
+
+test('uses only the first array when the model restates two arrays (issue #271)', async () => {
+  const out = await translateLyricLines(
+    ['一つ', '二つ'],
+    CFG,
+    mockFetch(200, { choices: [{ message: { content: '["第一","第二"],["第三","第四"]' } }] }),
+  );
+  assert.deepEqual(out, ['第一', '第二']);
+});
+
+test('rejects a JSON-shaped response that yields no complete item (issue #271)', async () => {
+  await assert.rejects(
+    translateLyricLines(['a'], CFG, mockFetch(200, { choices: [{ message: { content: '[' } }] })),
+    (error: unknown) => error instanceof TranslationError && error.code === 'translation_invalid_response',
+  );
+  // A fenced JSON array is a JSON attempt too — never split by newline.
+  const fenced = await translateLyricLines(['a', 'b'], CFG, mockFetch(200, {
+    choices: [{ message: { content: '```json\n["第一",' } }],
+  }));
+  assert.deepEqual(fenced, ['第一', '']);
+});
+
+test('rejects a translation array whose items are JSON structures, not strings (issue #271)', async () => {
+  await assert.rejects(
+    translateLyricLines(['a', 'b'], CFG, mockFetch(200, {
+      choices: [{ message: { content: '[{"translation":"第一"},{"translation":"第二"}]' } }],
+    })),
+    (error: unknown) => error instanceof TranslationError && error.code === 'translation_invalid_response',
+  );
+  await assert.rejects(
+    translateLyricLines(['a'], CFG, mockFetch(200, {
+      choices: [{ message: { content: '[["第一","第二"]]' } }],
+    })),
+    (error: unknown) => error instanceof TranslationError && error.code === 'translation_invalid_response',
+  );
+});
+
+test('prose followed by a truncated JSON array is salvaged, never line-split (issue #271)', async () => {
+  // The preamble must never become line 1's translation, and the JSON fragment
+  // must never become line 2's.
+  const out = await translateLyricLines(['a', 'b', 'c'], CFG, mockFetch(200, {
+    choices: [{ message: { content: 'Here are the translations:\n["第一","第二",' } }],
+  }));
+  assert.deepEqual(out, ['第一', '第二', '']);
 });
 
 test('normalises mismatched response length', async () => {
@@ -358,6 +477,25 @@ test('streaming translation aborts the upstream fetch when the external signal f
   controller.abort(); // client cancels → the fetch's signal must abort
   await assert.rejects(run, (error: unknown) => error instanceof Error);
   assert.ok(signalSeen!.aborted, 'upstream fetch signal aborted after cancel');
+});
+
+test('streamed translation salvages a truncated JSON array instead of line-splitting it (issue #271)', async () => {
+  const { streamTranslateLyricLines } = await import('./translation/index.ts');
+  const out = await streamTranslateLyricLines(
+    ['一つ', '二つ', '三つ'],
+    CFG,
+    () => {},
+    openAIStreamFetch(['["第一",', '"第二",']),
+  );
+  assert.deepEqual(out, ['第一', '第二', '']);
+});
+
+test('streamed translation rejects a JSON fragment with no complete item (issue #271)', async () => {
+  const { streamTranslateLyricLines } = await import('./translation/index.ts');
+  await assert.rejects(
+    streamTranslateLyricLines(['a'], CFG, () => {}, openAIStreamFetch(['['])),
+    (error: unknown) => error instanceof TranslationError && error.code === 'translation_invalid_response',
+  );
 });
 
 test('discovers and sorts models from an OpenAI-compatible /models endpoint', async () => {
