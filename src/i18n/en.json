@@ -823,6 +823,8 @@
     "loginRequired": "Connect Spotify to edit translations",
     "forbidden": "No permission to edit this song",
     "staleSource": "Lyrics were updated elsewhere, please reload and retry",
+    "writeContention": "The translation is being written by another session, please retry",
+    "savedWithConcurrent": "Translation saved, {count} line(s) written by another session were kept in sync",
     "fillMissing": "AI fill missing ({count})",
     "fillMissingDone": "Filled {count} lines with AI",
     "fillMissingEmpty": "No missing translation lines",
