@@ -63,6 +63,35 @@ body {
   line-height: 1.6;
   transition: background-color 240ms ease;
 }
+/* Issue #274: source lyrics and their translation each carry their own `lang`,
+   so pick the CJK font whose glyph shapes belong to that language instead of
+   letting everything fall back to Noto Sans JP (which draws Japanese variants
+   of 直/骨/次/令/真 … for Chinese text).
+
+   Attribute selectors are deliberate: only elements that EXPLICITLY declare a
+   language are re-fonted. `:lang()` would also match every element that merely
+   *inherits* the UI locale from <html lang>, which would re-font the Japanese
+   lyric source (and the lyric/translation editors) whenever the UI is Chinese. */
+[lang="ja"] {
+  font-family: 'Inter', 'Noto Sans JP', 'Noto Sans SC', sans-serif;
+}
+/* Simplified Chinese (and any unknown `zh` / `zh-…` subtag). */
+[lang^="zh"] {
+  font-family: 'Inter', 'Noto Sans SC', 'Source Han Sans SC', 'Noto Sans JP', sans-serif;
+}
+/* Traditional Chinese: Taiwan, Hong Kong, `Hant`, plus Cantonese (yue-Hant).
+   Must stay after the `zh` rule so those tags win the cascade. */
+[lang^="zh-TW"],
+[lang^="zh-HK"],
+[lang^="zh-Hant"],
+[lang="yue-Hant"] {
+  font-family: 'Inter', 'Noto Sans TC', 'Source Han Sans TC', 'Noto Sans JP', sans-serif;
+}
+/* Keep Latin readings (romaji / jyutping) in Inter even inside a CJK lyric line. */
+[lang="en"],
+[lang="yue-Latn"] {
+  font-family: 'Inter', 'Noto Sans JP', sans-serif;
+}
 /* Match the document background transition so the sticky top bar does not jump ahead of page content. */
 .app-topbar {
   transition: background-color 240ms ease, border-color 240ms ease;

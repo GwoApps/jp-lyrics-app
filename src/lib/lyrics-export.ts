@@ -11,6 +11,8 @@ import type { FuriganaLine, ReadingScheme } from './types.ts';
 import { normalizeFuriganaSegments, resolveFuriganaReading } from './romaji.ts';
 import { parseTranslationCache } from './translation/parse.ts';
 import { extractLrcMetadata, isLrcMetadataLine } from './lrc.ts';
+import { sourceLyricsLang } from './lyrics-reading.ts';
+import { resolveTranslationLang } from './target-lang.ts';
 
 export type ExportFormat = 'text' | 'lrc' | 'html';
 
@@ -24,6 +26,8 @@ export interface ExportSongData {
   lyrics_synced: string;
   lyrics_furigana: string;
   lyrics_translation: string;
+  /** BCP-47 tag of the translation text (`songs.lyrics_translation_lang`). */
+  lyrics_translation_lang?: string | null;
   reading_scheme: ReadingScheme;
 }
 
@@ -186,7 +190,14 @@ export function buildTextExport(
   return lines.join('\n');
 }
 
-/** Emit a `.html` document (furigana/romaji ruby with optional translations). */
+/**
+ * Emit a `.html` document (furigana/romaji ruby with optional translations).
+ *
+ * Both sides of each lyric pair are language-annotated: source lines inherit
+ * `<html lang>` from the reading scheme, translation paragraphs carry their own
+ * `lang` (issue #274) so browsers/screen readers do not read them with the
+ * document language's rules.
+ */
 export function buildHtmlExport(
   song: ExportSongData,
   includeTranslation: boolean,
@@ -195,6 +206,7 @@ export function buildHtmlExport(
   const furiganaLines = parseFuriganaLines(song.lyrics_furigana);
   const translations = parseTranslations(song.lyrics_translation);
   const rawLines = song.lyrics_raw.split('\n');
+  const translationLanguage = resolveTranslationLang(song.lyrics_translation_lang);
 
   const bodyLines = rawLines.map((rawLine, index) => {
     const main = furiganaLines[index]
@@ -204,10 +216,10 @@ export function buildHtmlExport(
     const translation = translations[index]?.trim();
     if (!translation) return main;
     if (main === '<p class="empty">&nbsp;</p>') return main;
-    return `${main}\n<p class="translation">${escapeHtml(translation)}</p>`;
+    return `${main}\n<p class="translation" lang="${translationLanguage}">${escapeHtml(translation)}</p>`;
   }).join('\n');
 
-  const documentLanguage = song.reading_scheme === 'yue-jyutping' ? 'yue-Hant' : 'ja';
+  const documentLanguage = sourceLyricsLang(song.reading_scheme);
 
   return `<!DOCTYPE html>
 <html lang="${documentLanguage}">
@@ -222,6 +234,10 @@ export function buildHtmlExport(
   p { margin: 0; }
   .empty { height: 1.2em; }
   .translation { margin-top: -0.55em; padding-bottom: 0.55em; font-size: 0.8em; line-height: 1.6; color: #666; }
+  /* Offline file: no web fonts, so rely on locally installed CJK families to
+     avoid drawing Chinese translations with Japanese glyph shapes. */
+  .translation[lang^="zh"] { font-family: 'Noto Sans SC', 'Source Han Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+  .translation[lang^="zh-TW"], .translation[lang^="zh-HK"], .translation[lang^="zh-Hant"] { font-family: 'Noto Sans TC', 'Source Han Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; }
   rt { font-size: 0.5em; color: #888; }
   ruby:has(rt[lang="yue-Latn"]) { ruby-overhang: none; white-space: nowrap; }
   rt[lang="yue-Latn"] { padding-inline: 0.08em; }

@@ -11,6 +11,8 @@ import {
   resolveFuriganaReading,
 } from '@/lib/romaji';
 import { useI18n } from '@/lib/i18n';
+import { resolveTranslationLang } from '@/lib/target-lang';
+import { sourceLyricsLang } from '@/lib/lyrics-reading';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -33,6 +35,7 @@ export default function FuriganaLineView({
   romanizeFurigana = false,
   readingScheme = 'ja-kana',
   translation,
+  translationLang,
   onCopyTranslation,
   showUntranslatedHint = false,
 }: {
@@ -49,6 +52,10 @@ export default function FuriganaLineView({
   romanizeFurigana?: boolean;
   readingScheme?: ReadingScheme;
   translation?: string | null;
+  // Issue #274: BCP-47 tag of the translation text (`songs.lyrics_translation_lang`),
+  // so screen readers announce the translation in its own language and the CJK
+  // font matches its glyph shapes. Falls back to the app default when unset.
+  translationLang?: string | null;
   onCopyTranslation?: () => void;
   // Issue #100: when a song is only partially translated, mark lines that
   // still lack a translation with a faint "未翻译" placeholder so the user
@@ -68,6 +75,14 @@ export default function FuriganaLineView({
 
   if (line.segments.length === 0) return <div className="h-5 sm:h-6" />;
 
+  // Issue #274: annotate both sides of the lyric pair with the language they
+  // are actually in — the source from the reading scheme, the translation from
+  // `songs.lyrics_translation_lang`. Without this, both inherited the UI
+  // language (`<html lang>`), so screen readers read a Chinese translation with
+  // English/Japanese pronunciation and every CJK glyph came from Noto Sans JP.
+  const sourceLanguage = sourceLyricsLang(readingScheme);
+  const translationLanguage = resolveTranslationLang(translationLang);
+
   // The lyric line's large line-height (2.2 / 2.8) leaves ~0.6em / 0.9em of
   // half-leading below the text; pull the translation up by that amount so it
   // hugs the original line, then restore the same space underneath so spacing
@@ -75,11 +90,14 @@ export default function FuriganaLineView({
   // via the context menu, not by text selection.
   const translationBlock = translation ? (
     <div
+      lang={translationLanguage}
       className={`lyric-translation select-none -mt-[0.6em] pb-[0.6em] sm:-mt-[0.9em] sm:pb-[0.9em] text-[0.72em] leading-relaxed text-[var(--muted-foreground)]/85 ${debugTs != null ? 'pl-[60px] sm:pl-[72px]' : ''}`}
     >
       {translation}
     </div>
   ) : showUntranslatedHint ? (
+    // UI placeholder, not lyric content: it stays in the UI language and must
+    // NOT inherit the translation's `lang`.
     <div
       className={`select-none -mt-[0.6em] pb-[0.6em] sm:-mt-[0.9em] sm:pb-[0.9em] text-[0.72em] leading-relaxed italic text-[var(--muted-foreground)]/40 ${debugTs != null ? 'pl-[60px] sm:pl-[72px]' : ''}`}
       aria-hidden="true"
@@ -101,6 +119,7 @@ export default function FuriganaLineView({
         )}
         <div
           key={animKey}
+          lang={sourceLanguage}
           className={`lyric-line leading-[2.2] sm:leading-[2.8] transition-all duration-300 ${
             isActive
               ? 'lyric-line--active scale-[1.03] origin-left lyric-active'

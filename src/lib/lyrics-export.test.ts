@@ -80,17 +80,44 @@ test('buildHtmlExport pairs translations below source lines', () => {
   const html = buildHtmlExport(SONG, true, 'furigana');
   assert.match(html, /<title>桜<\/title>/);
   assert.match(html, /<p class="artist">Example<\/p>/);
-  assert.match(html, /<p class="translation">Cherry blossoms dance<\/p>/);
-  assert.match(html, /<p class="translation">Toward tomorrow<\/p>/);
+  // Issue #274: every translation paragraph carries the stored target language
+  // (defaulting to zh-CN when the row has none).
+  assert.match(html, /<p class="translation" lang="zh-CN">Cherry blossoms dance<\/p>/);
+  assert.match(html, /<p class="translation" lang="zh-CN">Toward tomorrow<\/p>/);
   // Blank separator line stays empty with no translation pair
   assert.match(html, /<p class="empty">&nbsp;<\/p>/);
   // Only one translation paragraph per non-empty source line
-  assert.equal((html.match(/<p class="translation">/g) ?? []).length, 2);
+  assert.equal((html.match(/<p class="translation"/g) ?? []).length, 2);
+});
+
+test('buildHtmlExport annotates translations with the stored target language', () => {
+  for (const [tag, expected] of [
+    ['zh-TW', 'zh-TW'],
+    ['zh-HK', 'zh-HK'],
+    ['en-US', 'en-US'],
+    ['zh-cn', 'zh-CN'],
+    ['not a tag', 'zh-CN'],
+    ['', 'zh-CN'],
+    [null, 'zh-CN'],
+  ] as const) {
+    const html = buildHtmlExport({ ...SONG, lyrics_translation_lang: tag }, true, 'furigana');
+    assert.match(
+      html,
+      new RegExp(`<p class="translation" lang="${expected}">Cherry blossoms dance</p>`),
+      `lang for ${JSON.stringify(tag)}`,
+    );
+  }
+});
+
+test('buildHtmlExport sets the document language from the reading scheme', () => {
+  assert.match(buildHtmlExport(SONG, false, 'none'), /<html lang="ja">/);
+  const cantonese = buildHtmlExport({ ...SONG, reading_scheme: 'yue-jyutping' }, false, 'none');
+  assert.match(cantonese, /<html lang="yue-Hant">/);
 });
 
 test('buildHtmlExport omits translations when disabled', () => {
   const html = buildHtmlExport(SONG, false, 'furigana');
-  assert.equal((html.match(/<p class="translation">/g) ?? []).length, 0);
+  assert.equal((html.match(/<p class="translation"/g) ?? []).length, 0);
 });
 
 test('buildHtmlExport escapes lyrics and falls back to plain lines', () => {

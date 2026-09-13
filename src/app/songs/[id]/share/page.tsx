@@ -8,6 +8,7 @@ import { ArrowLeft, Download, Link2, Loader2, Check, Smartphone, Monitor, Refres
 import { useI18n } from '@/lib/i18n';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { drawCard, getLyricLines, LANDSCAPE_H, LANDSCAPE_W, type Orientation, type ShareSong } from '@/lib/share-card';
+import { resolveTranslationLang } from '@/lib/target-lang';
 import { copyToClipboard } from '@/lib/clipboard';
 
 export default function SharePage() {
@@ -38,6 +39,9 @@ export default function SharePage() {
   const coverTheme = useCoverTheme(song?.cover_url);
 
   const lyricLines = useMemo(() => (song ? getLyricLines(song) : []), [song]);
+  // Issue #274: the translation preview must be language-annotated like the
+  // detail page, otherwise the browser reads it with the UI language's rules.
+  const translationLanguage = resolveTranslationLang(song?.lyrics_translation_lang);
 
   useEffect(() => {
     if (!id) {
@@ -364,7 +368,7 @@ export default function SharePage() {
                   <span className="min-w-0">
                     <span className="line-clamp-2 block text-sm">{line.text}</span>
                     {includeTranslation && line.translation && (
-                      <span className="line-clamp-2 mt-0.5 block text-xs text-[var(--muted-foreground)]">{line.translation}</span>
+                      <span lang={translationLanguage} className="line-clamp-2 mt-0.5 block text-xs text-[var(--muted-foreground)]">{line.translation}</span>
                     )}
                   </span>
                 </button>

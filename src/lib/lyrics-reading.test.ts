@@ -5,6 +5,7 @@ import {
   detectCantoneseLyrics,
   getCantoneseReadingCandidates,
   normalizeReadingScheme,
+  sourceLyricsLang,
 } from './lyrics-reading.ts';
 
 test('detectCantoneseLyrics gives a high-confidence suggestion for colloquial Cantonese', () => {
@@ -29,6 +30,13 @@ test('normalizeReadingScheme keeps existing songs on Japanese readings by defaul
   assert.equal(normalizeReadingScheme(undefined), 'ja-kana');
   assert.equal(normalizeReadingScheme('yue-jyutping'), 'yue-jyutping');
   assert.equal(normalizeReadingScheme('invalid'), 'ja-kana');
+});
+
+test('sourceLyricsLang maps the reading scheme to a BCP-47 tag', () => {
+  assert.equal(sourceLyricsLang(undefined), 'ja');
+  assert.equal(sourceLyricsLang('ja-kana'), 'ja');
+  assert.equal(sourceLyricsLang('invalid'), 'ja');
+  assert.equal(sourceLyricsLang('yue-jyutping'), 'yue-Hant');
 });
 
 test('convertCantoneseLyrics preserves every source character and blank line', async () => {

@@ -17,6 +17,8 @@ export interface ShareSong {
   lyrics_synced: string | null;
   /** JSON-array string aligned to `lyrics_raw` lines; each item is that line's translation (may be ''). */
   lyrics_translation?: string | null;
+  /** BCP-47 tag of the translated language (`songs.lyrics_translation_lang`), used for the `lang` attribute. */
+  lyrics_translation_lang?: string | null;
 }
 
 /** A lyric line with its optional translation (aligned by source line index). */

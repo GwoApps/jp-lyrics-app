@@ -901,6 +901,7 @@ export default function SongViewPage() {
                     romanizeFurigana={data.romanizeFurigana}
                     readingScheme={song.reading_scheme}
                     translation={data.showTranslation ? data.translations[i] ?? null : null}
+                    translationLang={song.lyrics_translation_lang}
                     showUntranslatedHint={data.showTranslation && data.hasTranslation && data.untranslatedCount > 0 && !(data.translations[i] ?? '').trim()}
                   />
                 </div>

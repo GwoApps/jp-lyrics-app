@@ -23,6 +23,20 @@ export function normalizeReadingScheme(value: unknown): ReadingScheme {
   return value === 'yue-jyutping' ? 'yue-jyutping' : 'ja-kana';
 }
 
+/**
+ * BCP-47 tag of the source lyrics, derived from the song's reading scheme:
+ * Japanese kana readings imply Japanese lyrics, jyutping readings imply
+ * Cantonese (traditional Chinese) lyrics.
+ *
+ * Used for the `lang` attribute of source-lyric containers and as the document
+ * language of the HTML export, so the browser and screen readers pick the right
+ * pronunciation rules and CJK glyph shapes for the original text instead of
+ * inheriting the UI language (issue #274).
+ */
+export function sourceLyricsLang(value: unknown): 'ja' | 'yue-Hant' {
+  return normalizeReadingScheme(value) === 'yue-jyutping' ? 'yue-Hant' : 'ja';
+}
+
 function uniqueLyricText(rawLyrics: string): string {
   const seen = new Set<string>();
   for (const rawLine of rawLyrics.normalize('NFC').split('\n')) {
