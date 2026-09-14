@@ -10,6 +10,7 @@ import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { drawCard, getLyricLines, LANDSCAPE_H, LANDSCAPE_W, type Orientation, type ShareSong } from '@/lib/share-card';
 import { resolveTranslationLang } from '@/lib/target-lang';
 import { copyToClipboard } from '@/lib/clipboard';
+import Toast from '@/components/Toast';
 
 export default function SharePage() {
   const params = useParams();
@@ -29,6 +30,7 @@ export default function SharePage() {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [toast, setToast] = useState<{ type: 'error'; msg: string } | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [orientation, setOrientation] = useState<Orientation>('landscape');
   const [showQrCode, setShowQrCode] = useState(true);
@@ -172,12 +174,25 @@ export default function SharePage() {
     }
   };
 
+  // Issue #266: a failed clipboard write must be surfaced instead of silently
+  // returning, matching the other copy paths across the app.
   const handleCopyLink = async () => {
     const ok = await copyToClipboard(pageUrl);
-    if (!ok) return; // ignore silent failure
+    if (!ok) {
+      setToast({ type: 'error', msg: t('song.copyFailed') });
+      return;
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
+
+  // Issue #266: auto-dismiss the copy-failure toast, same lifetime as the
+  // shared toast used by the other copy paths.
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   if (loading) {
     return (
@@ -383,6 +398,7 @@ export default function SharePage() {
           </p>
         )}
       </div>
+      {toast && <Toast type={toast.type} message={toast.msg} />}
     </div>
   );
 }
