@@ -825,6 +825,8 @@
     "loginRequired": "请先连接 Spotify 以编辑翻译",
     "forbidden": "没有权限修改这首歌词",
     "staleSource": "歌词已在其他页面更新，请刷新后重新校正",
+    "writeContention": "译文正在被其他会话写入，请稍后重试",
+    "savedWithConcurrent": "翻译已保存，并同步了 {count} 行其他会话写入的译文",
     "fillMissing": "AI 补全缺失行 ({count})",
     "fillMissingDone": "已补全 {count} 行翻译",
     "fillMissingEmpty": "没有缺失的翻译行",

@@ -33,6 +33,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import * as schema from './schema.ts';
 import { parseTranslationCache } from './translation/parse.ts';
+import { applyLineEdits, type LineEdit } from './translation-line-edits.ts';
 
 /** Max retries for the optimistic-lock merge loop (each retry re-reads the cache). */
 const MAX_MERGE_ATTEMPTS = 8;
@@ -72,6 +73,79 @@ function mergeSlice(
 }
 
 /**
+ * The optimistic-lock merge loop shared by every cache writer.
+ *
+ * Each attempt re-reads the LATEST cache, lets the caller apply its change-set
+ * on top of it, and CASes back on the exact `lyrics_translation` value it read;
+ * a lost race retries against the winner's cache instead of clobbering it.
+ */
+async function mergeUnderOptimisticLock(
+  db: unknown,
+  opts: {
+    id: string;
+    sourceLyrics: string;
+    totalLines: number;
+    /** Apply this writer's change-set to the cache read in this attempt. */
+    apply: (latest: string[]) => string[];
+    /** BCP-47 language to stamp, or undefined to keep the stored stamp. */
+    lang?: string;
+    /** Extra columns written together with the merged cache (e.g. reasoning). */
+    patch?: Record<string, unknown>;
+  },
+): Promise<MergeResult> {
+  const d = db as {
+    select: (cols: unknown) => {
+      from: (t: unknown) => {
+        where: (w: unknown) => { get: () => Promise<{ lyricsRaw: string; lyricsTranslation: string } | undefined> };
+      };
+    };
+    update: (t: unknown) => {
+      set: (v: Record<string, unknown>) => {
+        where: (w: unknown) => {
+          returning: (cols: unknown) => { get: () => Promise<{ id: string } | undefined> };
+        };
+      };
+    };
+  };
+
+  for (let attempt = 0; attempt < MAX_MERGE_ATTEMPTS; attempt++) {
+    const latest = await d.select({
+      lyricsRaw: schema.songs.lyricsRaw,
+      lyricsTranslation: schema.songs.lyricsTranslation,
+    }).from(schema.songs).where(eq(schema.songs.id, opts.id)).get();
+    if (!latest) return { ok: false, reason: 'not_found' };
+    // The song's source lyrics moved on — this request's output is stale.
+    if (latest.lyricsRaw !== opts.sourceLyrics) return { ok: false, reason: 'stale_source' };
+
+    const merged = opts.apply(parseCache(latest.lyricsTranslation, opts.totalLines));
+    // CAS on the exact cache value we read: if a concurrent writer committed
+    // in between, this UPDATE matches no row and we retry against its cache.
+    const applied = await d.update(schema.songs)
+      .set({
+        ...(opts.patch ?? {}),
+        lyricsTranslation: JSON.stringify(merged),
+        // Stamp the language whenever a language is provided; otherwise keep
+        // whatever is already stored (a resume into the same language).
+        ...(opts.lang !== undefined ? { lyricsTranslationLang: opts.lang } : {}),
+        updatedAt: sql`(datetime('now', 'localtime'))`,
+      })
+      .where(and(
+        eq(schema.songs.id, opts.id),
+        eq(schema.songs.lyricsRaw, opts.sourceLyrics),
+        eq(schema.songs.lyricsTranslation, latest.lyricsTranslation ?? ''),
+      ))
+      .returning({ id: schema.songs.id })
+      .get();
+    if (applied) return { ok: true, cache: merged };
+    // Lost the race — loop re-reads and merges on top of the winner's cache.
+  }
+  // Retries exhausted (pathological contention). Refuse rather than guess —
+  // this is a transient lock contention, NOT a stale source, so the caller
+  // can surface a retryable error instead of a misleading conflict.
+  return { ok: false, reason: 'contention' };
+}
+
+/**
  * Persist a slice merge under the optimistic lock.
  *
  * Guarantees:
@@ -102,55 +176,48 @@ export async function mergeSliceIntoCache(
     lang?: string;
   },
 ): Promise<MergeResult> {
-  const d = db as {
-    select: (cols: unknown) => {
-      from: (t: unknown) => {
-        where: (w: unknown) => { get: () => Promise<{ lyricsRaw: string; lyricsTranslation: string } | undefined> };
-      };
-    };
-    update: (t: unknown) => {
-      set: (v: Record<string, unknown>) => {
-        where: (w: unknown) => {
-          returning: (cols: unknown) => { get: () => Promise<{ id: string } | undefined> };
-        };
-      };
-    };
-  };
+  return mergeUnderOptimisticLock(db, {
+    id: opts.id,
+    sourceLyrics: opts.sourceLyrics,
+    totalLines: opts.totalLines,
+    lang: opts.lang,
+    apply: (latest) => mergeSlice(latest, opts.resolved, opts.totalLines, opts.start),
+  });
+}
 
-  for (let attempt = 0; attempt < MAX_MERGE_ATTEMPTS; attempt++) {
-    const latest = await d.select({
-      lyricsRaw: schema.songs.lyricsRaw,
-      lyricsTranslation: schema.songs.lyricsTranslation,
-    }).from(schema.songs).where(eq(schema.songs.id, opts.id)).get();
-    if (!latest) return { ok: false, reason: 'not_found' };
-    // The song's source lyrics moved on — this request's output is stale.
-    if (latest.lyricsRaw !== opts.sourceLyrics) return { ok: false, reason: 'stale_source' };
-
-    const merged = mergeSlice(parseCache(latest.lyricsTranslation, opts.totalLines), opts.resolved, opts.totalLines, opts.start);
-    // CAS on the exact cache value we read: if a concurrent writer committed
-    // in between, this UPDATE matches no row and we retry against its cache.
-    const applied = await d.update(schema.songs)
-      .set({
-        lyricsTranslation: JSON.stringify(merged),
-        // Stamp the language whenever a language is provided; otherwise keep
-        // whatever is already stored (a resume into the same language).
-        ...(opts.lang !== undefined ? { lyricsTranslationLang: opts.lang } : {}),
-        updatedAt: sql`(datetime('now', 'localtime'))`,
-      })
-      .where(and(
-        eq(schema.songs.id, opts.id),
-        eq(schema.songs.lyricsRaw, opts.sourceLyrics),
-        eq(schema.songs.lyricsTranslation, latest.lyricsTranslation ?? ''),
-      ))
-      .returning({ id: schema.songs.id })
-      .get();
-    if (applied) return { ok: true, cache: merged };
-    // Lost the race — loop re-reads and merges on top of the winner's cache.
-  }
-  // Retries exhausted (pathological contention). Refuse rather than guess —
-  // this is a transient lock contention, NOT a stale source, so the caller
-  // can surface a retryable error instead of a misleading conflict.
-  return { ok: false, reason: 'contention' };
+/**
+ * Persist **line-level** manual edits under the same optimistic lock
+ * (issue #272).
+ *
+ * The proofreading page sends only the lines the user actually changed, so
+ * this writer merges exactly those lines into the latest stored cache. A
+ * concurrent AI slice (or another editor) keeps its lines instead of being
+ * rolled back by a whole-snapshot write, and vice versa.
+ *
+ * Returns the merged cache so the client can adopt lines written elsewhere
+ * while still showing its own saved edits.
+ */
+export async function mergeLineEditsIntoCache(
+  db: unknown,
+  opts: {
+    id: string;
+    sourceLyrics: string;
+    totalLines: number;
+    edits: LineEdit[];
+    /** See `mergeSliceIntoCache` — omitted keeps the stored language stamp. */
+    lang?: string;
+    /** Extra columns written together with the merged cache (e.g. reasoning). */
+    patch?: Record<string, unknown>;
+  },
+): Promise<MergeResult> {
+  return mergeUnderOptimisticLock(db, {
+    id: opts.id,
+    sourceLyrics: opts.sourceLyrics,
+    totalLines: opts.totalLines,
+    lang: opts.lang,
+    patch: opts.patch,
+    apply: (latest) => applyLineEdits(latest, opts.edits, opts.totalLines),
+  });
 }
 
 /**

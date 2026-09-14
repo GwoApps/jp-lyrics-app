@@ -4,7 +4,7 @@ import { unlinkSync } from 'node:fs';
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import { sql } from 'drizzle-orm';
-import { mergeSliceIntoCache, writeSongField } from './translation-cache.ts';
+import { mergeLineEditsIntoCache, mergeSliceIntoCache, writeSongField } from './translation-cache.ts';
 import { parseTranslationCache } from './translation/parse.ts';
 import { songs } from './schema.ts';
 
@@ -356,4 +356,169 @@ test('merge into a partial cache with a stale null slot does not shift later lin
   const row = await readSong(t);
   // Index 1 stays '' (was null), index 2 keeps "晚", index 3 is the new merge.
   assert.equal(row?.lyricsTranslation, '["早","","晚","夜"]');
+});
+
+/**
+ * Issue #272 — the proofreading page's save used to PUT its whole snapshot and
+ * only CAS `lyrics_raw`, so every line another session wrote meanwhile was
+ * silently rolled back to the editor's stale copy. The save now carries a
+ * change-set that is merged into the latest cache under the optimistic lock.
+ */
+test('manual line edits keep the lines an AI slice wrote while the editor was open', async () => {
+  const t = makeTestDb(`/tmp/translation-cache-manual-vs-ai-${process.pid}-${Date.now()}.db`);
+  await createTables(t);
+  // The editor opened on a song with no translation yet.
+  await seedSong(t, { cache: '[]' });
+
+  // Meanwhile the song page resumes the run and fills lines 2-3.
+  const ai = await mergeSliceIntoCache(t.db, {
+    id: SONG_ID,
+    sourceLyrics: LYRICS,
+    totalLines: 4,
+    start: 2,
+    resolved: makeResolved(['三', '四']),
+  });
+  assert.equal(ai.ok, true);
+
+  // The user proofreads line 0 and saves. Only line 0 travels to the server.
+  const manual = await mergeLineEditsIntoCache(t.db, {
+    id: SONG_ID,
+    sourceLyrics: LYRICS,
+    totalLines: 4,
+    edits: [{ index: 0, translation: '我的翻译' }],
+    lang: 'zh-CN',
+  });
+  assert.deepEqual(manual, { ok: true, cache: ['我的翻译', '', '三', '四'] });
+
+  // The AI's lines survive — before the fix they were rolled back to ''.
+  const row = await readSong(t);
+  assert.equal(row?.lyricsTranslation, '["我的翻译","","三","四"]');
+});
+
+test('an AI slice merged after a manual save keeps the manual line', async () => {
+  const t = makeTestDb(`/tmp/translation-cache-ai-vs-manual-${process.pid}-${Date.now()}.db`);
+  await createTables(t);
+  await seedSong(t, { cache: '[]' });
+
+  const manual = await mergeLineEditsIntoCache(t.db, {
+    id: SONG_ID,
+    sourceLyrics: LYRICS,
+    totalLines: 4,
+    edits: [{ index: 1, translation: '手改行' }],
+  });
+  assert.equal(manual.ok, true);
+
+  // A later slice merge must not drop the manual correction.
+  const ai = await mergeSliceIntoCache(t.db, {
+    id: SONG_ID,
+    sourceLyrics: LYRICS,
+    totalLines: 4,
+    start: 2,
+    resolved: makeResolved(['三', '四']),
+  });
+  assert.equal(ai.ok, true);
+  const row = await readSong(t);
+  assert.equal(row?.lyricsTranslation, '["","手改行","三","四"]');
+});
+
+test('manual line edits are refused when the lyrics changed mid-flight', async () => {
+  const t = makeTestDb(`/tmp/translation-cache-manual-stale-${process.pid}-${Date.now()}.db`);
+  await createTables(t);
+  await seedSong(t, { cache: '["一","二","三","四"]' });
+  await t.db.update(songs).set({ lyricsRaw: 'edited\nline two\nline three\nline four' })
+    .where(sql`id = ${SONG_ID}`).run();
+
+  const result = await mergeLineEditsIntoCache(t.db, {
+    id: SONG_ID,
+    sourceLyrics: LYRICS, // snapshot from when the editor loaded
+    totalLines: 4,
+    edits: [{ index: 0, translation: '我的翻译' }],
+  });
+  assert.deepEqual(result, { ok: false, reason: 'stale_source' });
+  const row = await readSong(t);
+  assert.equal(row?.lyricsTranslation, '["一","二","三","四"]');
+});
+
+test('manual line edits normalise to the current line count and can clear a line', async () => {
+  const t = makeTestDb(`/tmp/translation-cache-manual-normalise-${process.pid}-${Date.now()}.db`);
+  await createTables(t);
+  // Cache longer than the lyrics + a damaged slot, exactly what a stale editor
+  // snapshot must not resurrect wholesale.
+  await seedSong(t, { cache: '["一","二","三","四","多余的"]' });
+
+  const result = await mergeLineEditsIntoCache(t.db, {
+    id: SONG_ID,
+    sourceLyrics: LYRICS,
+    totalLines: 4,
+    edits: [
+      { index: 0, translation: '' }, // user cleared line 0
+      { index: 3, translation: '四改' },
+    ],
+  });
+  assert.equal(result.ok, true);
+  const row = await readSong(t);
+  assert.equal(row?.lyricsTranslation, '["","二","三","四改"]');
+});
+
+test('manual line edits drop the stale AI reasoning and refresh the language stamp', async () => {
+  const t = makeTestDb(`/tmp/translation-cache-manual-patch-${process.pid}-${Date.now()}.db`);
+  await createTables(t);
+  await seedSong(t, { cache: '["一","","",""]' });
+  await t.db.update(songs).set({
+    lyricsTranslationReasoning: 'old thinking…',
+    lyricsTranslationLang: 'ja',
+  }).where(sql`id = ${SONG_ID}`).run();
+
+  const result = await mergeLineEditsIntoCache(t.db, {
+    id: SONG_ID,
+    sourceLyrics: LYRICS,
+    totalLines: 4,
+    edits: [{ index: 1, translation: '二' }],
+    lang: 'zh-CN',
+    patch: { lyricsTranslationReasoning: null },
+  });
+  assert.equal(result.ok, true);
+  const row = await t.db.select({
+    lyricsTranslation: songs.lyricsTranslation,
+    lyricsTranslationLang: songs.lyricsTranslationLang,
+    lyricsTranslationReasoning: songs.lyricsTranslationReasoning,
+  }).from(songs).where(sql`id = ${SONG_ID}`).get();
+  assert.equal(row?.lyricsTranslation, '["一","二","",""]');
+  assert.equal(row?.lyricsTranslationLang, 'zh-CN');
+  assert.equal(row?.lyricsTranslationReasoning, null);
+});
+
+test('concurrent manual saves of different lines both survive (optimistic lock)', async () => {
+  const t = makeTestDb(`/tmp/translation-cache-manual-conc-${process.pid}-${Date.now()}.db`);
+  await createTables(t);
+  await seedSong(t, { cache: '[]' });
+
+  const own1 = makeTestDb(t.path, { fresh: false });
+  const own2 = makeTestDb(t.path, { fresh: false });
+  try {
+    await own1.client.execute('PRAGMA busy_timeout=15000');
+    await own2.client.execute('PRAGMA busy_timeout=15000');
+
+    const [r1, r2] = await Promise.all([
+      mergeLineEditsIntoCache(own1.db, {
+        id: SONG_ID,
+        sourceLyrics: LYRICS,
+        totalLines: 4,
+        edits: [{ index: 0, translation: '一' }],
+      }),
+      mergeLineEditsIntoCache(own2.db, {
+        id: SONG_ID,
+        sourceLyrics: LYRICS,
+        totalLines: 4,
+        edits: [{ index: 1, translation: '二' }],
+      }),
+    ]);
+    assert.equal(r1.ok, true, 'tab 1 save must commit');
+    assert.equal(r2.ok, true, 'tab 2 save must commit');
+    const row = await readSong(t);
+    assert.equal(row?.lyricsTranslation, '["一","二","",""]');
+  } finally {
+    own1.client.close();
+    own2.client.close();
+  }
 });

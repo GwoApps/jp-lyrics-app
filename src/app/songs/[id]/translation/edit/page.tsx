@@ -14,6 +14,7 @@ import { useAuthSession } from '@/lib/auth-session';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { parseTranslationCache } from '@/lib/translation/parse';
+import { computeLineEdits, countAdoptedLines, reconcileDraft } from '@/lib/translation-line-edits';
 import { mergeTranslatedSlice, shouldConfirmRetranslate } from '@/lib/translation-draft';
 import { TRANSLATION_ERROR_KEYS } from '@/lib/translation-errors';
 import type { SongData } from '@/lib/types';
@@ -128,7 +129,12 @@ export default function TranslationEditPage() {
       .map(({ i }) => i),
     [rawLines, draft],
   );
-  const isDirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(original), [draft, original]);
+  // The lines this session actually changed, diffed against the baseline the
+  // editor loaded. Only these travel to the server on save (issue #272) — a
+  // whole-snapshot PUT rolled back lines written by another session (AI resume
+  // / another tab) while the user was proofreading.
+  const changes = useMemo(() => computeLineEdits(draft, original), [draft, original]);
+  const isDirty = useMemo(() => changes.length > 0, [changes]);
 
   // Unified unsaved-changes guard covering in-app <Link> clicks (breadcrumbs,
   // AppShell navigation), browser back/forward, `router.push` and unload. The
@@ -137,16 +143,23 @@ export default function TranslationEditPage() {
     confirmHref: `/songs/${id}`,
     dirty: isDirty,
   });
-
   const handleSave = useCallback(async () => {
     if (!id) return;
+    // Recompute at call time: the memo may be one render behind the keystroke
+    // that triggered the save.
+    const edits = computeLineEdits(draft, original);
+    if (edits.length === 0) return;
+    // Snapshot both sides so the reconciliation below can tell "this line is
+    // exactly what we sent" from "the user typed while the save was in flight".
+    const submitted = draft.slice();
+    const baseline = original;
     setSaving(true);
     try {
       const res = await fetch(`/api/songs/${id}/translation`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          translations: draft,
+          changes: edits,
           source_lyrics: sourceLyrics,
         }),
       });
@@ -154,17 +167,35 @@ export default function TranslationEditPage() {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         if (res.status === 401) throw new Error(t('translation.loginRequired'));
         if (res.status === 403) throw new Error(t('translation.forbidden'));
-        if (res.status === 409) throw new Error(t('translation.staleSource'));
+        if (data.error === 'stale_annotation_source') throw new Error(t('translation.staleSource'));
+        if (data.error === 'write_contention') throw new Error(t('translation.writeContention'));
         throw new Error(data.error === 'song_not_found' ? t('song.notFound') : t('translation.saveFailed'));
       }
-      setOriginal(draft);
-      showToast('success', t('translation.saved'));
+      const data = (await res.json().catch(() => ({}))) as { translations?: string[] };
+      // The server's merged cache is authoritative: it contains this save's
+      // edits AND whatever another session wrote meanwhile.
+      if (Array.isArray(data.translations)) {
+        const merged = data.translations;
+        const adopted = countAdoptedLines(baseline, edits, merged);
+        setOriginal(merged);
+        setDraft((prev) => reconcileDraft(prev, submitted, merged));
+        if (adopted > 0) {
+          // Not a conflict to resolve — the concurrent lines are kept — but the
+          // user should know the page just changed under them.
+          showToast('info', t('translation.savedWithConcurrent', { count: String(adopted) }));
+        } else {
+          showToast('success', t('translation.saved'));
+        }
+      } else {
+        setOriginal(submitted);
+        showToast('success', t('translation.saved'));
+      }
     } catch (e: unknown) {
       showToast('error', e instanceof Error ? e.message : t('translation.saveFailed'));
     } finally {
       setSaving(false);
     }
-  }, [id, draft, sourceLyrics, showToast, t]);
+  }, [id, draft, original, sourceLyrics, showToast, t]);
 
   const handleCancel = useCallback(() => {
     guardNavigate(`/songs/${id}`);
