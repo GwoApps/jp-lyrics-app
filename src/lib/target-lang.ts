@@ -48,7 +48,8 @@ const LANGUAGE_TAG_RE = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{1,8})*$/;
  * Every surface that renders translation text uses this: the detail page lyric
  * list (`FuriganaLine`), the share page and the HTML export (issue #274). The
  * tag drives both screen-reader pronunciation and CJK font selection
- * (`globals.css` re-fonts `[lang^="zh"]` …).
+ * (`globals.css` re-fonts `[lang^="zh"]` … for element-level `lang`s, and
+ * `html[lang^="zh"]` … for the UI language carried by `<html lang>`).
  */
 export function resolveTranslationLang(code: string | null | undefined): string {
   const raw = code?.trim();

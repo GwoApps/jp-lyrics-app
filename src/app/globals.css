@@ -54,33 +54,49 @@ html {
   overflow-y: scroll;
   scrollbar-gutter: stable;
 }
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: 'Inter', 'Noto Sans JP', 'Noto Sans SC', 'Source Han Sans SC', sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  line-height: 1.6;
-  transition: background-color 240ms ease;
-}
-/* Issue #274: source lyrics and their translation each carry their own `lang`,
-   so pick the CJK font whose glyph shapes belong to that language instead of
-   letting everything fall back to Noto Sans JP (which draws Japanese variants
-   of 直/骨/次/令/真 … for Chinese text).
+/* Issue #274: every language we render gets its own CJK family, so glyph shapes
+   match the text instead of everything falling back to Noto Sans JP (which draws
+   Japanese variants of 直/骨/次/令/真 … for Chinese text).
 
-   Attribute selectors are deliberate: only elements that EXPLICITLY declare a
-   language are re-fonted. `:lang()` would also match every element that merely
-   *inherits* the UI locale from <html lang>, which would re-font the Japanese
-   lyric source (and the lyric/translation editors) whenever the UI is Chinese. */
-[lang="ja"] {
+   Two layers, in cascade order (later rules win on equal specificity):
+
+   1. `html[lang=…]` — the UI font, driven by the language setting. `I18nProvider`
+      mirrors the active locale onto `<html lang>`, so the shell text, buttons and
+      editors pick the best-matching family first instead of always leading with
+      Noto Sans JP. Inherited by the whole document, so no per-component wiring is
+      needed.
+   2. `[lang=…]` — a per-element override for lyric blocks that declare their own
+      language. Attribute selectors are deliberate: `:lang()` would also match
+      every element that merely *inherits* the UI locale, which would re-font the
+      Japanese lyric source (and the lyric/translation editors) whenever the UI is
+      Chinese — exactly the mismatch this issue is about. */
+html[lang="en"] {
+  font-family: 'Inter', 'Noto Sans JP', 'Noto Sans SC', sans-serif;
+}
+html[lang="ja"] {
   font-family: 'Inter', 'Noto Sans JP', 'Noto Sans SC', sans-serif;
 }
 /* Simplified Chinese (and any unknown `zh` / `zh-…` subtag). */
-[lang^="zh"] {
+html[lang^="zh"] {
   font-family: 'Inter', 'Noto Sans SC', 'Source Han Sans SC', 'Noto Sans JP', sans-serif;
 }
 /* Traditional Chinese: Taiwan, Hong Kong, `Hant`, plus Cantonese (yue-Hant).
    Must stay after the `zh` rule so those tags win the cascade. */
+html[lang^="zh-TW"],
+html[lang^="zh-HK"],
+html[lang^="zh-Hant"],
+html[lang="yue-Hant"] {
+  font-family: 'Inter', 'Noto Sans TC', 'Source Han Sans TC', 'Noto Sans JP', sans-serif;
+}
+
+/* Lyric-level overrides: an element that declares its own language re-fonts that
+   block only, even when the surrounding UI uses another language. */
+[lang="ja"] {
+  font-family: 'Inter', 'Noto Sans JP', 'Noto Sans SC', sans-serif;
+}
+[lang^="zh"] {
+  font-family: 'Inter', 'Noto Sans SC', 'Source Han Sans SC', 'Noto Sans JP', sans-serif;
+}
 [lang^="zh-TW"],
 [lang^="zh-HK"],
 [lang^="zh-Hant"],
@@ -91,6 +107,15 @@ body {
 [lang="en"],
 [lang="yue-Latn"] {
   font-family: 'Inter', 'Noto Sans JP', sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
+  transition: background-color 240ms ease;
 }
 /* Match the document background transition so the sticky top bar does not jump ahead of page content. */
 .app-topbar {
