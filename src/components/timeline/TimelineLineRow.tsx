@@ -42,7 +42,7 @@ export default function TimelineLineRow({
   return (
     <div ref={registerRow} onClick={onSelect} className={`mb-1 grid cursor-pointer grid-cols-[28px_96px_minmax(0,1fr)_72px] items-center gap-2 rounded-lg border px-2 py-2 transition-colors sm:grid-cols-[32px_112px_minmax(0,1fr)_72px] sm:gap-3 sm:px-3 ${rowCls}`}>
       <div className="flex justify-center">{line.timeMs == null ? <Circle className="h-4 w-4 text-[var(--muted-foreground)]/50" /> : <CheckCircle2 className="h-4 w-4 text-[var(--success)]" />}</div>
-      <input key={`${index}-${line.timeMs ?? 'empty'}`} defaultValue={line.timeMs == null ? '' : fmtMs(line.timeMs)} placeholder="--:--.---" onClick={(event) => event.stopPropagation()} onBlur={(event) => {
+      <input key={`${index}-${line.timeMs ?? 'empty'}`} data-timeline-key-target="" defaultValue={line.timeMs == null ? '' : fmtMs(line.timeMs)} placeholder="--:--.---" onClick={(event) => event.stopPropagation()} onBlur={(event) => {
         const value = event.currentTarget.value.trim();
         if (!value) {
           if (line.timeMs != null) onSetTime(index, null);

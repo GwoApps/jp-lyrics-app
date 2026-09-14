@@ -356,20 +356,39 @@ export default function TimelineEditorPage() {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (target?.closest('input, textarea, button, a')) return;
+      const hasModifier = event.ctrlKey || event.metaKey;
+      // Elements that consume keys for their own behaviour instead of the page shortcuts.
+      const control = target?.closest<HTMLElement>('input, textarea, select, [contenteditable="true"], button, a') ?? null;
+      // Text entry controls only: buttons/links keep their native Enter and arrow behaviour.
+      const textField = control?.matches('input:not([type="button"]):not([type="submit"]):not([type="reset"]), textarea, [contenteditable="true"]')
+        ? control
+        : null;
+      // The seek input doubles as a shortcut target: modifiers there belong to the page.
+      const shortcutFriendly = target?.closest('[data-timeline-key-target]') ?? null;
+      if (textField && !(shortcutFriendly && hasModifier)) {
+        // Text editing: printable keys, caret movement, Home/End/Enter and the
+        // field's own Ctrl+A/Ctrl+Z/Ctrl+Y must reach the field untouched.
+        if (event.key.length > 1 || hasModifier) return;
+      }
+      const disabledControl = target?.closest<HTMLElement>('[aria-disabled="true"]');
+      if (disabledControl && !shortcutFriendly) return;
       if (event.key === 'Enter') {
+        // A focused button/link owns Enter; only mark the line when focus is elsewhere.
+        if (control) return;
         event.preventDefault();
         markCurrentLine();
-      } else if (event.key === 'ArrowUp') {
+      } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        // Line navigation stays available even when focus sits on the row / mark buttons.
         event.preventDefault();
-        selectLine(currentIndex - 1);
-      } else if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        selectLine(currentIndex + 1);
-      } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+        selectLine(currentIndex + (event.key === 'ArrowDown' ? 1 : -1));
+      } else if (hasModifier && event.key.toLowerCase() === 'z') {
+        // A focused text field keeps Ctrl+Z for its own edit history.
+        if (textField) return;
         event.preventDefault();
         undo();
-      } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+      } else if (hasModifier && event.key.toLowerCase() === 's') {
+        // Saving is page level: it wins over any text field except the seek input.
+        if (textField && !shortcutFriendly) return;
         event.preventDefault();
         save();
       }
