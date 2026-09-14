@@ -37,6 +37,13 @@ export type SongData = Omit<Song, 'created_by'> & { permissions?: { can_edit: bo
 export interface FuriganaSegment {
   text: string;
   reading: string;
+  /**
+   * Issue #286: morphological part of speech of this token (`kuromoji`'s
+   * `pos`, e.g. `助詞`), captured at tokenization time. Optional because
+   * annotations persisted before this field existed have no part of speech;
+   * a missing value simply means "unknown" and keeps the literal reading.
+   */
+  pos?: string;
 }
 
 export interface FuriganaLine {

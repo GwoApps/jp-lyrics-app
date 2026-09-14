@@ -68,6 +68,48 @@ test('romanizeKorean handles liaison and common pronunciation changes', () => {
   assert.equal(romanizeKorean('독립'), 'dongnip');
 });
 
+test('resolveFuriganaReading reads は/へ as particles only when the part of speech says so', () => {
+  const particle = { text: 'は', reading: '', pos: '助詞' };
+  const noun = { text: 'は', reading: '' };
+
+  // 助詞: は → wa, へ → e (katakana lyric text included)
+  assert.equal(resolveFuriganaReading('は', '', true, 'ja-kana', particle), 'wa');
+  assert.equal(resolveFuriganaReading('へ', '', true, 'ja-kana', { text: 'へ', reading: '', pos: '助詞' }), 'e');
+  assert.equal(resolveFuriganaReading('ハ', '', true, 'ja-kana', { text: 'ハ', reading: '', pos: '助詞' }), 'wa');
+  assert.equal(resolveFuriganaReading('ヘ', '', true, 'ja-kana', { text: 'ヘ', reading: '', pos: '助詞' }), 'e');
+
+  // Non-particles and legacy segments (no pos) keep the literal reading.
+  assert.equal(resolveFuriganaReading('は', '', true, 'ja-kana', noun), 'ha');
+  assert.equal(resolveFuriganaReading('は', '', true), 'ha');
+  assert.equal(resolveFuriganaReading('へ', '', true, 'ja-kana', { text: 'へ', reading: '', pos: '名詞' }), 'he');
+  assert.equal(resolveFuriganaReading('はな', '', true, 'ja-kana', { text: 'はな', reading: '', pos: '名詞' }), 'hana');
+  assert.equal(resolveFuriganaReading('を', '', true, 'ja-kana', { text: 'を', reading: '', pos: '助詞' }), 'o');
+
+  // A kanji-backed segment is never rewritten by the particle rule.
+  assert.equal(resolveFuriganaReading('葉', 'は', true, 'ja-kana', { text: '葉', reading: 'は', pos: '名詞' }), 'ha');
+});
+
+test('resolveFuriganaReading leaves the non-romanized ruby untouched by the particle rule', () => {
+  // Without romanization the ruby keeps the stored reading: a kana particle
+  // whose reading equals its text stays a no-op (unchanged behaviour).
+  assert.equal(resolveFuriganaReading('は', '', false, 'ja-kana', { text: 'は', reading: '', pos: '助詞' }), '');
+  assert.equal(resolveFuriganaReading('は', 'は', false, 'ja-kana', { text: 'は', reading: 'は', pos: '助詞' }), '');
+  assert.equal(resolveFuriganaReading('はな', 'はな', false, 'ja-kana', { text: 'はな', reading: 'はな', pos: '名詞' }), '');
+  assert.equal(resolveFuriganaReading('葉', 'は', false, 'ja-kana', { text: '葉', reading: 'は', pos: '名詞' }), 'は');
+  // The particle rule is never applied to the jyutping scheme.
+  assert.equal(resolveFuriganaReading('は', 'ha', true, 'yue-jyutping', { text: 'は', reading: 'ha', pos: '助詞' }), 'ha');
+});
+
+test('resolveFuriganaReading keeps merged kanji compounds and other readings literal', () => {
+  // きょう/は is a noun + particle, but the へ particle in きょうへ reads え.
+  const kyou = { text: 'きょう', reading: 'きょう', pos: '名詞' };
+  assert.equal(resolveFuriganaReading('きょう', 'きょう', true, 'ja-kana', kyou), 'kyou');
+  // Compound merges keep the tokenizer's pos (名詞) rather than turning into a particle.
+  assert.equal(resolveFuriganaReading('一人', 'ひとり', true, 'ja-kana', { text: '一人', reading: 'ひとり', pos: '名詞' }), 'hitori');
+  // A segment carrying a reading never falls through to the kana particle rule.
+  assert.equal(resolveFuriganaReading('歯', 'は', true, 'ja-kana', { text: '歯', reading: 'は', pos: '名詞' }), 'ha');
+});
+
 test('romanizeLyricsReading supports Japanese and Korean in the same fragment', () => {
   assert.equal(romanizeLyricsReading('きょう 안녕 スーパー'), 'kyou annyeong suupaa');
   assert.equal(romanizeKorean('한국 어'), 'hanguk eo');

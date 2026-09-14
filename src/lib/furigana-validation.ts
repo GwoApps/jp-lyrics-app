@@ -8,6 +8,7 @@ const MAX_LINES = 10_000;
 const MAX_SEGMENTS_PER_LINE = 10_000;
 const MAX_TEXT_LENGTH = 4_096;
 const MAX_READING_LENGTH = 256;
+const MAX_POS_LENGTH = 64;
 const MAX_TOTAL_CHARACTERS = 1_000_000;
 
 /** Checks whether stored annotations still reconstruct the current lyric source. */
@@ -59,7 +60,7 @@ export function validateFuriganaPayload(value: unknown, sourceLyrics: string): V
       if (!segment || typeof segment !== 'object' || Array.isArray(segment)) {
         return { ok: false, error: 'invalid_furigana' };
       }
-      const { text, reading } = segment as { text?: unknown; reading?: unknown };
+      const { text, reading, pos } = segment as { text?: unknown; reading?: unknown; pos?: unknown };
       if (
         typeof text !== 'string'
         || text.length === 0
@@ -69,11 +70,18 @@ export function validateFuriganaPayload(value: unknown, sourceLyrics: string): V
       ) {
         return { ok: false, error: 'invalid_furigana' };
       }
+      // Issue #286: the optional tokenizer part of speech must survive the
+      // save round-trip, otherwise particle readings (は→wa, へ→e) are lost on
+      // every re-save. A missing field stays missing, so legacy payloads are
+      // persisted exactly as before.
+      if (pos !== undefined && (typeof pos !== 'string' || pos.length > MAX_POS_LENGTH)) {
+        return { ok: false, error: 'invalid_furigana' };
+      }
       totalCharacters += text.length + reading.length;
       if (totalCharacters > MAX_TOTAL_CHARACTERS) {
         return { ok: false, error: 'invalid_furigana' };
       }
-      validatedSegments.push({ text, reading });
+      validatedSegments.push(pos === undefined ? { text, reading } : { text, reading, pos });
     }
 
     if (validatedSegments.map((segment) => segment.text).join('') !== sourceLines[lineIndex]) {

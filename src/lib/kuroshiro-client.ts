@@ -62,7 +62,13 @@ function fixCompoundReadings(segments: FuriganaSegment[]): FuriganaSegment[] {
       }
 
       if (bestMerge) {
-        result.push({ text: bestMerge.text, reading: bestMerge.reading });
+        // Merged kanji compounds keep the first token's part of speech so the
+        // merged segment is never mistaken for a particle (issue #286).
+        result.push({
+          text: bestMerge.text,
+          reading: bestMerge.reading,
+          ...(seg.pos ? { pos: seg.pos } : {}),
+        });
         i = bestMerge.endIdx;
         continue;
       }
@@ -102,7 +108,11 @@ export async function convertToFuriganaClient(rawLyrics: string): Promise<Furiga
       // Only add reading for kanji-containing tokens where reading differs
       const hasKanji = /[\u4E00-\u9FFF\u3400-\u4DBF]/.test(text);
       const finalReading = hasKanji && reading !== text ? reading : '';
-      segments.push({ text, reading: finalReading });
+      // Issue #286: keep the token's part of speech so the romanizer can apply
+      // particle-only readings (は→wa, へ→e). Particles are kana tokens without
+      // a reading, so without `pos` the sound change is impossible to detect.
+      const pos = typeof token.pos === 'string' && token.pos ? token.pos : undefined;
+      segments.push({ text, reading: finalReading, ...(pos ? { pos } : {}) });
     }
 
     result.push({ segments: fixCompoundReadings(segments) });

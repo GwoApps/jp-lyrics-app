@@ -129,7 +129,7 @@ export default function FuriganaLineView({
         >
           {normalizeFuriganaSegments(line.segments).map((seg, i) => {
             if (readingMode === 'original') return <span key={i}>{seg.text}</span>;
-            const reading = resolveFuriganaReading(seg.text, seg.reading, romanizeFurigana, readingScheme);
+            const reading = resolveFuriganaReading(seg.text, seg.reading, romanizeFurigana, readingScheme, seg);
             if (!reading) return <span key={i}>{seg.text}</span>;
             const cantoneseReading = readingScheme === 'yue-jyutping';
             const koreanWord = romanizeFurigana && isKoreanReadingSegment(seg.text);

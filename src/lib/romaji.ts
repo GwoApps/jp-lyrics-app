@@ -78,6 +78,56 @@ const LYRIC_SCRIPT_RUNS = /[\u3400-\u4DBF\u4E00-\u9FFF]+|[\u3040-\u30FF\uFF66-\u
 const KATAKANA_PARTS = /[ァ-ヺヽヾー]+|[^ァ-ヺヽヾー]+/g;
 const KATAKANA_ATTACH_TO_PREVIOUS = /^[ァィゥェォャュョヮヵヶー]$/;
 
+/**
+ * Issue #286 — pronunciation-oriented kana substitutions that apply only in
+ * grammatical context, not by literal lookup:
+ * - the topic particle は is pronounced わ (koreha → korewa)
+ * - the direction particle へ is pronounced え (kyouhe → kyoue)
+ * Both are plain kana, so a literal kana→Latin table can never tell them apart
+ * from はな / ふへん; they are decided from the tokenizer's part of speech.
+ */
+const PARTICLE_READINGS: Record<string, string> = {
+  は: 'わ',
+  へ: 'え',
+};
+
+/** Match a kana-only segment so the particle lookup never touches kanji. */
+const KANA_ONLY_RE = /^[\u3041-\u3096\u30A1-\u30FA\u30FC]+$/;
+
+/** kuromoji part of speech marking a Japanese particle (助詞). */
+const PARTICLE_POS = '助詞';
+
+/**
+ * Whether a segment was tokenized as a Japanese particle. `pos` is optional:
+ * annotations persisted before issue #286 have no part of speech, so a missing
+ * value counts as "unknown" and keeps today's literal romanization.
+ */
+export function isParticleSegment(segment: LyricReadingSegment): boolean {
+  return segment.pos === PARTICLE_POS;
+}
+
+/**
+ * Apply particle-only kana readings (は→わ, へ→え) to one segment.
+ *
+ * `pos` is required — it is the only lexical signal that separates the
+ * particles from ordinary words, so legacy segments without it are returned
+ * unchanged. The lookup runs on kana only: kanji-backed segments are returned
+ * verbatim, so a reading such as 葉/は can never be rewritten. Katakana lyric
+ * text (ハ/ヘ) is folded to hiragana first, so those particles romanize to
+ * wa/e as well.
+ */
+export function applyParticleReadings(
+  text: string,
+  reading: string,
+  segment: LyricReadingSegment,
+): { text: string; reading: string } {
+  if (!isParticleSegment(segment)) return { text, reading };
+  const normalize = (value: string) => (
+    KANA_ONLY_RE.test(value) ? toHiragana(value).replace(/[はへ]/g, (kana) => PARTICLE_READINGS[kana]) : value
+  );
+  return { text: normalize(text), reading: normalize(reading) };
+}
+
 /** Split mixed lyrics so Japanese, Korean and neutral text can receive independent ruby. */
 export function splitLyricScriptRuns(value: string): string[] {
   const normalized = value.normalize('NFC');
@@ -87,6 +137,8 @@ export function splitLyricScriptRuns(value: string): string[] {
 export interface LyricReadingSegment {
   text: string;
   reading: string;
+  /** Tokenizer part of speech (`FuriganaSegment.pos`); absent on legacy data. */
+  pos?: string;
 }
 
 export function isKoreanReadingSegment(value: string): boolean {
@@ -357,10 +409,16 @@ export function resolveFuriganaReading(
   reading: string,
   romanize: boolean,
   scheme: ReadingScheme = 'ja-kana',
+  segment?: LyricReadingSegment,
 ): string {
   if (scheme === 'yue-jyutping') return reading;
-  const source = reading || (romanize ? text : '');
+  // Issue #286: particles are romanized by pronunciation (は→wa, へ→e). The
+  // lexical part of speech is only available when the caller passes the whole
+  // segment; legacy annotations (and the pre-#286 call shape) keep the literal
+  // reading because no part of speech can be assumed.
+  const particle = segment ? applyParticleReadings(text, reading, segment) : { text, reading };
+  const source = particle.reading || (romanize ? particle.text : '');
   if (!source) return '';
   const resolved = romanize ? romanizeLyricsReading(source) : source;
-  return resolved === text ? '' : resolved;
+  return resolved === particle.text ? '' : resolved;
 }

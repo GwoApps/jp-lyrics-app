@@ -31,6 +31,29 @@ test('recognizes stored annotations that still match the current lyrics', () => 
   assert.equal(furiganaLinesMatchSource([{ segments: [{ text: '香港', reading: 1 }] }], '香港'), false);
 });
 
+test('preserves the optional tokenizer part of speech and keeps legacy payloads unchanged', () => {
+  const withPos = [{ segments: [
+    { text: 'これ', reading: '' },
+    { text: 'は', reading: '', pos: '助詞' },
+  ] }];
+  const result = validateFuriganaPayload(withPos, 'これは');
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.deepEqual(result.lines, withPos);
+    // Legacy segments must not gain a `pos` key on the way through validation.
+    assert.deepEqual(Object.keys(result.lines[0].segments[0]), ['text', 'reading']);
+  }
+
+  assert.deepEqual(
+    validateFuriganaPayload([{ segments: [{ text: 'は', reading: '', pos: 1 }] }], 'は'),
+    { ok: false, error: 'invalid_furigana' },
+  );
+  assert.deepEqual(
+    validateFuriganaPayload([{ segments: [{ text: 'は', reading: '', pos: 'a'.repeat(65) }] }], 'は'),
+    { ok: false, error: 'invalid_furigana' },
+  );
+});
+
 test('rejects oversized readings', () => {
   const payload = [{ segments: [{ text: '香', reading: 'a'.repeat(257) }] }];
   assert.deepEqual(validateFuriganaPayload(payload, '香'), { ok: false, error: 'invalid_furigana' });

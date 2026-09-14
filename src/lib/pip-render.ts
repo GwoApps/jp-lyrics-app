@@ -21,7 +21,7 @@ export function renderPipLyricsHtml(
     const html = normalizeFuriganaSegments(line.segments).map(seg => {
       if (readingMode === 'original') return escapeHtml(seg.text);
       const scheme = normalizeReadingScheme(readingScheme);
-      const reading = resolveFuriganaReading(seg.text, seg.reading, romanize, scheme);
+      const reading = resolveFuriganaReading(seg.text, seg.reading, romanize, scheme, seg);
       if (!reading) return escapeHtml(seg.text);
       const rubyClass = scheme === 'yue-jyutping'
         ? 'cantonese-reading'

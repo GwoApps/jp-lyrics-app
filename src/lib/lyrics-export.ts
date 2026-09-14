@@ -96,7 +96,7 @@ export function renderFuriganaLineToHtml(
   if (line.segments.length === 0) return '<p class="empty">&nbsp;</p>';
   const inner = normalizeFuriganaSegments(line.segments).map((seg) => {
     if (readingMode === 'none') return escapeHtml(seg.text);
-    const reading = resolveFuriganaReading(seg.text, seg.reading, readingMode === 'romaji', readingScheme);
+    const reading = resolveFuriganaReading(seg.text, seg.reading, readingMode === 'romaji', readingScheme, seg);
     if (!reading) return escapeHtml(seg.text);
     const language = readingScheme === 'yue-jyutping' ? ' lang="yue-Latn"' : '';
     return `<ruby>${escapeHtml(seg.text)}<rp>(</rp><rt${language}>${escapeHtml(reading)}</rt><rp>)</rp></ruby>`;
@@ -168,7 +168,7 @@ export function buildTextExport(
       ? (() => {
           const parts = furiganaLine.segments.map((seg) => {
             if (readingMode === 'furigana') return seg.reading || seg.text;
-            const reading = resolveFuriganaReading(seg.text, seg.reading, true, song.reading_scheme);
+            const reading = resolveFuriganaReading(seg.text, seg.reading, true, song.reading_scheme, seg);
             return reading || seg.text;
           });
           if (readingMode !== 'romaji') return parts.join('');
