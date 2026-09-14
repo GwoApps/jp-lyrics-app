@@ -1,5 +1,6 @@
 'use client';
 
+import { useId } from 'react';
 import { FlaskConical, Mic, X, CircleAlert } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
@@ -23,6 +24,9 @@ export default function ExperimentsPanel({
   onClose,
 }: ExperimentsPanelProps) {
   const { t } = useI18n();
+  // Links the visible "spectrum" text to the switch so it becomes the switch's
+  // accessible name and tapping the text toggles it as well.
+  const spectrumId = useId();
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
@@ -50,12 +54,13 @@ export default function ExperimentsPanel({
 
         <div className="space-y-3 p-4">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-sm">
+            <label htmlFor={spectrumId} className="flex items-center gap-2 text-sm">
               <Mic className="h-4 w-4 text-[var(--muted-foreground)]" />
               <span>{t('song.experimentSpectrum')}</span>
-            </div>
+            </label>
             <button
               type="button"
+              id={spectrumId}
               role="switch"
               aria-checked={spectrumOn}
               onClick={onToggleSpectrum}

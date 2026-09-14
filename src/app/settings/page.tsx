@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { Loader2, LogIn, Save, Check } from 'lucide-react';
 import { useI18n, LOCALE_META, type Locale } from '@/lib/i18n';
 import { useAuthSession } from '@/lib/auth-session';
@@ -40,12 +40,24 @@ const TARGET_LANG_PRESETS = [
 
 const inputClass = 'w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm outline-none transition-colors focus:border-[var(--primary)]';
 
-/** One labelled setting row: a label/hint on the left, the control on the right. */
-function Row({ label, hint, control }: { label: string; hint?: string; control: React.ReactNode }) {
+/**
+ * One setting row: a label/hint on the left, the control on the right.
+ *
+ * The left column is a real `<label htmlFor>` bound to the control, so every
+ * control in the row gets its accessible name from the visible text and a tap
+ * anywhere on the text toggles the control (larger touch target on mobile).
+ *
+ * `controlId` is the id of the control; pass `undefined` when the control
+ * already carries its own name (e.g. `aria-label`) or when a natural label
+ * target is not appropriate.
+ */
+function Row({ label, hint, control, controlId }: { label: string; hint?: string; control: React.ReactNode; controlId?: string }) {
   return (
     <div className="flex items-center justify-between gap-4 py-3">
       <div className="min-w-0">
-        <p className="text-sm">{label}</p>
+        <label htmlFor={controlId} className="block text-sm">
+          {label}
+        </label>
         {hint && <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">{hint}</p>}
       </div>
       <div className="shrink-0">{control}</div>
@@ -63,6 +75,21 @@ export default function SettingsPage() {
   const [toast, setToast] = useState<ToastState>(null);
   const [dirty, setDirty] = useState(false);
   const [syncEnabled, setSyncEnabledState] = useState<boolean>(() => isSyncEnabled());
+
+  // Stable ids linking each Row's visible label to its control. Rendering the
+  // controls through ids (instead of aria-label) means the label text is also a
+  // click target and the name always tracks the visible copy.
+  const fieldIds = {
+    sync_settings: useId(),
+    theme: useId(),
+    locale: useId(),
+    font_size: useId(),
+    reading_mode: useId(),
+    romanize_furigana: useId(),
+    show_translation: useId(),
+    follow_playing: useId(),
+    translation_target_lang: useId(),
+  } satisfies Record<keyof SettingsMap, string>;
 
   // Unified unsaved-changes guard covering in-app <Link> clicks (top navigation),
   // browser back/forward, `router.push` and tab close/refresh, matching the
@@ -232,9 +259,10 @@ export default function SettingsPage() {
   const targetLang = settings.translation_target_lang ?? '';
   const syncOn = normalizeBoolean(settings.sync_settings);
 
-  const renderToggle = (key: keyof SettingsMap, checked: boolean, onChange: (v: boolean) => void) => (
+  const renderToggle = (id: string, checked: boolean, onChange: (v: boolean) => void) => (
     <button
       type="button"
+      id={id}
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
@@ -268,7 +296,8 @@ export default function SettingsPage() {
           <Row
             label={t('settings.syncSettings')}
             hint={syncOn ? t('settings.syncSettingsOn') : t('settings.syncSettingsOff')}
-            control={renderToggle('sync_settings', syncOn, handleSyncToggle)}
+            controlId={fieldIds.sync_settings}
+            control={renderToggle(fieldIds.sync_settings, syncOn, handleSyncToggle)}
           />
         </div>
       </section>
@@ -280,8 +309,10 @@ export default function SettingsPage() {
           <Row
             label={t('settings.theme')}
             hint={theme === 'dark' ? t('settings.themeDark') : t('settings.themeLight')}
+            controlId={fieldIds.theme}
             control={
               <select
+                id={fieldIds.theme}
                 value={theme}
                 onChange={(e) => handleFieldChange('theme', e.target.value)}
                 className={inputClass}
@@ -295,8 +326,10 @@ export default function SettingsPage() {
           <Row
             label={t('settings.locale')}
             hint={t('settings.localeHint')}
+            controlId={fieldIds.locale}
             control={
               <select
+                id={fieldIds.locale}
                 value={locale}
                 onChange={(e) => handleFieldChange('locale', e.target.value)}
                 className={inputClass}
@@ -318,10 +351,12 @@ export default function SettingsPage() {
           <Row
             label={t('settings.fontSize')}
             hint={t('settings.fontSizeHint', { size: String(fontSize) })}
+            controlId={fieldIds.font_size}
             control={
               <div className="flex items-center gap-3">
                 <span className="text-xs text-[var(--muted-foreground)]">14</span>
                 <input
+                  id={fieldIds.font_size}
                   type="range"
                   min={14}
                   max={32}
@@ -337,8 +372,10 @@ export default function SettingsPage() {
           <Row
             label={t('settings.readingMode')}
             hint={t('settings.readingModeHint')}
+            controlId={fieldIds.reading_mode}
             control={
               <select
+                id={fieldIds.reading_mode}
                 value={readingMode}
                 onChange={(e) => handleFieldChange('reading_mode', e.target.value)}
                 className={inputClass}
@@ -352,12 +389,14 @@ export default function SettingsPage() {
           <Row
             label={t('settings.romanizeFurigana')}
             hint={t('settings.romanizeFuriganaHint')}
-            control={renderToggle('romanize_furigana', romanizeFurigana, (v) => handleFieldChange('romanize_furigana', String(v)))}
+            controlId={fieldIds.romanize_furigana}
+            control={renderToggle(fieldIds.romanize_furigana, romanizeFurigana, (v) => handleFieldChange('romanize_furigana', String(v)))}
           />
           <Row
             label={t('settings.showTranslation')}
             hint={t('settings.showTranslationHint')}
-            control={renderToggle('show_translation', showTranslation, (v) => handleFieldChange('show_translation', String(v)))}
+            controlId={fieldIds.show_translation}
+            control={renderToggle(fieldIds.show_translation, showTranslation, (v) => handleFieldChange('show_translation', String(v)))}
           />
         </div>
       </section>
@@ -369,7 +408,8 @@ export default function SettingsPage() {
           <Row
             label={t('settings.followPlaying')}
             hint={t('settings.followPlayingHint')}
-            control={renderToggle('follow_playing', followPlaying, (v) => handleFieldChange('follow_playing', String(v)))}
+            controlId={fieldIds.follow_playing}
+            control={renderToggle(fieldIds.follow_playing, followPlaying, (v) => handleFieldChange('follow_playing', String(v)))}
           />
         </div>
       </section>
@@ -381,8 +421,10 @@ export default function SettingsPage() {
           <Row
             label={t('settings.translationTargetLang')}
             hint={t('settings.translationTargetLangHint')}
+            controlId={fieldIds.translation_target_lang}
             control={
               <select
+                id={fieldIds.translation_target_lang}
                 value={targetLang}
                 onChange={(e) => handleFieldChange('translation_target_lang', e.target.value)}
                 className={inputClass}
