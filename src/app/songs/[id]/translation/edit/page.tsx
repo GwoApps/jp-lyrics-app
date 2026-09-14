@@ -15,6 +15,7 @@ import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { parseTranslationCache } from '@/lib/translation/parse';
 import { computeLineEdits, countAdoptedLines, reconcileDraft } from '@/lib/translation-line-edits';
+import { translationLineInputId, translationLineLabel, translationSourceLineId } from '@/lib/translation-line-a11y';
 import { mergeTranslatedSlice, shouldConfirmRetranslate } from '@/lib/translation-draft';
 import { TRANSLATION_ERROR_KEYS } from '@/lib/translation-errors';
 import type { SongData } from '@/lib/types';
@@ -436,12 +437,17 @@ export default function TranslationEditPage() {
       <div className="space-y-1.5 pb-24">
         {rawLines.map((raw, i) => {
           const isEmptyLine = !raw.trim();
+          // Programmatic label pair: the source cell names the input of its own
+          // line so screen readers read the original line while editing.
+          const sourceLineId = translationSourceLineId(i);
+          const lineInputId = translationLineInputId(i);
           return (
             <div key={i} className={`grid gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--card)]/50 p-2.5 sm:grid-cols-[1fr_1.2fr] sm:gap-3 ${isEmptyLine ? 'opacity-50' : ''}`}>
-              <div className="min-w-0 break-words text-sm leading-relaxed text-[var(--foreground)]">
+              <div id={sourceLineId} className="min-w-0 break-words text-sm leading-relaxed text-[var(--foreground)]">
                 {raw || <span className="text-xs text-[var(--muted-foreground)]">{t('translation.emptyLine')}</span>}
               </div>
               <textarea
+                id={lineInputId}
                 ref={(el) => { inputRefs.current[i] = el; }}
                 rows={1}
                 wrap="soft"
@@ -478,7 +484,8 @@ export default function TranslationEditPage() {
                 placeholder={isEmptyLine ? '' : t('translation.inputPlaceholder')}
                 className="w-full resize-none rounded-md border border-[var(--border)] bg-[var(--input)] px-2.5 py-1.5 text-sm leading-relaxed outline-none transition-colors focus:border-[var(--primary)] disabled:opacity-50"
                 style={{ fieldSizing: 'content', maxHeight: '12rem', overflowY: 'auto' }}
-                aria-label={t('translation.translatedColumn')}
+                aria-labelledby={sourceLineId}
+                aria-label={translationLineLabel(i, t('translation.translatedColumn'))}
               />
             </div>
           );
