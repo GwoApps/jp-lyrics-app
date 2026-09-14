@@ -32,6 +32,53 @@ test('romanizeJapanese handles extended modern combinations and Hepburn chi gemi
   assert.equal(romanizeJapanese('まっちゃ'), 'matcha');
 });
 
+test('romanizeJapanese covers small-kana digraphs that used to leak kana', () => {
+  // ヂャ行: the ぢ digraphs were missing from COMBOS and leaked ゃ/ゅ/ょ verbatim.
+  assert.equal(romanizeJapanese('ヂャ'), 'ja');
+  assert.equal(romanizeJapanese('ヂュ'), 'ju');
+  assert.equal(romanizeJapanese('ヂョ'), 'jo');
+  assert.equal(romanizeJapanese('ぢゃぢゅぢょ'), 'jajujo');
+  // クヮ/グヮ: ゎ is a distinct small kana from ぁ, so the くぁ/ぐぁ entries did not cover it.
+  assert.equal(romanizeJapanese('クヮ'), 'kwa');
+  assert.equal(romanizeJapanese('グヮ'), 'gwa');
+  assert.equal(romanizeJapanese('くゎい'), 'kwai');
+  // e-series digraphs: previously ニェ→nie / キェ→kie / ギェ→gie.
+  assert.equal(romanizeJapanese('ニェ'), 'nye');
+  assert.equal(romanizeJapanese('キェ'), 'kye');
+  assert.equal(romanizeJapanese('ギェ'), 'gye');
+  assert.equal(romanizeJapanese('ヴャ ヴョ'), 'vya vyo');
+  assert.equal(romanizeJapanese('ヷ ヸ ヹ ヺ'), 'va vi ve vo');
+});
+
+test('romanizeJapanese always merges a trailing small kana into one syllable', () => {
+  // Unlisted combinations still collapse via the full-size kana reading.
+  assert.equal(romanizeJapanese('すゃ'), 'sya');
+  assert.equal(romanizeJapanese('くゎ'), 'kwa');
+  assert.equal(romanizeJapanese('んゃ'), 'nya');
+  // A small kana after an already-romanized syllable replaces its vowel.
+  assert.equal(romanizeJapanese('ふぃぇ'), 'fe');
+  assert.equal(romanizeJapanese('びぃ'), 'bi');
+  // Small kana on their own keep a reading instead of being echoed back.
+  assert.equal(romanizeJapanese('ゃゅょゎ'), 'yayuyowa');
+});
+
+test('romanizeJapanese never returns kana characters', () => {
+  const samples = [
+    'ヂャ行のヂュとヂョ',
+    'クヮ グヮ ニェ キェ ギェ ふぃぇ ゔぃぇ',
+    'ヴャ ヴョ ヷ ヸ ヹ ヺ ヵ ヶ ゕ ゖ',
+    'ゝゞヽヾ゛゜・',
+    'スーパー まっちゃ しんよう！ 一ヶ月',
+    'しゃしん 안녕하세요',
+  ];
+  for (const sample of samples) {
+    const output = romanizeJapanese(sample);
+    assert.equal(!/[\u3040-\u30ff]/.test(output), true, `${sample} still contains kana: ${output}`);
+  }
+  // Unmapped kana is dropped rather than echoed back into the Latin output.
+  assert.equal(/[\u3040-\u30ff]/.test(romanizeJapanese('ゕゖゝゞ゛゜')), false);
+});
+
 test('resolveFuriganaReading keeps romanized ruby off by default', () => {
   assert.equal(resolveFuriganaReading('写真', 'しゃしん', false), 'しゃしん');
   assert.equal(resolveFuriganaReading('きょう', '', false), '');

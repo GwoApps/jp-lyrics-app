@@ -17,7 +17,10 @@ const BASIC: Record<string, string> = {
   ら: 'ra', り: 'ri', る: 'ru', れ: 're', ろ: 'ro',
   わ: 'wa', ゐ: 'i', ゑ: 'e', を: 'o', ん: 'n',
   ぁ: 'a', ぃ: 'i', ぅ: 'u', ぇ: 'e', ぉ: 'o',
-  ゔ: 'vu',
+  ゃ: 'ya', ゅ: 'yu', ょ: 'yo', ゎ: 'wa',
+  ゔ: 'vu', ゕ: 'ka', ゖ: 'ke',
+  '\u309d': '', '\u309e': '', '\u309b': '', '\u309c': '', '\u30fb': '',
+  '\u30fd': '', '\u30fe': '',
 };
 
 const COMBOS: Record<string, string> = {
@@ -40,7 +43,11 @@ const COMBOS: Record<string, string> = {
   くぁ: 'kwa', くぃ: 'kwi', くぇ: 'kwe', くぉ: 'kwo',
   ぐぁ: 'gwa', ぐぃ: 'gwi', ぐぇ: 'gwe', ぐぉ: 'gwo',
   すぃ: 'si', ずぃ: 'zi', てゅ: 'tyu', でゅ: 'dyu', いぇ: 'ye',
-  ゔぁ: 'va', ゔぃ: 'vi', ゔぇ: 've', ゔぉ: 'vo', ゔゅ: 'vyu',
+  ゔぁ: 'va', ゔぃ: 'vi', ゔぇ: 've', ゔぉ: 'vo', ゔゃ: 'vya', ゔゅ: 'vyu', ゔょ: 'vyo',
+  // ヂャ行 / ヮ 合拗音: missing entries used to leak kana into the Latin output (#287).
+  ぢゃ: 'ja', ぢゅ: 'ju', ぢょ: 'jo',
+  くゎ: 'kwa', ぐゎ: 'gwa',
+  にぇ: 'nye', きぇ: 'kye', ぎぇ: 'gye',
 };
 
 const KOREAN_INITIALS = [
@@ -225,9 +232,18 @@ export function normalizeFuriganaSegments(segments: readonly LyricReadingSegment
 }
 
 function toHiragana(value: string): string {
-  const normalizedKana = value.replace(/[\uFF66-\uFF9F]+/g, (kana) => kana.normalize('NFKC'));
+  const normalizedKana = value
+    .replace(/[\uFF66-\uFF9F]+/g, (kana) => kana.normalize('NFKC'))
+    // ゞ/ヾ are a single voiced iteration mark (kana + U+3099); dropping the
+    // combining mark keeps them in the silent BASIC bucket instead of leaking.
+    .replace(/([\u309d\u30fd])\u3099/g, '$1');
   return [...normalizedKana].map((character) => {
     const code = character.charCodeAt(0);
+    // 0x30F7-0x30FA (ヷヸヹヺ) have no Hiragana counterpart: expand them into
+    // the matching ゔ digraph so the ゔ series reading (va/vi/ve/vo) applies.
+    if (code >= 0x30f7 && code <= 0x30fa) {
+      return '\u3094' + '\u3041\u3043\u3047\u3049'[code - 0x30f7];
+    }
     return code >= 0x30a1 && code <= 0x30f6
       ? String.fromCharCode(code - 0x60)
       : character;
@@ -239,7 +255,71 @@ function lastVowel(value: string): string {
   return match?.[0] ?? '';
 }
 
-/** Convert kana readings to a predictable Hepburn-style Latin representation. */
+/**
+ * Small kana that never stand alone in a syllable table.
+ *
+ * They either form a digraph with the preceding kana (きゃ) or fall back to the
+ * reading of their full-size counterpart (ゃ→ya, ぁ→a, ゎ→wa).
+ */
+const SMALL_KANA = 'ゃゅょぁぃぅぇぉゎ';
+
+/** Full-size kana used as the fallback reading of each small kana. */
+const SMALL_KANA_FULL: Record<string, string> = {
+  ゃ: 'や', ゅ: 'ゆ', ょ: 'よ', ぁ: 'あ', ぃ: 'い', ぅ: 'う', ぇ: 'え', ぉ: 'お', ゎ: 'わ',
+};
+
+/** Kana block (U+3040-U+30FF), including the combining voiced sound marks. */
+const KANA_CHARACTER = /[\u3040-\u30ff]/;
+
+/** Kana marks with no reading of their own (iteration marks, dakuten, middle dot). */
+const SILENT_KANA = new Set(['\u309d', '\u309e', '\u309b', '\u309c', '\u30fb', '\u30fd', '\u30fe']);
+
+function warnUnmappedKana(character: string): void {
+  if (typeof console === 'undefined' || typeof console.warn !== 'function') return;
+  console.warn(
+    `[romaji] unmapped character "${character}" (U+${character.codePointAt(0)?.toString(16).toUpperCase().padStart(4, '0')})`,
+  );
+}
+
+/**
+ * Rebuild the syllable that ends at `index` with the small kana's reading.
+ *
+ * The small kana is pronounced like its full-size counterpart (ゃ→ya), so the
+ * preceding syllable keeps its consonant onset and the small kana supplies the
+ * rest: す+ゃ→s+ya=sya, く+ゎ→k+wa=kwa, ふぃ+ぇ→f+e=fe.
+ */
+function mergeSmallKana(input: string, index: number): string | null {
+  const small = input[index];
+  const full = SMALL_KANA_FULL[small];
+  const smallReading = full ? BASIC[full] : undefined;
+  if (!smallReading) return null;
+
+  const previous = index > 0 ? input[index - 1] : '';
+  const previousPair = index > 1 ? input.slice(index - 2, index) : '';
+  if (previous === 'っ') return smallReading;
+
+  // Prefer the digraph immediately before the small kana (ふぃ + ぇ), then a
+  // single leading kana (く + ゎ), then the kana before that (ん + ぁ).
+  const base = [COMBOS[previousPair], COMBOS[previous], BASIC[previous], BASIC[input[index - 2]]]
+    .find((candidate) => candidate !== undefined);
+  if (!base) return null;
+  // ん already romanizes as "n"; the caller adds the syllable separator.
+  if (base === 'n') return `n${smallReading}`;
+  const onset = base.match(/^([^aeiou]*)/)?.[1] ?? '';
+  return onset + smallReading;
+}
+
+function isSmallKana(character: string): boolean {
+  return SMALL_KANA.includes(character);
+}
+
+/**
+ * Convert kana readings to a predictable Hepburn-style Latin representation.
+ *
+ * The output only ever contains Latin letters and punctuation: small kana that
+ * are missing from the tables merge into the preceding syllable, and any other
+ * unreadable kana is dropped with a warning (issue #287).
+ */
 export function romanizeJapanese(value: string): string {
   const input = toHiragana(value);
   let output = '';
@@ -255,14 +335,51 @@ export function romanizeJapanese(value: string): string {
       output += lastVowel(output);
       continue;
     }
+    if (SILENT_KANA.has(character)) {
+      geminate = false;
+      continue;
+    }
 
     const pair = input.slice(index, index + 2);
-    let syllable = COMBOS[pair];
-    if (syllable) index += 1;
-    else syllable = BASIC[character];
+    const previous = index > 0 ? input[index - 1] : '';
+    let consumed = 1;
+    let syllable: string | undefined = COMBOS[pair];
+
+    if (syllable) {
+      consumed = 2;
+    } else if (isSmallKana(character) && previous && output) {
+      // The preceding syllable is already in the output, so rebuild it with this
+      // small kana's reading: ふぃ + ぇ → fe. A run of small kana (ゃゅょ) has no
+      // syllable to merge into, so each of them keeps its own reading.
+      const previousSyllable = COMBOS[input.slice(index - 2, index)]
+        ?? (isSmallKana(previous) ? undefined : BASIC[previous]);
+      const merged = previousSyllable ? mergeSmallKana(input, index) : null;
+      if (previousSyllable && merged) {
+        output = output.slice(0, -previousSyllable.length);
+        syllable = merged;
+      } else {
+        syllable = BASIC[character];
+      }
+    } else if (isSmallKana(pair[1] ?? '') && !isSmallKana(character)) {
+      // The digraph is missing from the tables: merge the small kana into the
+      // syllable before it (く+ゎ → kwa) so it never stands alone or leaks kana.
+      syllable = mergeSmallKana(input, index + 1) ?? undefined;
+      if (syllable) {
+        consumed = 2;
+        if (isKana(previous) && BASIC[previous] === undefined) warnUnmappedKana(pair);
+      } else {
+        syllable = BASIC[character];
+      }
+    } else {
+      syllable = BASIC[character];
+    }
+    if (syllable) index += consumed - 1;
 
     if (!syllable) {
-      output += character;
+      // Last resort: never emit kana. Every kana with a reading is covered by
+      // the tables above, so a hit here means the kana is unknown and dropped.
+      if (isKana(character)) warnUnmappedKana(character);
+      else output += character;
       geminate = false;
       continue;
     }
@@ -280,6 +397,10 @@ export function romanizeJapanese(value: string): string {
   }
 
   return output;
+}
+
+function isKana(character: string): boolean {
+  return KANA_CHARACTER.test(character);
 }
 
 function decomposeKoreanSyllable(character: string): KoreanSyllable | null {
