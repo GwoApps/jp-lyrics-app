@@ -8,6 +8,7 @@ import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useAuthSession } from '@/lib/auth-session';
 import { fetchAndSyncSettings } from '@/lib/sync-settings';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
+import { APP_REPO_URL } from '@/lib/app-links';
 import { Sun, Moon, Settings } from 'lucide-react';
 
 function Nav() {
@@ -76,7 +77,7 @@ function Nav() {
             </Link>
           )}
           <a
-            href="https://github.com/GwoApps/jp-lyrics-app"
+            href={APP_REPO_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)]"

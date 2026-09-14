@@ -3,14 +3,13 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useId, useState } from 'react';
 import { ExternalLink, KeyRound, Loader2, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { APP_REPO_URL } from '@/lib/app-links';
 
 interface SpotifyLoginButtonProps {
   children: ReactNode;
   className?: string;
   title?: string;
 }
-
-const GITHUB_URL = 'https://github.com/GwoApps/jp-lyrics-app';
 
 export default function SpotifyLoginButton({ children, className, title }: SpotifyLoginButtonProps) {
   const { t } = useI18n();
@@ -140,7 +139,7 @@ export default function SpotifyLoginButton({ children, className, title }: Spoti
                 <p className="mt-2">
                   {t('loginGate.selfHost')}{' '}
                   <a
-                    href={GITHUB_URL}
+                    href={APP_REPO_URL}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-0.5 font-medium text-[var(--primary)] hover:underline"
