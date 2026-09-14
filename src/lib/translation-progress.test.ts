@@ -64,6 +64,69 @@ test('extract ignores non-string primitives for progress purposes', () => {
   assert.deepEqual(extractCompletedArrayItems(streamed), ['a', 'b']);
 });
 
+// --- issue #278: index-aligned extraction (persistence contract) ------------
+// The default extraction COMPRESSES the array (non-string items are skipped),
+// which is fine for counting but wrong for writing partial translations back
+// to request lines. `indexAligned: true` keeps every slot at its line index,
+// exactly like parseTranslationCache does for stored caches.
+
+test('index-aligned extraction keeps null items at their original index', () => {
+  const streamed = '["第一行译文", null, "第三行译文", "第四行译文"]';
+  assert.deepEqual(extractCompletedArrayItems(streamed, { indexAligned: true }), [
+    '第一行译文', '', '第三行译文', '第四行译文',
+  ]);
+  // The progress-counting default keeps compressing (existing contract).
+  assert.deepEqual(extractCompletedArrayItems(streamed), ['第一行译文', '第三行译文', '第四行译文']);
+});
+
+test('index-aligned extraction reserves a slot for numbers', () => {
+  const streamed = '["a", 0, 42, "d"]';
+  assert.deepEqual(extractCompletedArrayItems(streamed, { indexAligned: true }), ['a', '', '', 'd']);
+  assert.equal(countCompletedArrayItems('["a", 0, 42, "d"]'), 4);
+  // No array opening bracket -> nothing to align to.
+  assert.deepEqual(extractCompletedArrayItems('no array here', { indexAligned: true }), []);
+});
+
+test('index-aligned extraction reserves a slot for nested arrays and objects', () => {
+  const streamed = '["a", ["nested", "array"], {"translation": "b"}, "d"]';
+  assert.deepEqual(extractCompletedArrayItems(streamed, { indexAligned: true }), ['a', '', '', 'd']);
+  // The comma inside the nested array must not split the element.
+  assert.deepEqual(extractCompletedArrayItems(streamed), ['a', 'd']);
+});
+
+test('index-aligned extraction holds slots for a still-streaming non-string item', () => {
+  const streamed = '["a", {"translation": "b"}, "c';
+  // "a" is complete; the object before the comma is complete (slot reserved);
+  // "c never closed → not yielded in either mode.
+  assert.deepEqual(extractCompletedArrayItems(streamed, { indexAligned: true }), ['a', '']);
+  assert.deepEqual(extractCompletedArrayItems(streamed), ['a']);
+});
+
+test('index-aligned extraction is the source of truth for the persisted count', () => {
+  const streamed = '["a", null, 7, ["x"], "b"]';
+  const aligned = extractCompletedArrayItems(streamed, { indexAligned: true });
+  // The persisted lines ARE this array — its length is what the route reports
+  // as requestDone, so no separate (compressing) count can disagree with it.
+  assert.deepEqual(aligned, ['a', '', '', '', 'b']);
+  // Default (progress) counting is unchanged: only string items count, and the
+  // array it returns is still compressed.
+  assert.deepEqual(extractCompletedArrayItems(streamed), ['a', 'b']);
+  assert.equal(countCompletedArrayItems('["a", "b", "c"]'), 3);
+  // A still-open trailing element is counted by neither mode.
+  const streaming = '["a", null, "b';
+  assert.deepEqual(extractCompletedArrayItems(streaming, { indexAligned: true }), ['a', '']);
+  assert.equal(countCompletedArrayItems(streaming), 2);
+});
+
+test('index-aligned extraction matches parseTranslationCache for a damaged cache', async () => {
+  const { parseTranslationCache } = await import('./translation/parse.ts');
+  const raw = '["第一行", null, 3, ["嵌套"], "第五行"]';
+  assert.deepEqual(
+    extractCompletedArrayItems(raw, { indexAligned: true }),
+    parseTranslationCache(raw, 5),
+  );
+});
+
 test('computeCoverage counts non-empty source lines with a non-empty translation', () => {
   const lines = ['one', 'two', 'three'];
   const cache = ['一', '', '三'];

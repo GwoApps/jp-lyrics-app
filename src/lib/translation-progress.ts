@@ -10,6 +10,15 @@
  * array brackets and quoted strings (escaped quotes included). Depth is
  * relative to the opening bracket of the top-level array (which is consumed
  * before scanning begins), so a `]` at depth 0 closes the top-level array.
+ *
+ * Two extraction modes (see `extractCompletedArrayItems`):
+ *   - default — progress COUNTING contract: non-string items (null / numbers /
+ *     objects / nested arrays) are skipped, so the count is "how many
+ *     translation strings arrived".
+ *   - `indexAligned: true` — PERSISTENCE contract: the same scanner, but a
+ *     non-string item is emitted as `''` AT ITS ORIGINAL INDEX (issue #278),
+ *     matching `parseTranslationCache` so a streamed partial never shifts the
+ *     lines it is written to.
  */
 
 /**
@@ -36,7 +45,15 @@ export function computeCoverage(
   return { covered, coverable };
 }
 
-/** Count the complete string elements present in a JSON array that may still be streaming. */
+/**
+ * Count the complete STRING elements present in a JSON array that may still be
+ * streaming — the progress-counting contract.
+ *
+ * Non-string items (null / numbers / objects / nested arrays) are skipped, so
+ * the number is "how many translations arrived", not "how many request lines
+ * are decided". Use `extractCompletedArrayItems(text, { indexAligned: true })`
+ * when the count must match the lines that are actually persisted (issue #278).
+ */
 export function countCompletedArrayItems(text: string): number {
   const start = text.indexOf('[');
   if (start === -1) return 0;
@@ -82,8 +99,25 @@ export function countCompletedArrayItems(text: string): number {
   return count + (elementStarted && !inString ? 1 : 0);
 }
 
-/** Extract the complete string elements from a possibly-unterminated JSON array, in stream order. */
-export function extractCompletedArrayItems(text: string): string[] {
+/**
+ * Extract the complete elements from a possibly-unterminated JSON array.
+ *
+ * Default — progress contract: only complete string elements are returned, in
+ * stream order. Non-string items are skipped, which COMPRESSES the array (the
+ * item after a `null` moves up one index). Only safe where the result is used
+ * to count, never to write translations back to lyric lines.
+ *
+ * `{ indexAligned: true }` — persistence contract (issue #278): non-string
+ * items (null / numbers / objects / nested arrays) are emitted as `''` AT THEIR
+ * ORIGINAL INDEX instead of being skipped, so result[i] always belongs to
+ * request line i. Identical to `parseTranslationCache`'s policy for stored
+ * caches, and the only safe mode for persisting partial stream results.
+ */
+export function extractCompletedArrayItems(
+  text: string,
+  opts: { indexAligned?: boolean } = {},
+): string[] {
+  const indexAligned = opts.indexAligned === true;
   const start = text.indexOf('[');
   if (start === -1) return [];
   const items: string[] = [];
@@ -93,6 +127,24 @@ export function extractCompletedArrayItems(text: string): string[] {
   let depth = 0;
   let current = '';
   let closed = false;
+  /**
+   * Classify one complete top-level element.
+   *
+   * Progress mode only keeps parseable strings; index-aligned mode always
+   * reserves a slot so following items keep their line numbers (a non-string
+   * item is visible precisely because `current` does not start with a quote).
+   */
+  const push = () => {
+    const trimmed = current.trim();
+    if (trimmed.startsWith('"')) {
+      // A quoted element that reaches a separator/terminator is complete, so
+      // JSON.parse can only fail on malformed escaping — drop that item rather
+      // than invent a translation (unchanged behaviour).
+      try { items.push(JSON.parse(trimmed) as string); } catch { /* ignore */ }
+      return;
+    }
+    if (indexAligned && trimmed !== '') items.push('');
+  };
   while (i < text.length) {
     const ch = text[i];
     if (inString) {
@@ -107,10 +159,7 @@ export function extractCompletedArrayItems(text: string): string[] {
     if (ch === '[') { depth++; current += ch; i++; continue; }
     if (ch === ']') {
       if (depth === 0) {
-        const trimmed = current.trim();
-        if (trimmed.startsWith('"')) {
-          try { items.push(JSON.parse(trimmed) as string); } catch { /* ignore */ }
-        }
+        push();
         closed = true;
         break;
       }
@@ -120,10 +169,7 @@ export function extractCompletedArrayItems(text: string): string[] {
       continue;
     }
     if (ch === ',' && depth === 0) {
-      const trimmed = current.trim();
-      if (trimmed.startsWith('"')) {
-        try { items.push(JSON.parse(trimmed) as string); } catch { /* ignore */ }
-      }
+      push();
       current = '';
       i++;
       continue;
@@ -131,12 +177,9 @@ export function extractCompletedArrayItems(text: string): string[] {
     current += ch;
     i++;
   }
-  // Open array without a closing bracket: a complete trailing string survives.
-  if (!closed) {
-    const trimmed = current.trim();
-    if (trimmed.startsWith('"') && !inString) {
-      try { items.push(JSON.parse(trimmed) as string); } catch { /* ignore */ }
-    }
-  }
+  // Open array without a closing bracket: a complete trailing element survives.
+  // Only a finished element may be emitted — while `inString` the element is
+  // still arriving, so its (unterminated) text is never yielded.
+  if (!closed && !inString) push();
   return items;
 }

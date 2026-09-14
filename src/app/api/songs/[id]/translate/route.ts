@@ -384,9 +384,15 @@ export async function POST(
           coverable: coverage.coverable,
         });
         const emitProgress = (translationText: string) => {
-          const completed = extractCompletedArrayItems(translationText);
+          // Index-aligned extraction (issue #278): the SAME array is used both
+          // for the live count and for the partial lines persisted on
+          // cancel/failure, so a non-string item (null / number / nested array)
+          // in the streamed response can never shift the lines after it. This
+          // matches parseTranslationCache's policy for stored caches — the
+          // default (compressing) extraction stays the counting contract.
+          const completed = extractCompletedArrayItems(translationText, { indexAligned: true });
           partial = completed.slice(0, requestTotal);
-          const requestDone = Math.min(completed.length, requestTotal);
+          const requestDone = partial.length;
           if (requestDone > 0) {
             // Live estimate: seed the whole-song cache with the slice-relative
             // resolved lines we know about so far, then compute coverage.

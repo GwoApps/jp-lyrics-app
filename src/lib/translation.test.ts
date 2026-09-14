@@ -498,6 +498,19 @@ test('streamed translation rejects a JSON fragment with no complete item (issue 
   );
 });
 
+test('streamed translation keeps null items index-aligned (issue #278)', async () => {
+  const { streamTranslateLyricLines } = await import('./translation/index.ts');
+  const out = await streamTranslateLyricLines(
+    ['一つ', '二つ', '三つ', '四つ'],
+    CFG,
+    () => {},
+    openAIStreamFetch(['["第一行"', ', null, "第三行", "第四行"]']),
+  );
+  // The null line stays empty at ITS index — the later translations must not
+  // shift up into it (that is what corrupted the resume path).
+  assert.deepEqual(out, ['第一行', '', '第三行', '第四行']);
+});
+
 test('discovers and sorts models from an OpenAI-compatible /models endpoint', async () => {
   const { discoverTranslationModels } = await import('./translation/index.ts');
   const captured: { current?: CapturedCall } = {};
