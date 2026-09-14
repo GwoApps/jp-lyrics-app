@@ -10,8 +10,9 @@
  *   translations across batches, plus song title/artist context.
  * - Automatic retry with exponential backoff for transient failures
  *   (network errors, 5xx, provider 429). Quota errors are never retried.
- * - JSON-array-first response parsing with a newline fallback and strict
- *   line-count normalization.
+ * - JSON-array-first response parsing: JSON-shaped responses are never split
+ *   by newline — incomplete JSON is salvaged down to its complete items and an
+ *   untrustworthy response is rejected with `translation_invalid_response`.
  *
  * Environment variables:
  *   TRANSLATION_PROVIDER  'openai' | 'anthropic' | 'workers-ai'  (default: openai)
@@ -40,7 +41,7 @@ import {
   type TranslationTestResult,
 } from './config.ts';
 import { DEFAULT_SYSTEM_PROMPT, GLOSSARY_PROMPT, renderSystemPrompt } from './prompts.ts';
-import { extractJsonArray, normalizeTranslations } from './parse.ts';
+import { extractJsonArray, parseTranslationResponse } from './parse.ts';
 
 // Re-export the public configuration API so `@/lib/translation` keeps its
 // original surface (callers are untouched by the module split).
@@ -576,10 +577,17 @@ export async function streamTranslateLyricLines(
     text = await streamOpenAI(lines, cfg, onDelta, fetchImpl, ctx, signal);
   }
 
-  const parsed = extractJsonArray(text);
-  if (parsed !== null) return normalizeTranslations(lines, parsed);
-  const fallback = text.split('\n').map((line) => line.trim());
-  return normalizeTranslations(lines, fallback);
+  // Parse through the shared response contract (issue #271): a JSON-looking
+  // response is never split by newline — incomplete JSON is salvaged into the
+  // complete items only, and a response that cannot be trusted is rejected as
+  // `translation_invalid_response` instead of being written as a translation.
+  const { translations, shape, filled } = parseTranslationResponse(text, lines);
+  if (shape !== 'json') {
+    console.warn(
+      `[translation] non-canonical streamed response (shape=${shape}, filled ${filled}/${lines.length}) — report provider adherence`,
+    );
+  }
+  return translations;
 }
 
 /** OpenAI-compatible streaming chat completions (DeepSeek etc.). */
@@ -756,10 +764,7 @@ export async function translateLyricLines(
     return await requestOpenAI(lines, cfg, fetchImpl, ctx);
   }, RETRY_ATTEMPTS, RETRY_BASE_DELAY_MS);
 
-  // Prefer a JSON array; fall back to newline-separated plain text.
-  const parsed = extractJsonArray(text);
-  if (parsed !== null) return normalizeTranslations(lines, parsed);
-
-  const fallback = text.split('\n').map((line) => line.trim());
-  return normalizeTranslations(lines, fallback);
+  // Parse through the shared response contract (issue #271) — JSON-shaped
+  // responses are salvaged/rejected, never split by newline.
+  return parseTranslationResponse(text, lines).translations;
 }

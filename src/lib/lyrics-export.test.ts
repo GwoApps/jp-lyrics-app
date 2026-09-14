@@ -245,3 +245,40 @@ test('buildExport LRC with translation keeps untimed rows and multi-timestamp pr
     `[ti:${SONG.title}]\n[ar:${SONG.artist}]\n[00:01.000][00:02.000]桜が舞う\n[00:01.000][00:02.000]Cherry blossoms dance\n未标记行`,
   );
 });
+
+test('buildExport LRC with translation aligns when an untimed row precedes timed rows', () => {
+  // Partial timeline: 'A' is untimed (not yet marked) yet still corresponds to
+  // source line 0 and must consume one source row, so '[00:10]B' pairs with
+  // source line 1 (B) and '[00:20]C' with source line 2 (C) — none shifted left.
+  const song = {
+    title: '',
+    artist: '',
+    lyrics_raw: 'A\nB\nC\nD\nE',
+    lyrics_synced: 'A\n[00:10.000]B\n[00:20.000]C',
+    lyrics_furigana: '[]',
+    lyrics_translation: JSON.stringify(['TA', 'TB', 'TC', 'TD', 'TE']),
+    reading_scheme: 'ja-kana' as const,
+  };
+  const lrc = buildExport(song, { format: 'lrc', includeTranslation: true });
+  assert.equal(
+    lrc.body,
+    'A\n[00:10.000]B\n[00:10.000]TB\n[00:20.000]C\n[00:20.000]TC',
+  );
+});
+
+test('buildExport LRC with translation aligns when an untimed row sits between timed rows', () => {
+  const song = {
+    title: '',
+    artist: '',
+    lyrics_raw: 'A\nB\nC\nD\nE',
+    lyrics_synced: '[00:10.000]A\nB\n[00:20.000]C',
+    lyrics_furigana: '[]',
+    lyrics_translation: JSON.stringify(['TA', 'TB', 'TC', 'TD', 'TE']),
+    reading_scheme: 'ja-kana' as const,
+  };
+  const lrc = buildExport(song, { format: 'lrc', includeTranslation: true });
+  assert.equal(
+    lrc.body,
+    '[00:10.000]A\n[00:10.000]TA\nB\n[00:20.000]C\n[00:20.000]TC',
+  );
+});

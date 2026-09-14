@@ -378,6 +378,8 @@
     "nextLine": "次の行を選択",
     "markAt": "現在行を {time} に設定",
     "waitingSpotify": "Spotify でこの曲を再生してください",
+    "manualTimePlaceholder": "タイムスタンプを手動入力（例: 1:23.450）",
+    "setManualTime": "設定",
     "shortcutMark": "Enter で設定",
     "shortcutNavigate": "↑↓ で行を移動",
     "shortcutSave": "Ctrl/⌘ + S で保存",
@@ -829,7 +831,10 @@
     "fillMissingDone": "{count} 行の翻訳を補完しました",
     "fillMissingEmpty": "欠落している翻訳行はありません",
     "retranslateLine": "この行を再翻訳",
-    "retranslateLineDone": "この行を再翻訳しました"
+    "retranslateLineDone": "この行を再翻訳しました",
+    "retranslateLineEmpty": "この行の翻訳は返されなかったため、元の翻訳を保持しました",
+    "retranslateConfirmTitle": "この行の既存の翻訳を上書きしますか？",
+    "retranslateConfirmBody": "再翻訳すると、この行の既存の翻訳が AI の結果で上書きされます。"
   },
   "settings": {
     "title": "個人設定",

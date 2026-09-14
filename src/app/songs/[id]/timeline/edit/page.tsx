@@ -465,6 +465,7 @@ export default function TimelineEditorPage() {
         liveProgress={liveProgress}
         canUseSpotifyTime={canUseSpotifyTime}
         onMark={markCurrentLine}
+        onMarkManual={(timeMs) => setLineTime(currentIndex, timeMs)}
         onSelectPrev={() => selectLine(currentIndex - 1)}
         onSelectNext={() => selectLine(currentIndex + 1)}
       />

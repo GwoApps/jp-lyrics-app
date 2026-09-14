@@ -378,6 +378,8 @@
     "nextLine": "選擇下一行",
     "markAt": "標記目前行於 {time}",
     "waitingSpotify": "等待 Spotify 播放本歌曲",
+    "manualTimePlaceholder": "手動輸入時間戳，如 1:23.450",
+    "setManualTime": "設定",
     "shortcutMark": "Enter 打點",
     "shortcutNavigate": "↑↓ 切換行",
     "shortcutSave": "Ctrl/⌘ + S 儲存",
@@ -829,7 +831,10 @@
     "fillMissingDone": "已補齊 {count} 行翻譯",
     "fillMissingEmpty": "沒有缺失的翻譯行",
     "retranslateLine": "重新翻譯此行",
-    "retranslateLineDone": "已重新翻譯此行"
+    "retranslateLineDone": "已重新翻譯此行",
+    "retranslateLineEmpty": "此行未回傳譯文，已保留原有譯文",
+    "retranslateConfirmTitle": "覆蓋此行已有譯文？",
+    "retranslateConfirmBody": "重新翻譯會用 AI 結果覆蓋此行已有的譯文。"
   },
   "settings": {
     "title": "個人設定",
