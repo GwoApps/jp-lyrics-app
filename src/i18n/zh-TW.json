@@ -131,7 +131,14 @@
     "errorLoginRequired": "請先登入",
     "errorForbidden": "沒有權限執行此操作",
     "collectionNotFound": "收藏集不存在或已刪除",
-    "collectionNameRequired": "請輸入收藏集名稱"
+    "collectionNameRequired": "請輸入收藏集名稱",
+    "deleteCollectionLabel": "刪除收藏集「{name}」",
+    "clearCollectionFilterLabel": "取消篩選收藏集「{name}」",
+    "filterByCollection": "篩選收藏集「{name}」的歌曲",
+    "unfilterByCollection": "取消篩選收藏集「{name}」",
+    "toggleCollectionsLabel": "管理收藏集",
+    "deleteCollectionConfirmTitle": "確定刪除收藏集「{name}」？",
+    "deleteCollectionConfirmBody": "此操作不可撤銷。"
   },
   "song": {
     "notFound": "找不到歌曲",

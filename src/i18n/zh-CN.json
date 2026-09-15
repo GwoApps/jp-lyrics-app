@@ -131,7 +131,14 @@
     "errorLoginRequired": "请先登录",
     "errorForbidden": "没有权限执行此操作",
     "collectionNotFound": "收藏夹不存在或已删除",
-    "collectionNameRequired": "请输入收藏夹名称"
+    "collectionNameRequired": "请输入收藏夹名称",
+    "deleteCollectionLabel": "删除收藏夹「{name}」",
+    "clearCollectionFilterLabel": "取消筛选收藏夹「{name}」",
+    "filterByCollection": "筛选收藏夹「{name}」的歌曲",
+    "unfilterByCollection": "取消筛选收藏夹「{name}」",
+    "toggleCollectionsLabel": "管理收藏夹",
+    "deleteCollectionConfirmTitle": "确定删除收藏夹「{name}」？",
+    "deleteCollectionConfirmBody": "此操作不可撤销。"
   },
   "song": {
     "notFound": "找不到歌曲",

@@ -131,7 +131,14 @@
     "errorLoginRequired": "先にログインしてください",
     "errorForbidden": "この操作を行う権限がありません",
     "collectionNotFound": "コレクションが見つからないか、既に削除されています",
-    "collectionNameRequired": "コレクション名を入力してください"
+    "collectionNameRequired": "コレクション名を入力してください",
+    "deleteCollectionLabel": "コレクション「{name}」を削除",
+    "clearCollectionFilterLabel": "コレクション絞り込み「{name}」を解除",
+    "filterByCollection": "コレクション「{name}」で曲を絞り込む",
+    "unfilterByCollection": "コレクション絞り込み「{name}」を解除",
+    "toggleCollectionsLabel": "コレクションを管理",
+    "deleteCollectionConfirmTitle": "コレクション「{name}」を削除しますか？",
+    "deleteCollectionConfirmBody": "この操作は取り消せません。"
   },
   "song": {
     "notFound": "曲が見つかりません",
