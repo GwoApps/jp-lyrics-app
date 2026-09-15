@@ -70,6 +70,7 @@
     "deleted": "削除しました",
     "playlistImport": "プレイリスト取込",
     "playlistImportTitle": "Spotifyプレイリストから一括取込",
+    "playlistImportHint": "Spotifyプレイリストのリンクを貼り付けてください。確認後、1曲ずつ取り込み、進行状況を表示します。",
     "playlistUrlPlaceholder": "SpotifyプレイリストURLを入力...",
     "playlistImportBtn": "一括取込",
     "playlistImporting": "取込中...",

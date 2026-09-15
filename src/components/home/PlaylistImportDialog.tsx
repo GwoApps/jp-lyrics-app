@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
-import { Download, Loader2, AlertTriangle, X } from 'lucide-react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Loader2, AlertTriangle, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { useModalFocus } from '@/hooks/useModalFocus';
 import { importErrorMsg } from '@/lib/import-errors';
 import type { SongItem } from '@/lib/types';
 import ConfirmDialog from '@/components/ConfirmDialog';
@@ -12,6 +13,8 @@ interface PlaylistImportDialogProps {
   open: boolean;
   /** Fired with the refreshed song list after a successful import. */
   onImported: (songs: SongItem[]) => void;
+  /** Fired when the user dismisses the dialog (backdrop click, Escape, Cancel/Close). */
+  onClose: () => void;
 }
 
 interface PlaylistTrackResult {
@@ -50,32 +53,73 @@ interface ResumeState {
   processed: number;
 }
 
+function readResumeState(): ResumeState | null {
+  try {
+    if (typeof window === 'undefined') return null;
+    const raw = window.localStorage.getItem(RESUME_KEY);
+    return raw ? (JSON.parse(raw) as ResumeState) : null;
+  } catch { /* storage unavailable */ }
+  return null;
+}
+
 /**
- * Spotify playlist URL importer.
+ * Spotify playlist URL importer, shown as a modal dialog.
+ *
+ * Two phases, both inside the same dialog:
+ *   1. confirm — paste the playlist URL and press Import;
+ *   2. progress — live per-track progress, counts, cancel, and (on success) the
+ *      summary plus the low-confidence review list.
  *
  * Imports run as a series of short chunked requests (`POST` creates a job,
- * repeated `PUT`s process one chunk each). The dialog shows live per-track
- * progress, supports cancel, and can resume an interrupted import from
- * localStorage (a timed-out / crashed / refreshed page is not lost).
+ * repeated `PUT`s process one chunk each), so the progress stays live without a
+ * long-lived connection. An interrupted import can be resumed from localStorage
+ * (a timed-out / crashed / refreshed page is not lost).
+ *
+ * While a chunk loop is running the dialog cannot be dismissed (backdrop click
+ * or Escape) — the progress must stay visible and the user leaves through
+ * Cancel, which also tells the server to stop the job.
  */
-export default function PlaylistImportDialog({ open, onImported }: PlaylistImportDialogProps) {
+export default function PlaylistImportDialog({ open, onImported, onClose }: PlaylistImportDialogProps) {
   const { t } = useI18n();
   const [url, setUrl] = useState('');
   const [importing, setImporting] = useState(false);
   const [job, setJob] = useState<JobSummary | null>(null);
   const [currentTitle, setCurrentTitle] = useState('');
   const [result, setResult] = useState<PlaylistTrackResult[]>([]);
-  const [resumeState, setResumeState] = useState<ResumeState | null>(() => {
-    try {
-      if (typeof window === 'undefined') return null;
-      const raw = window.localStorage.getItem(RESUME_KEY);
-      return raw ? (JSON.parse(raw) as ResumeState) : null;
-    } catch { /* storage unavailable */ }
-    return null;
-  });
+  const [resumeState, setResumeState] = useState<ResumeState | null>(readResumeState);
   const [alert, setAlert] = useState<{ message: string } | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const cancelRef = useRef(false);
+  const titleId = useId();
+  const hintId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const urlInputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * Close the dialog and drop the transient import state, so reopening always
+   * starts from a clean confirm form (an unfinished import survives through the
+   * localStorage resume state instead).
+   *
+   * Mid-import this is a no-op: the running progress must stay on screen until
+   * the user cancels it explicitly — so backdrop click and Escape do nothing.
+   */
+  const handleClose = useCallback(() => {
+    if (importing) return;
+    setUrl('');
+    setJob(null);
+    setResult([]);
+    setCurrentTitle('');
+    onClose();
+  }, [importing, onClose]);
+
+  useModalFocus({ open, dialogRef, initialFocusRef: urlInputRef, onEscape: handleClose });
+
+  // The import summary toast is transient, matching the other copy/import paths.
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   const persistResume = useCallback((state: ResumeState | null) => {
     try {
@@ -250,124 +294,182 @@ export default function PlaylistImportDialog({ open, onImported }: PlaylistImpor
   const rateLimitedTracks = result.filter((track) => track.rateLimited) ?? [];
   const isDone = job?.status === 'completed';
   const isCancelled = job?.status === 'cancelled';
+  /** Confirm form vs. progress/summary view. */
+  const showProgress = importing || isDone || isCancelled;
+  const percent = job && job.total > 0 ? Math.round((job.processed / job.total) * 100) : 0;
 
   return (
     <>
       {open && (
-        <div className="mb-4 rounded-lg bg-[var(--card)] border border-[var(--border)] p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Download className="h-4 w-4 text-[var(--primary)]" />
-            <span className="text-sm font-medium">{t('home.playlistImportTitle')}</span>
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder={t('home.playlistUrlPlaceholder')}
-              className="flex-1 rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-xs outline-none focus:border-[var(--primary)] transition-colors placeholder:text-[var(--muted-foreground)]/50"
-              disabled={importing}
-            />
-            <button
-              onClick={() => void handleImport()}
-              disabled={importing || !url.trim()}
-              className="inline-flex items-center gap-1.5 rounded-md bg-[var(--primary)] px-4 py-2 text-xs font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-              <span>{importing ? t('home.playlistImporting') : t('home.playlistImportBtn')}</span>
-            </button>
-          </div>
-
-          {!importing && resumeState && !isDone && !isCancelled && (
-            <div className="mt-3 rounded-md border border-[var(--border)] bg-[var(--accent)] p-2 text-xs">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[var(--muted-foreground)]">
-                  {t('home.playlistImportResumeHint', { total: String(resumeState.total), processed: String(resumeState.processed) })}
-                </span>
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    onClick={() => void handleResume()}
-                    className="rounded-md bg-[var(--primary)] px-2.5 py-1 text-xs font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90"
-                  >
-                    {t('home.playlistImportResume')}
-                  </button>
-                  <button
-                    onClick={() => { persistResume(null); setResumeState(null); }}
-                    className="rounded-md border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-                  >
-                    {t('common.clear')}
-                  </button>
-                </div>
-              </div>
+        <div className="confirm-overlay" onClick={handleClose}>
+          <div
+            className="import-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            ref={dialogRef}
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div id={titleId} className="import-dialog-title">
+              {t('home.playlistImportTitle')}
             </div>
-          )}
 
-          {job && (importing || isDone || isCancelled) && (
-            <div className="mt-3 text-xs text-[var(--muted-foreground)]">
-              {importing && (
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5 truncate">
-                    <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                    {currentTitle ? (
-                      <span className="truncate">
-                        {currentTitle}{t('home.playlistImportProcessingSuffix')}
-                      </span>
-                    ) : t('home.playlistImportPreparing')}
-                  </span>
-                  <button
-                    onClick={() => void handleCancel()}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[var(--border)] px-2 py-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-                  >
-                    <X className="h-3 w-3" />
-                    {t('home.playlistImportCancel')}
-                  </button>
-                </div>
-              )}
-              <div className="mt-2 flex items-center gap-2">
-                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--border)]">
-                  <div
-                    className="h-full rounded-full bg-[var(--primary)] transition-all duration-300"
-                    style={{ width: `${job.total > 0 ? Math.round((job.processed / job.total) * 100) : 0}%` }}
-                  />
-                </div>
-                <span className="shrink-0 tabular-nums">
-                  {job.processed}/{job.total}
-                </span>
-              </div>
-              <div className="mt-2">
-                {t('home.playlistImportResult', {
-                  total: String(job.total),
-                  imported: String(job.imported),
-                  skipped: String(job.skipped),
-                  failed: String(job.failed),
-                })}
-              </div>
-              {isDone && reviewTracks.length > 0 && (
-                <div className="mt-2 rounded-md border border-[var(--border)] bg-[var(--accent)] p-2">
-                  <div className="flex items-center gap-1.5 font-medium text-[var(--warning)]">
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    <span>{t('home.playlistImportReviewHeader', { count: String(reviewTracks.length) })}</span>
+            {!showProgress && (
+              <>
+                <p id={hintId} className="import-dialog-hint">{t('home.playlistImportHint')}</p>
+                <input
+                  ref={urlInputRef}
+                  type="text"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void handleImport(); }}
+                  placeholder={t('home.playlistUrlPlaceholder')}
+                  aria-label={t('home.playlistImportTitle')}
+                  aria-describedby={hintId}
+                  className="import-dialog-input"
+                  disabled={importing}
+                />
+
+                {resumeState && (
+                  <div className="import-dialog-note">
+                    <span className="import-dialog-note-text">
+                      {t('home.playlistImportResumeHint', { total: String(resumeState.total), processed: String(resumeState.processed) })}
+                    </span>
+                    <div className="import-dialog-note-actions">
+                      <button
+                        type="button"
+                        className="confirm-dialog-btn confirm-dialog-btn--confirm"
+                        onClick={() => void handleResume()}
+                      >
+                        {t('home.playlistImportResume')}
+                      </button>
+                      <button
+                        type="button"
+                        className="confirm-dialog-btn confirm-dialog-btn--cancel"
+                        onClick={() => { persistResume(null); setResumeState(null); }}
+                      >
+                        {t('common.clear')}
+                      </button>
+                    </div>
                   </div>
-                  <ul className="mt-1.5 max-h-32 space-y-1 overflow-y-auto">
-                    {reviewTracks.map((track, index) => (
-                      <li key={`${track.title}-${index}`} className="truncate">
-                        {track.title}{track.artist ? ` — ${track.artist}` : ''}
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-1.5 text-[var(--muted-foreground)]">{t('home.playlistImportReviewHint')}</p>
+                )}
+
+                <div className="confirm-dialog-actions import-dialog-actions">
+                  <button
+                    type="button"
+                    className="confirm-dialog-btn confirm-dialog-btn--cancel"
+                    onClick={handleClose}
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    className="confirm-dialog-btn confirm-dialog-btn--confirm"
+                    onClick={() => void handleImport()}
+                    disabled={importing || !url.trim()}
+                  >
+                    {t('home.playlistImportBtn')}
+                  </button>
                 </div>
-              )}
-              {isDone && rateLimitedTracks.length > 0 && (
-                <div className="mt-2 rounded-md border border-[var(--border)] bg-[var(--accent)] p-2 text-[var(--muted-foreground)]">
-                  {t('home.playlistImportRateLimited')}
+              </>
+            )}
+
+            {showProgress && job && (
+              <>
+                <div className="import-dialog-progress">
+                  <div className="import-dialog-status">
+                    {importing ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                        <span className="truncate">
+                          {currentTitle
+                            ? `${currentTitle}${t('home.playlistImportProcessingSuffix')}`
+                            : t('home.playlistImportPreparing')}
+                        </span>
+                      </>
+                    ) : (
+                      <span>{isCancelled ? t('home.playlistImportCancelled') : t('home.playlistImportResult', {
+                        total: String(job.total),
+                        imported: String(job.imported),
+                        skipped: String(job.skipped),
+                        failed: String(job.failed),
+                      })}</span>
+                    )}
+                  </div>
+
+                  <div className="import-dialog-bar">
+                    <div
+                      className="import-dialog-bar-track"
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={job.total}
+                      aria-valuenow={job.processed}
+                      aria-label={t('home.playlistImportTitle')}
+                    >
+                      <div className="import-dialog-bar-fill" style={{ width: `${percent}%` }} />
+                    </div>
+                    <span className="import-dialog-count">{job.processed}/{job.total}</span>
+                  </div>
+
+                  {importing && (
+                    <div className="import-dialog-summary">
+                      {t('home.playlistImportResult', {
+                        total: String(job.total),
+                        imported: String(job.imported),
+                        skipped: String(job.skipped),
+                        failed: String(job.failed),
+                      })}
+                    </div>
+                  )}
+
+                  {isDone && reviewTracks.length > 0 && (
+                    <div className="import-dialog-note import-dialog-note--stacked">
+                      <div className="import-dialog-note-title">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        <span>{t('home.playlistImportReviewHeader', { count: String(reviewTracks.length) })}</span>
+                      </div>
+                      <ul className="import-dialog-list">
+                        {reviewTracks.map((track, index) => (
+                          <li key={`${track.title}-${index}`} className="truncate">
+                            {track.title}{track.artist ? ` — ${track.artist}` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="import-dialog-note-text">{t('home.playlistImportReviewHint')}</p>
+                    </div>
+                  )}
+
+                  {isDone && rateLimitedTracks.length > 0 && (
+                    <div className="import-dialog-note import-dialog-note--stacked">
+                      <span className="import-dialog-note-text">{t('home.playlistImportRateLimited')}</span>
+                    </div>
+                  )}
                 </div>
-              )}
-              {isCancelled && (
-                <div className="mt-2 text-[var(--muted-foreground)]">{t('home.playlistImportCancelled')}</div>
-              )}
-            </div>
-          )}
+
+                <div className="confirm-dialog-actions import-dialog-actions">
+                  {importing ? (
+                    <button
+                      type="button"
+                      className="confirm-dialog-btn confirm-dialog-btn--cancel"
+                      onClick={() => void handleCancel()}
+                    >
+                      <X className="h-3 w-3" />
+                      {t('home.playlistImportCancel')}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="confirm-dialog-btn confirm-dialog-btn--confirm"
+                      onClick={handleClose}
+                    >
+                      {t('common.close')}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 

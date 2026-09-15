@@ -513,6 +513,8 @@ export default function HomePage() {
           {spotify?.connected && (
             <button
               onClick={() => setShowPlaylistImport(!showPlaylistImport)}
+              aria-haspopup="dialog"
+              aria-expanded={showPlaylistImport}
               className={`inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors ${
                 showPlaylistImport
                   ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
@@ -531,6 +533,7 @@ export default function HomePage() {
       <PlaylistImportDialog
         open={showPlaylistImport}
         onImported={handlePlaylistImported}
+        onClose={() => setShowPlaylistImport(false)}
       />
 
       {/* Search & Filter: mobile keeps controls on one compact row and expands search on demand. */}

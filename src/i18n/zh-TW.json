@@ -70,6 +70,7 @@
     "deleted": "已刪除",
     "playlistImport": "匯入播放清單",
     "playlistImportTitle": "從 Spotify 播放清單批次匯入",
+    "playlistImportHint": "貼上 Spotify 播放清單連結，確認後逐首匯入，匯入過程中顯示進度。",
     "playlistUrlPlaceholder": "輸入 Spotify 播放清單 URL...",
     "playlistImportBtn": "批次匯入",
     "playlistImporting": "匯入中...",
