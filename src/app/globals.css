@@ -411,6 +411,10 @@ textarea {
 .confirm-dialog-children .preview-toggle:hover { background: var(--accent); }
 .confirm-dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .confirm-dialog-btn {
+  /* inline-flex so an optional icon inside the button shares the text baseline:
+     Tailwind preflight renders `svg` as display:block, which would otherwise push
+     the label onto its own line and inflate the button height. */
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 500;
   cursor: pointer; border: 1px solid var(--border); transition: all 0.15s;
 }
