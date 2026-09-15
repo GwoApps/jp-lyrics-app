@@ -70,6 +70,7 @@
     "deleted": "Deleted",
     "playlistImport": "Import Playlist",
     "playlistImportTitle": "Batch import from Spotify playlist",
+    "playlistImportHint": "Paste a Spotify playlist link. After you confirm, tracks are imported one by one with live progress.",
     "playlistUrlPlaceholder": "Enter Spotify playlist URL...",
     "playlistImportBtn": "Import",
     "playlistImporting": "Importing...",

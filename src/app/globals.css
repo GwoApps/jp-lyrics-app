@@ -421,6 +421,42 @@ textarea {
 .confirm-dialog-btn--danger { background: var(--destructive); color: var(--destructive-foreground); border-color: var(--destructive); }
 .confirm-dialog-btn--danger:hover { opacity: 0.9; }
 
+/* Playlist Import Dialog — modal confirm form plus live import progress. */
+.import-dialog {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 16px; padding: 20px; max-width: 480px; width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  animation: dialogIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.import-dialog-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.import-dialog-hint { font-size: 12px; line-height: 1.7; color: var(--muted-foreground); margin-bottom: 12px; }
+.import-dialog-input {
+  width: 100%; border-radius: 8px; border: 1px solid var(--border); background: var(--input);
+  padding: 8px 12px; font-size: 13px; color: var(--foreground); outline: none;
+  transition: border-color 0.15s;
+}
+.import-dialog-input:focus { border-color: var(--primary); }
+.import-dialog-input::placeholder { color: var(--muted-foreground); opacity: 0.5; }
+.import-dialog-actions { margin-top: 16px; }
+.import-dialog-note {
+  margin-top: 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--accent); font-size: 12px; line-height: 1.6;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.import-dialog-note--stacked { display: block; }
+.import-dialog-note-title { display: flex; align-items: center; gap: 6px; font-weight: 500; color: var(--warning); }
+.import-dialog-note-text { color: var(--muted-foreground); }
+.import-dialog-note-actions { display: flex; flex-shrink: 0; gap: 8px; }
+.import-dialog-progress { font-size: 12px; color: var(--muted-foreground); }
+.import-dialog-status { display: flex; align-items: center; gap: 6px; min-height: 18px; }
+.import-dialog-bar { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.import-dialog-bar-track { height: 6px; flex: 1; overflow: hidden; border-radius: 999px; background: var(--border); }
+.import-dialog-bar-fill { height: 100%; border-radius: 999px; background: var(--primary); transition: width 0.3s ease; }
+.import-dialog-count { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.import-dialog-summary { margin-top: 8px; }
+.import-dialog-list { margin-top: 6px; max-height: 128px; overflow-y: auto; }
+.import-dialog-list li { margin-bottom: 4px; }
+
 /* Alert-style toast: follows shadcn's compact icon + description callout composition. */
 .toast {
   position: fixed;
