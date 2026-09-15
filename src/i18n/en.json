@@ -387,6 +387,7 @@
     "markAt": "Mark current line at {time}",
     "waitingSpotify": "Waiting for this song on Spotify",
     "manualTimePlaceholder": "Enter a timestamp, e.g. 1:23.450",
+    "invalidTimeFormat": "Timestamp must use m:ss.mmm format, e.g. 1:23.450",
     "setManualTime": "Set",
     "shortcutMark": "Enter to mark",
     "shortcutNavigate": "↑↓ to navigate",

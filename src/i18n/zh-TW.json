@@ -387,6 +387,7 @@
     "markAt": "標記目前行於 {time}",
     "waitingSpotify": "等待 Spotify 播放本歌曲",
     "manualTimePlaceholder": "手動輸入時間戳，如 1:23.450",
+    "invalidTimeFormat": "時間戳格式應為 m:ss.mmm，例如 1:23.450",
     "setManualTime": "設定",
     "shortcutMark": "Enter 打點",
     "shortcutNavigate": "↑↓ 切換行",

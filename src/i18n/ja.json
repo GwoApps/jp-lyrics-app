@@ -387,6 +387,7 @@
     "markAt": "現在行を {time} に設定",
     "waitingSpotify": "Spotify でこの曲を再生してください",
     "manualTimePlaceholder": "タイムスタンプを手動入力（例: 1:23.450）",
+    "invalidTimeFormat": "タイムスタンプは m:ss.mmm 形式で入力してください（例: 1:23.450）",
     "setManualTime": "設定",
     "shortcutMark": "Enter で設定",
     "shortcutNavigate": "↑↓ で行を移動",
