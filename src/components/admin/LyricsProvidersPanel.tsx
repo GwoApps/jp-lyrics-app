@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { ApiError } from '@/client/api/request';
+import { lyricsProviderSaveErrorKey } from '@/lib/lyrics-provider/error-keys';
 import {
   createLyricsProvider,
   deleteLyricsProvider,
@@ -27,12 +28,6 @@ import {
 import BuiltinSourceConfigFields from './BuiltinSourceConfigFields';
 import SortableProviderRow, { ProviderRowSummary } from './LyricsProviderRow';
 import { EMPTY_PROVIDER_FORM, type ListResponse, type ProviderTestResult, type ProviderWire } from './lyrics-provider-types';
-
-/** Capitalise a snake-case error code for the i18n key lookup. */
-function capCode(code: string | undefined): string {
-  if (!code) return '';
-  return code.replace(/_/g, '').replace(/^\w/, (character) => character.toUpperCase());
-}
 
 /**
  * Admin "歌词源" panel (ISSUE #148 Phase 2): CRUD / test / reorder / enable &
@@ -146,12 +141,13 @@ export default function LyricsProvidersPanel() {
       closeDialog();
       await load(true);
     } catch (error) {
+      // Look the code up in the explicit code → key table: an unknown code falls
+      // back to the generic message instead of leaking the raw code or key.
       const code = error instanceof ApiError ? error.code : undefined;
+      const errorKey = lyricsProviderSaveErrorKey(code);
       setNotice({
         kind: 'err',
-        text: code
-          ? t(`admin.lyricsProviderError${capCode(code)}`)
-          : t('admin.lyricsProviderSaveFailed'),
+        text: errorKey ? t(errorKey) : t('admin.lyricsProviderSaveFailed'),
       });
     } finally {
       setSaving(false);
