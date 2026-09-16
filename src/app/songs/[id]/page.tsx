@@ -15,6 +15,7 @@ import ExperimentsPanel from '@/components/ExperimentsPanel';
 import Toast from '@/components/Toast';
 import TranslationStatusOverlay from '@/components/TranslationStatusOverlay';
 import SyncStatusOverlay from '@/components/SyncStatusOverlay';
+import SongTopStatusStack from '@/components/SongTopStatusStack';
 import { ToolbarMenu, buildReadingMenuItems } from '@/components/song/ToolbarMenu';
 import { MobileMenu } from '@/components/song/MobileMenu';
 import DownloadDialog from '@/components/song/DownloadDialog';
@@ -1015,12 +1016,18 @@ export default function SongViewPage() {
         />
       )}
 
+      {/* Top status stack (issue #282): the partial-translation banner, the
+          translation pill and the sync pill all used to copy the same
+          `fixed left-1/2 top-3` anchor, so any two of them overlapped (and ate
+          each other's buttons). They are now children of one top-center
+          container and stack vertically instead. */}
+      <SongTopStatusStack>
       {/* Persistent "partial translation" banner (issue #100): once the error
           pill is dismissed there is no other常驻 reminder that the song is
           only partially translated. Show a dismissible "已翻译 X/Y 行，点击继续"
           strip that re-opens the resume flow until the song is complete. */}
       {showPartialBanner && (
-        <div className="fixed left-1/2 top-3 z-[99] flex -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--primary)]/30 bg-[var(--card)]/95 px-3 py-1.5 text-xs shadow-sm backdrop-blur-sm">
+        <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-[var(--primary)]/30 bg-[var(--card)]/95 px-3 py-1.5 text-xs shadow-sm backdrop-blur-sm">
           <Languages className="h-3.5 w-3.5 shrink-0 text-[var(--primary)]" />
           <button
             type="button"
@@ -1046,7 +1053,7 @@ export default function SongViewPage() {
         </div>
       )}
 
-      {/* Translation status overlay — fixed at viewport level (not clipped by the lyrics panel): visible progress while translating, persistent error with dismiss + continue */}
+      {/* Translation status pill — viewport-level (not clipped by the lyrics panel): visible progress while translating, persistent error with dismiss + continue */}
       <TranslationStatusOverlay
         translating={data.translating}
         translationSaving={data.translationSaving}
@@ -1064,7 +1071,9 @@ export default function SongViewPage() {
         onContinue={() => void data.handleTranslate()}
         onCancel={data.cancelTranslate}
       />
+      {/* Sync status pill — stacked under the translation pill instead of sharing its anchor */}
       <SyncStatusOverlay syncing={data.syncing} stage={data.syncStage} onCancel={data.cancelSync} />
+      </SongTopStatusStack>
       {data.toast && <Toast type={data.toast.type} message={data.toast.msg} actionLabel={data.toast.actionLabel} onAction={data.toast.onAction} />}
 
       {showSongInfo && (
