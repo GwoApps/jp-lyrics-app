@@ -6,6 +6,7 @@ import {
   buildTextExport,
   ExportError,
   isEmptyAfterTrim,
+  joinReadingParts,
   parseFuriganaLines,
   parseTranslations,
   renderFuriganaLineToHtml,
@@ -62,6 +63,72 @@ test('buildTextExport falls back to raw text when no furigana line exists', () =
   const song = { ...SONG, lyrics_furigana: '[]' };
   assert.equal(buildTextExport(song, false, 'furigana'), SONG.lyrics_raw);
   assert.equal(buildTextExport(song, false, 'romaji'), SONG.lyrics_raw);
+});
+
+/**
+ * Cantonese songs: `to-jyutping` returns one segment per character, so the raw
+ * readings are bare latin syllables with no separator (`gam1tin1tin1hei3han2hou2`).
+ * Issue #311: the `furigana` ("注音") text mode must reuse the same space
+ * separation + punctuation gluing as the `romaji` mode, so the exported `.txt`
+ * carries syllable boundaries like the `.html`/PiP ruby rendering does.
+ */
+const YUE_SONG = {
+  title: '今天天氣很好',
+  artist: 'Example',
+  lyrics_raw: '今天天氣很好\n\n我哋去咗公園',
+  lyrics_synced: '',
+  lyrics_furigana: JSON.stringify([
+    {
+      segments: [
+        { text: '今', reading: 'gam1' }, { text: '天', reading: 'tin1' },
+        { text: '天', reading: 'tin1' }, { text: '氣', reading: 'hei3' },
+        { text: '很', reading: 'han2' }, { text: '好', reading: 'hou2' },
+      ],
+    },
+    { segments: [] },
+    {
+      segments: [
+        { text: '我', reading: 'ngo5' }, { text: '哋', reading: 'dei6' },
+        { text: '去', reading: 'heoi3' }, { text: '咗', reading: 'zo2' },
+        { text: '公', reading: 'gung1' }, { text: '園', reading: 'jyun2' },
+      ],
+    },
+  ]),
+  lyrics_translation: '[]',
+  reading_scheme: 'yue-jyutping' as const,
+};
+
+test('buildTextExport space-separates jyutping readings in BOTH reading modes', () => {
+  const furigana = buildTextExport(YUE_SONG, false, 'furigana');
+  assert.equal(furigana, 'gam1 tin1 tin1 hei3 han2 hou2\n\nngo5 dei6 heoi3 zo2 gung1 jyun2');
+  // Byte-identical to the romaji mode: jyutping readings are already latin, so
+  // the two modes differ in wording only, never in layout.
+  const romaji = buildTextExport(YUE_SONG, false, 'romaji');
+  assert.equal(romaji, furigana);
+});
+
+test('buildTextExport still glues punctuation to jyutping readings', () => {
+  const song = {
+    ...YUE_SONG,
+    lyrics_raw: '好！',
+    lyrics_furigana: JSON.stringify([
+      { segments: [{ text: '好', reading: 'hou2' }, { text: '！', reading: '！' }] },
+    ]),
+  };
+  assert.equal(buildTextExport(song, false, 'furigana'), 'hou2！');
+  assert.equal(buildTextExport(song, false, 'romaji'), 'hou2！');
+});
+
+test('joinReadingParts keeps kana furigana concatenated and splits latin readings', () => {
+  const parts = ['さくら', 'が', 'まう'];
+  // kana furigana: unchanged concatenation
+  assert.equal(joinReadingParts(parts, 'ja-kana', 'furigana'), 'さくらがまう');
+  // romaji mode always splits
+  assert.equal(joinReadingParts(['sakura', 'ga', 'mau'], 'ja-kana', 'romaji'), 'sakura ga mau');
+  // jyutping scheme splits in furigana mode too
+  assert.equal(joinReadingParts(['gam1', 'tin1'], 'yue-jyutping', 'furigana'), 'gam1 tin1');
+  // 'none' mode never reaches the splitter, but must stay a plain join
+  assert.equal(joinReadingParts(parts, 'yue-jyutping', 'none'), 'さくらがまう');
 });
 
 test('renderFuriganaLineToHtml honours reading mode', () => {

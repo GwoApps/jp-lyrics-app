@@ -151,6 +151,36 @@ function appendLrcTranslations(lyrics: string, translations: string[], rawLyrics
   }).join('\n');
 }
 
+/**
+ * Join per-segment reading parts into one plain-text line.
+ *
+ * Latin readings carry no inter-word separators of their own, so they are
+ * space-separated word by word with the punctuation glued to the preceding
+ * word. This applies to the `romaji` mode (kana → Latin) and to the
+ * `yue-jyutping` scheme, whose readings are already Latin syllables (issue
+ * #311): without it `gam1tin1tin1hei3han2hou2` had no syllable boundary, while
+ * the `.html`/PiP ruby rendering and the `romaji` mode both showed the parts
+ * apart. Non-Latin readings (kana furigana) keep the plain concatenation so
+ * their output is unchanged.
+ */
+export function joinReadingParts(
+  parts: readonly string[],
+  scheme: ReadingScheme,
+  readingMode: ExportReadingMode,
+): string {
+  // 'none' emits the original text, so it is never split (the caller skips the
+  // splitter entirely, but the contract stays explicit).
+  if (readingMode === 'none') return parts.join('');
+  const latinReadings = readingMode === 'romaji' || scheme === 'yue-jyutping';
+  if (!latinReadings) return parts.join('');
+  // Space-separate latin syllables for readability while keeping punctuation
+  // glued to the preceding word.
+  return parts
+    .join(' ')
+    .replace(/\s+([\p{P}\p{S}])/gu, '$1')
+    .trim();
+}
+
 /** Emit a `.txt` document (original / furigana / romaji with optional translations). */
 export function buildTextExport(
   song: ExportSongData,
@@ -171,13 +201,7 @@ export function buildTextExport(
             const reading = resolveFuriganaReading(seg.text, seg.reading, true, song.reading_scheme, seg);
             return reading || seg.text;
           });
-          if (readingMode !== 'romaji') return parts.join('');
-          // Space-separate romanized word segments for readability while
-          // keeping punctuation glued to the preceding word.
-          return parts
-            .join(' ')
-            .replace(/\s+([\p{P}\p{S}])/gu, '$1')
-            .trim();
+          return joinReadingParts(parts, song.reading_scheme, readingMode);
         })()
       : rawLine;
     lines.push(source);
