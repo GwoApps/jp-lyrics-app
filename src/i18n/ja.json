@@ -131,7 +131,9 @@
     "errorLoginRequired": "先にログインしてください",
     "errorForbidden": "この操作を行う権限がありません",
     "collectionNotFound": "コレクションが見つからないか、既に削除されています",
-    "collectionNameRequired": "コレクション名を入力してください"
+    "collectionNameRequired": "コレクション名を入力してください",
+    "disconnectConfirmTitle": "Spotify を切断しますか？",
+    "disconnectConfirmBody": "切断するとログアウトされます。再度 Spotify を認証するまで、再生中の曲の同期と取り込みが利用できなくなります。"
   },
   "song": {
     "notFound": "曲が見つかりません",

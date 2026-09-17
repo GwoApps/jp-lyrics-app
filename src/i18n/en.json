@@ -131,7 +131,9 @@
     "errorLoginRequired": "Please sign in first",
     "errorForbidden": "You do not have permission to do that",
     "collectionNotFound": "Collection not found or already deleted",
-    "collectionNameRequired": "Please enter a collection name"
+    "collectionNameRequired": "Please enter a collection name",
+    "disconnectConfirmTitle": "Disconnect Spotify?",
+    "disconnectConfirmBody": "Disconnecting signs you out: playback sync and imports stop working until you authorize Spotify again."
   },
   "song": {
     "notFound": "Song not found",

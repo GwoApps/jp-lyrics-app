@@ -71,6 +71,7 @@ export default function HomePage() {
     return success === 'connected' ? { type: 'success', msg: t('home.spotifyConnected') } : null;
   });
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [disconnectConfirm, setDisconnectConfirm] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [importAlert, setImportAlert] = useState<ImportAlertState | null>(null);
   const [importReview, setImportReview] = useState<ImportReviewState | null>(null);
@@ -496,7 +497,7 @@ export default function HomePage() {
             <div className="flex items-center gap-2 flex-1 sm:flex-none">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
               <span className="text-xs text-[var(--muted-foreground)] truncate">{spotify.display_name}</span>
-              <button onClick={handleDisconnect} className="text-[var(--muted-foreground)] hover:text-[var(--destructive)] transition-colors" title={t('home.disconnect')}>
+              <button onClick={() => setDisconnectConfirm(true)} className="text-[var(--muted-foreground)] hover:text-[var(--destructive)] transition-colors" title={t('home.disconnect')}>
                 <Unlink className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -729,6 +730,20 @@ export default function HomePage() {
         variant="danger"
         onConfirm={confirmDelete}
         onCancel={() => { setDeleteTarget(null); setDeleteError(null); }}
+      />
+
+      <ConfirmDialog
+        open={disconnectConfirm}
+        title={t('home.disconnectConfirmTitle')}
+        body={t('home.disconnectConfirmBody')}
+        confirmLabel={t('home.disconnect')}
+        cancelLabel={t('common.cancel')}
+        variant="danger"
+        onConfirm={() => {
+          setDisconnectConfirm(false);
+          void handleDisconnect();
+        }}
+        onCancel={() => setDisconnectConfirm(false)}
       />
 
       <ConfirmDialog

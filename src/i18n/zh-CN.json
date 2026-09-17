@@ -131,7 +131,9 @@
     "errorLoginRequired": "请先登录",
     "errorForbidden": "没有权限执行此操作",
     "collectionNotFound": "收藏夹不存在或已删除",
-    "collectionNameRequired": "请输入收藏夹名称"
+    "collectionNameRequired": "请输入收藏夹名称",
+    "disconnectConfirmTitle": "确定断开 Spotify？",
+    "disconnectConfirmBody": "断开等于退出登录。在重新授权 Spotify 之前，播放同步和歌曲导入都将无法使用。"
   },
   "song": {
     "notFound": "找不到歌曲",

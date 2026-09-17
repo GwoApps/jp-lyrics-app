@@ -131,7 +131,9 @@
     "errorLoginRequired": "請先登入",
     "errorForbidden": "沒有權限執行此操作",
     "collectionNotFound": "收藏集不存在或已刪除",
-    "collectionNameRequired": "請輸入收藏集名稱"
+    "collectionNameRequired": "請輸入收藏集名稱",
+    "disconnectConfirmTitle": "確定中斷 Spotify？",
+    "disconnectConfirmBody": "中斷等於登出。在重新授權 Spotify 之前，播放同步與歌曲匯入都將無法使用。"
   },
   "song": {
     "notFound": "找不到歌曲",
