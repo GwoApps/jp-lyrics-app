@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Music, Plus, Unlink, Download, ExternalLink, Loader2, Search, Disc3, RefreshCw, ChevronRight } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
@@ -79,6 +79,8 @@ export default function HomePage() {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [songViewMode, setSongViewMode] = useState<SongViewMode>(getSongViewMode);
   const [collapsedAlbums, setCollapsedAlbums] = useState<Set<string>>(new Set());
+  // Stable, SSR-safe prefix for the album group header/content id pairs (#318).
+  const albumGroupIdPrefix = useId();
   const [mySongsOnly, setMySongsOnly] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [showPlaylistImport, setShowPlaylistImport] = useState(false);
@@ -400,10 +402,13 @@ export default function HomePage() {
     });
   }, []);
   const albumView = songViewMode === 'album' ? groupSongsByAlbum(filteredSongs) : { entries: [], unclassified: [] };
+  const albumGroups = albumView.entries.filter((e) => e.type === 'group').map((e) => e.group);
   const collapseAllAlbums = () => {
-    setCollapsedAlbums(new Set(albumView.entries.filter((e) => e.type === 'group').map((e) => e.group.key)));
+    setCollapsedAlbums(new Set(albumGroups.map((group) => group.key)));
   };
   const expandAllAlbums = () => setCollapsedAlbums(new Set());
+  const allAlbumsCollapsed = albumGroups.length > 0 && albumGroups.every((group) => collapsedAlbums.has(group.key));
+  const allAlbumsExpanded = albumGroups.every((group) => !collapsedAlbums.has(group.key));
   const visibleSongIds = filteredSongs.map((song) => song.id).join(',');
   const songListRef = useRef<HTMLDivElement>(null);
   const previousSongRectsRef = useRef<Map<string, DOMRect>>(new Map());
@@ -677,36 +682,58 @@ export default function HomePage() {
           {songViewMode === 'album' ? (<>
             {albumView.entries.length > 0 && (
               <div className="flex justify-end gap-1.5 px-1 mb-1.5">
-                <button type="button" onClick={collapseAllAlbums} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors" aria-label={t('home.collapseAll')}>
+                <button type="button" onClick={collapseAllAlbums} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]" aria-label={t('home.collapseAll')} aria-pressed={allAlbumsCollapsed}>
                   <ChevronRight className="h-3 w-3 -rotate-90" /> {t('home.collapseAll')}
                 </button>
-                <button type="button" onClick={expandAllAlbums} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors" aria-label={t('home.expandAll')}>
+                <button type="button" onClick={expandAllAlbums} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]" aria-label={t('home.expandAll')} aria-pressed={allAlbumsExpanded}>
                   <ChevronRight className="h-3 w-3 rotate-90" /> {t('home.expandAll')}
                 </button>
               </div>
             )}
-            {albumView.entries.map((entry) => {
+            {albumView.entries.map((entry, albumGroupIndex) => {
               if (entry.type !== 'group') return null;
               const group = entry.group;
               const coverUrl = group.songs.find((song) => song.cover_url)?.cover_url;
               const isCollapsed = collapsedAlbums.has(group.key);
+              // `albumGroupIndex` is the entry index, not the group index, so the
+              // ids stay unique and stable even when a non-group entry is interleaved.
+              const headerId = `${albumGroupIdPrefix}-header-${albumGroupIndex}`;
+              const contentId = `${albumGroupIdPrefix}-content-${albumGroupIndex}`;
               return (
                 <section key={group.key} className="album-group rounded-lg border border-[var(--border)] bg-[var(--card)]/40 p-2.5 sm:p-3">
-                  <header className="flex min-w-0 cursor-pointer items-center gap-2.5 px-1 select-none transition-[margin] duration-200 ease-in-out" style={{ marginBottom: isCollapsed ? 0 : '0.625rem' }} onClick={() => toggleAlbumCollapse(group.key)} aria-expanded={!isCollapsed}>
-                    {coverUrl ? (
-                      // Provider cover hosts are dynamic and cannot be enumerated for next/image.
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={coverUrl} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover bg-[var(--muted)]" loading="lazy" />
-                    ) : (
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[var(--accent)] text-[var(--muted-foreground)]"><Disc3 className="h-4 w-4" /></div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <h2 className="truncate text-sm font-semibold tracking-tight">{group.album}</h2>
-                      <p className="truncate text-xs text-[var(--muted-foreground)]">{group.artist ? `${group.artist} · ${t('home.albumTrackCount', { count: group.songs.length })}` : t('home.albumTrackCount', { count: group.songs.length })}</p>
-                    </div>
-                    <ChevronRight className={`h-4 w-4 shrink-0 text-[var(--muted-foreground)] transition-transform ${!isCollapsed ? 'rotate-90' : ''}`} />
-                  </header>
-                  <div className="overflow-hidden transition-[grid-template-rows] duration-200 ease-in-out" style={{ display: 'grid', gridTemplateRows: isCollapsed ? '0fr' : '1fr' }}>
+                  <h2 className="min-w-0">
+                    <button
+                      type="button"
+                      id={headerId}
+                      onClick={() => toggleAlbumCollapse(group.key)}
+                      aria-expanded={!isCollapsed}
+                      aria-controls={contentId}
+                      className="flex w-full min-w-0 cursor-pointer items-center gap-2.5 rounded px-1 text-left select-none transition-[margin] duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                      style={{ marginBottom: isCollapsed ? 0 : '0.625rem' }}
+                    >
+                      {coverUrl ? (
+                        // Provider cover hosts are dynamic and cannot be enumerated for next/image.
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={coverUrl} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover bg-[var(--muted)]" loading="lazy" />
+                      ) : (
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[var(--accent)] text-[var(--muted-foreground)]"><Disc3 className="h-4 w-4" /></div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold tracking-tight">{group.album}</span>
+                        <span className="block truncate text-xs text-[var(--muted-foreground)]">{group.artist ? `${group.artist} · ${t('home.albumTrackCount', { count: group.songs.length })}` : t('home.albumTrackCount', { count: group.songs.length })}</span>
+                      </div>
+                      <ChevronRight className={`h-4 w-4 shrink-0 text-[var(--muted-foreground)] transition-transform ${!isCollapsed ? 'rotate-90' : ''}`} />
+                    </button>
+                  </h2>
+                  <div
+                    id={contentId}
+                    role="group"
+                    aria-labelledby={headerId}
+                    aria-hidden={isCollapsed}
+                    inert={isCollapsed}
+                    className="overflow-hidden transition-[grid-template-rows] duration-200 ease-in-out"
+                    style={{ display: 'grid', gridTemplateRows: isCollapsed ? '0fr' : '1fr' }}
+                  >
                     <div className="min-h-0 space-y-1.5">
                       {group.songs.map((song) => renderSongCard(song, 'list', true))}
                     </div>
