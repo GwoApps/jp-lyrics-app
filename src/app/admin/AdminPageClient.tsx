@@ -71,6 +71,9 @@ export default function AdminPage() {
   const [queueError, setQueueError] = useState(false);
   const [selectedSongId, setSelectedSongId] = useState<string | null>(null);
   const queueLoaded = useRef(false);
+  // Whether queueTotal already holds an authoritative queue-wide count (the
+  // 待办 badge source). State, not a ref: the 内容 footer hint renders from it.
+  const [queueTotalLoaded, setQueueTotalLoaded] = useState(false);
 
   // Content library (view=content).
   const songFilters = useMemo(() => songFiltersFromParams(searchParams), [searchParams]);
@@ -202,7 +205,10 @@ export default function AdminPage() {
       const data = (await res.json()) as AdminPage<AdminSong>;
       setQueueSongs(data.items);
       queueLoaded.current = true;
-      if (typeof data.total === 'number') setQueueTotal(data.total);
+      if (typeof data.total === 'number') {
+        setQueueTotal(data.total);
+        setQueueTotalLoaded(true);
+      }
       if (data.items.length > 0) {
         setSelectedSongId((prev) => prev ?? data.items[0]!.id);
       }
@@ -262,6 +268,12 @@ export default function AdminPage() {
         // Update the content list in place with the merged summary so quality
         // fields never disappear; the queue advances via advanceQueue().
         setSongs((prev) => prev.map((s) => (s.id === song.id ? { ...s, ...updated } : s)));
+        // Approving/rejecting clears a pending item, so the queue-wide total
+        // watched by the 待办 badge and the 内容 footer hint must follow.
+        if (action === 'approve_public' || action === 'reject_public') {
+          setQueueTotalLoaded(true);
+          setQueueTotal((n) => Math.max(0, n - 1));
+        }
         if (action === 'approve_public') showToast('success', t('admin.approved'));
         else if (action === 'reject_public') showToast('success', t('admin.rejected'));
         else if (action === 'undo_approve') showToast('success', t('admin.undone'));
@@ -325,6 +337,24 @@ export default function AdminPage() {
       });
     return () => { cancelled = true; };
   }, [session, isAdmin, view, searchParams, songFilters, songCursor]);
+
+  // The 内容 footer hint shares the 待办 badge's count (ISSUE #319). Reuse the
+  // light COUNT endpoint when the queue was never loaded, so entering 内容
+  // directly still shows the queue-wide number instead of a per-page guess.
+  useEffect(() => {
+    if (session === null || !isAdmin || view !== 'content') return;
+    if (queueTotalLoaded) return;
+    let cancelled = false;
+    fetch('/api/admin/todo-count')
+      .then((res) => (res.ok ? res.json() as Promise<{ count?: number }> : null))
+      .then((data) => {
+        if (cancelled || typeof data?.count !== 'number') return;
+        setQueueTotalLoaded(true);
+        setQueueTotal(data.count);
+      })
+      .catch(() => { /* keep the per-page fallback */ });
+    return () => { cancelled = true; };
+  }, [session, isAdmin, view, queueTotalLoaded]);
 
   const applySongFilters = useCallback((updates: Record<string, string | null>) => {
     setParam({ ...updates, cursor: null, prev: null });
@@ -621,6 +651,7 @@ export default function AdminPage() {
           <AdminSongList
             songs={songs}
             total={songsTotal}
+            pendingTotal={queueTotalLoaded ? queueTotal : undefined}
             q={songFilters.q}
             status={songFilters.status}
             review={songFilters.review}
