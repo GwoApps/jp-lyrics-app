@@ -547,17 +547,41 @@ function resolvePetitLyricsSettings(opts?: PetitLyricsOptions): { syncCandidateL
   };
 }
 
+/**
+ * PetitLyrics candidate metadata normalizer.
+ *
+ * Uses the shared `normalize()` (NFKC + katakana→hiragana folding + lowercase,
+ * ISSUE #317) so a candidate written in katakana is no longer rejected by the
+ * exact-equality check below when the requested title is hiragana (and vice
+ * versa). Only the *comparison* adds the punctuation/symbol stripping that is
+ * specific to this source's metadata formatting — the requested title/artist
+ * still go out to PetitLyrics verbatim.
+ */
 function normalizePetitLyricsMetadata(value: string): string {
-  return value.normalize('NFKC').toLocaleLowerCase('ja-JP').replace(/[\s\p{P}\p{S}]+/gu, '');
+  return normalize(value).replace(/[\s\p{P}\p{S}]+/gu, '');
 }
 
-function isPetitLyricsMatch(candidate: PetitLyricsCandidate, title: string, artist: string): boolean {
+/**
+ * Does this candidate's metadata describe the requested song?
+ *
+ * Exported so the matching rule can be asserted directly without a network
+ * round-trip; `isPetitLyricsMatch` is the internal call site.
+ */
+export function petitLyricsCandidateMatches(
+  candidate: { title: string; artist: string },
+  title: string,
+  artist: string,
+): boolean {
   const candidateTitle = normalizePetitLyricsMetadata(candidate.title);
   const requestedTitle = normalizePetitLyricsMetadata(title);
   const candidateArtist = normalizePetitLyricsMetadata(candidate.artist);
   const requestedArtist = normalizePetitLyricsMetadata(artist);
   return candidateTitle === requestedTitle
     && (!requestedArtist || candidateArtist === requestedArtist || candidateArtist.includes(requestedArtist) || requestedArtist.includes(candidateArtist));
+}
+
+function isPetitLyricsMatch(candidate: PetitLyricsCandidate, title: string, artist: string): boolean {
+  return petitLyricsCandidateMatches(candidate, title, artist);
 }
 
 export function parsePetitLyricsResponse(xml: string, requestedType: number): PetitLyricsCandidate | null {

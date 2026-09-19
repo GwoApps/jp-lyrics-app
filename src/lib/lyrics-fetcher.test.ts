@@ -11,6 +11,7 @@ import {
   parsePetitLyricsResponse,
   parseUtaNetCandidates,
   petitLyricsXmlToLrc,
+  petitLyricsCandidateMatches,
   searchLrclib,
   stripTimestamps,
   unescapeLyrics,
@@ -79,6 +80,29 @@ test('parses PetitLyrics candidate metadata and converts its WYSIWYG timing to l
   assert.deepEqual(candidate, { type: 3, data: timingXml, title: 'テスト曲', artist: '歌手 A' });
   assert.equal(typeof candidate?.data, 'string');
   assert.equal(petitLyricsXmlToLrc(candidate!.data as string), '[00:01.47]第一行');
+});
+
+test('PetitLyrics accepts a candidate whose title differs only by kana script (ISSUE #317)', () => {
+  // PetitLyrics indexes 「サヨナラ」 in katakana while the requested Spotify title
+  // is hiragana — the exact-equality gate used to reject the candidate outright.
+  assert.equal(
+    petitLyricsCandidateMatches({ title: 'サヨナラ', artist: 'アイミョン' }, 'さよなら', 'あいみょん'),
+    true,
+  );
+  // Halfwidth katakana (NFKC) and punctuation differences stay tolerated.
+  assert.equal(
+    petitLyricsCandidateMatches({ title: 'サヨナラ！（Live）', artist: 'アイミョン' }, 'さよなら(Live)', 'あいみょん'),
+    true,
+  );
+  // Different readings must still be rejected — folding does not widen the gate.
+  assert.equal(
+    petitLyricsCandidateMatches({ title: 'サヨナラ', artist: '別の人' }, 'さよなら', 'あいみょん'),
+    false,
+  );
+  assert.equal(
+    petitLyricsCandidateMatches({ title: 'ヒマワリ', artist: 'アイミョン' }, 'さよなら', 'あいみょん'),
+    false,
+  );
 });
 
 // ─── Duration / album evidence ───────────────────────────────
@@ -273,6 +297,28 @@ test('fetchFromLrclib falls back to the album-scoped query when the bare exact 4
   }
 });
 
+test('searchLrclib matches a kana-heterogeneous candidate without mutating the query (ISSUE #317)', async () => {
+  // The candidate is indexed in katakana while the caller's title/artist are
+  // hiragana. Folding must make the hard gates pass — and the *request* must
+  // still carry the caller's original spelling.
+  const seenUrls: string[] = [];
+  const restore = mockFetch((url) => {
+    seenUrls.push(url);
+    return new Response(JSON.stringify([lrclibTrack({ trackName: 'サヨナラ', artistName: 'アイミョン' })]), { status: 200 });
+  });
+  try {
+    const hit = await searchLrclib('さよなら あいみょん', 'さよなら', 'あいみょん');
+    assert.ok(hit.hit, 'kana-heterogeneous candidate must survive the gates');
+    const searchUrl = seenUrls.find((u) => u.includes('/api/search'));
+    assert.ok(searchUrl, 'fuzzy search must have been issued');
+    const query = decodeURIComponent(new URL(searchUrl).searchParams.get('q') ?? '');
+    assert.equal(query, 'さよなら あいみょん');
+    assert.doesNotMatch(query, /[\u30a1-\u30f6]/, 'query must not be folded to katakana or rewritten');
+  } finally {
+    restore();
+  }
+});
+
 test('searchLrclib drops candidates whose duration clearly conflicts with Spotify', async () => {
   const tvSize = lrclibTrack({ id: 1, duration: 90, albumName: 'TVアニメ「Idol」挿入歌' });
   const studio = lrclibTrack({ id: 2, duration: 213, albumName: 'Idol' });
@@ -462,6 +508,27 @@ test('fetchFromUtaNet returns null when no candidate clears the thresholds', asy
   try {
     const hit = await fetchFromUtaNet('アイドル', 'YOASOBI');
     assert.equal(hit, null);
+  } finally {
+    restore();
+  }
+});
+
+test('fetchFromUtaNet accepts a kana-heterogeneous hit without folding the search keyword', async () => {
+  let searchUrl = '';
+  const restore = mockFetch((url) => {
+    if (url.includes('/search/')) {
+      searchUrl = url;
+      return new Response(utanetSearchHtml([['777', 'サヨナラ', 'アイミョン']]), { status: 200 });
+    }
+    if (url.includes('/song/')) return new Response(utanetLyricsHtml, { status: 200 });
+    return null;
+  });
+  try {
+    const hit = await fetchFromUtaNet('さよなら', 'あいみょん');
+    assert.ok(hit, 'kana-heterogeneous Uta-Net row must be accepted');
+    assert.equal(hit?.matchedTitle, 'サヨナラ');
+    const keyword = decodeURIComponent(new URL(searchUrl).searchParams.get('Keyword') ?? '');
+    assert.equal(keyword, 'さよなら あいみょん');
   } finally {
     restore();
   }

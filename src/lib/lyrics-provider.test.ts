@@ -517,6 +517,40 @@ test('builtinRowIdToKey resolves both colon and legacy hyphen row ids', () => {
 });
 
 
+// ─── scoreCandidate: kana script folding (ISSUE #317) ─────────────
+
+test('scoreCandidate accepts a kana-heterogeneous title + artist candidate', () => {
+  // Every HTTP provider candidate used to be dropped by the < 0.55 title/artist
+  // hard gates when the source indexed the song in the other kana script.
+  const result = scoreCandidate(
+    { title: 'さよなら', artists: ['あいみょん'] },
+    undefined,
+    {
+      title: 'サヨナラ',
+      artists: ['アイミョン'],
+      synced: '[00:01.00]さよなら',
+      sourceUrl: 'https://provider.example/song/123',
+    },
+    'plugin:test:1',
+  );
+  assert.ok(result, 'kana-heterogeneous candidate must be accepted');
+  assert.equal(result.confidence, 90);
+  // The candidate's own spelling is preserved for the review UI — the fold is
+  // comparison-only.
+  assert.equal(result.match?.title, 'サヨナラ');
+  assert.equal(result.match?.artist, 'アイミョン');
+});
+
+test('scoreCandidate still rejects a different song written in kana', () => {
+  const result = scoreCandidate(
+    { title: 'さよなら', artists: ['あいみょん'] },
+    undefined,
+    { title: 'ヒマワリ', artists: ['アイミョン'], synced: '[00:01.00]ヒマワリ' },
+    'plugin:test:1',
+  );
+  assert.equal(result, null);
+});
+
 // ─── scoreCandidate: HTTP provider source_url propagation (ISSUE #215) ────
 
 test('scoreCandidate keeps sourceUrl in match.link for a synced candidate', () => {

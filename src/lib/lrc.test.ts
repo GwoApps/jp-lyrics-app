@@ -396,6 +396,20 @@ test('buildTimelineDraft fuzzy-matches punctuation and bracket differences', () 
   assert.deepEqual(result.lines, [{ text: 'さよなら、それだけで十分', timeMs: 20000 }]);
 });
 
+test('buildTimelineDraft aligns lines whose kana script differs (ISSUE #317)', () => {
+  // The plain `lyrics_raw` is hiragana while the synced LRC is katakana. Bigram
+  // Dice used to be 0, so every timestamp was dropped for the whole block.
+  const result = buildTimelineDraft(
+    'さよなら\nありがとう',
+    '[00:10.000]サヨナラ\n[00:20.000]アリガトウ',
+  );
+  assert.equal(result.unmatched, 0);
+  assert.deepEqual(result.lines, [
+    { text: 'さよなら', timeMs: 10000 },
+    { text: 'ありがとう', timeMs: 20000 },
+  ]);
+});
+
 test('buildTimelineDraft exact matches never fall back to fuzzy for repeated chorus lines', () => {
   // Repeated identical chorus text must consume its own timestamp queue in order,
   // even when a nearby line is fuzzy-similar, so fuzzy fallback never steals it.

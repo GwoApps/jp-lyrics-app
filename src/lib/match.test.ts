@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { songMatchScore, isSameSpotifyTrack, findBestMatch, type SongCandidate } from './match.ts';
+import {
+  artistScore,
+  findBestMatch,
+  isSameSpotifyTrack,
+  lineFuzzyMatch,
+  normalize,
+  songMatchScore,
+  titleScore,
+  type SongCandidate,
+} from './match.ts';
 
 test('Spotify Track ID is authoritative when both sides have one', () => {
   const song = { id: 'song', title: 'Same Song', artist: 'Artist', spotify_track_id: 'track-a' };
@@ -175,4 +184,46 @@ test('findBestMatch: returns null when no song matches', () => {
   const s = song({ id: 's1', title: 'Completely Different', artist: 'Someone' });
   const track = { id: 'track-x', name: 'Same Song', artist: 'Artist' };
   assert.equal(findBestMatch([s], track, ME), null);
+});
+
+// ─── Kana script folding (ISSUE #317) ─────────────────────────────────
+
+test('normalize folds katakana onto hiragana for comparison', () => {
+  assert.equal(normalize('サヨナラ'), 'さよなら');
+  assert.equal(normalize('ドライフラワー'), 'どらいふらわー');
+  // NFKC still runs first: halfwidth katakana + fullwidth latin collapse too.
+  assert.equal(normalize('ｻﾖﾅﾗ'), 'さよなら');
+  assert.equal(normalize('ＡＢＣ'), 'abc');
+});
+
+test('same reading in different kana scripts is a full title match', () => {
+  assert.equal(titleScore('さよなら', 'サヨナラ'), 1);
+  assert.equal(titleScore('ひまわり', 'ヒマワリ'), 1);
+  assert.equal(titleScore('ありがとう', 'アリガトウ'), 1);
+  assert.equal(titleScore('ドライフラワー', 'どらいふらわー'), 1);
+});
+
+test('same reading in different kana scripts is a full artist match', () => {
+  assert.equal(artistScore('あいみょん', 'アイミョン'), 1);
+  assert.equal(artistScore('ヨルシカ', 'よるしか'), 1);
+});
+
+test('songMatchScore accepts a kana-heterogeneous title + artist pair', () => {
+  assert.equal(songMatchScore(
+    { id: 'song', title: 'さよなら', artist: 'あいみょん' },
+    { id: 'track-x', name: 'サヨナラ', artist: 'アイミョン' },
+  ), 1);
+});
+
+test('lineFuzzyMatch treats kana-heterogeneous lyric lines as equal', () => {
+  assert.equal(lineFuzzyMatch('サヨナラ', 'さよなら'), true);
+  assert.equal(lineFuzzyMatch('君をのせて', 'キミヲノセテ'), true);
+});
+
+test('kana folding does not loosen the version-suffix guard', () => {
+  // The substring length guard must survive the extra folding step.
+  assert.equal(titleScore('GAME', 'さよならアンドロメダ - GAME VERSION'), 0);
+  assert.equal(titleScore('世界が終わるまで君と踊っていた', '世界が終わるまで君と踊っていた -LIVE'), 0.85);
+  // Kanji stays untouched → still no match between different readings.
+  assert.equal(titleScore('さよなら', '別れ'), 0);
 });
