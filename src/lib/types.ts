@@ -78,6 +78,13 @@ export interface SongListItem {
   spotify_album?: string | null;
   created_at: string;
   updated_at: string;
+  /**
+   * Issue #323: quality-gate flag written by the lyrics fetcher
+   * (`lyrics-hit.ts` → `playlist-import.ts`). `1` means the lyrics match was
+   * low-confidence / duration-conflicting, so the home list can surface the
+   * same "needs review" badge the admin list uses.
+   */
+  lyrics_needs_review?: number;
 }
 
 /** Song list item as used by the home page (same shape as SongListItem). */
