@@ -294,9 +294,11 @@ export default function AdminPage() {
 
   // --- Content library -------------------------------------------------------
 
-  useEffect(() => {
-    if (session === null || !isAdmin || view !== 'content') return;
-    let cancelled = false;
+  // The content list owns one request; failures used to be "retried" with
+  // router.refresh(), which changes none of the deps below (AdminPageClient is
+  // rendered without props and session is reference-stable). Retry now re-runs
+  // this loader directly, the same contract loadQueue/AdminSystemPanel use.
+  const loadSongs = useCallback(async () => {
     const params = new URLSearchParams({
       mode: 'content',
       limit: String(PAGE_LIMIT),
@@ -309,34 +311,52 @@ export default function AdminPage() {
     if (songFilters.review !== 'all') params.set('review', songFilters.review);
     if (songCursor) params.set('cursor', songCursor);
     const requestKey = params.toString();
-    if (loadedSongQuery.current === requestKey) return;
+
     setSongsLoading(true);
     setSongsError(false);
+    try {
+      const res = await fetch(`/api/admin/songs?${requestKey}`);
+      if (!res.ok) throw new Error('songs_load_failed');
+      const data = (await res.json()) as AdminPage<AdminSong>;
+      loadedSongQuery.current = requestKey;
+      setSongs(data.items);
+      setSongsTotal(data.total);
+      setSongNextCursor(data.next_cursor);
+      setSongHasNext(!!data.next_cursor);
+      const stack = searchParams.getAll('prev');
+      songPrevStack.current = stack;
+      setSongHasPrev(stack.length > 0);
+    } catch {
+      setSongsError(true);
+    } finally {
+      setSongsLoading(false);
+    }
+  }, [searchParams, songFilters, songCursor]);
 
-    fetch(`/api/admin/songs?${requestKey}`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error('songs_load_failed');
-        return (await res.json()) as AdminPage<AdminSong>;
-      })
-      .then((data) => {
-        if (cancelled) return;
-        loadedSongQuery.current = requestKey;
-        setSongs(data.items);
-        setSongsTotal(data.total);
-        setSongNextCursor(data.next_cursor);
-        setSongHasNext(!!data.next_cursor);
-        const stack = searchParams.getAll('prev');
-        songPrevStack.current = stack;
-        setSongHasPrev(stack.length > 0);
-        setSongsLoading(false);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setSongsError(true);
-        setSongsLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [session, isAdmin, view, searchParams, songFilters, songCursor]);
+  // The guard is only written on success, so a manual retry must clear it first
+  // or the loader would short-circuit on the same (never-loaded) requestKey.
+  const retrySongs = useCallback(() => {
+    loadedSongQuery.current = null;
+    void loadSongs();
+  }, [loadSongs]);
+
+  useEffect(() => {
+    if (session === null || !isAdmin || view !== 'content') return;
+    const params = new URLSearchParams({
+      mode: 'content',
+      limit: String(PAGE_LIMIT),
+      total: '1',
+      sort: songFilters.sort,
+      order: songFilters.order,
+    });
+    if (songFilters.q) params.set('q', songFilters.q);
+    if (songFilters.status !== 'all') params.set('status', songFilters.status);
+    if (songFilters.review !== 'all') params.set('review', songFilters.review);
+    if (songCursor) params.set('cursor', songCursor);
+    // Skip a query that is already on screen; manual retry bypasses this.
+    if (loadedSongQuery.current === params.toString()) return;
+    void loadSongs();
+  }, [session, isAdmin, view, songFilters, songCursor, loadSongs]);
 
   // The 内容 footer hint shares the 待办 badge's count (ISSUE #319). Reuse the
   // light COUNT endpoint when the queue was never loaded, so entering 内容
@@ -393,43 +413,52 @@ export default function AdminPage() {
 
   // --- People ----------------------------------------------------------------
 
-  useEffect(() => {
-    if (session === null || !isAdmin || view !== 'people') return;
-    let cancelled = false;
+  // People list: same loader/retry contract as loadSongs.
+  const loadUsers = useCallback(async () => {
     const params = new URLSearchParams({ limit: String(PAGE_LIMIT), total: '1' });
     if (userFilters.q) params.set('q', userFilters.q);
     if (userFilters.role !== 'all') params.set('role', userFilters.role);
     if (userFilters.status !== 'all') params.set('status', userFilters.status);
     if (userCursor) params.set('cursor', userCursor);
     const requestKey = params.toString();
-    if (loadedUserQuery.current === requestKey) return;
+
     setUsersLoading(true);
     setUsersError(false);
+    try {
+      const res = await fetch(`/api/admin/users?${requestKey}`);
+      if (!res.ok) throw new Error('users_load_failed');
+      const data = (await res.json()) as AdminPage<AdminUser>;
+      loadedUserQuery.current = requestKey;
+      setUsers(data.items);
+      setUsersTotal(data.total);
+      setUserNextCursor(data.next_cursor);
+      setUserHasNext(!!data.next_cursor);
+      const stack = searchParams.getAll('prev');
+      userPrevStack.current = stack;
+      setUserHasPrev(stack.length > 0);
+    } catch {
+      setUsersError(true);
+    } finally {
+      setUsersLoading(false);
+    }
+  }, [searchParams, userFilters, userCursor]);
 
-    fetch(`/api/admin/users?${requestKey}`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error('users_load_failed');
-        return (await res.json()) as AdminPage<AdminUser>;
-      })
-      .then((data) => {
-        if (cancelled) return;
-        loadedUserQuery.current = requestKey;
-        setUsers(data.items);
-        setUsersTotal(data.total);
-        setUserNextCursor(data.next_cursor);
-        setUserHasNext(!!data.next_cursor);
-        const stack = searchParams.getAll('prev');
-        userPrevStack.current = stack;
-        setUserHasPrev(stack.length > 0);
-        setUsersLoading(false);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setUsersError(true);
-        setUsersLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [session, isAdmin, view, searchParams, userFilters, userCursor]);
+  const retryUsers = useCallback(() => {
+    loadedUserQuery.current = null;
+    void loadUsers();
+  }, [loadUsers]);
+
+  useEffect(() => {
+    if (session === null || !isAdmin || view !== 'people') return;
+    const params = new URLSearchParams({ limit: String(PAGE_LIMIT), total: '1' });
+    if (userFilters.q) params.set('q', userFilters.q);
+    if (userFilters.role !== 'all') params.set('role', userFilters.role);
+    if (userFilters.status !== 'all') params.set('status', userFilters.status);
+    if (userCursor) params.set('cursor', userCursor);
+    // Skip a query that is already on screen; manual retry bypasses this.
+    if (loadedUserQuery.current === params.toString()) return;
+    void loadUsers();
+  }, [session, isAdmin, view, userFilters, userCursor, loadUsers]);
 
   const applyUserFilters = useCallback((updates: Record<string, string | null>) => {
     setParam({ ...updates, cursor: null, prev: null });
@@ -641,7 +670,7 @@ export default function AdminPage() {
             <p className="text-sm text-[var(--destructive)]">{t('admin.songsLoadFailed')}</p>
             <button
               type="button"
-              onClick={() => router.refresh()}
+              onClick={retrySongs}
               className="mt-3 rounded-md border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
             >
               {t('admin.retry')}
@@ -686,7 +715,7 @@ export default function AdminPage() {
             <p className="text-sm text-[var(--destructive)]">{t('admin.usersLoadFailed')}</p>
             <button
               type="button"
-              onClick={() => router.refresh()}
+              onClick={retryUsers}
               className="mt-3 rounded-md border border-[var(--border)] px-3 py-1.5 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
             >
               {t('admin.retry')}
