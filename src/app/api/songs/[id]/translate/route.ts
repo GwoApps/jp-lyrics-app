@@ -72,6 +72,7 @@ export async function POST(
     lyricsTranslationLang: schema.songs.lyricsTranslationLang,
     lyricsTranslationReasoning: schema.songs.lyricsTranslationReasoning,
     lyricsGlossary: schema.songs.lyricsGlossary,
+    readingScheme: schema.songs.readingScheme,
   }).from(schema.songs).where(eq(schema.songs.id, id)).get();
   if (!existing) {
     return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
@@ -273,6 +274,12 @@ export async function POST(
     title: existing.title,
     artist: existing.artist,
     glossary: glossary ?? undefined,
+    // Source language drives the few-shot direction and the Cantonese reading
+    // rule (issue #316). Cantonese songs are flagged by their reading scheme,
+    // the same signal the UI uses for source-lyric lang/readings; anything
+    // else (including unknown/NULL) is Japanese, so Japanese songs are
+    // unaffected.
+    sourceLang: existing.readingScheme === 'yue-jyutping' ? 'yue' : 'ja',
     // Slice requests (missing-line fill / single-line re-translate) get the
     // full song as REFERENCE CONTEXT so the model resolves Japanese omitted
     // subjects, pronouns and proper nouns from the surrounding lyrics instead

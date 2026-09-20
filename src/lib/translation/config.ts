@@ -24,6 +24,13 @@ export interface TranslationContext {
   fullLyrics?: string[];
   /** Absolute indices (into `fullLyrics`) of the lines actually being translated. */
   targetIndices?: number[];
+  /**
+   * Short tag of the SOURCE lyrics language ('ja' | 'yue'). Selects the
+   * few-shot example direction and the Cantonese reading rule in the prompt.
+   * Unknown / missing values fall back to Japanese, so Japanese songs keep
+   * their previous prompt (issue #316).
+   */
+  sourceLang?: string;
 }
 
 export interface TranslationConfig {
