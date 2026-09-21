@@ -16,7 +16,7 @@ export default function SharePage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { t } = useI18n();
+  const { t, bcp47: uiLanguage } = useI18n();
   const id = (params?.id as string) || '';
   const defaultLine = searchParams?.get('line');
 
@@ -138,11 +138,14 @@ export default function SharePage() {
       showQrCode,
       showSourceText,
       includeTranslation,
+      // Issue #336: the card's canvas does not inherit CSS, so the UI-owned
+      // strings (title, artist, scan hint, site) need the UI language here.
+      uiLanguage,
     ).then(() => {
       if (!cancelled) setReady(true);
     });
     return () => { cancelled = true; };
-  }, [song, qrDataUrl, pageUrl, t, selected, lyricLines, orientation, showQrCode, showSourceText, includeTranslation]);
+  }, [song, qrDataUrl, pageUrl, t, uiLanguage, selected, lyricLines, orientation, showQrCode, showSourceText, includeTranslation]);
 
   const toggleLine = (idx: number) => {
     setSelected((prev) => {
