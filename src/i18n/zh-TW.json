@@ -192,7 +192,6 @@
     "syncStageLrclibSearch": "正在模糊搜尋 LRCLIB…",
     "syncStagePetitlyrics": "正在查詢 PetitLyrics…",
     "syncStageUtaNet": "正在查詢 Uta-Net…",
-    "syncStageYtmusic": "正在查詢 YouTube Music…",
     "furigana": "注音",
     "raw": "原文",
     "readingMode": "顯示方式",
@@ -824,9 +823,6 @@
     "sourceConfigFuzzyEnabledHint": "關閉後 exact 未命中即跳過 fuzzy 搜尋，降低延遲和請求量。",
     "sourceConfigSyncCandidateLimit": "同步詞候選掃描深度",
     "sourceConfigSyncCandidateLimitHint": "串行掃描 indexed WYSIWYG/LSY 候選的數量。調大提高命中率、延遲線性增長。",
-    "sourceConfigSidecarUrl": "Sidecar 位址",
-    "sourceConfigSidecarUrlPlaceholder": "http://localhost:8080",
-    "sourceConfigSidecarUrlHint": "ytmusicapi sidecar 的基底位址，留空使用環境變數 YT_MUSIC_SIDECAR_URL。",
     "lyricsProviderErrorInvalidSourceConfig": "來源設定包含未知欄位或值不在允許範圍內",
     "lyricsProviderErrorInvalidSourceSchema": "來源設定 schema 無效",
     "lyricsProviderErrorHttpProviderReadonlyField": "HTTP Provider 不支援該欄位"

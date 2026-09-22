@@ -1,8 +1,8 @@
 /**
  * Effective provider chain orchestrator (ISSUE #148).
  *
- * Phase 1 unified abstraction: builtin sources (LRCLIB → PetitLyrics → Uta-Net
- * → ytmusic) and admin-enabled HTTP providers are all exposed as `LyricsProvider`
+ * Phase 1 unified abstraction: builtin sources (LRCLIB → PetitLyrics → Uta-Net)
+ * and admin-enabled HTTP providers are all exposed as `LyricsProvider`
  * adapters and scheduled by a single orchestrator loop, sharing the caller's
  * AbortSignal and the chain budget. The builtin adapter keeps its exact order +
  * confidence rules (backward compatible) and sits first; HTTP providers follow
@@ -104,6 +104,19 @@ export function scoreCandidate(
 }
 
 /**
+ * Provenance key persisted as the song's `lyrics_source`. Providers may supply
+ * a stable `candidate_id` (e.g. the ytmusic plugin's `ytmusic`), which doubles
+ * as the display label key in LYRICS_SOURCE_KEYS. Reserved UI keys are never
+ * provider-assignable so a plugin cannot mislabel its hits as manual edits;
+ * anything reserved (or missing) falls back to the provider row id.
+ */
+const RESERVED_SOURCE_KEYS = new Set(['manual', 'none']);
+function provenanceSource(candidateId: string | undefined, providerId: string): string {
+  if (candidateId && !RESERVED_SOURCE_KEYS.has(candidateId)) return candidateId;
+  return providerId;
+}
+
+/**
  * Build the effective chain and fetch lyrics. Backward compatible: with no HTTP
  * providers configured, behaviour is byte-for-byte identical to `fetchLyrics`.
  */
@@ -152,7 +165,7 @@ export async function fetchLyricsWithChain(
           name: cfg.name,
           // null means "use builtin per-source defaults" — do NOT force the HTTP
           // plugin default timeout onto builtin adapters (they each have their own
-          // per-request budgets: PetitLyrics 8s, LRCLIB/Uta-Net 15s, ytmusic 20s).
+          // per-request budgets: PetitLyrics 8s, LRCLIB/Uta-Net 15s).
           timeoutMs: cfg.timeoutMs != null ? resolveProviderTimeoutMs(cfg.timeoutMs, chainBudget) : undefined,
           sourceConfig: cfg.sourceConfig,
         }));
@@ -199,7 +212,7 @@ export async function fetchLyricsWithChain(
               plain: candidate.plainLyrics ?? '',
               synced: candidate.syncedLyrics ?? '',
             },
-            source: candidate.candidateId ?? provider.id,
+            source: provenanceSource(candidate.candidateId, provider.id),
             confidence: candidate.confidence,
             ...(candidate.durationMismatch ? { durationMismatch: true } : {}),
             ...(candidate.match ? { match: candidate.match } : {}),
@@ -217,7 +230,7 @@ export async function fetchLyricsWithChain(
               album: candidate.album,
               sourceUrl: candidate.sourceUrl,
             },
-            provider.id,
+            provenanceSource(candidate.candidateId, provider.id),
           );
         }
         if (scored && (!best || scored.confidence > best.confidence)) {

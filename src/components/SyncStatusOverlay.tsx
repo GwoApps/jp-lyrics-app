@@ -22,7 +22,6 @@ const STAGE_KEYS: Record<SyncStage, string> = {
   'lrclib-search': 'syncStageLrclibSearch',
   petitlyrics: 'syncStagePetitlyrics',
   'uta-net': 'syncStageUtaNet',
-  ytmusic: 'syncStageYtmusic',
 };
 
 /** Resolve the human-readable progress line for a stage (builtin or plugin). */

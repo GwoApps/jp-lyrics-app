@@ -62,6 +62,8 @@ SESSION_SECRET=your_session_secret
 # HTTP lyrics providers (ISSUE #148) — deployment-level network policy + budgets.
 # These are env-only; admins/users cannot override them from the UI or database.
 # Boolean values accept only an explicit `true` (any other value = false / fail-closed).
+# NOTE: the bundled yt-sidecar plugin (see yt-sidecar/README.md) runs over plaintext
+# HTTP on the compose network — deploying it requires both switches below to be `true`.
 LYRICS_PROVIDER_ALLOW_HTTP=false
 LYRICS_PROVIDER_ALLOW_PRIVATE_NETWORK=false
 # Required to store Bearer-token providers (AES-GCM encryption at rest).

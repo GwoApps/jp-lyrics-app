@@ -262,6 +262,15 @@ test('parseCandidate rejects missing / blank title and artist identity evidence'
   assert.equal(parseCandidate({ title: '  t  ', artists: ['  a  '], plain_lyrics: 'x' })?.title, 't');
 });
 
+test('parseCandidate keeps candidate_id only as a short provenance token', () => {
+  assert.equal(parseCandidate({ title: 't', artists: ['a'], plain_lyrics: 'x', candidate_id: 'ytmusic' })?.candidateId, 'ytmusic');
+  assert.equal(parseCandidate({ title: 't', artists: ['a'], plain_lyrics: 'x', candidate_id: '  ytmusic  ' })?.candidateId, 'ytmusic');
+  assert.equal(parseCandidate({ title: 't', artists: ['a'], plain_lyrics: 'x', candidate_id: '' })?.candidateId, undefined);
+  assert.equal(parseCandidate({ title: 't', artists: ['a'], plain_lyrics: 'x', candidate_id: '   ' })?.candidateId, undefined);
+  assert.equal(parseCandidate({ title: 't', artists: ['a'], plain_lyrics: 'x', candidate_id: 'x'.repeat(65) })?.candidateId, undefined);
+  assert.equal(parseCandidate({ title: 't', artists: ['a'], plain_lyrics: 'x', candidate_id: 42 })?.candidateId, undefined);
+});
+
 // ─── Normalize ────────────────────────────────────────────────
 
 test('normalizeCandidateLyrics decodes entities and derives plain from synced', () => {
@@ -487,7 +496,9 @@ test('builtinRowIdToKey resolves both colon and legacy hyphen row ids', () => {
   assert.equal(builtinRowIdToKey('builtin:uta-net'), 'uta-net');
   assert.equal(builtinRowIdToKey('builtin-uta-net'), 'uta-net');
   assert.equal(builtinRowIdToKey('builtin-lrclib'), 'lrclib');
-  assert.equal(builtinRowIdToKey('builtin-ytmusic'), 'ytmusic');
+  // ytmusic was converted to an HTTP plugin row (`ytmusic-sidecar`) by migration 0021.
+  assert.equal(builtinRowIdToKey('builtin-ytmusic'), null);
+  assert.equal(builtinRowIdToKey('builtin:ytmusic'), null);
   assert.equal(builtinRowIdToKey('plugin:abc:1'), null);
   assert.equal(builtinRowIdToKey('builtin-unknown'), null);
 });

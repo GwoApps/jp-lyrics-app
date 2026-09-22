@@ -192,7 +192,6 @@
     "syncStageLrclibSearch": "LRCLIB を検索中…",
     "syncStagePetitlyrics": "PetitLyrics を照会中…",
     "syncStageUtaNet": "Uta-Net を照会中…",
-    "syncStageYtmusic": "YouTube Music を照会中…",
     "furigana": "注音",
     "raw": "原文",
     "readingMode": "表示方式",
@@ -824,9 +823,6 @@
     "sourceConfigFuzzyEnabledHint": "オフにすると、exact ミス時にファジー検索をスキップ。レイテンシとリクエスト量を削減。",
     "sourceConfigSyncCandidateLimit": "同期候補スキャン深度",
     "sourceConfigSyncCandidateLimitHint": "WYSIWYG/LSY 候補を直列にスキャンする数。大きくすると命中率向上、遅延は線形増加。",
-    "sourceConfigSidecarUrl": "サイドカーURL",
-    "sourceConfigSidecarUrlPlaceholder": "http://localhost:8080",
-    "sourceConfigSidecarUrlHint": "ytmusicapi サイドカーのベース URL。空欄は YT_MUSIC_SIDECAR_URL 環境変数を使用。",
     "lyricsProviderErrorInvalidSourceConfig": "ソース設定に不明なフィールドまたは範囲外の値があります",
     "lyricsProviderErrorInvalidSourceSchema": "ソース設定スキーマが無効です",
     "lyricsProviderErrorHttpProviderReadonlyField": "HTTP Provider ではこのフィールドを変更できません"

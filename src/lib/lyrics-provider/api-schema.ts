@@ -104,22 +104,6 @@ export const BUILTIN_SOURCE_SCHEMAS: Record<BuiltinSourceKey, ProviderSourceSche
     displayName: 'Uta-Net',
     fields: [],
   },
-  ytmusic: {
-    key: 'ytmusic',
-    displayName: 'YouTube Music',
-    fields: [
-      {
-        key: 'sidecar_url',
-        labelKey: 'sourceConfigSidecarUrl',
-        type: 'string',
-        default: null,
-        placeholderKey: 'sourceConfigSidecarUrlPlaceholder',
-        helpKey: 'sourceConfigSidecarUrlHint',
-        envFallback: 'YT_MUSIC_SIDECAR_URL',
-        url: true,
-      },
-    ],
-  },
 };
 
 /** Return the schema for a builtin provider row id (e.g. `builtin:lrclib`). */

@@ -1,19 +1,34 @@
 """
-ytmusicapi sidecar — lightweight HTTP service for YouTube Music lyrics.
+ytmusicapi sidecar — HTTP lyrics provider plugin (jplrc-lyrics-provider v1).
 
-Endpoints:
-  GET /lyrics?q=artist+title   → { synced, plain, source }
-  GET /health                  → { ok: true }
+A reference implementation of the plugin protocol documented in
+`examples/provider-plugin/README.md` (deployment notes: yt-sidecar/README.md):
 
-Requires: pip install ytmusicapi fastapi uvicorn
-Optional: set YT_MUSIC_OAUTH env var path to oauth.json
+  GET  /manifest.json  → capability negotiation
+  POST /v1/search      → lyric candidates for one structured track
+  GET  /health         → liveness probe
+
+The plugin only *retrieves candidates*; scoring, LRC validation, low-confidence
+review and persistence are owned by jplrc. Wire shapes and the upstream
+ytmusicapi adaptation live in provider_core.py.
+
+Requires:  pip install ytmusicapi fastapi uvicorn
+Optional:  YT_MUSIC_OAUTH=path/to/oauth.json   (authenticated ytmusicapi session)
+           YT_MUSIC_PORT=8910                  (listen port)
+
+Run directly:  python server.py
 """
 
-import os
-import re
-import sys
 import logging
-from typing import Optional
+import os
+import sys
+
+from provider_core import (
+    MAX_LYRICS_FETCHES,
+    PROTOCOL_VERSION,
+    manifest,
+    search_candidates,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("yt-sidecar")
@@ -37,68 +52,42 @@ def get_ytmusic():
     return _ytmusic
 
 
-def ms_to_lrc(ms: float) -> str:
-    total_sec = int(ms)
-    mins = total_sec // 60
-    secs = total_sec % 60
-    centis = int((ms - total_sec) * 100)
-    return f"{mins:02d}:{secs:02d}.{centis:02d}"
-
-
-def timestamps_to_lrc(timestamps: list[dict]) -> str:
-    lines = []
-    for ts in timestamps:
-        text = ts.get("text", "").strip()
-        start = ts.get("start", 0)
-        if text:
-            lines.append(f"[{ms_to_lrc(start)}]{text}")
-    return "\n".join(lines)
-
-
-def search_and_get_lyrics(query: str) -> Optional[dict]:
-    ytmusic = get_ytmusic()
-    try:
-        results = ytmusic.search(query, filter="songs", limit=3)
-    except Exception as e:
-        logger.error("ytmusic search failed: %s", e)
-        return None
-
-    for song in results:
-        lyrics_info = song.get("lyrics")
-        if not lyrics_info or not lyrics_info.get("browseId"):
-            continue
-        browse_id = lyrics_info["browseId"]
-        try:
-            # Try synced first
-            lyrics = ytmusic.get_lyrics(browse_id, timestamps=True)
-            synced = ""
-            if "timestamps" in lyrics and lyrics["timestamps"]:
-                synced = timestamps_to_lrc(lyrics["timestamps"])
-            plain = lyrics.get("lyrics", "")
-            if not plain and not synced:
-                continue
-            return {
-                "synced": synced,
-                "plain": plain,
-                "source": lyrics.get("source", "ytmusic"),
-            }
-        except Exception as e:
-            logger.warning("get_lyrics failed for %s: %s", browse_id, e)
-            continue
-
-    return None
-
-
 # ── FastAPI app ──
 
 try:
-    from fastapi import FastAPI, Query
+    from fastapi import FastAPI
     from fastapi.responses import JSONResponse
+    from pydantic import BaseModel, Field
 except ImportError:
     print("Install fastapi: pip install fastapi uvicorn", file=sys.stderr)
     sys.exit(1)
 
-app = FastAPI(title="ytmusicapi sidecar")
+app = FastAPI(title="ytmusicapi sidecar (jplrc-lyrics-provider v1)")
+
+
+class Track(BaseModel):
+    title: str = ""
+    artists: list[str] = Field(default_factory=list)
+    album: str | None = None
+    duration_ms: int | None = None
+    isrc: str | None = None
+    spotify_track_id: str | None = None
+    locale: str | None = None
+
+
+class SearchRequest(BaseModel):
+    """The jplrc-lyrics-provider v1 search body (unknown fields are ignored)."""
+
+    protocol_version: int
+    request_id: str | None = None
+    track: Track
+    accept: list[str] = Field(default_factory=lambda: ["synced", "plain"])
+    max_candidates: int | None = None
+
+
+def _error(status: int, code: str, message: str) -> JSONResponse:
+    """The protocol's optional error body (diagnostic only, never user-facing)."""
+    return JSONResponse(status_code=status, content={"error": {"code": code, "message": message}})
 
 
 @app.get("/health")
@@ -106,15 +95,42 @@ async def health():
     return {"ok": True}
 
 
-@app.get("/lyrics")
-async def lyrics(q: str = Query(..., description="Search query (artist + title)")):
-    result = search_and_get_lyrics(q)
-    if not result:
-        return JSONResponse(status_code=404, content={"error": "No lyrics found"})
-    return result
+@app.get("/manifest.json")
+async def manifest_endpoint():
+    return manifest()
+
+
+@app.post("/v1/search")
+async def search(req: SearchRequest):
+    if req.protocol_version != PROTOCOL_VERSION:
+        return _error(400, "invalid_request", f"unsupported protocol_version: {req.protocol_version}")
+
+    try:
+        ytmusic = get_ytmusic()
+    except Exception as exc:
+        logger.error("ytmusicapi init failed: %s", exc)
+        return _error(503, "temporary_unavailable", "ytmusicapi init failed")
+
+    try:
+        candidates = search_candidates(
+            ytmusic,
+            req.track.model_dump(),
+            min(req.max_candidates or MAX_LYRICS_FETCHES, MAX_LYRICS_FETCHES),
+        )
+    except Exception as exc:
+        logger.error("upstream search failed: %s", exc)
+        return _error(503, "temporary_unavailable", "upstream search failed")
+
+    # A miss is a normal 200 with an empty list — never a 4xx/5xx.
+    return {
+        "protocol_version": PROTOCOL_VERSION,
+        "request_id": req.request_id,
+        "candidates": candidates,
+    }
 
 
 if __name__ == "__main__":
     import uvicorn
+
     port = int(os.environ.get("YT_MUSIC_PORT", "8910"))
     uvicorn.run(app, host="0.0.0.0", port=port)

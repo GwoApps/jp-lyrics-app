@@ -192,7 +192,6 @@
     "syncStageLrclibSearch": "正在模糊搜索 LRCLIB…",
     "syncStagePetitlyrics": "正在查询 PetitLyrics…",
     "syncStageUtaNet": "正在查询 Uta-Net…",
-    "syncStageYtmusic": "正在查询 YouTube Music…",
     "furigana": "注音",
     "raw": "原文",
     "readingMode": "显示方式",
@@ -824,9 +823,6 @@
     "sourceConfigFuzzyEnabledHint": "关闭后 exact 未命中即跳过 fuzzy 搜索，降低延迟和请求量。",
     "sourceConfigSyncCandidateLimit": "同步词候选扫描深度",
     "sourceConfigSyncCandidateLimitHint": "串行扫描 indexed WYSIWYG/LSY 候选的数量。调大提高命中率、延迟线性增长。",
-    "sourceConfigSidecarUrl": "Sidecar 地址",
-    "sourceConfigSidecarUrlPlaceholder": "http://localhost:8080",
-    "sourceConfigSidecarUrlHint": "ytmusicapi sidecar 的基地址，留空使用环境变量 YT_MUSIC_SIDECAR_URL。",
     "lyricsProviderErrorInvalidSourceConfig": "源配置包含未知字段或值不在允许范围内",
     "lyricsProviderErrorInvalidSourceSchema": "源配置 schema 无效",
     "lyricsProviderErrorHttpProviderReadonlyField": "HTTP Provider 不支持该字段"

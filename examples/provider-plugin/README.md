@@ -154,6 +154,11 @@ A minimal Node reference implementation lives in
 node examples/provider-plugin/index.mjs --port 8787
 ```
 
+A production-grade Python implementation of the same protocol — including the
+upstream-adaptation and candidate-identity patterns worth copying — lives in
+[`yt-sidecar/`](../../yt-sidecar/) (this repo's docker-compose deployment runs
+it as the YouTube Music lyrics source).
+
 Then in the admin 系统 → 歌词源 panel, add a provider with base URL
 `http://localhost:8787` (requires `LYRICS_PROVIDER_ALLOW_HTTP=true` +
 `LYRICS_PROVIDER_ALLOW_PRIVATE_NETWORK=true` for local testing).

@@ -12,7 +12,6 @@ const decodeHtmlEntity = (heModule as unknown as { default?: typeof heModule }).
  *  2. LRCLIB fuzzy search
  *  3. PetitLyrics (JP synced)
  *  4. Uta-Net (JP plain)
- *  5. ytmusicapi sidecar (optional)
  */
 
 export interface LyricsResult {
@@ -852,33 +851,6 @@ export async function fetchFromUtaNet(
   };
 }
 
-// ─── ytmusicapi sidecar ──
-
-export async function fetchFromYtMusic(
-  title: string,
-  artist: string,
-  signal?: AbortSignal,
-  opts?: { sidecarUrl?: string; timeoutMs?: number },
-): Promise<LyricsResult | null> {
-  // Row-configured sidecar URL takes precedence; env var is the legacy fallback.
-  const sidecarUrl = opts?.sidecarUrl?.trim() || process.env.YT_MUSIC_SIDECAR_URL;
-  if (!sidecarUrl) return null;
-  try {
-    const res = await fetchWithTimeout(
-      `${sidecarUrl}/lyrics?q=${encodeURIComponent(`${title} ${artist}`)}`,
-      { signal },
-      opts?.timeoutMs ?? 20000,
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data.plain && !data.lyrics) return null;
-    return { synced: data.synced || '', plain: data.plain || data.lyrics || '' };
-  } catch {
-    if (signal?.aborted) throw signal.reason;
-    return null;
-  }
-}
-
 // ─── Full chain ──
 
 /**
@@ -891,8 +863,7 @@ export type SyncStage =
   | 'lrclib'        // LRCLIB exact + Spotify canonical name
   | 'lrclib-search' // LRCLIB fuzzy search
   | 'petitlyrics'
-  | 'uta-net'
-  | 'ytmusic';
+  | 'uta-net';
 
 /** Map a legacy SyncStage string to a display name used by the SSE stage events. */
 export function syncStageToDynamicProviderStage(stage: string): ProviderStage {
@@ -901,7 +872,6 @@ export function syncStageToDynamicProviderStage(stage: string): ProviderStage {
     'lrclib-search': 'LRCLIB',
     'petitlyrics': 'PetitLyrics',
     'uta-net': 'Uta-Net',
-    'ytmusic': 'YouTube Music',
   };
   return { id: stage, displayName: names[stage] ?? 'Lyrics', kind: 'builtin' };
 }

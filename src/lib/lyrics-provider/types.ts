@@ -1,7 +1,7 @@
 /**
  * Transport-agnostic lyrics provider contract (ISSUE #148).
  *
- * Built-in sources (LRCLIB / PetitLyrics / Uta-Net / ytmusic) and runtime
+ * Built-in sources (LRCLIB / PetitLyrics / Uta-Net) and runtime
  * hot-plugged HTTP providers share one unified interface: a `search` that
  * returns structured candidates + a status, leaving confidence scoring, LRC
  * parsing, size limits, low-confidence review and security policy to jplrc.
