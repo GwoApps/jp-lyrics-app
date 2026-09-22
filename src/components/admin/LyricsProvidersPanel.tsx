@@ -14,6 +14,7 @@ import {
 import {
   CheckCircle2, CircleAlert, Loader2, Plus, Plug, X,
 } from 'lucide-react';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { useI18n } from '@/lib/i18n';
 import { ApiError } from '@/client/api/request';
 import { lyricsProviderSaveErrorKey } from '@/lib/lyrics-provider/error-keys';
@@ -28,6 +29,38 @@ import {
 import BuiltinSourceConfigFields from './BuiltinSourceConfigFields';
 import SortableProviderRow, { ProviderRowSummary } from './LyricsProviderRow';
 import { EMPTY_PROVIDER_FORM, type ListResponse, type ProviderTestResult, type ProviderWire } from './lyrics-provider-types';
+
+/**
+ * Failure codes the server shares with the generic admin error vocabulary.
+ * Provider-specific codes resolve through the explicit code -> key table in
+ * `@/lib/lyrics-provider/error-keys` (never a derived key: the dictionary keys
+ * are camelCase while the codes are snake_case).
+ */
+const GENERIC_ERROR_KEYS: Record<string, string> = {
+  forbidden: 'apiErrors.forbidden',
+  not_found: 'song.notFound',
+  invalid_fields: 'admin.invalidFields',
+  invalid_json: 'admin.invalidJson',
+};
+
+/**
+ * Localised reason for a failed provider write (delete / enable & disable).
+ *
+ * Reuses the existing dictionaries only (no new i18n strings): provider codes
+ * go through the same explicit lookup table `save()` uses, shared codes through
+ * the generic admin vocabulary, and anything else falls back to the
+ * caller-supplied generic message (never the raw code or key).
+ */
+function providerErrorMessage(
+  t: (key: string, vars?: Record<string, string | number>) => string,
+  error: unknown,
+  fallbackKey: string,
+): string {
+  const code = error instanceof ApiError ? error.code : undefined;
+  if (!code) return t(fallbackKey);
+  const errorKey = lyricsProviderSaveErrorKey(code) ?? GENERIC_ERROR_KEYS[code];
+  return errorKey ? t(errorKey) : t(fallbackKey);
+}
 
 /**
  * Admin "歌词源" panel (ISSUE #148 Phase 2): CRUD / test / reorder / enable &
@@ -45,9 +78,16 @@ export default function LyricsProvidersPanel() {
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<Record<string, ProviderTestResult>>({});
   const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  // List-level feedback (toggle/delete failures); the dialog-scoped `notice`
+  // above is only painted inside the create/edit dialog.
+  const [panelNotice, setPanelNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   // Dialog visibility is a dedicated flag so create (editing=null) and edit
   // (editing!=null) both work through the same dialog.
   const [dialogOpen, setDialogOpen] = useState(false);
+  // Row awaiting delete confirmation; the ConfirmDialog (danger variant) is
+  // the only delete confirmation path (ISSUE #305 — no native window.confirm).
+  const [deleteTarget, setDeleteTarget] = useState<ProviderWire | null>(null);
+  const [deleting, setDeleting] = useState(false);
   // dnd-kit sortable: id of the row currently being dragged (drives the
   // DragOverlay preview + the placeholder styling on the source row).
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
@@ -115,6 +155,7 @@ export default function LyricsProvidersPanel() {
   const save = async () => {
     setSaving(true);
     setNotice(null);
+    setPanelNotice(null);
     const isEdit = !!editing;
     try {
       const input = {
@@ -141,13 +182,11 @@ export default function LyricsProvidersPanel() {
       closeDialog();
       await load(true);
     } catch (error) {
-      // Look the code up in the explicit code → key table: an unknown code falls
-      // back to the generic message instead of leaking the raw code or key.
-      const code = error instanceof ApiError ? error.code : undefined;
-      const errorKey = lyricsProviderSaveErrorKey(code);
+      // Shared with the list-level path: explicit code → key table, then the
+      // generic vocabulary, then the fallback message (never the raw code/key).
       setNotice({
         kind: 'err',
-        text: errorKey ? t(errorKey) : t('admin.lyricsProviderSaveFailed'),
+        text: providerErrorMessage(t, error, 'admin.lyricsProviderSaveFailed'),
       });
     } finally {
       setSaving(false);
@@ -155,19 +194,39 @@ export default function LyricsProvidersPanel() {
   };
 
   const toggleEnabled = async (p: ProviderWire) => {
+    setPanelNotice(null);
     try {
       await updateLyricsProvider(p.id, { enabled: !p.enabled });
       await load(true);
-    } catch { /* keep the current row state when the request fails */ }
+    } catch (error) {
+      // The row kept its previous state, so say why instead of failing silently.
+      setPanelNotice({ kind: 'err', text: providerErrorMessage(t, error, 'admin.lyricsProviderSaveFailed') });
+    }
   };
 
-  const remove = async (p: ProviderWire) => {
+  /** Opens the danger ConfirmDialog for an HTTP provider row. */
+  const requestRemove = (p: ProviderWire) => {
     if (p.kind === 'builtin') return; // UI guard; the API rejects it anyway
-    if (!window.confirm(t('admin.lyricsProviderDeleteConfirm', { name: p.name }))) return;
+    setPanelNotice(null);
+    setDeleteTarget(p);
+  };
+
+  const confirmRemove = async () => {
+    const target = deleteTarget;
+    if (!target) return;
+    setDeleting(true);
+    setPanelNotice(null);
     try {
-      await deleteLyricsProvider(p.id);
+      await deleteLyricsProvider(target.id);
+      setDeleteTarget(null);
       await load(true);
-    } catch { /* keep the current row when deletion fails */ }
+    } catch (error) {
+      // Close the dialog and surface the reason in the panel notice.
+      setDeleteTarget(null);
+      setPanelNotice({ kind: 'err', text: providerErrorMessage(t, error, 'home.deleteFailed') });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const testConnection = async (p: ProviderWire) => {
@@ -300,6 +359,16 @@ export default function LyricsProvidersPanel() {
         </span>
       </div>
 
+      {panelNotice && (
+        <p
+          role="alert"
+          className={`mb-3 flex items-center gap-1 text-xs ${panelNotice.kind === 'ok' ? 'text-[var(--success)]' : 'text-[var(--destructive)]'}`}
+        >
+          {panelNotice.kind === 'ok' ? <CheckCircle2 className="h-3.5 w-3.5" /> : <CircleAlert className="h-3.5 w-3.5" />}
+          {panelNotice.text}
+        </p>
+      )}
+
       {data.providers.length === 0 ? (
         <p className="text-xs text-[var(--muted-foreground)]">{t('admin.lyricsProviderEmpty')}</p>
       ) : (
@@ -324,7 +393,7 @@ export default function LyricsProvidersPanel() {
                   onTest={p.kind === 'http' ? () => void testConnection(p) : undefined}
                   testing={testingId === p.id}
                   onEdit={() => openEdit(p)}
-                  onDelete={p.kind === 'http' ? () => void remove(p) : undefined}
+                  onDelete={p.kind === 'http' ? () => requestRemove(p) : undefined}
                   sourceSchema={data.source_schemas[p.id.replace(/^builtin[:-]/, '')]}
                 />
               ))}
@@ -351,6 +420,16 @@ export default function LyricsProvidersPanel() {
           <CircleAlert className="h-3.5 w-3.5" /> {t('admin.lyricsProviderNoSecretKey')}
         </p>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title={t('admin.lyricsProviderDeleteConfirm', { name: deleteTarget?.name ?? '' })}
+        confirmLabel={t('common.delete')}
+        cancelLabel={t('common.cancel')}
+        variant="danger"
+        onConfirm={() => { if (!deleting) void confirmRemove(); }}
+        onCancel={() => setDeleteTarget(null)}
+      />
 
       {dialogOpen && (
         <div
