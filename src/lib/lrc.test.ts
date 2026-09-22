@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createTimelineDraft, buildTimelineDraft, extractLrcMetadata, findLrcConflicts, findTimelineConflicts, getLrcTextLines, hasSameLrcText, isLrcMetadataLine, mapTimelineTimestamps, offsetLrcLines, parseLrc, resolveLrcTextUpdate, resolveTimelineSave, serializeLrc, serializeTimelineDraft, updateLrcLineTime } from './lrc.ts';
+import { createTimelineDraft, buildTimelineDraft, extractLrcMetadata, findLrcConflicts, findTimelineConflicts, getLrcTextLines, hasSameLrcText, isLrcMetadataLine, mapTimelineTimestamps, offsetLrcLines, parseLrc, parseLrcTimestamp, resolveLrcTextUpdate, resolveTimelineSave, serializeLrc, serializeTimelineDraft, updateLrcLineTime } from './lrc.ts';
 
 test('offsetLrcLines shifts timestamps and clamps at zero', () => {
   const lines = parseLrc('[00:00.250]first\n[01:02.345]second');
@@ -101,6 +101,37 @@ test('parseLrc tolerates non-standard timestamps (single-digit minutes, missing 
   assert.deepEqual(getLrcTextLines('[1:23.45]first\n[01:23]second\n[0:05]third'), ['first', 'second', 'third']);
 });
 
+test('colon-separated timestamps are parsed, stripped and expanded like dot ones', () => {
+  // [00:12:34] means [00:12.340]: the third segment is a fraction of a second,
+  // whatever the separator. Colon digits are zero-padded on the right.
+  const lrc = '[00:12:34]夜に駆ける\n[00:15:00]沈むように';
+  assert.deepEqual(parseLrc(lrc), [
+    { timeMs: 12340, text: '夜に駆ける' },
+    { timeMs: 15000, text: '沈むように' },
+  ]);
+  assert.deepEqual(getLrcTextLines(lrc), ['夜に駆ける', '沈むように']);
+  assert.equal(findLrcConflicts(lrc).length, 0);
+  assert.deepEqual(createTimelineDraft('夜に駆ける\n沈むように', lrc), [
+    { timeMs: 12340, text: '夜に駆ける' },
+    { timeMs: 15000, text: '沈むように' },
+  ]);
+  // A colon row with no lyric text still carries no highlightable line.
+  assert.deepEqual(parseLrc('[00:12:34][00:15:00]chorus'), [
+    { timeMs: 12340, text: 'chorus' },
+    { timeMs: 15000, text: 'chorus' },
+  ]);
+  assert.deepEqual(parseLrc('[00:12:00]'), []);
+  // Colon and dot rows mix freely, and dot-only results are unchanged.
+  assert.deepEqual(parseLrc('[1:23:45]a\n[00:50.000]b'), [
+    { timeMs: 50000, text: 'b' },
+    { timeMs: 83450, text: 'a' },
+  ]);
+  assert.deepEqual(parseLrc('[00:01.000]a\n[01:23]b'), [
+    { timeMs: 1000, text: 'a' },
+    { timeMs: 83000, text: 'b' },
+  ]);
+});
+
 test('non-standard timestamps do not leak into text lines nor get dropped', () => {
   // Mixed input: standard, non-standard, multi-timestamp and a plain row.
   const lrc = '[00:10.00][1:23.45]chorus\n[02:00]verse\nplain line\n[3:04.1]bridge';
@@ -171,6 +202,17 @@ test('parseLrcTimestamp accepts editor timestamps and rejects invalid values', a
   assert.equal(parseLrcTimestamp('01:02.345'), 62345);
   assert.equal(parseLrcTimestamp('1:02.3'), 62300);
   assert.equal(parseLrcTimestamp('bad'), null);
+});
+
+test('parseLrcTimestamp accepts a colon-separated fraction like the LRC parser', () => {
+  // [mm:ss:xx] is the "dot typed as a colon" variant the parser normalises to
+  // the same millisecond value, so manual entry accepts it too.
+  assert.equal(parseLrcTimestamp('00:12:34'), 12340);
+  assert.equal(parseLrcTimestamp('00:12:3'), 12300);
+  assert.equal(parseLrcTimestamp('1:23:450'), 83450);
+  // Existing dot forms and the rejection set are unchanged.
+  assert.equal(parseLrcTimestamp('00:12.34'), 12340);
+  assert.equal(parseLrcTimestamp('1:83:450'), null);
 });
 
 test('hasSameLrcText ignores timestamps but detects lyric edits and line order changes', () => {

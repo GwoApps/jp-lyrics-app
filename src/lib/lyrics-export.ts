@@ -10,7 +10,7 @@
 import type { FuriganaLine, ReadingScheme } from './types.ts';
 import { normalizeFuriganaSegments, resolveFuriganaReading } from './romaji.ts';
 import { parseTranslationCache } from './translation/parse.ts';
-import { extractLrcMetadata, isLrcMetadataLine } from './lrc.ts';
+import { LRC_LEADING_TIMESTAMPS_REGEX, extractLrcMetadata, isLrcMetadataLine, stripLrcTimestampsFromLine } from './lrc.ts';
 import { sourceLyricsLang } from './lyrics-reading.ts';
 import { resolveTranslationLang } from './target-lang.ts';
 
@@ -109,9 +109,6 @@ export function renderPlainLineToHtml(line: string): string {
   return `<p>${line ? escapeHtml(line) : '&nbsp;'}</p>`;
 }
 
-/** Regex matching the full leading timestamp prefix of one synced LRC row. */
-const LRC_LEADING_TIMESTAMPS_RE = /^(?:\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]\s*)+/;
-
 /**
  * Append a translation line after each timed lyric row, reusing the exact same
  * timestamp prefix so players keep the highlight synchronized. Translations are
@@ -131,8 +128,11 @@ function appendLrcTranslations(lyrics: string, translations: string[], rawLyrics
     const trimmed = raw.trim();
     // Metadata tags ([ti:]/[ar:]/…) and blank lines are never lyric rows.
     if (!trimmed || isLrcMetadataLine(trimmed)) return raw;
-    const prefix = trimmed.match(LRC_LEADING_TIMESTAMPS_RE)?.[0] ?? '';
-    const text = trimmed.slice(prefix.length).trim();
+    // Both the prefix to re-emit and the lyric text come from the shared
+    // timestamp syntax in `lrc.ts` — a form the parser accepts must never be
+    // invisible here, or the translation line would be silently dropped.
+    const prefix = trimmed.match(LRC_LEADING_TIMESTAMPS_REGEX)?.[0] ?? '';
+    const text = stripLrcTimestampsFromLine(trimmed);
     // A timestamp with no text carries no lyric, so it consumes no source row.
     if (!text) return raw;
     // The k-th text-bearing synced row corresponds to the k-th non-empty source
