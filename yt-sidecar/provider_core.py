@@ -24,6 +24,7 @@ persistence all belong to jplrc — never fabricate identity evidence here.
 """
 
 from typing import Any, Optional
+import hmac
 
 PROTOCOL_NAME = "jplrc-lyrics-provider"
 PROTOCOL_VERSION = 1
@@ -49,6 +50,17 @@ def manifest() -> dict:
         "capabilities": ["search", "plain", "synced"],
         "limits": {"max_candidates": MAX_LYRICS_FETCHES},
     }
+
+
+def bearer_ok(authorization: Optional[str], token: Optional[str]) -> bool:
+    """
+    Bearer auth check for public deployments. Empty / missing `token` disables
+    auth (trusted-network mode); otherwise the header must match
+    ``Bearer <token>`` exactly, compared in constant time.
+    """
+    if not token:
+        return True
+    return hmac.compare_digest(authorization or "", f"Bearer {token}")
 
 
 def ms_to_lrc(ms: float) -> str:

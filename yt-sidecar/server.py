@@ -26,6 +26,7 @@ import sys
 from provider_core import (
     MAX_LYRICS_FETCHES,
     PROTOCOL_VERSION,
+    bearer_ok,
     manifest,
     search_candidates,
 )
@@ -55,7 +56,7 @@ def get_ytmusic():
 # ── FastAPI app ──
 
 try:
-    from fastapi import FastAPI
+    from fastapi import FastAPI, Request
     from fastapi.responses import JSONResponse
     from pydantic import BaseModel, Field
 except ImportError:
@@ -63,6 +64,11 @@ except ImportError:
     sys.exit(1)
 
 app = FastAPI(title="ytmusicapi sidecar (jplrc-lyrics-provider v1)")
+
+# Optional bearer auth for public deployments (PROVIDER_TOKEN env). Empty /
+# unset = trusted-network mode (the compose deployment default). Pair it with
+# `auth_type: bearer` + the same token on the jplrc provider row.
+TOKEN = os.environ.get("PROVIDER_TOKEN") or None
 
 
 class Track(BaseModel):
@@ -96,12 +102,16 @@ async def health():
 
 
 @app.get("/manifest.json")
-async def manifest_endpoint():
+async def manifest_endpoint(request: Request):
+    if not bearer_ok(request.headers.get("authorization"), TOKEN):
+        return _error(401, "auth_failed", "missing or invalid bearer token")
     return manifest()
 
 
 @app.post("/v1/search")
-async def search(req: SearchRequest):
+async def search(req: SearchRequest, request: Request):
+    if not bearer_ok(request.headers.get("authorization"), TOKEN):
+        return _error(401, "auth_failed", "missing or invalid bearer token")
     if req.protocol_version != PROTOCOL_VERSION:
         return _error(400, "invalid_request", f"unsupported protocol_version: {req.protocol_version}")
 

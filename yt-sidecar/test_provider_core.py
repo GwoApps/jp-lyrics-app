@@ -13,6 +13,7 @@ import unittest
 from provider_core import (
     MAX_LYRICS_FETCHES,
     PROVIDER_ID,
+    bearer_ok,
     build_query,
     candidate_from_song,
     lyric_lines_to_texts,
@@ -174,6 +175,21 @@ class TestSearch(unittest.TestCase):
         c = candidate_from_song(yt, song)
         assert c is not None
         self.assertEqual(c["album"], "Album A")
+
+
+class TestAuth(unittest.TestCase):
+    def test_no_token_disables_auth(self):
+        self.assertTrue(bearer_ok(None, None))
+        self.assertTrue(bearer_ok(None, ""))
+        self.assertTrue(bearer_ok("Bearer whatever", None))
+
+    def test_token_requires_exact_bearer_header(self):
+        self.assertTrue(bearer_ok("Bearer s3cret", "s3cret"))
+        self.assertFalse(bearer_ok(None, "s3cret"))
+        self.assertFalse(bearer_ok("", "s3cret"))
+        self.assertFalse(bearer_ok("Bearer wrong", "s3cret"))
+        self.assertFalse(bearer_ok("bearer s3cret", "s3cret"))
+        self.assertFalse(bearer_ok("s3cret", "s3cret"))
 
 
 if __name__ == "__main__":

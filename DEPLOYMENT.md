@@ -244,6 +244,26 @@ wrangler secret put TRANSLATION_API_KEY   # optional, for the translation featur
 wrangler secret put LYRICS_PROVIDER_SECRET_KEY
 ```
 
+#### YouTube Music source (yt-sidecar) on Cloudflare
+
+The bundled `yt-sidecar` service cannot run on Workers — migration 0021 seeds a
+`ytmusic-sidecar` plugin row with `http://yt-sidecar:8910`, which is unreachable
+here. It fails closed (the network policy rejects plaintext HTTP before any
+network call), so it only adds one skipped stage per sync:
+
+- **Disable or delete** the `ytmusic-sidecar` row in the admin 系统 → 歌词源
+  panel, unless you point it at an external sidecar.
+- To actually use YouTube Music: deploy `yt-sidecar/` on any host with public
+  HTTPS and `PROVIDER_TOKEN` bearer auth, then set the row's base URL to it
+  (`auth_type: bearer`, secret = the same token) — see `yt-sidecar/README.md`.
+  The default network policy accepts public HTTPS; no `LYRICS_PROVIDER_ALLOW_*`
+  change is needed.
+- Do NOT set `LYRICS_PROVIDER_ALLOW_HTTP` /
+  `LYRICS_PROVIDER_ALLOW_PRIVATE_NETWORK` on Cloudflare: nothing here needs
+  them and they relax the SSRF policy globally.
+- Remove a stale `YT_MUSIC_SIDECAR_URL` var if one exists — nothing reads it
+  since migration 0021.
+
 > **Note:** when using the `workers-ai` translation provider, no API key is
 > needed — add the `ai` binding in `wrangler.jsonc` instead and set
 > `TRANSLATION_PROVIDER=workers-ai`.

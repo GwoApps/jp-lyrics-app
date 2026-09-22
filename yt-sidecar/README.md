@@ -59,3 +59,38 @@ pip install -r requirements.txt
 python server.py                 # YT_MUSIC_PORT=8910, YT_MUSIC_OAUTH=<oauth.json>
 python3 -m unittest discover -s yt-sidecar   # protocol + mapping tests, no deps
 ```
+
+## Public HTTPS deployment (e.g. for Cloudflare Workers hosts)
+
+For deployments where jplrc cannot reach the sidecar over a private network,
+expose it over public HTTPS and enable bearer auth:
+
+1. Run the container behind a TLS reverse proxy. Traefik labels (same pattern
+   as jplrc's own compose service):
+
+   ```yaml
+   services:
+     yt-sidecar:
+       build: ./yt-sidecar
+       env_file: .env                # PROVIDER_TOKEN=<random secret>
+       networks: [traefik-net]
+       labels:
+         - "traefik.enable=true"
+         - "traefik.http.services.yt-sidecar.loadbalancer.server.port=8910"
+         - "traefik.http.routers.yt-sidecar.rule=Host(`lyrics-sidecar.example.com`)"
+         - "traefik.http.routers.yt-sidecar.entrypoints=${TRAEFIK_ENTRYPOINT}"
+         - "traefik.http.routers.yt-sidecar.tls.certresolver=${TRAEFIK_CERTRESOLVER}"
+   ```
+
+2. Set `PROVIDER_TOKEN` to a long random secret. `/manifest.json` and
+   `/v1/search` then require `Authorization: Bearer <token>` (401
+   `auth_failed` otherwise); `/health` stays open for probes.
+
+3. Register it in the admin 系统 → 歌词源 panel: base URL
+   `https://lyrics-sidecar.example.com`, auth type `bearer`, secret = the same
+   token. The default network policy (HTTPS + public only) accepts this without
+   any `LYRICS_PROVIDER_ALLOW_*` change.
+
+jplrc never sends session / Spotify credentials to plugins; the bearer token is
+stored AES-GCM encrypted at rest (requires `LYRICS_PROVIDER_SECRET_KEY`, see
+DEPLOYMENT.md).
