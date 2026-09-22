@@ -51,5 +51,8 @@ node_modules/
 
 # Python (yt-sidecar tests)
 __pycache__/
+
+# never commit upstream session secrets
+yt-music-oauth.json
 .dev.vars*
 !.dev.vars.example

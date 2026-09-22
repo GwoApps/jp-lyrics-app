@@ -68,6 +68,12 @@ LYRICS_PROVIDER_ALLOW_HTTP=false
 LYRICS_PROVIDER_ALLOW_PRIVATE_NETWORK=false
 # Required to store Bearer-token providers (AES-GCM encryption at rest).
 LYRICS_PROVIDER_SECRET_KEY=
+
+# yt-sidecar: authenticated upstream session (recommended — unauthenticated
+# sessions get soft-throttled with empty results). Generate with
+# `ytmusicapi oauth` / `ytmusicapi browser`, drop the file at
+# /data0/docker/jplrc-secrets/yt-music-oauth.json (mounted read-only at
+# /app/oauth.json). An empty/invalid file falls back to unauth.
 # Optional per-provider / chain budgets (ms). Missing/invalid values fall back to safe defaults.
 LYRICS_PROVIDER_DEFAULT_TIMEOUT_MS=20000
 LYRICS_PROVIDER_MAX_TIMEOUT_MS=60000

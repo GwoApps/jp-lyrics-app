@@ -26,6 +26,7 @@ import sys
 from provider_core import (
     MAX_LYRICS_FETCHES,
     PROTOCOL_VERSION,
+    EmptySearchGuard,
     bearer_ok,
     manifest,
     search_candidates,
@@ -37,6 +38,10 @@ logger = logging.getLogger("yt-sidecar")
 # ── Lazy init ytmusicapi (heavy import) ──
 
 _ytmusic = None
+# Recycles the shared session after consecutive empty/failed searches (see
+# provider_core.EmptySearchGuard): upstream soft-throttling can make a session
+# return empty result sets with no error; a fresh session recovers.
+_guard = EmptySearchGuard()
 
 
 def get_ytmusic():
@@ -44,13 +49,26 @@ def get_ytmusic():
     if _ytmusic is None:
         from ytmusicapi import YTMusic
         oauth_path = os.environ.get("YT_MUSIC_OAUTH")
-        if oauth_path and os.path.exists(oauth_path):
-            _ytmusic = YTMusic(oauth_path)
-            logger.info("ytmusicapi initialized with OAuth: %s", oauth_path)
-        else:
+        if oauth_path and os.path.isfile(oauth_path):
+            try:
+                _ytmusic = YTMusic(oauth_path)
+                logger.info("ytmusicapi initialized with OAuth: %s", oauth_path)
+            except Exception as exc:
+                logger.warning(
+                    "YT_MUSIC_OAUTH unusable (%s); falling back to unauthenticated session",
+                    exc,
+                )
+        if _ytmusic is None:
             _ytmusic = YTMusic()
             logger.info("ytmusicapi initialized without auth")
     return _ytmusic
+
+
+def reset_ytmusic(reason: str):
+    """Drop the shared client so the next request builds a fresh session."""
+    global _ytmusic
+    _ytmusic = None
+    logger.info("ytmusicapi session reset (%s)", reason)
 
 
 # ── FastAPI app ──
@@ -129,7 +147,12 @@ async def search(req: SearchRequest, request: Request):
         )
     except Exception as exc:
         logger.error("upstream search failed: %s", exc)
+        if _guard.observe(0):
+            reset_ytmusic("consecutive empty/failed searches")
         return _error(503, "temporary_unavailable", "upstream search failed")
+
+    if _guard.observe(len(candidates)):
+        reset_ytmusic("consecutive empty searches")
 
     # A miss is a normal 200 with an empty list — never a 4xx/5xx.
     return {

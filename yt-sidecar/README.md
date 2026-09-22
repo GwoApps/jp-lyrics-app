@@ -60,6 +60,18 @@ python server.py                 # YT_MUSIC_PORT=8910, YT_MUSIC_OAUTH=<oauth.jso
 python3 -m unittest discover -s yt-sidecar   # protocol + mapping tests, no deps
 ```
 
+## Authenticated sessions (recommended)
+
+`YT_MUSIC_OAUTH=/app/oauth.json` — path to a ytmusicapi `oauth.json`. Generate
+one with `ytmusicapi oauth` (native Google sign-in flow) or `ytmusicapi
+browser` (export from a local browser's cookies). Authenticated sessions are
+far more stable: unauthenticated ones can start returning empty search results
+(no error) when the upstream soft-throttles them. An empty/invalid file is
+ignored with a warning (falls back to an unauthenticated session), and the
+server additionally recycles the session after two consecutive empty or failed
+searches (`EmptySearchGuard`), so a degraded session self-heals on the next
+requests either way.
+
 ## Public HTTPS deployment (e.g. for Cloudflare Workers hosts)
 
 For deployments where jplrc cannot reach the sidecar over a private network,

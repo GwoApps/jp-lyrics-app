@@ -13,6 +13,7 @@ import unittest
 from provider_core import (
     MAX_LYRICS_FETCHES,
     PROVIDER_ID,
+    EmptySearchGuard,
     bearer_ok,
     build_query,
     candidate_from_song,
@@ -190,6 +191,29 @@ class TestAuth(unittest.TestCase):
         self.assertFalse(bearer_ok("Bearer wrong", "s3cret"))
         self.assertFalse(bearer_ok("bearer s3cret", "s3cret"))
         self.assertFalse(bearer_ok("s3cret", "s3cret"))
+
+
+class TestEmptySearchGuard(unittest.TestCase):
+    def test_hits_reset_the_streak(self):
+        g = EmptySearchGuard(threshold=2)
+        self.assertFalse(g.observe(0))  # streak 1
+        self.assertFalse(g.observe(2))  # a hit resets
+        self.assertFalse(g.observe(0))  # streak 1 again, not 2
+        self.assertTrue(g.observe(0))   # streak 2 -> recycle
+        self.assertFalse(g.observe(3))  # a hit resets after recycle
+
+    def test_threshold_consecutive_empty_triggers_once(self):
+        g = EmptySearchGuard(threshold=2)
+        self.assertFalse(g.observe(0))
+        self.assertTrue(g.observe(0))
+        # streak restarted: the next empty starts counting again
+        self.assertFalse(g.observe(0))
+        self.assertTrue(g.observe(0))
+
+    def test_threshold_is_clamped_to_at_least_one(self):
+        g = EmptySearchGuard(threshold=0)
+        self.assertEqual(g.threshold, 1)
+        self.assertTrue(g.observe(0))
 
 
 if __name__ == "__main__":

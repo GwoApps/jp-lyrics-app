@@ -63,6 +63,32 @@ def bearer_ok(authorization: Optional[str], token: Optional[str]) -> bool:
     return hmac.compare_digest(authorization or "", f"Bearer {token}")
 
 
+class EmptySearchGuard:
+    """
+    Recycle the shared upstream session after `threshold` consecutive searches
+    with zero candidates (failed searches count as zero). A ytmusicapi session
+    can start returning empty result sets (HTTP 200, no error) when the
+    upstream soft-throttles it — authenticated or not — and a fresh session
+    recovers. A genuine no-hit query can also look empty, so threshold > 1
+    keeps false positives cheap (one harmless client rebuild).
+    """
+
+    def __init__(self, threshold: int = 2):
+        self.threshold = max(1, int(threshold))
+        self._streak = 0
+
+    def observe(self, hit_count: int) -> bool:
+        """Record one search outcome; True => recycle the upstream client."""
+        if hit_count > 0:
+            self._streak = 0
+            return False
+        self._streak += 1
+        if self._streak >= self.threshold:
+            self._streak = 0
+            return True
+        return False
+
+
 def ms_to_lrc(ms: float) -> str:
     """Milliseconds → ``[mm:ss.cc]`` LRC timestamp (minutes unbounded)."""
     total_centis = int(round(float(ms) / 10.0))
