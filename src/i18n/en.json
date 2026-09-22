@@ -138,7 +138,9 @@
     "unfilterByCollection": "Clear collection filter {name}",
     "toggleCollectionsLabel": "Manage collections",
     "deleteCollectionConfirmTitle": "Delete collection \"{name}\"?",
-    "deleteCollectionConfirmBody": "This action cannot be undone."
+    "deleteCollectionConfirmBody": "This action cannot be undone.",
+    "disconnectConfirmTitle": "Disconnect Spotify?",
+    "disconnectConfirmBody": "Disconnecting signs you out: playback sync and imports stop working until you authorize Spotify again."
   },
   "song": {
     "notFound": "Song not found",

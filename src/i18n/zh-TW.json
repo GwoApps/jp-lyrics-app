@@ -138,7 +138,9 @@
     "unfilterByCollection": "取消篩選收藏集「{name}」",
     "toggleCollectionsLabel": "管理收藏集",
     "deleteCollectionConfirmTitle": "確定刪除收藏集「{name}」？",
-    "deleteCollectionConfirmBody": "此操作不可撤銷。"
+    "deleteCollectionConfirmBody": "此操作不可撤銷。",
+    "disconnectConfirmTitle": "確定中斷 Spotify？",
+    "disconnectConfirmBody": "中斷等於登出。在重新授權 Spotify 之前，播放同步與歌曲匯入都將無法使用。"
   },
   "song": {
     "notFound": "找不到歌曲",

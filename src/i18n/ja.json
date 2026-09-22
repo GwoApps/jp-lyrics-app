@@ -138,7 +138,9 @@
     "unfilterByCollection": "コレクション絞り込み「{name}」を解除",
     "toggleCollectionsLabel": "コレクションを管理",
     "deleteCollectionConfirmTitle": "コレクション「{name}」を削除しますか？",
-    "deleteCollectionConfirmBody": "この操作は取り消せません。"
+    "deleteCollectionConfirmBody": "この操作は取り消せません。",
+    "disconnectConfirmTitle": "Spotify を切断しますか？",
+    "disconnectConfirmBody": "切断するとログアウトされます。再度 Spotify を認証するまで、再生中の曲の同期と取り込みが利用できなくなります。"
   },
   "song": {
     "notFound": "曲が見つかりません",
