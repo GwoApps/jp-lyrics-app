@@ -17,6 +17,7 @@ import {
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useI18n } from '@/lib/i18n';
 import { ApiError } from '@/client/api/request';
+import { lyricsProviderSaveErrorKey } from '@/lib/lyrics-provider/error-keys';
 import {
   createLyricsProvider,
   deleteLyricsProvider,
@@ -29,13 +30,12 @@ import BuiltinSourceConfigFields from './BuiltinSourceConfigFields';
 import SortableProviderRow, { ProviderRowSummary } from './LyricsProviderRow';
 import { EMPTY_PROVIDER_FORM, type ListResponse, type ProviderTestResult, type ProviderWire } from './lyrics-provider-types';
 
-/** Capitalise a snake-case error code for the i18n key lookup. */
-function capCode(code: string | undefined): string {
-  if (!code) return '';
-  return code.replace(/_/g, '').replace(/^\w/, (character) => character.toUpperCase());
-}
-
-/** Failure codes the server shares with the generic admin error vocabulary. */
+/**
+ * Failure codes the server shares with the generic admin error vocabulary.
+ * Provider-specific codes resolve through the explicit code -> key table in
+ * `@/lib/lyrics-provider/error-keys` (never a derived key: the dictionary keys
+ * are camelCase while the codes are snake_case).
+ */
 const GENERIC_ERROR_KEYS: Record<string, string> = {
   forbidden: 'apiErrors.forbidden',
   not_found: 'song.notFound',
@@ -46,10 +46,10 @@ const GENERIC_ERROR_KEYS: Record<string, string> = {
 /**
  * Localised reason for a failed provider write (delete / enable & disable).
  *
- * Reuses the existing dictionaries only (no new i18n strings): shared codes go
- * through the generic admin vocabulary, provider-specific codes through the
- * `admin.lyricsProviderError*` family (the same mapping `save()` uses), and
- * anything else falls back to the caller-supplied generic message.
+ * Reuses the existing dictionaries only (no new i18n strings): provider codes
+ * go through the same explicit lookup table `save()` uses, shared codes through
+ * the generic admin vocabulary, and anything else falls back to the
+ * caller-supplied generic message (never the raw code or key).
  */
 function providerErrorMessage(
   t: (key: string, vars?: Record<string, string | number>) => string,
@@ -58,11 +58,8 @@ function providerErrorMessage(
 ): string {
   const code = error instanceof ApiError ? error.code : undefined;
   if (!code) return t(fallbackKey);
-  const directKey = `admin.lyricsProviderError${capCode(code)}`;
-  const translated = t(directKey);
-  if (translated !== directKey) return translated;
-  const genericKey = GENERIC_ERROR_KEYS[code];
-  return genericKey ? t(genericKey) : t(fallbackKey);
+  const errorKey = lyricsProviderSaveErrorKey(code) ?? GENERIC_ERROR_KEYS[code];
+  return errorKey ? t(errorKey) : t(fallbackKey);
 }
 
 /**
@@ -185,12 +182,11 @@ export default function LyricsProvidersPanel() {
       closeDialog();
       await load(true);
     } catch (error) {
-      const code = error instanceof ApiError ? error.code : undefined;
+      // Shared with the list-level path: explicit code → key table, then the
+      // generic vocabulary, then the fallback message (never the raw code/key).
       setNotice({
         kind: 'err',
-        text: code
-          ? t(`admin.lyricsProviderError${capCode(code)}`)
-          : t('admin.lyricsProviderSaveFailed'),
+        text: providerErrorMessage(t, error, 'admin.lyricsProviderSaveFailed'),
       });
     } finally {
       setSaving(false);
