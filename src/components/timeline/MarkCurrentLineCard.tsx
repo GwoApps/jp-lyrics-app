@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ChevronDown, ChevronUp, LocateFixed } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { fmtMs, parseLrcTimestamp } from '@/lib/lrc';
+import { manualTimeError } from '@/lib/timeline-manual-time';
 import type { TimelineDraftLine } from '@/lib/lrc';
 
 interface MarkCurrentLineCardProps {
@@ -33,12 +34,19 @@ export default function MarkCurrentLineCard({
 }: MarkCurrentLineCardProps) {
   const { t } = useI18n();
   const [manualDraft, setManualDraft] = useState('');
+  const [manualError, setManualError] = useState<string | null>(null);
 
   const submitManual = () => {
     const parsed = parseLrcTimestamp(manualDraft);
-    if (parsed == null) return;
+    if (parsed == null) {
+      // Never drop an unparseable draft silently: keep the value, mark the
+      // input invalid and explain the expected format instead (issue #297).
+      setManualError(manualTimeError(manualDraft, t));
+      return;
+    }
     onMarkManual(parsed);
     setManualDraft('');
+    setManualError(null);
   };
 
   return (
@@ -57,9 +65,10 @@ export default function MarkCurrentLineCard({
         {canUseSpotifyTime ? t('timelineWorkspace.markAt', { time: fmtMs(liveProgress) }) : t('timelineWorkspace.waitingSpotify')}
       </button>
       <form className="mx-auto mt-3 flex max-w-md items-center gap-2" onSubmit={(event) => { event.preventDefault(); submitManual(); }}>
-        <input value={manualDraft} onChange={(event) => setManualDraft(event.target.value)} placeholder={t('timelineWorkspace.manualTimePlaceholder')} className="h-10 min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--input)] px-3 font-mono text-xs tabular-nums outline-none focus:border-[var(--song-accent)]" aria-label={t('timelineWorkspace.manualTimePlaceholder')} />
+        <input value={manualDraft} onChange={(event) => { setManualDraft(event.target.value); setManualError(null); }} placeholder={t('timelineWorkspace.manualTimePlaceholder')} className={`h-10 min-w-0 flex-1 rounded-md border bg-[var(--input)] px-3 font-mono text-xs tabular-nums outline-none focus:border-[var(--song-accent)] ${manualError ? 'border-[var(--destructive)]' : 'border-[var(--border)]'}`} aria-label={t('timelineWorkspace.manualTimePlaceholder')} aria-invalid={manualError != null} aria-describedby={manualError ? 'manual-time-error' : undefined} />
         <button type="submit" className="song-accent-button inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md px-3 text-xs font-medium" aria-label={t('timelineWorkspace.setManualTime')}>{t('timelineWorkspace.setManualTime')}</button>
       </form>
+      <p id="manual-time-error" aria-live="polite" className="mx-auto mt-2 max-w-md text-[11px] text-[var(--destructive)]">{manualError}</p>
       <div className="mt-3 hidden items-center justify-center gap-4 text-[10px] text-[var(--muted-foreground)] sm:flex">
         <span>{t('timelineWorkspace.shortcutMark')}</span><span>{t('timelineWorkspace.shortcutNavigate')}</span><span>{t('timelineWorkspace.shortcutSave')}</span>
       </div>
