@@ -17,6 +17,17 @@ async function getSpotifyDisplayName(email: string): Promise<string> {
   return row?.displayName || '';
 }
 
+/**
+ * Personalized song responses must never be persisted by shared caches or the
+ * service worker (issue #298): the payload is scoped to the caller's session
+ * (`?mine=1`/`?favorites=1`, private songs), so a cached copy would keep being
+ * served to the next account on this browser after logout/switch — even while
+ * offline, where the ACL in `getAuthUser`/`isSongVisibleToUser` never runs.
+ * `private` forbids shared/CDN caching, `no-store` forbids any persistence;
+ * `sw.js` honors the latter by skipping its cache write.
+ */
+const NO_STORE_HEADERS = { 'Cache-Control': 'private, no-store' } as const;
+
 // GET /api/songs - list songs with optional search and filter
 export async function GET(request: NextRequest) {
   const db = getDB();
@@ -29,7 +40,7 @@ export async function GET(request: NextRequest) {
 
   if (favoritesOnly) {
     if (!user) {
-      return NextResponse.json([]);
+      return NextResponse.json([], { headers: NO_STORE_HEADERS });
     }
     const pattern = q ? `%${q}%` : null;
     let rawSql;
@@ -51,7 +62,7 @@ export async function GET(request: NextRequest) {
         : sql`SELECT s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail} WHERE (s.is_public = 1 OR s.created_by = ${userEmail}) ORDER BY s.updated_at DESC`;
     }
     const songs = await db.all(rawSql) as unknown as SongListItem[];
-    return NextResponse.json(songs);
+    return NextResponse.json(songs, { headers: NO_STORE_HEADERS });
   }
 
   // Non-favorites query
@@ -60,23 +71,23 @@ export async function GET(request: NextRequest) {
     const songs = isAdmin
       ? await db.all(sql`SELECT id, title, artist, cover_url, spotify_track_id, spotify_album, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE (title LIKE ${pattern} OR artist LIKE ${pattern}) AND created_by = ${userEmail} ORDER BY updated_at DESC`) as unknown as SongListItem[]
       : await db.all(sql`SELECT id, title, artist, cover_url, spotify_track_id, spotify_album, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE (title LIKE ${pattern} OR artist LIKE ${pattern}) AND created_by = ${userEmail} AND (is_public = 1 OR created_by = ${userEmail}) ORDER BY updated_at DESC`) as unknown as SongListItem[];
-    return NextResponse.json(songs);
+    return NextResponse.json(songs, { headers: NO_STORE_HEADERS });
   } else if (q) {
     const pattern = `%${q}%`;
     const songs = isAdmin
       ? await db.all(sql`SELECT id, title, artist, cover_url, spotify_track_id, spotify_album, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE (title LIKE ${pattern} OR artist LIKE ${pattern}) ORDER BY updated_at DESC`) as unknown as SongListItem[]
       : await db.all(sql`SELECT id, title, artist, cover_url, spotify_track_id, spotify_album, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE (title LIKE ${pattern} OR artist LIKE ${pattern}) AND is_public = 1 ORDER BY updated_at DESC`) as unknown as SongListItem[];
-    return NextResponse.json(songs);
+    return NextResponse.json(songs, { headers: NO_STORE_HEADERS });
   } else if (mine && user) {
     const songs = isAdmin
       ? await db.all(sql`SELECT id, title, artist, cover_url, spotify_track_id, spotify_album, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE created_by = ${userEmail} ORDER BY updated_at DESC`) as unknown as SongListItem[]
       : await db.all(sql`SELECT id, title, artist, cover_url, spotify_track_id, spotify_album, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE created_by = ${userEmail} AND (is_public = 1 OR created_by = ${userEmail}) ORDER BY updated_at DESC`) as unknown as SongListItem[];
-    return NextResponse.json(songs);
+    return NextResponse.json(songs, { headers: NO_STORE_HEADERS });
   } else {
     const songs = isAdmin
       ? await db.all(sql`SELECT id, title, artist, cover_url, spotify_track_id, spotify_album, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs ORDER BY updated_at DESC`) as unknown as SongListItem[]
       : await db.all(sql`SELECT id, title, artist, cover_url, spotify_track_id, spotify_album, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE is_public = 1 ORDER BY updated_at DESC`) as unknown as SongListItem[];
-    return NextResponse.json(songs);
+    return NextResponse.json(songs, { headers: NO_STORE_HEADERS });
   }
 }
 

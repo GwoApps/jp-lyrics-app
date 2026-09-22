@@ -2,6 +2,23 @@ const CACHE_NAME = 'jplrc-v5';
 const IMMUTABLE_CACHE = 'jplrc-immutable-v1';
 const KUROMOJI_CACHE = 'jplrc-kuromoji-v1';
 
+/**
+ * Whether `response` may be persisted in the Cache Storage.
+ *
+ * Issue #298: song endpoints answer with personalized, ACL-gated data
+ * (`/api/songs` + `/api/songs/:id`) and mark those responses
+ * `Cache-Control: private, no-store`. A URL-keyed persistent copy would
+ * otherwise be replayed to whoever uses this browser next — after logout,
+ * session expiry or an account switch — while offline, where the server ACL is
+ * never consulted. When the server says `no-store`, the response is passed
+ * through untouched and never written to a cache.
+ */
+function isCacheable(response) {
+  if (!response || !response.ok) return false;
+  const cacheControl = response.headers.get('Cache-Control') || '';
+  return !/\bno-store\b/i.test(cacheControl);
+}
+
 // Install: precache icons only
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -84,7 +101,7 @@ self.addEventListener('fetch', (event) => {
       event.respondWith(
         fetch(request)
           .then((response) => {
-            if (response.ok) {
+            if (isCacheable(response)) {
               const clone = response.clone();
               caches.open(CACHE_NAME).then((c) => c.put(request, clone));
             }
