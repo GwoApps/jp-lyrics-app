@@ -114,6 +114,110 @@ import * as fs from 'fs';
 
 interface MigrationEntry { idx: number; tag: string }
 
+/**
+ * Give `playlist_import_track_results` its slot identity (ISSUE #347).
+ *
+ * Migration 0022 adds `track_index`, but SQLite keeps the *value* of a newly
+ * added column implicit for rows that already existed: `UPDATE … SET track_index
+ * = 0` (and even an index over an expression on the column) still sees the
+ * stored `NULL`, so two legacy rows of the same job keep colliding and
+ * `UNIQUE (job_id, track_index)` cannot be built. The only reliable way to
+ * materialise a value for those rows is to rebuild the table, which is also the
+ * right moment to give them a slot:
+ *
+ *  - legacy rows (written before 0022) carry no slot information. We refuse to
+ *    guess it — a wrong guess would mis-count a resumed job — so they are
+ *    renumbered into *negative* slots, one per row, by creation order. They can
+ *    never collide with a real slot (`>= 0`, used by every new write), and
+ *    `getPersistedTrackResults()` still refuses to resume such a job.
+ *  - rows that already have a real slot (0, 1, …) are copied verbatim.
+ *
+ * Additive from the app's point of view: `playlist_import_jobs` is untouched, so
+ * the job counters and everything the client reads keep their meaning. The
+ * caller wraps this in its own write transaction.
+ */
+async function repairPlaylistImportSlotIdentity(
+  execute: (statement: string) => Promise<unknown>,
+) {
+  type Rows = { rows: Record<string, unknown>[] };
+  const table = (await execute(
+    `SELECT name FROM sqlite_master WHERE type='table' AND name='playlist_import_track_results'`
+  )) as Rows;
+  if (table.rows.length === 0) return;
+
+  const index = (await execute(
+    `SELECT name FROM sqlite_master WHERE type='index' AND name='playlist_import_track_results_job_track_idx'`
+  )) as Rows;
+  if (index.rows.length > 0) return;
+
+  // No `track_index` yet → migration 0022 has not run, so there is nothing to
+  // repair. (It runs right after this check when it is part of the pending set.)
+  const columns = (await execute(`PRAGMA table_info(playlist_import_track_results)`)) as Rows;
+  if (!columns.rows.some((c) => c.name === 'track_index')) return;
+
+  const ambiguous = (await execute(`
+    SELECT count(*) AS n FROM (
+      SELECT job_id, track_index FROM playlist_import_track_results
+      GROUP BY job_id, track_index HAVING count(*) > 1
+    )
+  `)) as Rows;
+  if (Number(ambiguous.rows[0]?.n ?? 0) === 0) {
+    // Every row already sits on its own slot — just enforce it.
+    await execute(
+      `CREATE UNIQUE INDEX IF NOT EXISTS playlist_import_track_results_job_track_idx
+       ON playlist_import_track_results (job_id, track_index)`
+    );
+    return;
+  }
+
+  // Rows that share a slot are the ambiguous legacy ones. Rebuild the table so
+  // their slot becomes a materialised negative value.
+  await execute(`DROP INDEX IF EXISTS playlist_import_track_results_job_track_idx`);
+  await execute(`DROP TABLE IF EXISTS playlist_import_track_results_rebuild`);
+  await execute(`CREATE TABLE playlist_import_track_results_rebuild (
+    job_id text NOT NULL,
+    spotify_track_id text NOT NULL,
+    track_index integer DEFAULT 0 NOT NULL,
+    title text NOT NULL,
+    artist text NOT NULL,
+    status text NOT NULL,
+    needs_review integer DEFAULT 0 NOT NULL,
+    created_at text DEFAULT (datetime('now', 'localtime')) NOT NULL
+  )`);
+  const LEGACY_ROWS = `rowid IN (
+    SELECT rowid FROM playlist_import_track_results AS dup
+    WHERE (SELECT count(*) FROM playlist_import_track_results AS x
+           WHERE x.job_id = dup.job_id AND x.track_index = dup.track_index) > 1
+  )`;
+  await execute(`
+    INSERT INTO playlist_import_track_results_rebuild
+      (job_id, spotify_track_id, track_index, title, artist, status, needs_review, created_at)
+    SELECT job_id, spotify_track_id,
+           -ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY created_at, rowid),
+           title, artist, status, needs_review, created_at
+    FROM playlist_import_track_results WHERE ${LEGACY_ROWS}
+  `);
+  await execute(`
+    INSERT INTO playlist_import_track_results_rebuild
+      (job_id, spotify_track_id, track_index, title, artist, status, needs_review, created_at)
+    SELECT job_id, spotify_track_id, track_index, title, artist, status, needs_review, created_at
+    FROM playlist_import_track_results WHERE rowid NOT IN (
+      SELECT rowid FROM playlist_import_track_results AS dup
+      WHERE (SELECT count(*) FROM playlist_import_track_results AS x
+             WHERE x.job_id = dup.job_id AND x.track_index = dup.track_index) > 1
+    )
+  `);
+  await execute(`DROP TABLE playlist_import_track_results`);
+  await execute(`ALTER TABLE playlist_import_track_results_rebuild RENAME TO playlist_import_track_results`);
+  await execute(`CREATE INDEX IF NOT EXISTS playlist_import_track_results_job_id_idx
+    ON playlist_import_track_results (job_id)`);
+  await execute(
+    `CREATE UNIQUE INDEX IF NOT EXISTS playlist_import_track_results_job_track_idx
+     ON playlist_import_track_results (job_id, track_index)`
+  );
+  console.log('[db] playlist_import_track_results: rebuilt with (job_id, track_index) identity (ISSUE #347)');
+}
+
 async function runMigrations() {
   if (_isD1) return; // D1 manages its own schema via wrangler
 
@@ -182,6 +286,7 @@ async function runMigrations() {
       // Split by statement-breakpoint (drizzle-kit convention)
       const statements = migrationSQL.split('--> statement-breakpoint').map(s => s.trim()).filter(Boolean);
       console.log(`[db] Applying ${tag} (${statements.length} statements)`);
+      const addsTrackIndex = tag === '0022_playlist_import_track_index.sql';
       for (const stmt of statements) {
         // Idempotent DDL: skip if the column/table already exists. This lets a
         // DB left in a half-migrated state by a previous crashed build self-heal
@@ -207,6 +312,12 @@ async function runMigrations() {
         }
         await tx.execute(stmt);
       }
+      if (addsTrackIndex) {
+        // Build the unique index here, inside the same transaction, before
+        // migration 0023 runs: on a populated database that CREATE UNIQUE INDEX
+        // would fail and abort the whole migration run (ISSUE #347).
+        await repairPlaylistImportSlotIdentity((statement) => tx.execute(statement));
+      }
       await tx.execute({ sql: `INSERT INTO "__drizzle_migrations" ("hash", "created_at") VALUES (?, ?)`, args: [tag, now] });
     }
     await tx.commit();
@@ -221,6 +332,23 @@ async function runMigrations() {
 
 // Block module initialisation until schema is ready; route handlers must never race migrations.
 await runMigrations();
+
+// Safety net for databases that are already fully migrated (their journal has
+// every entry, so `runMigrations()` had nothing to do) but whose slot-identity
+// index is missing — e.g. a DB restored after a partially applied migration.
+if (!_isD1) {
+  const client: import('@libsql/client').Client = getDB().$client;
+  const tx = await client.transaction('write');
+  try {
+    await repairPlaylistImportSlotIdentity((statement) => tx.execute(statement));
+    await tx.commit();
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  } finally {
+    tx.close();
+  }
+}
 
 // Re-export Drizzle query helpers for convenience
 export { schema, sql, eq, and, or, like, inArray, desc, asc, isNull, isNotNull };

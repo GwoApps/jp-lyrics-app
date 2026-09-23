@@ -162,6 +162,20 @@
       "when": 1789000000000,
       "tag": "0021_convert_ytmusic_builtin_to_plugin",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1790183099391,
+      "tag": "0022_playlist_import_track_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1790183099392,
+      "tag": "0023_playlist_import_track_index_unique",
+      "breakpoints": true
     }
   ]
 }

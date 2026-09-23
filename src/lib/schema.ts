@@ -219,15 +219,34 @@ export const adminAuditLog = sqliteTable('admin_audit_log', {
   sqliteIndex('admin_audit_log_target_idx').on(t.targetType, t.targetId, t.occurredAt),
 ]);
 
-/** One row per track with its final outcome (idempotent by Spotify track id). */
+/**
+ * One row per *playlist slot* with its final outcome (ISSUE #347).
+ *
+ * The row identity is `(job_id, track_index)` — the position of the track in
+ * the playlist — not the Spotify track id. A playlist may legitimately contain
+ * the same track twice, so keying on `spotify_track_id` collapsed the second
+ * slot into the first one: `saveTrackResult` treated it as a retry and skipped
+ * the counter bump, leaving `processed` permanently below `total`.
+ *
+ * Slot-based identity keeps the retry semantics intact (re-submitting the same
+ * offset re-inserts the same `(job_id, track_index)` → no-op) while every slot
+ * now owns exactly one row, so counters always line up with `total`.
+ *
+ * No DB-level PK on purpose: a composite PK cannot be added to a populated
+ * table without rebuilding it. `(job_id, track_index)` is unique by
+ * construction — the unique index that enforces it on existing databases is
+ * created by `repairPlaylistImportSlotIdentity()` in src/lib/db.ts, mirroring
+ * the index declared here for fresh databases.
+ */
 export const playlistImportTrackResults = sqliteTable('playlist_import_track_results', {
   jobId: text('job_id').notNull().references(() => playlistImportJobs.id, { onDelete: 'cascade' }),
   spotifyTrackId: text('spotify_track_id').notNull(),
+  trackIndex: integer('track_index').notNull().default(0),
   title: text('title').notNull(),
   artist: text('artist').notNull(),
   status: text('status').notNull(), // imported | skipped | failed
   needsReview: integer('needs_review').notNull().default(0),
   createdAt: text('created_at').notNull().default(sql`(datetime('now', 'localtime'))`),
 }, (t) => [
-  primaryKey({ columns: [t.jobId, t.spotifyTrackId] }),
+  sqliteIndex('playlist_import_track_results_job_track_idx').on(t.jobId, t.trackIndex),
 ]);

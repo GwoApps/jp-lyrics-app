@@ -12,7 +12,9 @@ import {
   fetchPlaylistTracks,
   finishJob,
   getOwnedJob,
+  getPersistedTrackResults,
   listTrackResults,
+  PLAYLIST_IMPORT_RESUME_UNSUPPORTED,
   processTrack,
   requireSpotifyToken,
   saveTrackResult,
@@ -61,8 +63,19 @@ export async function GET(request: NextRequest) {
   if (!job) {
     return NextResponse.json({ error: 'job_not_found' }, { status: 404 });
   }
+  const persisted = await getPersistedTrackResults(jobId);
   const tracks = await listTrackResults(jobId);
-  return NextResponse.json({ job, tracks });
+  if (persisted.resumeOffset < 0) {
+    // Rows written before migration 0022 cannot be mapped to a playlist slot.
+    // The client needs that mapping to know where to continue, so refuse the
+    // resume rather than continue from a guessed offset.
+    return NextResponse.json(
+      { error: PLAYLIST_IMPORT_RESUME_UNSUPPORTED, job, tracks },
+      { status: 409 },
+    );
+  }
+  // `resumeOffset` is the first pending slot, i.e. the client's cursor.
+  return NextResponse.json({ job, tracks, resumeOffset: persisted.resumeOffset });
 }
 
 // POST — create an import job (fetch playlist metadata only, no lyrics).
@@ -159,12 +172,15 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ job: done, tracks: [], nextOffset: tracks.length, done: true });
   }
 
-  // Idempotency: replay tracks whose outcome was already persisted. This is what
-  // makes a chunk that timed out mid-way resumable — already-saved tracks are
-  // replayed from the job's track table instead of re-fetching lyrics.
-  const alreadyDone = await existingResultsForChunk(jobId, tracks);
-
   const chunk = tracks.slice(offset, offset + PLAYLIST_CHUNK_SIZE);
+
+  // Idempotency: replay the slots whose outcome was already persisted. This is
+  // what makes a chunk that timed out mid-way resumable — already-saved slots
+  // are replayed from the job's track table instead of re-fetching lyrics.
+  // Keyed by playlist index (ISSUE #347): a playlist may contain the same song
+  // twice, and both slots must be replayed as the separate rows they are.
+  const alreadyDone = await existingResultsForChunk(jobId, offset, chunk.length);
+
   const trackResults: PlaylistTrackResultDTO[] = [];
 
   const db = getDB();
@@ -176,8 +192,13 @@ export async function PUT(request: NextRequest) {
 
   // Process the chunk; a timeout may fire mid-chunk, so persist each track's
   // outcome as soon as it completes (saveTrackResult is idempotent).
-  for (const track of chunk) {
-    const persisted = alreadyDone.get(track.id);
+  for (let i = 0; i < chunk.length; i += 1) {
+    const track = chunk[i];
+    // Playlist slot = the index this chunk was sliced at. It never changes for
+    // a given request, so replaying the chunk after a timeout re-derives the
+    // exact same slot and `saveTrackResult` stays a no-op for done slots.
+    const trackIndex = offset + i;
+    const persisted = alreadyDone.get(trackIndex);
     if (persisted) {
       // Already handled by an earlier request — replay the saved outcome.
       trackResults.push({
@@ -190,7 +211,7 @@ export async function PUT(request: NextRequest) {
       continue;
     }
     const result = await processTrack(user, createdByName, track);
-    await saveTrackResult(jobId, track, result);
+    await saveTrackResult(jobId, trackIndex, track, result);
     trackResults.push({ spotifyId: track.id, title: track.title, artist: track.artist, ...result });
   }
 

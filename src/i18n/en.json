@@ -87,6 +87,7 @@
     "playlistImportInvalidJob": "Invalid import job",
     "playlistImportJobNotFound": "Import job not found",
     "playlistImportJobFailed": "The import job has failed",
+    "playlistImportResumeUnsupported": "This import was started before a resume upgrade and cannot be continued. Please start a new import.",
     "collections": "Collections",
     "collectionsTitle": "Manage Collections",
     "newCollectionPlaceholder": "New collection name...",

@@ -11,17 +11,20 @@ import {
 } from './schema.ts';
 
 /**
- * Idempotency + concurrency tests for `saveTrackResult` (ISSUE #212).
+ * Idempotency + concurrency tests for `saveTrackResult` (ISSUE #212, ISSUE #347).
  *
- * The bug: the job-counter UPDATE ran unconditionally BEFORE the idempotent
+ * #212 — the job-counter UPDATE ran unconditionally BEFORE the idempotent
  * INSERT, so retrying or concurrently submitting the same chunk kept bumping
  * `processed/imported/skipped/failed` even though the track-result row already
  * existed — the counters drifted above the real number of rows and could exceed
- * `total`.
+ * `total`. Fix: insert the track-result row FIRST (ON CONFLICT DO NOTHING) and
+ * only bump the job counters when the INSERT actually added a NEW row.
  *
- * The fix: insert the track-result row FIRST (ON CONFLICT DO NOTHING) and only
- * bump the job counters when the INSERT actually added a NEW row. A duplicate
- * is an idempotent no-op for both the result table and the counters.
+ * #347 — the row identity was the Spotify track id, so a playlist containing the
+ * same song twice collapsed the second slot into the first: the INSERT hit
+ * ON CONFLICT and `processed` could never reach `total`. Fix: the row identity
+ * is now the playlist slot `(jobId, trackIndex)`, while the "first write wins,
+ * duplicates are a no-op" semantics stay exactly the same.
  *
  * Uses a real local libsql DB (same driver family as D1), one connection per
  * "request" to mirror Cloudflare D1 where every Worker request has its own
@@ -55,16 +58,20 @@ async function createTables(t: TestDb) {
     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
   )`);
+  // Mirrors migrations 0022/0023: rows are identified by playlist slot, and
+  // (job_id, track_index) is unique.
   await t.db.run(sql`CREATE TABLE playlist_import_track_results (
     job_id TEXT NOT NULL,
     spotify_track_id TEXT NOT NULL,
+    track_index INTEGER NOT NULL DEFAULT 0,
     title TEXT NOT NULL,
     artist TEXT NOT NULL,
     status TEXT NOT NULL,
     needs_review INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    PRIMARY KEY (job_id, spotify_track_id)
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
   )`);
+  await t.db.run(sql`CREATE UNIQUE INDEX playlist_import_track_results_job_track_idx
+    ON playlist_import_track_results (job_id, track_index)`);
 }
 
 async function insertJob(t: TestDb, id: string, total = 1) {
@@ -94,7 +101,7 @@ test('a fresh insert increments counters once', async () => {
   await createTables(t);
   await insertJob(t, 'j');
 
-  await saveTrackResult('j', track, { status: 'imported' }, t.db);
+  await saveTrackResult('j', 0, track, { status: 'imported' }, t.db);
 
   const job = await getJob(t, 'j');
   assert.equal(job.processed, 1);
@@ -112,9 +119,9 @@ test('a duplicate submit is an idempotent no-op for counters', async () => {
   await createTables(t);
   await insertJob(t, 'j');
 
-  await saveTrackResult('j', track, { status: 'imported' }, t.db);
+  await saveTrackResult('j', 0, track, { status: 'imported' }, t.db);
   // Retry the exact same (job, track) — must NOT double-count.
-  await saveTrackResult('j', track, { status: 'imported' }, t.db);
+  await saveTrackResult('j', 0, track, { status: 'imported' }, t.db);
 
   const job = await getJob(t, 'j');
   assert.equal(job.processed, 1, 'processed must not grow on retry');
@@ -129,10 +136,10 @@ test('sequential re-order retries are idempotent', async () => {
   await createTables(t);
   await insertJob(t, 'j');
 
-  await saveTrackResult('j', track, { status: 'skipped' }, t.db);
+  await saveTrackResult('j', 0, track, { status: 'skipped' }, t.db);
   // Same track delivered again with a different status — the first row wins,
   // counters must reflect only the first (skipped) write.
-  await saveTrackResult('j', track, { status: 'imported' }, t.db);
+  await saveTrackResult('j', 0, track, { status: 'imported' }, t.db);
 
   const job = await getJob(t, 'j');
   assert.equal(job.processed, 1);
@@ -156,7 +163,7 @@ test('concurrent duplicate submits never over-count', async () => {
     const own = makeTestDb(t.path, { fresh: false });
     try {
       await own.client.execute('PRAGMA busy_timeout=15000');
-      await saveTrackResult('j', track, { status: 'imported' }, own.db);
+      await saveTrackResult('j', 0, track, { status: 'imported' }, own.db);
     } finally {
       own.client.close();
     }
@@ -179,11 +186,11 @@ test('mixed statuses count independently and sum to processed', async () => {
   const t2 = { ...track, id: 'b' };
   const t3 = { ...track, id: 'c' };
 
-  await saveTrackResult('j', t1, { status: 'imported' }, t.db);
-  await saveTrackResult('j', t2, { status: 'skipped' }, t.db);
-  await saveTrackResult('j', t3, { status: 'failed' }, t.db);
+  await saveTrackResult('j', 0, t1, { status: 'imported' }, t.db);
+  await saveTrackResult('j', 1, t2, { status: 'skipped' }, t.db);
+  await saveTrackResult('j', 2, t3, { status: 'failed' }, t.db);
   // A duplicate retry of an already-failed track must not move anything.
-  await saveTrackResult('j', t3, { status: 'imported' }, t.db);
+  await saveTrackResult('j', 2, t3, { status: 'imported' }, t.db);
 
   const job = await getJob(t, 'j');
   assert.equal(job.processed, 3);
@@ -197,6 +204,27 @@ test('mixed statuses count independently and sum to processed', async () => {
   assert.equal(rows.length, 3);
 });
 
+test('the same song in two playlist slots counts twice (ISSUE #347)', async () => {
+  const t = makeTestDb(`/tmp/pi-dup-track-${process.pid}-${Date.now()}.db`);
+  await createTables(t);
+  // Playlist [A, B, A] — the third slot repeats the first track.
+  await insertJob(t, 'j', 3);
+
+  await saveTrackResult('j', 0, { ...track, id: 'a' }, { status: 'imported' }, t.db);
+  await saveTrackResult('j', 1, { ...track, id: 'b' }, { status: 'imported' }, t.db);
+  await saveTrackResult('j', 2, { ...track, id: 'a' }, { status: 'imported' }, t.db);
+
+  const job = await getJob(t, 'j');
+  assert.equal(job.processed, 3, 'every playlist slot must be counted');
+  assert.equal(job.total, 3);
+  assert.equal(job.imported, 3);
+  assert.equal(job.imported + job.skipped + job.failed, job.total,
+    'the summary must add up to total (no more "completed but 2/3")');
+
+  const rows = await t.db.select().from(playlistImportTrackResults).all();
+  assert.equal(rows.length, 3, 'one row per slot, even for a repeated track id');
+});
+
 test('an INSERT failure leaves the counters untouched (no counted-but-no-result)', async () => {
   const t = makeTestDb(`/tmp/pi-fail-${process.pid}-${Date.now()}.db`);
   await createTables(t);
@@ -205,7 +233,7 @@ test('an INSERT failure leaves the counters untouched (no counted-but-no-result)
   // Force the INSERT to fail by dropping the result table before saving.
   await t.db.run(sql`DROP TABLE playlist_import_track_results`);
   await assert.rejects(
-    () => saveTrackResult('j', track, { status: 'imported' }, t.db),
+    () => saveTrackResult('j', 0, track, { status: 'imported' }, t.db),
   );
 
   // Because the insert runs first and failed, the counters were never bumped —

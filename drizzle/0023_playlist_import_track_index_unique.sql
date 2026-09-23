@@ -1,0 +1,12 @@
+-- ISSUE #347 — enforce the new row identity of `playlist_import_track_results`.
+--
+-- Split out from 0022 because SQLite cannot create this index while pre-0022
+-- rows still share a slot, and a failing statement aborts the whole migration
+-- run. Fresh databases reach this file without ever seeing such rows, so the
+-- index is built up front.
+--
+-- Existing databases are handled before this file runs: the runtime migration
+-- in src/lib/db.ts (`repairPlaylistImportSlotIdentity()`) renumbers their
+-- ambiguous rows first, so by the time this executes the index already exists
+-- and the IF NOT EXISTS is a no-op.
+CREATE UNIQUE INDEX IF NOT EXISTS `playlist_import_track_results_job_track_idx` ON `playlist_import_track_results` (`job_id`,`track_index`);

@@ -87,6 +87,7 @@
     "playlistImportInvalidJob": "无效的导入任务",
     "playlistImportJobNotFound": "找不到导入任务",
     "playlistImportJobFailed": "导入任务已失败",
+    "playlistImportResumeUnsupported": "该导入任务在升级前创建，无法继续恢复。请重新发起一次导入。",
     "collections": "收藏夹",
     "collectionsTitle": "管理收藏夹",
     "newCollectionPlaceholder": "新收藏夹名称...",
