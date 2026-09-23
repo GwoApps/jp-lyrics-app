@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDB, sql } from '@/lib/db';
+import { getDB, sql, and } from '@/lib/db';
+import { songVisibilityWhere } from '@/lib/song-visibility';
 import { getAuthUser } from '@/lib/auth';
 import { findBestMatch, type SongCandidate } from '@/lib/match';
 
@@ -22,8 +23,6 @@ import { findBestMatch, type SongCandidate } from '@/lib/match';
  */
 export async function GET(request: NextRequest) {
   const user = await getAuthUser(request);
-  const userEmail = user?.email || '';
-  const isAdmin = user?.isAdmin === true;
 
   const trackId = request.nextUrl.searchParams.get('track_id')?.trim() || '';
   const title = request.nextUrl.searchParams.get('title')?.trim() || '';
@@ -41,16 +40,13 @@ export async function GET(request: NextRequest) {
 
   // Only load the columns `findBestMatch` needs, restricted to songs that are
   // actually eligible for a match (own songs any visibility, or public songs).
-  const rows = isAdmin
-    ? await db.all(sql`
-        SELECT id, title, artist, spotify_track_id, created_by, is_public
-        FROM songs
-      `)
-    : await db.all(sql`
-        SELECT id, title, artist, spotify_track_id, created_by, is_public
-        FROM songs
-        WHERE is_public = 1 OR created_by = ${userEmail}
-      `);
+  // The predicate is the shared one, so this endpoint can never drift from the
+  // list/collection read paths (ISSUE #346). Admins get no restriction.
+  const rows = await db.all(sql`
+    SELECT id, title, artist, spotify_track_id, created_by, is_public
+    FROM songs
+    WHERE ${and(songVisibilityWhere(user))}
+  `);
 
   const candidates = (rows as SongCandidate[])
     .filter((row) => row.id !== excludeId)
@@ -66,7 +62,7 @@ export async function GET(request: NextRequest) {
   const match = findBestMatch(
     candidates,
     { id: trackId || undefined, name: title, artist },
-    userEmail,
+    user?.email || '',
   );
 
   if (!match) {
