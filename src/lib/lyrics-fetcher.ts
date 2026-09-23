@@ -418,7 +418,11 @@ export async function fetchFromLrclib(
       // recording — the album-scoped hit is much more likely to be the right one.
       const scoped = await albumScoped();
       if (scoped.ok && scoped.data) return { hit: toLrclibHit(scoped.data, evidence), rateLimited: false };
-      if (!scoped.ok) return { hit: null, rateLimited: scoped.rateLimited };
+      // A failed album-scoped request (timeout / 5xx / non-JSON) says nothing
+      // about whether the album version exists, so it must not discard the
+      // bare hit already in hand — the duration conflict only downgrades it to
+      // a reviewable candidate (`lrclibConfidence` → needs_review).
+      if (!scoped.ok) return { hit: toLrclibHit(plain, evidence), rateLimited: scoped.rateLimited };
     }
     return { hit: toLrclibHit(plain, evidence), rateLimited: false };
   }
