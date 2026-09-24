@@ -19,6 +19,17 @@ async function getSpotifyDisplayName(email: string): Promise<string> {
   return row?.displayName || '';
 }
 
+/**
+ * Personalized song responses must never be persisted by shared caches or the
+ * service worker (issue #298): the payload is scoped to the caller's session
+ * (`?mine=1`/`?favorites=1`, private songs), so a cached copy would keep being
+ * served to the next account on this browser after logout/switch — even while
+ * offline, where the ACL in `getAuthUser`/`isSongVisibleToUser` never runs.
+ * `private` forbids shared/CDN caching, `no-store` forbids any persistence;
+ * `sw.js` honors the latter by skipping its cache write.
+ */
+const NO_STORE_HEADERS = { 'Cache-Control': 'private, no-store' } as const;
+
 // GET /api/songs - list songs with optional search and filter
 export async function GET(request: NextRequest) {
   const db = getDB();
@@ -40,7 +51,7 @@ export async function GET(request: NextRequest) {
 
   if (favoritesOnly) {
     if (!user) {
-      return NextResponse.json([]);
+      return NextResponse.json([], { headers: NO_STORE_HEADERS });
     }
     const pattern = q ? `%${q}%` : null;
     const filters: (SQL | undefined)[] = [
@@ -58,7 +69,7 @@ export async function GET(request: NextRequest) {
       ORDER BY s.updated_at DESC
     `;
     const songs = await db.all(rawSql) as unknown as SongListItem[];
-    return NextResponse.json(songs);
+    return NextResponse.json(songs, { headers: NO_STORE_HEADERS });
   }
 
   // Non-favorites query
@@ -79,7 +90,7 @@ export async function GET(request: NextRequest) {
       WHERE ${and(...filters)}
       ORDER BY s.updated_at DESC
     `) as unknown as SongListItem[];
-    return NextResponse.json(songs);
+    return NextResponse.json(songs, { headers: NO_STORE_HEADERS });
   }
 }
 

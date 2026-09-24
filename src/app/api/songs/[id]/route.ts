@@ -84,6 +84,16 @@ function findSong(id: string) {
     });
 }
 
+/**
+ * Personalized song responses must never be persisted by shared caches or the
+ * service worker (issue #298): the payload is ACL-gated per caller (`getAuthUser`
+ * + `isSongVisibleToUser`), so a cached copy would keep being served to the next
+ * account on this browser after logout/switch — even while offline, where the
+ * ACL is never re-evaluated. `private` forbids shared/CDN caching, `no-store`
+ * forbids any persistence; `sw.js` honors the latter by skipping its cache write.
+ */
+const NO_STORE_HEADERS = { 'Cache-Control': 'private, no-store' } as const;
+
 // GET /api/songs/[id] - get single song
 export async function GET(
   request: NextRequest,
@@ -96,7 +106,7 @@ export async function GET(
     return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
   }
   const canEdit = !!user && (user.isAdmin || song.created_by === user.id);
-  return NextResponse.json(sanitizeSong(song, canEdit));
+  return NextResponse.json(sanitizeSong(song, canEdit), { headers: NO_STORE_HEADERS });
 }
 
 // PUT /api/songs/[id] - update song
