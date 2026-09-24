@@ -37,6 +37,35 @@ identity** from the YouTube Music search result (title/artists/album/duration)
 plus a `https://music.youtube.com/watch?v=…` source link — never the request's
 identity echoed back.
 
+## Request budget & concurrency (ISSUE #353)
+
+One search is up to **11 serial upstream calls** (1 `search` + ≤5
+`get_watch_playlist` + ≤3 `get_lyrics`), and ytmusicapi is synchronous
+(`requests`). Two things keep that from hurting jplrc:
+
+- **Off the event loop.** The search handler is a plain `def`, so FastAPI runs
+  it in its threadpool — `/health`, `/manifest.json` and other searches keep
+  answering while a scan is in flight (previously a single blocking search
+  stalled the whole sidecar and made the admin 测试连接 write a bogus
+  `failed` / `timeout`). The shared client and the empty-search guard are
+  handed out under a lock, so concurrent requests cannot corrupt them.
+- **A bounded total budget.** Every upstream call goes through one shared
+  `requests.Session` whose per-call timeout is always set (ytmusicapi's own
+  default is 30s per call, with no bound on the *number* of calls), and the
+  whole search additionally has a monotonic deadline that is re-checked between
+  songs and folded into the next call's timeout. A stalled socket is abandoned
+  at the deadline and the sidecar answers `503 temporary_unavailable` — a
+  diagnosable, retryable status — well **before** jplrc's 20s provider budget
+  would abort the connection itself.
+
+| Env var | Default | Meaning |
+|---|---|---|
+| `YT_MUSIC_DEADLINE_SECONDS` | `12` | Total budget for one `/v1/search` (clamped 1–60s). Kept under jplrc's 20s default. |
+| `YT_MUSIC_TIMEOUT_SECONDS` | `30` | Ceiling for a single upstream call (a smaller remaining deadline always wins). |
+
+Both are read per request and fail closed: a missing, non-numeric or
+out-of-range value falls back to the default instead of trusting it.
+
 ## Wiring into jplrc
 
 The seed migration (`drizzle/0021_convert_ytmusic_builtin_to_plugin.sql`)
@@ -57,8 +86,12 @@ row's base URL in the admin panel.
 ```bash
 pip install -r requirements.txt
 python server.py                 # YT_MUSIC_PORT=8910, YT_MUSIC_OAUTH=<oauth.json>
-python3 -m unittest discover -s yt-sidecar   # protocol + mapping tests, no deps
+python3 -m unittest discover -s yt-sidecar   # protocol + budget tests, no deps
 ```
+
+The test suite is stdlib-only: it duck-types ytmusicapi and drives the request
+budget with a fake monotonic clock, so "upstream hangs" cases assert a *bounded*
+stop without sleeping.
 
 ## Authenticated sessions (recommended)
 
@@ -70,7 +103,8 @@ far more stable: unauthenticated ones can start returning empty search results
 ignored with a warning (falls back to an unauthenticated session), and the
 server additionally recycles the session after two consecutive empty or failed
 searches (`EmptySearchGuard`), so a degraded session self-heals on the next
-requests either way.
+requests either way. The guard is lock-protected and the client is recycled
+under the same lock, so concurrent searches cannot rebuild it twice.
 
 ## Public HTTPS deployment (e.g. for Cloudflare Workers hosts)
 
