@@ -262,6 +262,15 @@ test('parseCandidate rejects missing / blank title and artist identity evidence'
   assert.equal(parseCandidate({ title: '  t  ', artists: ['  a  '], plain_lyrics: 'x' })?.title, 't');
 });
 
+test('parseCandidate keeps candidate_id only as a short provenance token', () => {
+  assert.equal(parseCandidate({ title: 't', artists: ['a'], plain_lyrics: 'x', candidate_id: 'ytmusic' })?.candidateId, 'ytmusic');
+  assert.equal(parseCandidate({ title: 't', artists: ['a'], plain_lyrics: 'x', candidate_id: '  ytmusic  ' })?.candidateId, 'ytmusic');
+  assert.equal(parseCandidate({ title: 't', artists: ['a'], plain_lyrics: 'x', candidate_id: '' })?.candidateId, undefined);
+  assert.equal(parseCandidate({ title: 't', artists: ['a'], plain_lyrics: 'x', candidate_id: '   ' })?.candidateId, undefined);
+  assert.equal(parseCandidate({ title: 't', artists: ['a'], plain_lyrics: 'x', candidate_id: 'x'.repeat(65) })?.candidateId, undefined);
+  assert.equal(parseCandidate({ title: 't', artists: ['a'], plain_lyrics: 'x', candidate_id: 42 })?.candidateId, undefined);
+});
+
 // ─── Normalize ────────────────────────────────────────────────
 
 test('normalizeCandidateLyrics decodes entities and derives plain from synced', () => {
@@ -280,6 +289,19 @@ test('normalizeCandidateLyrics downgrades synced with no valid LRC timeline to p
   const timed = normalizeCandidateLyrics({ syncedLyrics: '[00:01.00]Tom &amp; Jerry\n[00:04.00]says hi', plainLyrics: '' });
   assert.equal(timed.syncedValid, true);
   assert.match(timed.plain, /Tom & Jerry/);
+});
+
+test('normalizeCandidateLyrics keeps colon-separated timestamps as a valid timeline', () => {
+  // [00:12:34] used to parse to nothing, so a perfectly timed source was
+  // downgraded to plain-only (synced dropped, score capped at 82) and the
+  // derived plain text kept the raw `[00:12:34]` tags. Both must be gone.
+  const out = normalizeCandidateLyrics({
+    syncedLyrics: '[00:12:34]夜に駆ける\n[00:15:00]沈むように',
+    plainLyrics: '',
+  });
+  assert.equal(out.syncedValid, true);
+  assert.equal(out.synced, '[00:12:34]夜に駆ける\n[00:15:00]沈むように');
+  assert.equal(out.plain, '夜に駆ける\n沈むように');
 });
 
 // ─── Secret helpers (non-crypto pure functions) ───────────────
@@ -487,7 +509,9 @@ test('builtinRowIdToKey resolves both colon and legacy hyphen row ids', () => {
   assert.equal(builtinRowIdToKey('builtin:uta-net'), 'uta-net');
   assert.equal(builtinRowIdToKey('builtin-uta-net'), 'uta-net');
   assert.equal(builtinRowIdToKey('builtin-lrclib'), 'lrclib');
-  assert.equal(builtinRowIdToKey('builtin-ytmusic'), 'ytmusic');
+  // ytmusic was converted to an HTTP plugin row (`ytmusic-sidecar`) by migration 0021.
+  assert.equal(builtinRowIdToKey('builtin-ytmusic'), null);
+  assert.equal(builtinRowIdToKey('builtin:ytmusic'), null);
   assert.equal(builtinRowIdToKey('plugin:abc:1'), null);
   assert.equal(builtinRowIdToKey('builtin-unknown'), null);
 });

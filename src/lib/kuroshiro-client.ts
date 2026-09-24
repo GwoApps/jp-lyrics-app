@@ -8,21 +8,52 @@ import { COMPOUND_READINGS, isKanji, katakanaToHiragana } from './compound-readi
 let tokenizerPromise: Promise<any> | null = null;
 
 /**
- * Lazily load kuromoji-es tokenizer from CDN.
- * Only fetched on first call; subsequent calls reuse the cached promise.
+ * Fetch the kuromoji-es module from the CDN and build a tokenizer.
+ * Kept in one place so tests can swap the (unreachable from the test runner)
+ * network step for a stub without touching the memoization logic.
  */
-async function getTokenizer() {
+async function loadTokenizerFromCdn() {
+  // Dynamic import from CDN — kuromoji-es is a pure ES module
+  const cdnUrl = 'https://code4fukui.github.io/kuromoji-es/kuromoji.js';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mod: any = await import(/* webpackIgnore: true */ cdnUrl);
+  return mod.kuromoji.createTokenizer();
+}
+
+let tokenizerLoader = loadTokenizerFromCdn;
+
+/** Test-only: replace the CDN loader. Pair it with `resetTokenizer()`. */
+export function __setTokenizerLoaderForTest(loader: () => Promise<unknown>): void {
+  tokenizerLoader = loader;
+}
+
+/**
+ * Lazily load the kuromoji-es tokenizer over the network.
+ * Only fetched on first load; subsequent calls reuse the cached promise.
+ *
+ * Issue #280: a failed load must not be memoized. When the module import or the
+ * dictionary download rejects, the singleton is cleared so the next call (the
+ * UI "retry" button) starts a fresh attempt instead of replaying the same
+ * rejected promise forever.
+ */
+export async function getTokenizer() {
   if (tokenizerPromise) return tokenizerPromise;
 
-  tokenizerPromise = (async () => {
-    // Dynamic import from CDN — kuromoji-es is a pure ES module
-    const cdnUrl = 'https://code4fukui.github.io/kuromoji-es/kuromoji.js';
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mod: any = await import(/* webpackIgnore: true */ cdnUrl);
-    return mod.kuromoji.createTokenizer();
-  })();
+  const attempt = tokenizerLoader();
 
-  return tokenizerPromise;
+  tokenizerPromise = attempt;
+  try {
+    return await attempt;
+  } catch (error) {
+    // A failed attempt is not an "already loaded" tokenizer: allow a later retry.
+    if (tokenizerPromise === attempt) tokenizerPromise = null;
+    throw error;
+  }
+}
+
+/** Test-only: drop the memoized tokenizer (or failed attempt) so the next call reloads. */
+export function resetTokenizer(): void {
+  tokenizerPromise = null;
 }
 
 /**

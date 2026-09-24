@@ -4,6 +4,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { CheckCircle2, ChevronDown, ChevronUp, CircleAlert, GripVertical, Loader2, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { lyricsProviderTestErrorKey } from '@/lib/lyrics-provider/error-keys';
 import type { ProviderTestResult, ProviderWire, SourceSchema, SourceSchemaField } from './lyrics-provider-types';
 
 export interface SortableRowProps {
@@ -84,7 +85,12 @@ export default function SortableProviderRow({ p, testResult, dragging, onMoveUp,
             {p.last_check_status === 'ok'
               ? t('admin.lyricsProviderCheckOk')
               : p.last_check_status === 'failed'
-                ? (p.last_check_code || t('admin.lyricsProviderCheckFailed'))
+                ? (() => {
+                    // Same lookup as the on-demand test badge: unknown codes fall
+                    // back to a generic label rather than leaking the raw code.
+                    const errorKey = lyricsProviderTestErrorKey(p.last_check_code);
+                    return errorKey ? t(errorKey) : t('admin.lyricsProviderCheckFailed');
+                  })()
                 : t('admin.lyricsProviderCheckUnchecked')}
             {p.last_check_latency_ms != null && ` · ${p.last_check_latency_ms}ms`}
           </span>
@@ -221,11 +227,16 @@ export function ProviderRowSummary({ p }: { p: ProviderWire }) {
 function TestResultBadge({ result }: { result?: ProviderTestResult }) {
   const { t } = useI18n();
   if (!result) return null;
+  // The server reports language-neutral codes; show the localized reason and
+  // keep the generic label when the code is unknown (or missing).
+  const errorKey = result.ok ? null : lyricsProviderTestErrorKey(result.code);
   return (
-    <span className={`inline-flex items-center gap-1 ${result.ok ? 'text-[var(--success)]' : 'text-[var(--destructive)]'}`}>
+    <span className={`inline-flex items-center gap-1 ${result.ok ? 'text-[var(--success)]' : 'text-[var(--destructive)]'}`} title={errorKey ? `${t('admin.lyricsProviderTestFail')} (${result.code})` : undefined}>
       {result.ok
         ? t('admin.lyricsProviderTestOk')
-        : `${t('admin.lyricsProviderTestFail')} (${result.code})`}
+        : errorKey
+          ? t(errorKey)
+          : t('admin.lyricsProviderTestFail')}
       {result.latencyMs != null && ` · ${result.latencyMs}ms`}
     </span>
   );

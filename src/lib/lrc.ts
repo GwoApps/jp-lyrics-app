@@ -16,12 +16,68 @@ const LRC_METADATA_KEYS = new Set(['ar', 'ti', 'al', 'by', 'offset', 're', 've',
 /** Match a standard LRC metadata tag line such as `[ar:YOASOBI]` / `[offset:120]`. */
 const METADATA_LINE_RE = /^\[([a-z]+):(.*)\]$/i;
 
-/** One or more timestamps at the start of an LRC lyric row (any supported form). */
-const LEADING_TIMESTAMPS_RE = /^(?:\[(?:\d{1,2}:\d{2}(?:\.\d{1,3})?)\]\s*)+/;
-/** Global matcher used to expand every timestamp inside a multi-timestamp prefix. */
-const TIMESTAMP_RE = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]/g;
+/**
+ * Source of truth for the LRC timestamp syntax. Every matcher below is built
+ * from this one fragment, so the parser, the plain-text stripper and the export
+ * pairing can never drift into accepting different forms (issue #340).
+ *
+ * Groups: 1 = minutes (1-2 digits), 2 = seconds (exactly 2 digits),
+ * 3 = optional fraction digits (1-3).
+ *
+ * The fragment is a JS string embedded into a regular expression constructor,
+ * so it carries two escaping layers: a bracket that is literal in the pattern is
+ * written with a doubled backslash, and a literal backslash needs four. Digit
+ * classes are spelled out as `[0-9]` because inside a plain string `\d` would
+ * collapse to a literal `d`.
+ *
+ * The third segment may be separated by a dot (`[mm:ss.xx]`, the canonical LRC
+ * form) or by a colon (`[mm:ss:xx]`, a widely used "dot typed as a colon"
+ * variant). The colon form is read as a fraction of a second, so `[00:12:34]`
+ * is 12340 ms (`[00:12.340]`) and its digits are zero-padded on the right
+ * (`[00:12:3]` -> 300 ms), matching the existing lenient style. Non-standard
+ * 1-2 digit minutes and single-digit seconds (`[1:23.45]`, `[0:5]`) stay accepted.
+ */
+export const LRC_TIMESTAMP_PATTERN = '\\[([0-9]{1,2}):([0-9]{2})(?:[.:]([0-9]{1,3}))?\\]';
 
-/** Parse minutes/seconds/fraction (as captured by {@link TIMESTAMP_RE}) into ms. */
+/** Global matcher used to expand every timestamp inside a multi-timestamp prefix. */
+export const LRC_TIMESTAMP_REGEX = new RegExp(LRC_TIMESTAMP_PATTERN, 'g');
+
+/**
+ * A single timestamp as typed into the editor: the same syntax as
+ * {@link LRC_TIMESTAMP_PATTERN} without the surrounding brackets.
+ */
+const LRC_TIMESTAMP_ONLY_REGEX = new RegExp('^(?:' + LRC_TIMESTAMP_PATTERN.slice(2, -2) + ')$');
+
+/** One or more timestamps at the start of an LRC lyric row (any supported form). */
+export const LRC_LEADING_TIMESTAMPS_REGEX = new RegExp('^(?:' + LRC_TIMESTAMP_PATTERN + '[\t ]*)+');
+
+/** Multi-line matcher dropping every leading timestamp prefix from a document. */
+const LEADING_TIMESTAMPS_MULTILINE_REGEX = new RegExp('^(?:' + LRC_TIMESTAMP_PATTERN + '[\t ]*)+', 'gm');
+
+/**
+ * Strip every leading timestamp prefix from a full LRC document, keeping the
+ * lyric text after it. Shared with the plain-text derivation of synced lyrics
+ * so it can never lag behind {@link LRC_TIMESTAMP_REGEX}.
+ */
+export function stripLrcTimestamps(value: string): string {
+  return value.replace(LEADING_TIMESTAMPS_MULTILINE_REGEX, '');
+}
+
+/**
+ * Strip every leading timestamp prefix from a single LRC row, keeping the lyric
+ * text after it. A row without a timestamp is returned unchanged (trimmed).
+ */
+export function stripLrcTimestampsFromLine(value: string): string {
+  const trimmed = value.trim();
+  const prefix = trimmed.match(LRC_LEADING_TIMESTAMPS_REGEX)?.[0] ?? '';
+  return prefix ? trimmed.slice(prefix.length).trim() : trimmed;
+}
+
+/**
+ * Parse minutes/seconds/fraction (as captured by {@link LRC_TIMESTAMP_REGEX})
+ * into ms. The fraction separator (dot or colon) is not part of the capture, so
+ * both forms share this single numeric conversion.
+ */
 function timestampCapturesToMs(minutes: string, seconds: string, fraction: string | undefined): number {
   const secs = Number.parseInt(seconds, 10);
   if (secs >= 60) return NaN;
@@ -33,16 +89,17 @@ function timestampCapturesToMs(minutes: string, seconds: string, fraction: strin
 
 /**
  * Expand a multi-timestamp LRC row into one entry per timestamp.
- * Supports non-standard forms (`[1:23.45]`, `[01:23]`) with 1-2 digit minutes
- * and an optional fraction. Returns null when the row has no leading timestamp.
+ * Supports non-standard forms (`[1:23.45]`, `[01:23]`, `[00:12:34]`) with 1-2
+ * digit minutes and an optional dot- or colon-separated fraction. Returns null
+ * when the row has no leading timestamp.
  */
 function parseTimestampedRow(raw: string): SyncLine[] | null {
-  const prefix = raw.match(LEADING_TIMESTAMPS_RE)?.[0];
+  const prefix = raw.match(LRC_LEADING_TIMESTAMPS_REGEX)?.[0];
   if (!prefix) return null;
   const text = raw.slice(prefix.length).trim();
   if (!text) return [];
   const lines: SyncLine[] = [];
-  for (const match of prefix.matchAll(TIMESTAMP_RE)) {
+  for (const match of prefix.matchAll(LRC_TIMESTAMP_REGEX)) {
     const timeMs = timestampCapturesToMs(match[1], match[2], match[3]);
     if (!Number.isNaN(timeMs)) lines.push({ timeMs, text });
   }
@@ -99,7 +156,7 @@ export function getLrcTextLines(value: string): string[] {
   return value.split('\n').flatMap((raw) => {
     const trimmed = raw.trim();
     if (!trimmed || isLrcMetadataLine(trimmed)) return [];
-    const text = trimmed.replace(LEADING_TIMESTAMPS_RE, '').trim();
+    const text = stripLrcTimestampsFromLine(trimmed);
     return text ? [text] : [];
   });
 }
@@ -386,16 +443,19 @@ export function resolveTimelineSave(
   return { ok: true, ...resolveLrcTextUpdate(existingRaw, existingSynced, submittedSynced) };
 }
 
-/** Parse an editor timestamp in M:SS, M:SS.d, M:SS.dd or M:SS.ddd form. */
+/**
+ * Parse an editor timestamp: M:SS with an optional dot- or colon-separated
+ * fraction (M:SS, M:SS.d, M:SS.dd, M:SS.ddd, M:SS:dd, M:SS:ddd). The colon form
+ * is the same "dot typed as a colon" variant {@link LRC_TIMESTAMP_REGEX}
+ * accepts, and shares its numeric conversion.
+ */
 export function parseLrcTimestamp(value: string): number | null {
-  const match = value.trim().match(/^(\d+):(\d{2})(?:\.(\d{1,3}))?$/);
+  const match = value.trim().match(LRC_TIMESTAMP_ONLY_REGEX);
   if (!match) return null;
-  const seconds = Number.parseInt(match[2], 10);
-  if (seconds >= 60) return null;
-  const fraction = (match[3] || '').padEnd(3, '0');
-  return Number.parseInt(match[1], 10) * 60000
-    + seconds * 1000
-    + (fraction ? Number.parseInt(fraction, 10) : 0);
+  const timeMs = timestampCapturesToMs(match[1], match[2], match[3]);
+  // `timestampCapturesToMs` reports seconds >= 60 as NaN; the editor contract is
+  // a nullable parse, so NaN is normalised to null (unchanged behaviour).
+  return Number.isNaN(timeMs) ? null : timeMs;
 }
 
 /** Find the active sync line index for a given progress position */

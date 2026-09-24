@@ -111,8 +111,12 @@ export function parseCandidate(raw: unknown): ProviderCandidate | null {
   if (plain.length > MAX_LYRICS_CHARS || synced.length > MAX_LYRICS_CHARS) return null;
   let sourceUrl: string | undefined;
   if (typeof raw.source_url === 'string' && /^https:/.test(raw.source_url)) sourceUrl = raw.source_url;
+  // `candidate_id` doubles as the persisted provenance key (`lyrics_source`),
+  // so keep it a short non-empty token and drop anything else.
+  const rawCandidateId = typeof raw.candidate_id === 'string' ? raw.candidate_id.trim() : '';
+  const candidateId = rawCandidateId.length > 0 && rawCandidateId.length <= 64 ? rawCandidateId : undefined;
   return {
-    candidateId: typeof raw.candidate_id === 'string' ? raw.candidate_id : undefined,
+    candidateId,
     title,
     artists,
     album: typeof raw.album === 'string' ? raw.album : undefined,

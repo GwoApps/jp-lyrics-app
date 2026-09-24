@@ -224,6 +224,21 @@ test('buildExport LRC with translation skips blank source lines and keeps index 
   );
 });
 
+test('buildExport LRC pairs translations for colon-separated rows too', () => {
+  // [00:12:34] rows used to be invisible to the export pairing regex, so the
+  // translation line was silently dropped. The prefix is now re-emitted by the
+  // shared timestamp syntax in lrc.ts.
+  const song = {
+    ...SONG,
+    lyrics_synced: '[00:01:00]桜が舞う\n[00:05:00]明日へ',
+  };
+  const lrc = buildExport(song, { format: 'lrc', includeTranslation: true });
+  assert.equal(
+    lrc.body,
+    `[ti:${SONG.title}]\n[ar:${SONG.artist}]\n[00:01:00]桜が舞う\n[00:01:00]Cherry blossoms dance\n[00:05:00]明日へ\n[00:05:00]Toward tomorrow`,
+  );
+});
+
 test('buildExport LRC with translation does not emit a redundant line for untranslated rows', () => {
   const song = {
     ...SONG,

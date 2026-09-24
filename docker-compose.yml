@@ -5,7 +5,10 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      - YT_MUSIC_SIDECAR_URL=http://yt-sidecar:8910
+      # The bundled yt-sidecar plugin (ytmusic-sidecar row) speaks plaintext
+      # HTTP on the compose network — relax the deployment policy for it.
+      - LYRICS_PROVIDER_ALLOW_HTTP=true
+      - LYRICS_PROVIDER_ALLOW_PRIVATE_NETWORK=true
     volumes:
       - jplrc-data:/app/data
     depends_on:
@@ -37,6 +40,12 @@ services:
     build: ./yt-sidecar
     container_name: yt-sidecar
     restart: unless-stopped
+    # YT_MUSIC_OAUTH: authenticated upstream session (recommended — see
+    # yt-sidecar/README.md). An empty/invalid file falls back to unauth.
+    environment:
+      YT_MUSIC_OAUTH: /app/oauth.json
+    volumes:
+      - /data0/docker/jplrc-secrets/yt-music-oauth.json:/app/oauth.json:ro
     env_file: .env
     networks:
       - traefik-net

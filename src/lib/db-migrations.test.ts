@@ -80,6 +80,17 @@ test('fresh DB applying full journal yields all required tables/columns', async 
       assert.equal(res.rows.length, 1, `missing table: ${table}`);
     }
 
+    // Migration 0021 converts the seeded builtin ytmusic row into one HTTP
+    // plugin row with the compose-network sidecar default (fresh DBs have no
+    // source_config override to inherit).
+    const converted = await client.execute(
+      "SELECT id, kind, base_url FROM lyrics_provider_configs WHERE id IN ('ytmusic-sidecar', 'builtin-ytmusic', 'builtin:ytmusic')"
+    );
+    assert.equal(converted.rows.length, 1, 'builtin ytmusic row should be converted to exactly one plugin row');
+    assert.equal(converted.rows[0].id, 'ytmusic-sidecar');
+    assert.equal(converted.rows[0].kind, 'http');
+    assert.equal(converted.rows[0].base_url, 'http://yt-sidecar:8910');
+
     const songCols = await client.execute('PRAGMA table_info(`songs`)');
     const songColNames = new Set(songCols.rows.map(r => r.name as string));
     for (const col of requiredSongColumns) {

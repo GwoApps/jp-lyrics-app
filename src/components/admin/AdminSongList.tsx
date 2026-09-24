@@ -12,6 +12,13 @@ export type SongOrder = 'desc' | 'asc';
 interface AdminSongListProps {
   songs: AdminSong[];
   total?: number;
+  /**
+   * Authoritative pending-approval count for the whole queue (ISSUE #319).
+   * Supplied by the admin page from the queue total so this footer hint and
+   * the 待办 tab badge never disagree. Falls back to the pending items on the
+   * current page when omitted.
+   */
+  pendingTotal?: number;
   q: string;
   status: SongStatusFilter;
   review: SongReviewFilter;
@@ -41,7 +48,7 @@ interface AdminSongListProps {
  * no approve/reject duplicate entry here.
  */
 export default function AdminSongList({
-  songs, total, q, status, review, sort, order, hasNext, hasPrev, onQChange, onStatusChange,
+  songs, total, pendingTotal, q, status, review, sort, order, hasNext, hasPrev, onQChange, onStatusChange,
   onReviewChange, onSortChange, onOrderChange, onNext, onPrev, onPreview,
   onPublish, onUnpublish, onDelete, locale,
 }: AdminSongListProps) {
@@ -51,6 +58,9 @@ export default function AdminSongList({
   const inputCls = 'rounded-md border border-[var(--border)] bg-[var(--input)] px-2.5 py-1.5 text-xs outline-none focus:border-[var(--primary)] transition-colors';
 
   const pendingItems = songs.filter((s) => s.public_requested === 1 && s.is_public === 0);
+  // Prefer the queue-wide total (same source as the 待办 badge); the per-page
+  // fallback only applies when the caller has no authoritative count.
+  const pendingCount = pendingTotal ?? pendingItems.length;
 
   return (
     <div className="space-y-3">
@@ -200,9 +210,9 @@ export default function AdminSongList({
       )}
 
       {/* Pending hint */}
-      {pendingItems.length > 0 && (
+      {pendingCount > 0 && (
         <p className="text-[11px] text-[var(--muted-foreground)]/70">
-          {t('admin.pendingInQueue', { count: String(pendingItems.length) })}
+          {t('admin.pendingInQueue', { count: String(pendingCount) })}
         </p>
       )}
 

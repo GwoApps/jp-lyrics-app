@@ -44,8 +44,15 @@ export function useFurigana(deps: UseFuriganaDeps) {
     : null;
   const readingSourceKey = `${readingScheme}\u0000${lyricsRaw}`;
   const plainFuriganaLines = useMemo(() => createPlainFuriganaLines(lyricsRaw), [lyricsRaw]);
+  // Issue #280: a retry must show its loading state immediately. The effect only
+  // sets `loading` after an async tick (after the stale-request cleanup window),
+  // so without this the retry button stayed enabled and its spinner frozen.
+  // The ref mirrors the state so the effect can drop a stale flag without a
+  // setState-in-effect (which would trigger a cascading re-render).
+  const [retryPending, setRetryPending] = useState(false);
+  const retryPendingRef = useRef(false);
   const isCurrentClientResult = clientFuriganaState.source === readingSourceKey;
-  const furiganaLoading = isCurrentClientResult && clientFuriganaState.loading;
+  const furiganaLoading = (isCurrentClientResult && clientFuriganaState.loading) || retryPending;
   const furiganaError = isCurrentClientResult ? clientFuriganaState.error : '';
 
   const furiganaLines = useMemo<FuriganaLine[]>(() => {
@@ -62,9 +69,14 @@ export function useFurigana(deps: UseFuriganaDeps) {
   // Client-side furigana conversion: only once per lyrics value when server data is absent.
   const [furiganaRetryTick, setFuriganaRetryTick] = useState(0);
   useEffect(() => {
-    if (!lyricsRaw.trim() || serverFurigana.length > 0 || !hasHanCharacters || cantoneseSuggestion) return;
+    if (!lyricsRaw.trim() || serverFurigana.length > 0 || !hasHanCharacters || cantoneseSuggestion) {
+      // Nothing to load for this input, so a pending retry can never resolve itself.
+      retryPendingRef.current = false;
+      return;
+    }
     const requestKey = `${id}\u0000${readingSourceKey}`;
     if (requestedLyricsRef.current === requestKey) return;
+    retryPendingRef.current = false;
     requestedLyricsRef.current = requestKey;
     let cancelled = false;
     let settled = false;
@@ -73,6 +85,8 @@ export function useFurigana(deps: UseFuriganaDeps) {
       // Cross an async boundary so this state transition belongs to the conversion request.
       await Promise.resolve();
       if (cancelled) return;
+      retryPendingRef.current = false;
+      setRetryPending(false);
       setClientFuriganaState({ source: readingSourceKey, lines: [], loading: true, error: '' });
       try {
         const lines = await convertLyricsReading(lyricsRaw, readingScheme);
@@ -108,14 +122,20 @@ export function useFurigana(deps: UseFuriganaDeps) {
 
   // Retry a failed client-side furigana conversion: the effect only runs once
   // per lyrics value, so clear the guard and bump the tick to re-run it.
+  // `retryPending` keeps the button in its loading state until the effect has
+  // actually taken over (or bailed out), so clicking retry always gives feedback.
   const retryFurigana = useCallback(() => {
     requestedLyricsRef.current = '';
+    retryPendingRef.current = true;
+    setRetryPending(true);
     setFuriganaRetryTick((n) => n + 1);
   }, []);
 
   // Reset client furigana state after a reading-scheme change invalidates it.
   const resetFurigana = useCallback(() => {
     requestedLyricsRef.current = '';
+    retryPendingRef.current = false;
+    setRetryPending(false);
     setClientFuriganaState({ source: '', lines: [], loading: false, error: '' });
   }, []);
 

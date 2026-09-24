@@ -9,7 +9,7 @@
  *   LYRICS_PROVIDER_CHAIN_TIMEOUT_MS    = 180000  (whole effective chain budget)
  *
  * Builtin providers keep their original per-request timeouts (PetitLyrics 8s,
- * LRCLIB 15s, Uta-Net 15s, ytmusic 20s) — they are NOT squeezed to the plugin
+ * LRCLIB/Uta-Net 15s) — they are NOT squeezed to the plugin
  * default, avoiding a search-capability regression.
  */
 

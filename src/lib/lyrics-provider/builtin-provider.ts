@@ -1,7 +1,7 @@
 /**
  * Builtin lyrics source adapters (ISSUE #148, unified abstraction).
  *
- * Each trusted builtin source (LRCLIB → PetitLyrics → Uta-Net → ytmusic) is
+ * Each trusted builtin source (LRCLIB → PetitLyrics → Uta-Net) is
  * exposed as an individual `LyricsProvider` backed by a `builtin:*` row in
  * `lyrics_provider_configs`, so admins can enable/disable and reorder them in
  * the same 歌词源 panel as runtime HTTP plugins. The legacy behaviour (default
@@ -15,14 +15,13 @@ import {
   searchLrclib,
   fetchFromPetitLyrics,
   fetchFromUtaNet,
-  fetchFromYtMusic,
   lrclibConfidence,
   utaNetConfidence,
 } from '../lyrics-fetcher.ts';
 
 /** Stable row ids used by the seed migration — never rename these. */
-export const BUILTIN_PROVIDER_IDS = ['builtin:lrclib', 'builtin:petitlyrics', 'builtin:uta-net', 'builtin:ytmusic'] as const;
-export type BuiltinSourceKey = 'lrclib' | 'petitlyrics' | 'uta-net' | 'ytmusic';
+export const BUILTIN_PROVIDER_IDS = ['builtin:lrclib', 'builtin:petitlyrics', 'builtin:uta-net'] as const;
+export type BuiltinSourceKey = 'lrclib' | 'petitlyrics' | 'uta-net';
 
 /**
  * Row id (`builtin:<key>`) → legacy source key kept for display/diagnostics.
@@ -38,7 +37,8 @@ export function builtinRowIdToKey(rowId: string): BuiltinSourceKey | null {
     case 'lrclib': return 'lrclib';
     case 'petitlyrics': return 'petitlyrics';
     case 'uta-net': return 'uta-net';
-    case 'ytmusic': return 'ytmusic';
+    // `ytmusic` was converted into an HTTP plugin row (`ytmusic-sidecar`) by
+    // migration 0021 and no longer resolves to a builtin adapter.
     default: return null;
   }
 }
@@ -49,7 +49,6 @@ export function builtinSourceDisplayName(key: BuiltinSourceKey): string {
     case 'lrclib': return 'LRCLIB';
     case 'petitlyrics': return 'PetitLyrics';
     case 'uta-net': return 'Uta-Net';
-    case 'ytmusic': return 'YouTube Music';
   }
 }
 
@@ -65,8 +64,6 @@ export interface BuiltinSourceConfig {
   fuzzyEnabled?: boolean;
   // PetitLyrics
   syncCandidateLimit?: number;
-  // ytmusic
-  sidecarUrl?: string;
   // shared
   timeoutMs?: number;
 }
@@ -81,7 +78,6 @@ export function parseSourceConfig(raw: string | null): BuiltinSourceConfig {
     if (typeof obj.api_base === 'string') out.apiBase = obj.api_base;
     if (typeof obj.fuzzy_enabled === 'boolean') out.fuzzyEnabled = obj.fuzzy_enabled;
     if (typeof obj.sync_candidate_limit === 'number') out.syncCandidateLimit = obj.sync_candidate_limit;
-    if (typeof obj.sidecar_url === 'string') out.sidecarUrl = obj.sidecar_url;
     return out;
   } catch {
     return {};
@@ -127,12 +123,6 @@ export function builtinLyricsProvider(cfg: { id: string; name: string; timeoutMs
           return { status: 'error', candidates: [], diagnostic: policyError };
         }
       }
-      if (sourceConfig.sidecarUrl) {
-        const policyError = await validateProviderBaseUrl(sourceConfig.sidecarUrl, getNetworkPolicy());
-        if (policyError) {
-          return { status: 'error', candidates: [], diagnostic: policyError };
-        }
-      }
 
       try {
         switch (key) {
@@ -174,23 +164,6 @@ export function builtinLyricsProvider(cfg: { id: string; name: string; timeoutMs
                 syncedLyrics: un.result.synced || undefined,
                 confidence: utaNetConfidence(un.score),
                 match: { title: un.matchedTitle, artist: un.matchedArtist, link: un.link, ambiguous: un.ambiguous },
-              }],
-            };
-          }
-          case 'ytmusic': {
-            const yt = await fetchFromYtMusic(query.title, artist, signal, {
-              sidecarUrl: sourceConfig.sidecarUrl,
-            });
-            if (!yt) return { status: 'empty', candidates: [] };
-            return {
-              status: 'hit',
-              candidates: [{
-                candidateId: 'ytmusic',
-                title: query.title,
-                artists: query.artists,
-                plainLyrics: yt.plain || undefined,
-                syncedLyrics: yt.synced || undefined,
-                confidence: yt.synced ? 74 : 68,
               }],
             };
           }

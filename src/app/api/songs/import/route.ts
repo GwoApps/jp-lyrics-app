@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
-import { and, eq, or } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { getDB, schema } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { fetchLyricsWithChain } from '@/lib/lyrics-provider';
@@ -8,6 +8,7 @@ import { classifyLyricsHit } from '@/lib/lyrics-hit';
 import { parseLrc } from '@/lib/lrc';
 import { getSpotifyTrack, searchSpotifyTrack } from '@/lib/spotify';
 import { parseJsonBody } from '@/lib/admin';
+import { songVisibilityWhere } from '@/lib/song-visibility';
 
 // POST /api/songs/import — import the current/canonical Spotify track through the shared source chain
 export async function POST(request: NextRequest) {
@@ -32,9 +33,7 @@ export async function POST(request: NextRequest) {
   }
 
   const db = getDB();
-  const visibleToUser = user.isAdmin
-    ? undefined
-    : or(eq(schema.songs.createdBy, user.email), eq(schema.songs.isPublic, 1));
+  const visibleToUser = songVisibilityWhere(user);
   const spotifyTrack = (spotifyTrackId ? await getSpotifyTrack(user.email, spotifyTrackId) : null)
     || await searchSpotifyTrack(user.email, title, artist);
   const existingBySpotify = spotifyTrack

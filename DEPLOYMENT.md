@@ -62,10 +62,18 @@ SESSION_SECRET=your_session_secret
 # HTTP lyrics providers (ISSUE #148) — deployment-level network policy + budgets.
 # These are env-only; admins/users cannot override them from the UI or database.
 # Boolean values accept only an explicit `true` (any other value = false / fail-closed).
+# NOTE: the bundled yt-sidecar plugin (see yt-sidecar/README.md) runs over plaintext
+# HTTP on the compose network — deploying it requires both switches below to be `true`.
 LYRICS_PROVIDER_ALLOW_HTTP=false
 LYRICS_PROVIDER_ALLOW_PRIVATE_NETWORK=false
 # Required to store Bearer-token providers (AES-GCM encryption at rest).
 LYRICS_PROVIDER_SECRET_KEY=
+
+# yt-sidecar: authenticated upstream session (recommended — unauthenticated
+# sessions get soft-throttled with empty results). Generate with
+# `ytmusicapi oauth` / `ytmusicapi browser`, drop the file at
+# /data0/docker/jplrc-secrets/yt-music-oauth.json (mounted read-only at
+# /app/oauth.json). An empty/invalid file falls back to unauth.
 # Optional per-provider / chain budgets (ms). Missing/invalid values fall back to safe defaults.
 LYRICS_PROVIDER_DEFAULT_TIMEOUT_MS=20000
 LYRICS_PROVIDER_MAX_TIMEOUT_MS=60000
@@ -241,6 +249,26 @@ wrangler secret put TRANSLATION_API_KEY   # optional, for the translation featur
 # Required only if you configure Bearer-token HTTP lyrics providers (ISSUE #148)
 wrangler secret put LYRICS_PROVIDER_SECRET_KEY
 ```
+
+#### YouTube Music source (yt-sidecar) on Cloudflare
+
+The bundled `yt-sidecar` service cannot run on Workers — migration 0021 seeds a
+`ytmusic-sidecar` plugin row with `http://yt-sidecar:8910`, which is unreachable
+here. It fails closed (the network policy rejects plaintext HTTP before any
+network call), so it only adds one skipped stage per sync:
+
+- **Disable or delete** the `ytmusic-sidecar` row in the admin 系统 → 歌词源
+  panel, unless you point it at an external sidecar.
+- To actually use YouTube Music: deploy `yt-sidecar/` on any host with public
+  HTTPS and `PROVIDER_TOKEN` bearer auth, then set the row's base URL to it
+  (`auth_type: bearer`, secret = the same token) — see `yt-sidecar/README.md`.
+  The default network policy accepts public HTTPS; no `LYRICS_PROVIDER_ALLOW_*`
+  change is needed.
+- Do NOT set `LYRICS_PROVIDER_ALLOW_HTTP` /
+  `LYRICS_PROVIDER_ALLOW_PRIVATE_NETWORK` on Cloudflare: nothing here needs
+  them and they relax the SSRF policy globally.
+- Remove a stale `YT_MUSIC_SIDECAR_URL` var if one exists — nothing reads it
+  since migration 0021.
 
 > **Note:** when using the `workers-ai` translation provider, no API key is
 > needed — add the `ai` binding in `wrangler.jsonc` instead and set

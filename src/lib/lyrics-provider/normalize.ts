@@ -7,7 +7,7 @@
  * anything is persisted or surfaced to the user.
  */
 import * as heModule from 'he';
-import { parseLrc } from '../lrc.ts';
+import { parseLrc, stripLrcTimestamps } from '../lrc.ts';
 
 const decodeHtmlEntity = (heModule as unknown as { default?: typeof heModule }).default?.decode ?? heModule.decode;
 
@@ -16,13 +16,15 @@ export function unescapeLyrics(value: string): string {
   return decodeHtmlEntity(value);
 }
 
-/** Strip LRC timestamps + metadata tags from synced lyrics to derive plain text. */
+/**
+ * Strip LRC timestamps + metadata tags from synced lyrics to derive plain text.
+ * The timestamp syntax lives in `lrc.ts` (single source of truth), so a new
+ * accepted form can never be parsed there yet leak into the derived plain text.
+ */
 export function stripTimestamps(lrc: string): string {
-  return lrc
+  return stripLrcTimestamps(lrc)
     // Drop standard metadata tags ([ar:], [ti:], [al:], [by:], [offset:], …)
     .replace(/^\[[a-z]+:[^\]]*\]\s*$/gim, '')
-    // Drop every leading timestamp tag, keeping any lyric text after them.
-    .replace(/^(?:\[(?:\d{1,2}:\d{2}(?:\.\d{1,3})?)\]\s*)+/gm, '')
     .trim();
 }
 

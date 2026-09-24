@@ -101,8 +101,8 @@ export const settings = sqliteTable('settings', {
 export const lyricsProviderConfigs = sqliteTable('lyrics_provider_configs', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
-  // 'builtin' = trusted in-app source (LRCLIB / PetitLyrics / Uta-Net /
-  // ytmusic) managed like any other provider row; 'http' = runtime plugin.
+  // 'builtin' = trusted in-app source (LRCLIB / PetitLyrics / Uta-Net)
+  // managed like any other provider row; 'http' = runtime plugin.
   kind: text('kind', { enum: ['builtin', 'http'] }).notNull().default('http'),
   // Nullable for builtin providers (they have no external URL).
   baseUrl: text('base_url'),
