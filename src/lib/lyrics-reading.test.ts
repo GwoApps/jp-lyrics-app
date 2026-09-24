@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import type { ReadingScheme } from './types.ts';
 import {
   convertCantoneseLyrics,
   detectCantoneseLyrics,
   getCantoneseReadingCandidates,
   normalizeReadingScheme,
+  sourceLangOf,
   sourceLyricsLang,
 } from './lyrics-reading.ts';
 
@@ -37,6 +39,23 @@ test('sourceLyricsLang maps the reading scheme to a BCP-47 tag', () => {
   assert.equal(sourceLyricsLang('ja-kana'), 'ja');
   assert.equal(sourceLyricsLang('invalid'), 'ja');
   assert.equal(sourceLyricsLang('yue-jyutping'), 'yue-Hant');
+});
+
+test('sourceLangOf maps the reading scheme to a translation source-language tag', () => {
+  assert.equal(sourceLangOf(undefined), 'ja');
+  assert.equal(sourceLangOf('ja-kana'), 'ja');
+  assert.equal(sourceLangOf('invalid'), 'ja');
+  assert.equal(sourceLangOf('yue-jyutping'), 'yue');
+});
+
+test('sourceLangOf stays in sync with sourceLyricsLang for every known scheme', () => {
+  // Both are derived from the SAME scheme table, so a newly added scheme can
+  // never end up with a source-language tag in one place and a BCP-47 tag in
+  // the other — the regression this guard exists for (PR #332 review).
+  const known: ReadingScheme[] = ['ja-kana', 'yue-jyutping'];
+  for (const scheme of known) {
+    assert.equal(sourceLangOf(scheme), sourceLyricsLang(scheme).split('-')[0]);
+  }
 });
 
 test('convertCantoneseLyrics preserves every source character and blank line', async () => {

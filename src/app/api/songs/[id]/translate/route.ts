@@ -8,6 +8,7 @@ import { getUserSettings, applyUserTargetLang } from '@/lib/user-settings';
 import { computeCoverage, extractCompletedArrayItems } from '@/lib/translation-progress';
 import { mergeSliceIntoCache, writeSongField } from '@/lib/translation-cache';
 import { parseTranslationCache } from '@/lib/translation/parse';
+import { sourceLangOf } from '@/lib/lyrics-reading';
 
 const SSE_HEADERS = {
   'Content-Type': 'text/event-stream',
@@ -275,11 +276,12 @@ export async function POST(
     artist: existing.artist,
     glossary: glossary ?? undefined,
     // Source language drives the few-shot direction and the Cantonese reading
-    // rule (issue #316). Cantonese songs are flagged by their reading scheme,
-    // the same signal the UI uses for source-lyric lang/readings; anything
-    // else (including unknown/NULL) is Japanese, so Japanese songs are
-    // unaffected.
-    sourceLang: existing.readingScheme === 'yue-jyutping' ? 'yue' : 'ja',
+    // rule (issue #316). It is derived from the song's reading scheme via the
+    // shared scheme→source table in lib/lyrics-reading (the same signal the UI
+    // uses for source-lyric lang/readings), so a NEW reading scheme only needs
+    // its entry added there — this call site keeps working unchanged. Unknown /
+    // NULL schemes normalize to Japanese, so those songs are unaffected.
+    sourceLang: sourceLangOf(existing.readingScheme),
     // Slice requests (missing-line fill / single-line re-translate) get the
     // full song as REFERENCE CONTEXT so the model resolves Japanese omitted
     // subjects, pronouns and proper nouns from the surrounding lyrics instead

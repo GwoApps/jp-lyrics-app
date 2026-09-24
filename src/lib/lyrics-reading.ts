@@ -19,8 +19,45 @@ const CANTONESE_PHRASES = [
 const KANA_RE = /[\u3040-\u30ff]/u;
 const LRC_TIMESTAMP_RE = /^\s*(?:\[[^\]]*\]\s*)+/u;
 
+/**
+ * Single source of truth for what a reading scheme implies about the source
+ * lyrics. Every scheme-dependent decision (source-language tag for the
+ * translation prompt, BCP-47 tag for `lang` attributes / HTML export, reading
+ * conversion, …) reads this table instead of comparing the scheme literal
+ * inline — so adding a scheme means adding ONE entry here, not hunting down
+ * every `=== 'yue-jyutping'` branch.
+ *
+ * `sourceLang` is the short tag consumed by the translation prompt
+ * (`TranslationContext.sourceLang`, i.e. `ja` | `yue`); `bcp47` is the full
+ * tag used for markup. Both are inherently required — a scheme with no entry
+ * cannot be supported, and the record type makes a missing one a build error.
+ */
+const READING_SCHEME_SOURCE: Record<ReadingScheme, { sourceLang: string; bcp47: string }> = {
+  'ja-kana': { sourceLang: 'ja', bcp47: 'ja' },
+  'yue-jyutping': { sourceLang: 'yue', bcp47: 'yue-Hant' },
+};
+
+/** Reading scheme assumed for songs with an unknown / NULL / legacy value. */
+export const DEFAULT_READING_SCHEME: ReadingScheme = 'ja-kana';
+
+/**
+ * Narrow an arbitrary stored value to a known {@link ReadingScheme}, falling
+ * back to {@link DEFAULT_READING_SCHEME} so legacy/unknown rows keep behaving
+ * like Japanese songs.
+ */
 export function normalizeReadingScheme(value: unknown): ReadingScheme {
-  return value === 'yue-jyutping' ? 'yue-jyutping' : 'ja-kana';
+  return typeof value === 'string' && Object.hasOwn(READING_SCHEME_SOURCE, value)
+    ? value as ReadingScheme
+    : DEFAULT_READING_SCHEME;
+}
+
+/**
+ * Short source-language tag of the lyrics (`ja` | `yue`), straight from the
+ * scheme table. This is the value the translation prompt expects — do NOT
+ * compare the scheme literal at the call site.
+ */
+export function sourceLangOf(value: unknown): string {
+  return READING_SCHEME_SOURCE[normalizeReadingScheme(value)].sourceLang;
 }
 
 /**
@@ -33,8 +70,8 @@ export function normalizeReadingScheme(value: unknown): ReadingScheme {
  * pronunciation rules and CJK glyph shapes for the original text instead of
  * inheriting the UI language (issue #274).
  */
-export function sourceLyricsLang(value: unknown): 'ja' | 'yue-Hant' {
-  return normalizeReadingScheme(value) === 'yue-jyutping' ? 'yue-Hant' : 'ja';
+export function sourceLyricsLang(value: unknown): string {
+  return READING_SCHEME_SOURCE[normalizeReadingScheme(value)].bcp47;
 }
 
 function uniqueLyricText(rawLyrics: string): string {
