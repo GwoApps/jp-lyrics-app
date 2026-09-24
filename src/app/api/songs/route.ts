@@ -37,7 +37,6 @@ export async function GET(request: NextRequest) {
   const mine = request.nextUrl.searchParams.get('mine') === '1';
   const favoritesOnly = request.nextUrl.searchParams.get('favorites') === '1';
   const user = await getAuthUser(request);
-  const isAdmin = user?.isAdmin === true;
   const userEmail = user?.email || '';
 
   // Visibility is never hand-rolled per branch: every filter combination below
@@ -55,24 +54,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([], { headers: NO_STORE_HEADERS });
     }
     const pattern = q ? `%${q}%` : null;
-    let rawSql;
-    if (q && mine) {
-      rawSql = isAdmin
-        ? sql`SELECT s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail} WHERE (s.title LIKE ${pattern} OR s.artist LIKE ${pattern}) AND s.created_by = ${userEmail} ORDER BY s.updated_at DESC`
-        : sql`SELECT s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail} WHERE (s.title LIKE ${pattern} OR s.artist LIKE ${pattern}) AND s.created_by = ${userEmail} AND (s.is_public = 1 OR s.created_by = ${userEmail}) ORDER BY s.updated_at DESC`;
-    } else if (q) {
-      rawSql = isAdmin
-        ? sql`SELECT s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail} WHERE (s.title LIKE ${pattern} OR s.artist LIKE ${pattern}) ORDER BY s.updated_at DESC`
-        : sql`SELECT s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail} WHERE (s.title LIKE ${pattern} OR s.artist LIKE ${pattern}) AND (s.is_public = 1 OR s.created_by = ${userEmail}) ORDER BY s.updated_at DESC`;
-    } else if (mine) {
-      rawSql = isAdmin
-        ? sql`SELECT s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail} WHERE s.created_by = ${userEmail} ORDER BY s.updated_at DESC`
-        : sql`SELECT s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail} WHERE s.created_by = ${userEmail} AND (s.is_public = 1 OR s.created_by = ${userEmail}) ORDER BY s.updated_at DESC`;
-    } else {
-      rawSql = isAdmin
-        ? sql`SELECT s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail} ORDER BY s.updated_at DESC`
-        : sql`SELECT s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at FROM songs s INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail} WHERE (s.is_public = 1 OR s.created_by = ${userEmail}) ORDER BY s.updated_at DESC`;
-    }
+    const filters: (SQL | undefined)[] = [
+      q && pattern
+        ? sql`(s.title LIKE ${pattern} OR s.artist LIKE ${pattern})`
+        : undefined,
+      mine ? sql`s.created_by = ${userEmail}` : undefined,
+      visibleWhere,
+    ];
+    const rawSql = sql`
+      SELECT ${selectColumns}
+      FROM songs s
+      INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail}
+      WHERE ${and(...filters)}
+      ORDER BY s.updated_at DESC
+    `;
     const songs = await db.all(rawSql) as unknown as SongListItem[];
     return NextResponse.json(songs, { headers: NO_STORE_HEADERS });
   }
