@@ -291,6 +291,19 @@ test('normalizeCandidateLyrics downgrades synced with no valid LRC timeline to p
   assert.match(timed.plain, /Tom & Jerry/);
 });
 
+test('normalizeCandidateLyrics keeps colon-separated timestamps as a valid timeline', () => {
+  // [00:12:34] used to parse to nothing, so a perfectly timed source was
+  // downgraded to plain-only (synced dropped, score capped at 82) and the
+  // derived plain text kept the raw `[00:12:34]` tags. Both must be gone.
+  const out = normalizeCandidateLyrics({
+    syncedLyrics: '[00:12:34]夜に駆ける\n[00:15:00]沈むように',
+    plainLyrics: '',
+  });
+  assert.equal(out.syncedValid, true);
+  assert.equal(out.synced, '[00:12:34]夜に駆ける\n[00:15:00]沈むように');
+  assert.equal(out.plain, '夜に駆ける\n沈むように');
+});
+
 // ─── Secret helpers (non-crypto pure functions) ───────────────
 
 test('maskSecret masks short and long values without revealing plaintext', () => {

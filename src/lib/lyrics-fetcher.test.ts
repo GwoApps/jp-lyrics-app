@@ -206,6 +206,55 @@ test('fetchFromLrclib prefers an album-scoped hit when the bare exact duration c
   }
 });
 
+test('fetchFromLrclib keeps the bare hit when the album fallback fails with a temporary error', async () => {
+  const restore = mockFetch((url) => {
+    if (url.includes('album_name')) return new Response('boom', { status: 500 });
+    // Bare entry is the 90s TV-size version of the same title + artist.
+    return new Response(JSON.stringify(lrclibTrack({ duration: 90 })), { status: 200 });
+  });
+  try {
+    // Spotify duration 213s → conflict, but a 500 means "we could not check",
+    // not "the album version does not exist" — the candidate must survive as a
+    // reviewable duration-conflict hit instead of becoming "not found".
+    const hit = await fetchFromLrclib('Idol', 'YOASOBI', { durationMs: 213_000, album: 'Idol' });
+    assert.equal(hit.hit?.duration, 'conflict');
+    assert.equal(hit.hit?.result.synced, '[00:00.10]テスト');
+    assert.equal(hit.rateLimited, false);
+  } finally {
+    restore();
+  }
+});
+
+test('fetchFromLrclib keeps the bare hit when the album fallback response is not JSON', async () => {
+  const restore = mockFetch((url) => {
+    if (url.includes('album_name')) return new Response('<html>gateway error</html>', { status: 200 });
+    return new Response(JSON.stringify(lrclibTrack({ duration: 90 })), { status: 200 });
+  });
+  try {
+    const hit = await fetchFromLrclib('Idol', 'YOASOBI', { durationMs: 213_000, album: 'Idol' });
+    assert.equal(hit.hit?.duration, 'conflict');
+    assert.equal(hit.rateLimited, false);
+  } finally {
+    restore();
+  }
+});
+
+test('fetchFromLrclib keeps the bare hit when the album fallback 404s', async () => {
+  const restore = mockFetch((url) => {
+    if (url.includes('album_name')) {
+      return new Response(JSON.stringify({ message: 'Not found', name: 'TrackNotFound' }), { status: 404 });
+    }
+    return new Response(JSON.stringify(lrclibTrack({ duration: 90 })), { status: 200 });
+  });
+  try {
+    const hit = await fetchFromLrclib('Idol', 'YOASOBI', { durationMs: 213_000, album: 'Idol' });
+    assert.equal(hit.hit?.duration, 'conflict');
+    assert.equal(hit.rateLimited, false);
+  } finally {
+    restore();
+  }
+});
+
 test('fetchFromLrclib falls back to the album-scoped query when the bare exact 404s', async () => {
   let albumScopedCalled = false;
   const restore = mockFetch((url) => {

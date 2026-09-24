@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
-import { getDB, schema, sql } from '@/lib/db';
+import { getDB, schema, sql, and } from '@/lib/db';
 import { parseLrc, findLrcConflicts } from '@/lib/lrc';
 import { getAuthUser } from '@/lib/auth';
 import { getSpotifyTrack } from '@/lib/spotify';
 import { parseJsonBody } from '@/lib/admin';
+import { songVisibilityWhere } from '@/lib/song-visibility';
+import type { SQL } from 'drizzle-orm';
 import type { SongListItem } from '@/lib/types';
 
 /** Look up Spotify display name from spotify_auth table */
@@ -38,6 +40,16 @@ export async function GET(request: NextRequest) {
   const isAdmin = user?.isAdmin === true;
   const userEmail = user?.email || '';
 
+  // Visibility is never hand-rolled per branch: every filter combination below
+  // composes the filters it needs on top of this ONE predicate (ISSUE #346).
+  // - logged-in non-admin -> `is_public = 1 OR created_by = <email>`
+  // - anonymous          -> `is_public = 1` (a history row with an empty
+  //                         created_by must NOT match)
+  // - admin              -> undefined (no restriction)
+  const visibleWhere = songVisibilityWhere(user);
+
+  const selectColumns = sql`s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at`;
+
   if (favoritesOnly) {
     if (!user) {
       return NextResponse.json([], { headers: NO_STORE_HEADERS });
@@ -66,27 +78,23 @@ export async function GET(request: NextRequest) {
   }
 
   // Non-favorites query
-  if (q && mine && user) {
-    const pattern = `%${q}%`;
-    const songs = isAdmin
-      ? await db.all(sql`SELECT id, title, artist, cover_url, spotify_track_id, spotify_album, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE (title LIKE ${pattern} OR artist LIKE ${pattern}) AND created_by = ${userEmail} ORDER BY updated_at DESC`) as unknown as SongListItem[]
-      : await db.all(sql`SELECT id, title, artist, cover_url, spotify_track_id, spotify_album, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE (title LIKE ${pattern} OR artist LIKE ${pattern}) AND created_by = ${userEmail} AND (is_public = 1 OR created_by = ${userEmail}) ORDER BY updated_at DESC`) as unknown as SongListItem[];
-    return NextResponse.json(songs, { headers: NO_STORE_HEADERS });
-  } else if (q) {
-    const pattern = `%${q}%`;
-    const songs = isAdmin
-      ? await db.all(sql`SELECT id, title, artist, cover_url, spotify_track_id, spotify_album, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE (title LIKE ${pattern} OR artist LIKE ${pattern}) ORDER BY updated_at DESC`) as unknown as SongListItem[]
-      : await db.all(sql`SELECT id, title, artist, cover_url, spotify_track_id, spotify_album, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE (title LIKE ${pattern} OR artist LIKE ${pattern}) AND is_public = 1 ORDER BY updated_at DESC`) as unknown as SongListItem[];
-    return NextResponse.json(songs, { headers: NO_STORE_HEADERS });
-  } else if (mine && user) {
-    const songs = isAdmin
-      ? await db.all(sql`SELECT id, title, artist, cover_url, spotify_track_id, spotify_album, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE created_by = ${userEmail} ORDER BY updated_at DESC`) as unknown as SongListItem[]
-      : await db.all(sql`SELECT id, title, artist, cover_url, spotify_track_id, spotify_album, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE created_by = ${userEmail} AND (is_public = 1 OR created_by = ${userEmail}) ORDER BY updated_at DESC`) as unknown as SongListItem[];
-    return NextResponse.json(songs, { headers: NO_STORE_HEADERS });
-  } else {
-    const songs = isAdmin
-      ? await db.all(sql`SELECT id, title, artist, cover_url, spotify_track_id, spotify_album, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs ORDER BY updated_at DESC`) as unknown as SongListItem[]
-      : await db.all(sql`SELECT id, title, artist, cover_url, spotify_track_id, spotify_album, created_by, created_by_name, is_public, public_requested, created_at, updated_at FROM songs WHERE is_public = 1 ORDER BY updated_at DESC`) as unknown as SongListItem[];
+  {
+    const pattern = q ? `%${q}%` : null;
+    const filters: (SQL | undefined)[] = [
+      q && pattern
+        ? sql`(s.title LIKE ${pattern} OR s.artist LIKE ${pattern})`
+        : undefined,
+      // `?mine=1` without a session stays owner-scoped: an anonymous viewer has
+      // no email, so `created_by = ''` legitimately lists the unowned rows.
+      mine && user ? sql`s.created_by = ${userEmail}` : undefined,
+      visibleWhere,
+    ];
+    const songs = await db.all(sql`
+      SELECT ${selectColumns}
+      FROM songs s
+      WHERE ${and(...filters)}
+      ORDER BY s.updated_at DESC
+    `) as unknown as SongListItem[];
     return NextResponse.json(songs, { headers: NO_STORE_HEADERS });
   }
 }
