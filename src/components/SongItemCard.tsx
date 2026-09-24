@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
-import { Share2, Star, Trash2 } from 'lucide-react';
+import { AlertTriangle, Share2, Star, Trash2 } from 'lucide-react';
 import { Link } from 'next-view-transitions';
 import CoverImage from '@/components/CoverImage';
 import { useCoverPalette } from '@/hooks/useCoverPalette';
@@ -13,6 +13,8 @@ export interface SongItemCardSong {
   cover_url?: string | null;
   created_by_name: string;
   updated_at: string;
+  /** Issue #323: `1` when the lyrics match was low-confidence (needs review). */
+  lyrics_needs_review?: number;
 }
 
 interface SongItemCardProps {
@@ -25,6 +27,8 @@ interface SongItemCardProps {
   locale: string;
   unknownArtistLabel: string;
   createdByLabel: string;
+  /** Issue #323: badge label for `lyrics_needs_review === 1` (shared with the admin list). */
+  needsReviewLabel: string;
   shareLabel: string;
   openSongLabel: (title: string) => string;
   favoriteLabel: (title: string, isFavorite: boolean) => string;
@@ -45,6 +49,7 @@ export default function SongItemCard({
   locale,
   unknownArtistLabel,
   createdByLabel,
+  needsReviewLabel,
   shareLabel,
   openSongLabel,
   favoriteLabel: favoriteAccessibleName,
@@ -110,8 +115,16 @@ export default function SongItemCard({
       >
         {!hideCover && <CoverImage src={song.cover_url} alt={song.title} size={variant === 'grid' ? 'md' : 'sm'} className="song-item-card__cover z-10" viewTransitionName={`song-cover-${song.id}`} />}
         <div className="song-item-card__content relative z-10 flex-1 min-w-0">
-          <div className="text-sm font-medium truncate flex items-center gap-2">
-            <span className="truncate">{song.title}</span>
+          <div className="text-sm font-medium flex items-center gap-2">
+            <span className="truncate min-w-0">{song.title}</span>
+            {/* Issue #323: same badge the admin song list uses, so the review hint
+                in the playlist import summary is actionable from the home list. */}
+            {song.lyrics_needs_review === 1 && (
+              <span className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--destructive)]/10 text-[var(--destructive)]">
+                <AlertTriangle className="h-3 w-3 mr-0.5" />
+                {needsReviewLabel}
+              </span>
+            )}
             {isPlaying && <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--success)] animate-pulse shrink-0" />}
           </div>
           <div className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate">

@@ -473,6 +473,7 @@ export default function HomePage() {
         locale={bcp47}
         unknownArtistLabel={t('common.unknownArtist')}
         createdByLabel={t('home.createdBy')}
+        needsReviewLabel={t('admin.lyricsNeedsReview')}
         shareLabel={t('song.share')}
         openSongLabel={(title) => t('home.openSong', { title })}
         favoriteLabel={(title, fav) => t(fav ? 'home.removeFromFavorites' : 'home.addToFavorites', { title })}

@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
   // - admin              -> undefined (no restriction)
   const visibleWhere = songVisibilityWhere(user);
 
-  const selectColumns = sql`s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at`;
+  const selectColumns = sql`s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at, s.lyrics_needs_review`;
 
   if (favoritesOnly) {
     if (!user) {
