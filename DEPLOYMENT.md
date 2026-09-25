@@ -74,6 +74,9 @@ LYRICS_PROVIDER_SECRET_KEY=
 # `ytmusicapi oauth` / `ytmusicapi browser`, drop the file at
 # /data0/docker/jplrc-secrets/yt-music-oauth.json (mounted read-only at
 # /app/oauth.json). An empty/invalid file falls back to unauth.
+# To notice a dead/soft-throttled session, probe `http://yt-sidecar:8910/health?deep=1`
+# from inside the compose network — it runs one real upstream search, caches the
+# answer for 60s, and returns 503 within a minute of the upstream going quiet.
 # Optional per-provider / chain budgets (ms). Missing/invalid values fall back to safe defaults.
 LYRICS_PROVIDER_DEFAULT_TIMEOUT_MS=20000
 LYRICS_PROVIDER_MAX_TIMEOUT_MS=60000

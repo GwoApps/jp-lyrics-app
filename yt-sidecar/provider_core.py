@@ -23,7 +23,8 @@ the plugin only *retrieves candidates* with their real matched identity
 persistence all belong to jplrc — never fabricate identity evidence here.
 """
 
-from typing import Any, Optional
+import time
+from typing import Any, Callable, Optional
 import hmac
 
 PROTOCOL_NAME = "jplrc-lyrics-provider"
@@ -37,6 +38,16 @@ PROVIDER_VERSION = "2.0.0"
 SEARCH_LIMIT = 5
 # …and how many of those get a lyrics lookup (each costs two upstream calls).
 MAX_LYRICS_FETCHES = 3
+
+# The cheapest upstream query ytmusicapi offers: it reuses the session the
+# plugin already holds (no lyrics browse, no extra HTTP round trip beyond the
+# one search) and any non-empty result set proves the session still works —
+# an expired OAuth file or a soft-throttled session fails or returns nothing.
+PROBE_QUERY = "a"
+# How long a deep probe result drives /health?deep=1. Probes are meant to run on
+# a container healthcheck interval, so the cache keeps repeated calls from
+# hammering the upstream while still surfacing degradation within the minute.
+HEALTH_PROBE_TTL_S = 60.0
 
 
 def manifest() -> dict:
@@ -247,3 +258,42 @@ def search_candidates(
         if candidate:
             candidates.append(candidate)
     return candidates
+
+
+def probe_upstream(ytmusic: Any) -> bool:
+    """One cheap question to the upstream: does this session still return data?
+
+    A degraded session does not raise: `YT_MUSIC_OAUTH` that has expired or is
+    malformed makes the client fall back to an unauthenticated session, and the
+    upstream soft-throttles anonymous callers by answering 200 with an empty
+    result set. So a probe that only caught exceptions would report healthy
+    exactly when the plugin is silently useless — an empty result set has to
+    count as failure.
+    """
+    return bool(ytmusic.search(PROBE_QUERY, filter="songs", limit=1) or [])
+
+
+class UpstreamHealthProbe:
+    """Caches one `probe_upstream` result for `ttl_s` so probes stay cheap.
+
+    Without the cache every docker healthcheck interval would issue an upstream
+    search; with it the upstream sees at most one probe per TTL no matter how
+    many callers ask. Results only: the caller decides how to render them.
+    """
+
+    def __init__(self, probe: Callable[[], bool], ttl_s: float = HEALTH_PROBE_TTL_S):
+        self.probe = probe
+        self.ttl_s = max(0.0, float(ttl_s))
+        self._at = float("-inf")
+        self._ok = False
+
+    def check(self, now: Optional[float] = None) -> bool:
+        """Return the cached upstream state, probing again once the TTL lapses."""
+        now = time.monotonic() if now is None else now
+        if now - self._at >= self.ttl_s:
+            try:
+                self._ok = bool(self.probe())
+            except Exception:
+                self._ok = False
+            self._at = now
+        return self._ok

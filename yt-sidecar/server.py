@@ -6,7 +6,7 @@ A reference implementation of the plugin protocol documented in
 
   GET  /manifest.json  → capability negotiation
   POST /v1/search      → lyric candidates for one structured track
-  GET  /health         → liveness probe
+  GET  /health         → liveness probe (?deep=1 also probes the upstream)
 
 The plugin only *retrieves candidates*; scoring, LRC validation, low-confidence
 review and persistence are owned by jplrc. Wire shapes and the upstream
@@ -27,8 +27,10 @@ from provider_core import (
     MAX_LYRICS_FETCHES,
     PROTOCOL_VERSION,
     EmptySearchGuard,
+    UpstreamHealthProbe,
     bearer_ok,
     manifest,
+    probe_upstream,
     search_candidates,
 )
 
@@ -42,6 +44,10 @@ _ytmusic = None
 # provider_core.EmptySearchGuard): upstream soft-throttling can make a session
 # return empty result sets with no error; a fresh session recovers.
 _guard = EmptySearchGuard()
+# Answers `GET /health?deep=1`: one upstream search, cached for
+# provider_core.HEALTH_PROBE_TTL_S so a healthcheck loop cannot turn into an
+# upstream load generator.
+_upstream_probe = UpstreamHealthProbe(lambda: probe_upstream(get_ytmusic()))
 
 
 def get_ytmusic():
@@ -115,8 +121,26 @@ def _error(status: int, code: str, message: str) -> JSONResponse:
 
 
 @app.get("/health")
-async def health():
-    return {"ok": True}
+async def health(deep: int = 0):
+    """Liveness by default; `?deep=1` also reports whether the upstream answers.
+
+    The plain form must stay cheap (it answers "is this process listening?"), so
+    it never touches the network. The deep form is what a container healthcheck
+    or a human should call: it costs one cached upstream search and returns 503
+    when the session is dead or soft-throttled — the failure mode that otherwise
+    shows up only as "no lyrics found" in the app.
+
+    It is deliberately *not* our /v1/search: that would spend three upstream
+    lyrics lookups, be rate-limitable, and conflate "no such song" with
+    "upstream down". `/health` is also outside the plugin protocol (see
+    examples/provider-plugin/README.md) and open even under PROVIDER_TOKEN, so
+    this stays consistent with probes needing no credentials.
+    """
+    if not deep:
+        return {"ok": True}
+    if _upstream_probe.check():
+        return {"ok": True}
+    return JSONResponse(status_code=503, content={"ok": False})
 
 
 @app.get("/manifest.json")
