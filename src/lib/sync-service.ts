@@ -1,10 +1,50 @@
 import { fetchLyricsWithChain } from '@/lib/lyrics-provider';
 import type { ProviderStage } from '@/lib/lyrics-provider/types';
-import { getLrcTextLines, parseLrc } from '@/lib/lrc';
+import { parseLrc } from '@/lib/lrc';
 import { classifyLyricsHit } from '@/lib/lyrics-hit';
 import { getSpotifyTrack, searchSpotifyTrack } from '@/lib/spotify';
 import { signCandidate, type CandidateTokenPayload } from '@/lib/candidate-token';
 import { applySyncWrite } from '@/lib/sync-write';
+
+/**
+ * Normalize every line terminator to `\n` (LF).
+ *
+ * Providers ship CRLF/CR payloads (`lyrics-fetcher.ts` folds them in its own
+ * paths, an admin HTTP provider's JSON does not), while the stored
+ * `lyrics_raw` is always compared to the candidate verbatim. Comparing the two
+ * without folding first would report "changed" for a byte-identical document
+ * that only differs in line endings — wiping furigana / translation for
+ * nothing.
+ */
+export function normalizeLrcEol(value: string): string {
+  return value.replace(/\r\n?/g, '\n');
+}
+
+/**
+ * Decide whether a sync candidate really changes the stored lyric content
+ * (issue #304).
+ *
+ * The derived caches (furigana / translation / glossary / reading scheme
+ * confirmation) are all indexed by `lyrics_raw` LINE NUMBER, so they may only
+ * survive a sync when the new text is line-for-line identical to what is
+ * already stored. The previous check compared the timestamp-stripped,
+ * blank-line-dropped text (`getLrcTextLines`), which is NOT what gets written:
+ * a candidate that merely moved a blank line / replaced it with a full-width
+ * space row compared "equal" and kept the caches, but was written verbatim —
+ * shifting translation and furigana by one row, refusing every later furigana
+ * save with `furigana_source_mismatch`, and defeating the whole-song
+ * translation cache short-circuit.
+ *
+ * The comparison baseline now matches the written value exactly: after EOL
+ * normalization the two documents are compared as a whole, so any difference
+ * in line count, line order or whitespace counts as a content change and the
+ * caches are reset. The trade-off is deliberate (see #304, option 1): a pure
+ * formatting difference like an inserted blank line re-runs the translation
+ * once, but never leaves caches misaligned with the stored lyrics.
+ */
+export function hasSyncContentChanged(storedRaw: string, candidatePlain: string): boolean {
+  return normalizeLrcEol(candidatePlain) !== normalizeLrcEol(storedRaw);
+}
 
 /**
  * Single-song (re)sync business logic (issue #148 / #120).
@@ -54,8 +94,13 @@ export async function persistCandidate(
   // the same lyrics — e.g. just to refresh LRC timestamps or fix the source — must
   // not erase manual furigana corrections, consumed AI translation quota, or the
   // confirmed reading scheme (matches the content-aware PUT route behaviour).
-  const contentChanged = getLrcTextLines(plain).join('\n')
-    !== getLrcTextLines(song.lyricsRaw).join('\n');
+  //
+  // The check is a strict whole-document comparison (EOL-normalized) so the
+  // "changed?" baseline is exactly the value written into `lyrics_raw` below:
+  // the derived caches are indexed by `lyrics_raw` line number, so keeping them
+  // across a re-wrapped candidate would leave them silently misaligned (issue
+  // #304). A pure blank-line difference therefore resets them on purpose.
+  const contentChanged = hasSyncContentChanged(song.lyricsRaw, plain);
 
   // CAS write: the UPDATE only matches while `lyrics_raw` still equals the
   // snapshot this request was based on. If another tab/session edited the
