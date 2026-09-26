@@ -101,14 +101,59 @@ function extractPlaylistId(input: string): string | null {
 
 export { extractPlaylistId };
 
+/** How a playlist was resolved — what the cap actually dropped (ISSUE #324). */
+export interface PlaylistFetch {
+  /** The tracks to import (never more than `PLAYLIST_MAX_TRACKS`). */
+  tracks: PlaylistTrack[];
+  /**
+   * Total number of items the playlist reports (`total` from the Spotify API),
+   * i.e. before any cap or item filtering. `null` when Spotify did not report
+   * one — in that case `mayHaveMore` and `dropped` stay `null` too rather than
+   * guessing, so callers can render a probability instead of a fake number.
+   */
+  playlistTotal: number | null;
+  /**
+   * True only when the playlist really holds more than we fetched — either the
+   * cap was hit with a `next` page still pending, or the reported total exceeds
+   * what we kept. A playlist of exactly `PLAYLIST_MAX_TRACKS` is NOT truncated.
+   */
+  truncated: boolean;
+  /** Whether the fetch stopped before the reported total (null when unknown). */
+  mayHaveMore: boolean | null;
+  /** Tracks we could not fetch: `playlistTotal - tracks.length` (null when unknown). */
+  dropped: number | null;
+  /** Diagnostic only: how many raw playlist items were read across pages. */
+  rawItems: number;
+}
+
 /** Fetch all tracks of a Spotify playlist (paged, capped at PLAYLIST_MAX_TRACKS). */
 export async function fetchPlaylistTracks(
   playlistId: string,
   accessToken: string,
 ): Promise<PlaylistTrack[]> {
+  const { tracks } = await fetchPlaylistTrackPage(playlistId, accessToken);
+  return tracks;
+}
+
+/**
+ * Fetch a playlist together with the real numbers behind the cap (ISSUE #324).
+ *
+ * Asking Spotify for `total` (and keeping the `next` page marker) is what makes
+ * the cap *decidable*: the previous `tracks.length >= PLAYLIST_MAX_TRACKS` guess
+ * also fired for a playlist of exactly 200 tracks (nothing dropped) and threw
+ * away the one signal that actually means "there is another page". Here the
+ * truncated / dropped numbers are derived from what Spotify reports, never
+ * inferred from the track count alone.
+ */
+export async function fetchPlaylistTrackPage(
+  playlistId: string,
+  accessToken: string,
+): Promise<PlaylistFetch> {
   const tracks: PlaylistTrack[] = [];
+  let rawItems = 0;
+  let reportedTotal: number | null = null;
   let nextUrl: string | null =
-    `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=items(track(id,uri,name,duration_ms,artists(name),album(name,images(url,width)))),next`;
+    `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=total,items(track(id,uri,name,duration_ms,artists(name),album(name,images(url,width)))),next`;
 
   while (nextUrl && tracks.length < PLAYLIST_MAX_TRACKS) {
     const spotifyRes = await fetch(nextUrl, {
@@ -121,9 +166,18 @@ export async function fetchPlaylistTracks(
     }
     const data = (await spotifyRes.json()) as {
       items: { track: SpotifyApiTrack | null }[];
+      total?: number | null;
       next: string | null;
     };
-    for (const item of data.items || []) {
+    // `total` counts every playlist item, including ones we filter out below
+    // (removed tracks, local files, episodes) — that is exactly why it has to
+    // come from the API instead of being derived from `tracks.length`.
+    if (reportedTotal == null && typeof data.total === 'number' && Number.isFinite(data.total)) {
+      reportedTotal = Math.max(0, Math.floor(data.total));
+    }
+    const pageItems = data.items || [];
+    rawItems += pageItems.length;
+    for (const item of pageItems) {
       if (tracks.length >= PLAYLIST_MAX_TRACKS) break;
       const track = item.track;
       if (track?.id && track.name) {
@@ -147,7 +201,21 @@ export async function fetchPlaylistTracks(
     nextUrl = data.next || null;
   }
 
-  return tracks;
+  const nextPagePending = nextUrl != null;
+  const reportedGap = reportedTotal != null && reportedTotal > tracks.length;
+  const mayHaveMore = reportedTotal == null
+    ? (nextPagePending ? true : null)
+    : (nextPagePending || reportedGap);
+  const dropped = reportedTotal == null ? null : Math.max(0, reportedTotal - tracks.length);
+
+  return {
+    tracks,
+    playlistTotal: reportedTotal,
+    truncated: mayHaveMore === true,
+    mayHaveMore,
+    dropped,
+    rawItems,
+  };
 }
 
 interface SpotifyApiTrack {
