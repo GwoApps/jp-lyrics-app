@@ -442,6 +442,56 @@ test('glossary extraction returns null on a malformed (non-array) response', asy
   assert.equal(malformed, null);
 });
 
+test('glossary extraction receives a caller signal and aborts the upstream fetch on cancel (issue #359)', async () => {
+  const { extractLyricsGlossary } = await import('./translation/index.ts');
+  const controller = new AbortController();
+  let signalSeen: AbortSignal | undefined;
+  // Upstream accepts the connection but never responds (half-open gateway).
+  const hangingFetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    signalSeen = init?.signal as AbortSignal | undefined;
+    assert.ok(signalSeen, 'glossary fetch received a signal');
+    return await new Promise<Response>((_resolve, reject) => {
+      signalSeen!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
+    });
+  }) as typeof fetch;
+
+  const run = extractLyricsGlossary('花火', 'AAA', ['花火'], CFG, hangingFetch, controller.signal);
+  await new Promise((resolve) => setTimeout(resolve, 0)); // request in flight
+  assert.ok(!signalSeen!.aborted, 'upstream not aborted yet');
+  controller.abort(); // client cancels the preparation stage
+  assert.equal(await run, null); // best-effort → null, never a hang
+  assert.ok(signalSeen!.aborted, 'upstream fetch aborted after caller cancel');
+});
+
+test('glossary extraction resolves to null immediately when the caller signal is already aborted (issue #359)', async () => {
+  const { extractLyricsGlossary } = await import('./translation/index.ts');
+  const controller = new AbortController();
+  controller.abort();
+  let calls = 0;
+  const countingFetch = (async () => { calls += 1; return new Response('{}', { status: 200 }); }) as typeof fetch;
+  // Already-cancelled caller must not issue (or retry) any request.
+  assert.equal(await extractLyricsGlossary('花火', 'AAA', ['花火'], CFG, countingFetch, controller.signal), null);
+  assert.equal(calls, 0);
+});
+
+test('composeAbortBudget composes the caller signal with the deadline and clears its timer', async () => {
+  const { composeAbortBudget } = await import('./translation/index.ts');
+  // Caller abort wins.
+  const caller = new AbortController();
+  const composed = composeAbortBudget(caller.signal, 60_000);
+  assert.ok(!composed.signal.aborted);
+  caller.abort();
+  assert.ok(composed.signal.aborted, 'caller cancel propagates to the composed signal');
+  clearTimeout(composed.timer);
+
+  // Deadline wins even with no caller signal, and never fires early.
+  const timed = composeAbortBudget(undefined, 10);
+  assert.ok(!timed.signal.aborted);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.ok(timed.signal.aborted, 'deadline aborts the composed signal');
+  clearTimeout(timed.timer);
+});
+
 test('streaming translation aborts the upstream fetch when the external signal fires', async () => {
   const { streamTranslateLyricLines } = await import('./translation/index.ts');
   const controller = new AbortController();

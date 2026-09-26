@@ -29,6 +29,7 @@
  */
 
 import {
+  GLOSSARY_TIMEOUT_MS,
   MAX_OUTPUT_TOKENS,
   REASONING_EFFORT,
   RETRY_ATTEMPTS,
@@ -51,6 +52,7 @@ export {
   DEFAULT_OPENAI_BASE_URL,
   DEFAULT_OPENAI_MODEL,
   DEFAULT_WORKERS_AI_MODEL,
+  GLOSSARY_TIMEOUT_MS,
   MAX_OUTPUT_TOKENS,
   RETRY_ATTEMPTS,
   RETRY_BASE_DELAY_MS,
@@ -428,6 +430,55 @@ async function requestWorkersAI(lines: string[], cfg: TranslationConfig, ctx?: T
 }
 
 /**
+ * Bind an inner AbortController to BOTH the caller's cancel signal and a hard
+ * deadline, and return the composed signal plus its timer handle. Exported for
+ * the glossary-extraction tests, which must prove cancellation/deadline
+ * actually reach the upstream fetch.
+ *
+ * `AbortSignal.any` is used when available (Node 20+/Workers); otherwise the
+ * composition degrades to event listeners so the deadline still bounds the
+ * request on older runtimes.
+ */
+export function composeAbortBudget(
+  external: AbortSignal | undefined,
+  timeoutMs: number,
+): { controller: AbortController; signal: AbortSignal; timer: ReturnType<typeof setTimeout> } {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let signal: AbortSignal;
+  if (typeof AbortSignal.any === 'function') {
+    signal = external
+      ? AbortSignal.any([external, controller.signal])
+      : controller.signal;
+  } else {
+    if (external) {
+      if (external.aborted) controller.abort();
+      else external.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+    signal = controller.signal;
+  }
+  return { controller, signal, timer };
+}
+
+/** Best-effort teardown for a signal built by `composeAbortBudget`. */
+function clearAbortBudget(timer: ReturnType<typeof setTimeout> | undefined) {
+  if (timer !== undefined) clearTimeout(timer);
+}
+
+/**
+ * True when a failure was caused by cancellation or by our own deadline
+ * (abort), as opposed to an upstream/network/transport error.
+ *
+ * NOTE: this is deliberately only used for logging/diagnostics — the retry
+ * policy is unchanged in this change (the issue's "abort must not be retried"
+ * item is tracked separately).
+ */
+export function isAbortError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null
+    && (error as { name?: string }).name === 'AbortError';
+}
+
+/**
  * Extract a terminology table from the full song.
  *
  * Return contract — three distinguishable states:
@@ -445,6 +496,14 @@ export async function extractLyricsGlossary(
   lines: string[],
   cfg: TranslationConfig,
   fetchImpl: typeof fetch = fetch,
+  /**
+   * Optional cancel signal. Pass the request's `signal` so a client cancel /
+   * page close aborts THIS model call too — otherwise the preparation stage
+   * keeps burning provider quota after the user is already gone (issue #359).
+   * Optional on purpose: omitting it keeps the previous behaviour, and the
+   * hard `GLOSSARY_TIMEOUT_MS` deadline (see below) still applies.
+   */
+  signal?: AbortSignal,
 ): Promise<GlossaryEntry[] | null> {
   const input = JSON.stringify({ title, artist, lyrics: lines });
   try {
@@ -454,7 +513,7 @@ export async function extractLyricsGlossary(
         { role: 'user', content: input },
       ];
       if (cfg.provider === 'anthropic') {
-        return await requestAnthropicRaw(messages, cfg);
+        return await requestAnthropicRaw(messages, cfg, signal);
       }
       if (cfg.provider === 'workers-ai') {
         const { estimateTokens, neuronsForTokens } = await import('@/lib/ai-usage');
@@ -473,15 +532,29 @@ export async function extractLyricsGlossary(
           return { value: response, actualNeurons: neuronsForTokens(inputTokens, outputTokens) };
         });
       }
-      const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
-      const res = await fetchImpl(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
-        body: JSON.stringify({ model: cfg.model, messages, max_tokens: 4096, temperature: 0 }),
-      });
-      if (!res.ok) throw new TranslationError('translation_failed', `upstream status ${res.status}`, res.status >= 500 || res.status === 429);
-      const data = await res.json() as { choices?: { message?: { content?: string } }[] };
-      return data.choices?.[0]?.message?.content ?? '';
+      // OpenAI-compatible branch (also the self-hosted / third-party gateway
+      // deployment). Shares ONE deadline budget with the anthropic branch so a
+      // half-open upstream can neither hang forever nor be retried three times
+      // at full length (issue #359).
+      const { signal: requestSignal, timer } = composeAbortBudget(signal, GLOSSARY_TIMEOUT_MS);
+      try {
+        // Note: rejecting immediately for an already-cancelled caller is safe
+        // because this throw escapes the whole retry loop — it is raised while
+        // building the per-attempt closure, not from inside `fn`.
+        requestSignal.throwIfAborted();
+        const url = `${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`;
+        const res = await fetchImpl(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
+          body: JSON.stringify({ model: cfg.model, messages, max_tokens: 4096, temperature: 0 }),
+          signal: requestSignal,
+        });
+        if (!res.ok) throw new TranslationError('translation_failed', `upstream status ${res.status}`, res.status >= 500 || res.status === 429);
+        const data = await res.json() as { choices?: { message?: { content?: string } }[] };
+        return data.choices?.[0]?.message?.content ?? '';
+      } finally {
+        clearAbortBudget(timer);
+      }
     }, RETRY_ATTEMPTS, RETRY_BASE_DELAY_MS);
 
     const parsed = extractJsonArray(text);
@@ -507,11 +580,13 @@ export async function extractLyricsGlossary(
 async function requestAnthropicRaw(
   messages: { role: string; content: string }[],
   cfg: TranslationConfig,
+  signal?: AbortSignal,
 ): Promise<string> {
   const base = cfg.baseUrl.replace(/\/+$/, '');
   const url = base.endsWith('/v1') ? `${base}/messages` : `${base}/v1/messages`;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30_000);
+  // Same shared deadline as the OpenAI-compatible branch (was a hard-coded
+  // 30s here only) and now also cancellable by the caller (issue #359).
+  const { signal: requestSignal, timer } = composeAbortBudget(signal, GLOSSARY_TIMEOUT_MS);
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -521,13 +596,13 @@ async function requestAnthropicRaw(
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({ model: cfg.model, messages, max_tokens: 4096, temperature: 0 }),
-      signal: controller.signal,
+      signal: requestSignal,
     });
     if (!res.ok) throw new TranslationError('translation_failed', `upstream status ${res.status}`, res.status >= 500 || res.status === 429);
     const data = await res.json() as { content?: { type?: string; text?: string }[] };
     return data.content?.find((block) => block.type === 'text')?.text ?? '';
   } finally {
-    clearTimeout(timer);
+    clearAbortBudget(timer);
   }
 }
 

@@ -234,9 +234,17 @@ export async function POST(
   // Returns [ok, errorCode, status]. `ok === false` means a fatal error the
   // caller must abort on: `errorCode` is the API error key and `status` the
   // HTTP status for non-streaming responses (stale source / deleted song).
-  const ensureGlossary = async (): Promise<[boolean, string | null, number | null]> => {
+  //
+  // `signal` is the request's cancel signal. The SSE path passes it so a
+  // cancel / page close during the preparation stage really does abort the
+  // in-flight glossary call (and releases that provider quota) instead of
+  // letting it run to completion for a client that is already gone — the same
+  // behaviour the translation stream got in #15. The non-streaming path has no
+  // request signal to forward and relies on the call's own timeout budget
+  // (issue #359).
+  const ensureGlossary = async (signal?: AbortSignal): Promise<[boolean, string | null, number | null]> => {
     if (glossary !== null) return [true, null, null];
-    const extracted = await extractLyricsGlossary(existing.title, existing.artist, lines, config);
+    const extracted = await extractLyricsGlossary(existing.title, existing.artist, lines, config, fetch, signal);
     if (extracted !== null) {
       // Only persist a SUCCESSFUL extraction. A failure returns null and is
       // left unwritten, so the next whole-song translation retries it instead
@@ -420,7 +428,7 @@ export async function POST(
           // generic "preparing" notice — the glossary internals stay opaque
           // (issue #172).
           send('stage', { stage: 'glossary_extraction' });
-          const [glossaryOk, glossaryCode] = await ensureGlossary();
+          const [glossaryOk, glossaryCode] = await ensureGlossary(request.signal);
           if (!glossaryOk) {
             // Stale source / deleted song detected during extraction — the
             // write could not be committed, so abort the stream with the real
