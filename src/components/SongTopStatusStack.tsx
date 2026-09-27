@@ -11,6 +11,11 @@ import type { ReactNode } from 'react';
  * own layout. `max-w` stays on the container so an over-wide child truncates
  * instead of overflowing narrow viewports, and the column items are centered
  * so every pill keeps the same horizontally-centered anchor it had before.
+ *
+ * `pointer-events-none` makes the full-width band click-through (only the pills
+ * should take clicks), but `pointer-events` is inherited — a child without its
+ * own restore stays unclickable, so its buttons look alive and do nothing
+ * (issue #369). Children must therefore be wrapped in `StatusLayer` below.
  */
 export default function SongTopStatusStack({ children }: { children: ReactNode }) {
   return (
@@ -21,4 +26,15 @@ export default function SongTopStatusStack({ children }: { children: ReactNode }
       {children}
     </div>
   );
+}
+
+/**
+ * Wrapper for every direct child of `SongTopStatusStack`: restores
+ * `pointer-events-auto` so the layer's own buttons and scroll areas stay
+ * clickable under the click-through container. Use it for any new status layer
+ * instead of hand-adding the class, so the restore cannot be forgotten
+ * (issue #369).
+ */
+export function StatusLayer({ children }: { children: ReactNode }) {
+  return <div className="pointer-events-auto contents">{children}</div>;
 }

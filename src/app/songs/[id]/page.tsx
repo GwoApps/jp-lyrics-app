@@ -15,7 +15,7 @@ import ExperimentsPanel from '@/components/ExperimentsPanel';
 import Toast from '@/components/Toast';
 import TranslationStatusOverlay from '@/components/TranslationStatusOverlay';
 import SyncStatusOverlay from '@/components/SyncStatusOverlay';
-import SongTopStatusStack from '@/components/SongTopStatusStack';
+import SongTopStatusStack, { StatusLayer } from '@/components/SongTopStatusStack';
 import { ToolbarMenu, buildReadingMenuItems } from '@/components/song/ToolbarMenu';
 import { MobileMenu } from '@/components/song/MobileMenu';
 import DownloadDialog from '@/components/song/DownloadDialog';
@@ -1140,7 +1140,8 @@ export default function SongViewPage() {
           only partially translated. Show a dismissible "已翻译 X/Y 行，点击继续"
           strip that re-opens the resume flow until the song is complete. */}
       {showPartialBanner && (
-        <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-[var(--primary)]/30 bg-[var(--card)]/95 px-3 py-1.5 text-xs shadow-sm backdrop-blur-sm">
+        <StatusLayer>
+        <div className="flex items-center gap-2 rounded-full border border-[var(--primary)]/30 bg-[var(--card)]/95 px-3 py-1.5 text-xs shadow-sm backdrop-blur-sm">
           <Languages className="h-3.5 w-3.5 shrink-0 text-[var(--primary)]" />
           <button
             type="button"
@@ -1164,9 +1165,11 @@ export default function SongViewPage() {
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
+        </StatusLayer>
       )}
 
       {/* Translation status pill — viewport-level (not clipped by the lyrics panel): visible progress while translating, persistent error with dismiss + continue */}
+      <StatusLayer>
       <TranslationStatusOverlay
         translating={data.translating}
         translationSaving={data.translationSaving}
@@ -1184,8 +1187,11 @@ export default function SongViewPage() {
         onContinue={() => void data.handleTranslate()}
         onCancel={data.cancelTranslate}
       />
+      </StatusLayer>
       {/* Sync status pill — stacked under the translation pill instead of sharing its anchor */}
+      <StatusLayer>
       <SyncStatusOverlay syncing={data.syncing} stage={data.syncStage} onCancel={data.cancelSync} />
+      </StatusLayer>
       </SongTopStatusStack>
       {data.toast && <Toast type={data.toast.type} message={data.toast.msg} actionLabel={data.toast.actionLabel} onAction={data.toast.onAction} />}
 
