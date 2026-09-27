@@ -25,7 +25,14 @@
     "notNow": "暂不转换",
     "unsavedTitle": "放弃未保存的修改？",
     "unsavedBody": "你未保存的修改将会丢失。",
-    "discard": "放弃修改"
+    "discard": "放弃修改",
+    "notFoundTitle": "页面不存在",
+    "notFoundBody": "你访问的页面不存在，也可能已被移动或删除。",
+    "errorTitle": "出现了错误",
+    "errorBody": "加载页面时出现问题，请重试。",
+    "backHome": "返回首页",
+    "goToSongList": "去歌曲列表",
+    "reload": "重试"
   },
   "loginGate": {
     "title": "Spotify 登录受限",

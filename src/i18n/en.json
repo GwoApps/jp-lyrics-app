@@ -25,7 +25,14 @@
     "notNow": "Not now",
     "unsavedTitle": "Discard unsaved changes?",
     "unsavedBody": "Your unsaved changes will be lost.",
-    "discard": "Discard changes"
+    "discard": "Discard changes",
+    "notFoundTitle": "Page not found",
+    "notFoundBody": "The page you are looking for does not exist, or it may have been moved or deleted.",
+    "errorTitle": "Something went wrong",
+    "errorBody": "A problem occurred while loading this page. Please try again.",
+    "backHome": "Back to home",
+    "goToSongList": "Go to song list",
+    "reload": "Try again"
   },
   "loginGate": {
     "title": "Spotify login is restricted",

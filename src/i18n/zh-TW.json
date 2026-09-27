@@ -25,7 +25,14 @@
     "notNow": "暫不轉換",
     "unsavedTitle": "放棄未儲存的修改？",
     "unsavedBody": "你未儲存的修改將會遺失。",
-    "discard": "放棄修改"
+    "discard": "放棄修改",
+    "notFoundTitle": "頁面不存在",
+    "notFoundBody": "你造訪的頁面不存在，也可能已被移動或刪除。",
+    "errorTitle": "發生錯誤",
+    "errorBody": "載入頁面時發生問題，請重試。",
+    "backHome": "返回首頁",
+    "goToSongList": "前往歌曲列表",
+    "reload": "重試"
   },
   "loginGate": {
     "title": "Spotify 登入受限",

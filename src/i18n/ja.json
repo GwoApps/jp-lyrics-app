@@ -25,7 +25,14 @@
     "notNow": "今は変換しない",
     "unsavedTitle": "未保存の変更を破棄しますか？",
     "unsavedBody": "未保存の変更は失われます。",
-    "discard": "変更を破棄"
+    "discard": "変更を破棄",
+    "notFoundTitle": "ページが見つかりません",
+    "notFoundBody": "お探しのページは存在しないか、移動または削除された可能性があります。",
+    "errorTitle": "エラーが発生しました",
+    "errorBody": "ページの読み込み中に問題が発生しました。もう一度お試しください。",
+    "backHome": "ホームに戻る",
+    "goToSongList": "曲一覧へ",
+    "reload": "再試行"
   },
   "loginGate": {
     "title": "Spotify ログインは制限されています",

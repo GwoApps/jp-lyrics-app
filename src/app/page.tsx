@@ -679,7 +679,7 @@ export default function HomePage() {
           <p className="text-sm text-[var(--muted-foreground)]">{t('home.noResults')}</p>
         </div>
       ) : (
-        <div ref={songListRef} className={songViewMode === 'grid' ? 'song-grid grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4' : 'space-y-1.5 sm:space-y-2'}>
+        <div id="songs" ref={songListRef} className={songViewMode === 'grid' ? 'song-grid grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4' : 'space-y-1.5 sm:space-y-2'}>
           {songViewMode === 'album' ? (<>
             {albumView.entries.length > 0 && (
               <div className="flex justify-end gap-1.5 px-1 mb-1.5">
