@@ -1,5 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { unlinkSync } from 'node:fs';
+import { createClient } from '@libsql/client';
+import { drizzle } from 'drizzle-orm/libsql';
+import { and, sql, type SQL } from 'drizzle-orm';
 import { isSongVisibleToUser, songVisibilityWhere } from './song-visibility.ts';
 
 const admin = { id: 'admin@example.com', isAdmin: true };
@@ -85,5 +89,104 @@ test('songVisibilityWhere: an empty/absent email stays public-only', () => {
 });
 
 test('songVisibilityWhere: admins get no restriction at all', () => {
-  assert.equal(songVisibilityWhere({ email: 'admin@example.com', isAdmin: true }), undefined);
+  const { text, params } = describePredicate(songVisibilityWhere({ email: 'admin@example.com', isAdmin: true }));
+  // The tautology, NOT `undefined`: see the raw-SQL execution tests below.
+  assert.equal(text, '1 = 1');
+  assert.deepEqual(params, []);
+});
+
+// --- Executable-SQL regression (2026-10-08 admin song-list outage) -----------
+// `songVisibilityWhere` used to return `undefined` for admins, and every list
+// endpoint interpolated it straight into a template: `WHERE ${and(...)}`.
+// drizzle renders an interpolated `undefined` as '', so an admin's query became
+// `WHERE \n ORDER BY ...` → SQLITE_ERROR "near ORDER" → HTTP 500 on the whole
+// song list (also /api/songs?favorites=1, /api/spotify/match-song and
+// /api/collections/[id]/songs). Non-admins never saw it because their branch
+// always had a real predicate.
+//
+// These tests execute the SAME composition the routes use against a real
+// libsql DB, so an `undefined` predicate fails here instead of in production.
+
+const VIEWERS = [
+  { name: 'anonymous', viewer: null },
+  { name: 'no-email', viewer: {} },
+  { name: 'non-admin', viewer: { email: 'me@example.com', isAdmin: false } },
+  { name: 'admin', viewer: { email: 'admin@example.com', isAdmin: true } },
+] as const;
+
+function makeSongsDb(tag: string) {
+  const path = `/tmp/song-visibility-${tag}-${process.pid}-${Date.now()}.db`;
+  try { unlinkSync(path); } catch { /* fresh */ }
+  const client = createClient({ url: `file:${path}`, timeout: 15_000 });
+  const db = drizzle(client);
+  return { db, client, path };
+}
+
+async function createSongs(client: ReturnType<typeof createClient>) {
+  await client.execute(`CREATE TABLE songs (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT '',
+    is_public INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL DEFAULT ''
+  )`);
+  await client.execute(`INSERT INTO songs (id, title, is_public, created_by, updated_at) VALUES
+    ('public-1', 'public song', 1, 'someone@example.com', '2026-01-01'),
+    ('mine-1',   'my private',  0, 'me@example.com',       '2026-01-02'),
+    ('other-1',  'other priv',  0, 'other@example.com',    '2026-01-03')`);
+}
+
+/** GET /api/songs: the `and(...filters)` composition (admin has NO other filter). */
+async function runListQuery(db: ReturnType<typeof drizzle>, viewer: Parameters<typeof songVisibilityWhere>[0]) {
+  const filters: (SQL | undefined)[] = [undefined, undefined, songVisibilityWhere(viewer)];
+  return db.all(sql`SELECT id FROM songs WHERE ${and(...filters)} ORDER BY updated_at DESC`);
+}
+
+/** /api/spotify/match-song + /api/collections/[id]/songs: `WHERE ${and(pred)}`. */
+async function runSinglePredicateQuery(db: ReturnType<typeof drizzle>, viewer: Parameters<typeof songVisibilityWhere>[0]) {
+  return db.all(sql`SELECT id FROM songs WHERE ${and(songVisibilityWhere(viewer))}`);
+}
+
+test('songVisibilityWhere composes into executable SQL for every viewer shape', async () => {
+  const t = makeSongsDb('exec');
+  try {
+    await createSongs(t.client);
+    for (const { name, viewer } of VIEWERS) {
+      const list = await runListQuery(t.db, viewer).catch((e: unknown) => {
+        assert.fail(`list query threw for ${name}: ${String(e)}`);
+      });
+      const single = await runSinglePredicateQuery(t.db, viewer).catch((e: unknown) => {
+        assert.fail(`single-predicate query threw for ${name}: ${String(e)}`);
+      });
+      assert.ok(list.length >= 1, `${name}: list query returned no rows`);
+      assert.ok(single.length >= 1, `${name}: single-predicate query returned no rows`);
+    }
+  } finally {
+    t.client.close();
+    try { unlinkSync(t.path); } catch { /* best effort */ }
+  }
+});
+
+test('songVisibilityWhere: the composed WHERE clause is never empty (admin included)', async () => {
+  const t = makeSongsDb('where');
+  try {
+    await createSongs(t.client);
+    for (const { name, viewer } of VIEWERS) {
+      const predicate = and(songVisibilityWhere(viewer));
+      assert.ok(predicate, `${name}: and() collapsed to undefined → empty WHERE clause`);
+      // Rows a viewer must NOT see, proving the predicate actually filters.
+      const ids = (await t.db.all(sql`SELECT id FROM songs WHERE ${predicate}`))
+        .map((r) => (r as { id: string }).id);
+      if (name === 'admin') {
+        assert.deepEqual([...ids].sort(), ['mine-1', 'other-1', 'public-1'], 'admin sees everything');
+      } else if (name === 'non-admin') {
+        assert.deepEqual([...ids].sort(), ['mine-1', 'public-1'], 'non-admin sees public + own');
+      } else {
+        assert.deepEqual(ids, ['public-1'], `${name} sees only public songs`);
+      }
+    }
+  } finally {
+    t.client.close();
+    try { unlinkSync(t.path); } catch { /* best effort */ }
+  }
 });

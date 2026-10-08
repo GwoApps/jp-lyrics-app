@@ -15,6 +15,14 @@
  * the default and `?q=` branches of GET /api/songs were still `is_public = 1`,
  * hiding a non-admin's own songs that `?mine=1`, `/api/collections/[id]/songs`
  * and `/api/spotify/match-song` happily returned).
+ *
+ * The predicate is TOTAL — it never returns `undefined`. Every caller
+ * interpolates it straight into a raw SQL template (`WHERE ${and(...)}`), and
+ * drizzle renders an interpolated `undefined` as the empty string, so an
+ * `undefined` admin predicate used to produce `WHERE \n ORDER BY` → SQLite
+ * `syntax error near "ORDER"` → HTTP 500 for the whole song list (admin-only,
+ * since only admins got `undefined`). Returning the tautology `1 = 1` for the
+ * unrestricted viewer keeps those templates valid by construction.
  */
 import { eq, or, sql, type SQL } from 'drizzle-orm';
 import { songs } from './schema.ts';
@@ -71,22 +79,23 @@ const SONGS_COLUMNS: SongVisibilityColumns = {
  *
  *   is_public = 1 OR created_by = <viewer email>      (logged-in non-admin)
  *   is_public = 1                                     (anonymous)
- *   undefined                                         (admin — no restriction)
+ *   1 = 1                                             (admin — no restriction)
  *
  * The anonymous branch is `is_public = 1` EXACTLY (never an unbound
  * `created_by = ''`): a legacy row whose `created_by` is empty/NULL must not
  * become visible to logged-out visitors.
  *
- * Callers must AND this into their own WHERE clause and skip it when
- * `undefined` (admins) — same convention as `/api/songs/import`.
+ * Always returns an `SQL` chunk (never `undefined`) so callers can AND it into
+ * their WHERE clause unconditionally. See the header comment for why an
+ * `undefined` admin predicate broke every raw-SQL caller.
  */
 export function songVisibilityWhere(
   viewer: SongViewer | null | undefined,
   columns: SongVisibilityColumns = SONGS_COLUMNS,
-): SQL | undefined {
-  if (viewer?.isAdmin) return undefined;
+): SQL {
+  if (viewer?.isAdmin) return sql`1 = 1`;
   const publicOnly = sql`${columns.isPublic as never} = 1`;
   const viewerEmail = viewer?.email;
   if (!viewerEmail) return publicOnly;
-  return or(publicOnly, eq(columns.createdBy as never, viewerEmail));
+  return or(publicOnly, eq(columns.createdBy as never, viewerEmail)) ?? publicOnly;
 }

@@ -44,7 +44,12 @@ export async function GET(request: NextRequest) {
   // - logged-in non-admin -> `is_public = 1 OR created_by = <email>`
   // - anonymous          -> `is_public = 1` (a history row with an empty
   //                         created_by must NOT match)
-  // - admin              -> undefined (no restriction)
+  // - admin              -> 1 = 1 (no restriction)
+  //
+  // `visibleWhere` is TOTAL (never undefined) and is pushed into `filters`
+  // unconditionally, so `and(...filters)` can never collapse to `undefined` —
+  // which drizzle would render as an empty string, yielding `WHERE  ORDER BY`
+  // and a SQLite syntax error for admins (2026-10-08 outage, admin-only).
   const visibleWhere = songVisibilityWhere(user);
 
   const selectColumns = sql`s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at, s.lyrics_needs_review`;
