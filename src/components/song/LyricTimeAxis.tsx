@@ -53,8 +53,42 @@ function LyricTimeAxis({
   const roRef = useRef<ResizeObserver | null>(null);
   const observedRef = useRef<Element[]>([]);
   const frameRef = useRef(0);
+  const tickRef = useRef(0);
+  const idleRef = useRef(0);
+  const syncedTopRef = useRef<number | null>(null);
 
   const hasLabels = timestamps.some((time) => time != null);
+
+  // Write the scroll-follow transform, returning false when nothing changed.
+  // A `scroll` event for a programmatic `scrollTop` write only fires on the
+  // NEXT frame's scroll steps, so the listener alone would make the labels
+  // trail the rows for the whole of animateSmoothScroll's follow animation.
+  // `kick()` therefore keeps a rAF ticker alive for a couple of frames after
+  // each scroll, which picks up those same-frame writes — and goes idle again
+  // as soon as the position settles.
+  const applyScroll = useCallback(() => {
+    const scroller = scrollRef.current;
+    const track = trackRef.current;
+    if (!scroller || !track) return false;
+    const top = scroller.scrollTop;
+    if (syncedTopRef.current === top) return false;
+    syncedTopRef.current = top;
+    track.style.transform = `translate3d(0, ${-top}px, 0)`;
+    return true;
+  }, [scrollRef]);
+
+  const tick = useCallback(() => {
+    idleRef.current = 0; // a fresh scroll arrived: extend the ticker's lease
+    if (tickRef.current) return;
+    // Local (non-self-referential) loop: runs one rAF per frame while the
+    // position keeps changing, then stops two frames after it settles.
+    const frame = () => {
+      tickRef.current = 0;
+      idleRef.current = applyScroll() ? 0 : idleRef.current + 1;
+      if (idleRef.current < 2) tickRef.current = requestAnimationFrame(frame);
+    };
+    tickRef.current = requestAnimationFrame(frame);
+  }, [applyScroll]);
 
   const measure = useCallback(() => {
     const scroller = scrollRef.current;
@@ -110,6 +144,7 @@ function LyricTimeAxis({
     const boxLeft = shRect.left - GAP_PX - labelWidth;
     box.style.visibility = labelWidth > 0 && boxLeft >= EDGE_PX ? 'visible' : 'hidden';
 
+    syncedTopRef.current = scrollTop;
     track.style.transform = `translate3d(0, ${-scrollTop}px, 0)`;
   }, [lineRefs, scrollRef]);
 
@@ -148,10 +183,11 @@ function LyricTimeAxis({
   useEffect(() => {
     const scroller = scrollRef.current;
     const onScroll = () => {
-      const liveScroller = scrollRef.current;
-      const track = trackRef.current;
-      if (!liveScroller || !track) return;
-      track.style.transform = `translate3d(0, ${-liveScroller.scrollTop}px, 0)`;
+      applyScroll();
+      // Keep a short rAF ticker alive: a programmatic scrollTop write made
+      // after this frame's scroll steps would otherwise only be picked up on
+      // the NEXT scroll event — one frame of visible lag behind the rows.
+      tick();
     };
     scroller?.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', scheduleMeasure);
@@ -168,11 +204,13 @@ function LyricTimeAxis({
       window.removeEventListener('resize', scheduleMeasure);
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
       frameRef.current = 0;
+      if (tickRef.current) cancelAnimationFrame(tickRef.current);
+      tickRef.current = 0;
       ro.disconnect();
       roRef.current = null;
       observedRef.current = [];
     };
-  }, [scheduleMeasure, scrollRef, syncObservation]);
+  }, [applyScroll, scheduleMeasure, scrollRef, syncObservation, tick]);
 
   if (!hasLabels) return null;
 
