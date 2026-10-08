@@ -19,6 +19,7 @@ import SongTopStatusStack from '@/components/SongTopStatusStack';
 import { ToolbarMenu, buildReadingMenuItems } from '@/components/song/ToolbarMenu';
 import { MobileMenu } from '@/components/song/MobileMenu';
 import DownloadDialog from '@/components/song/DownloadDialog';
+import LyricTimeAxis from '@/components/song/LyricTimeAxis';
 import { useModalFocus } from '@/hooks/useModalFocus';
 import { isEmptyAfterTrim } from '@/lib/lyrics-export';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
@@ -960,6 +961,16 @@ export default function SongViewPage() {
             )}
           </div>
         </div>
+
+        {/* Desktop time axis: sits in the left gutter, OUTSIDE the card, and is
+            only revealed there when the gutter is wide enough (measured). */}
+        <LyricTimeAxis
+          scrollRef={lyricsRef}
+          lineRefs={lineRefs}
+          timestamps={lineTimestamps}
+          activeLine={activeLine}
+          isSynced={!!isSynced}
+        />
       </div>
 
       {/* Compact metadata footer */}
