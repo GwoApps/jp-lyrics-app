@@ -1,12 +1,17 @@
 'use client';
 
-import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { fmtMs } from '@/lib/lrc';
 
 /** Gap kept between the card's left edge and the time labels (mirrors the CSS). */
 const GAP_PX = 12;
 /** Breathing room required between the labels and the viewport edge. */
 const EDGE_PX = 8;
+/**
+ * While synced to Spotify, how many rows either side of the playing row stay
+ * visible by default (spec: "上两行、下两行以及本行" → 5 labels total).
+ */
+const ACTIVE_CONTEXT_ROWS = 2;
 
 interface LyricTimeAxisProps {
   /** The lyrics scroll container this axis mirrors (rows scroll inside it). */
@@ -57,7 +62,17 @@ function LyricTimeAxis({
   const idleRef = useRef(0);
   const syncedTopRef = useRef<number | null>(null);
 
+  // Reveal rule (spec):
+  //  - Not synced → hidden until the pointer is over the lyrics; then ALL rows.
+  //  - Synced     → only the playing row ± ACTIVE_CONTEXT_ROWS by default;
+  //                 hovering the lyrics reveals ALL rows.
+  // The gutter fit measured in measure() still gates everything, so
+  // narrow/mobile layouts never reveal.
+  const [hovered, setHovered] = useState(false);
   const hasLabels = timestamps.some((time) => time != null);
+  // Mirror of the render-driven visibility inputs for measure(), which is a
+  // stable useCallback and must not be re-created on every hover change.
+  const viewRef = useRef({ hovered: false, isSynced: false, activeLine: -1 });
 
   // Write the scroll-follow transform, returning false when nothing changed.
   // A `scroll` event for a programmatic `scrollTop` write only fires on the
@@ -124,6 +139,29 @@ function LyricTimeAxis({
       labelWidth = Math.max(labelWidth, label.getBoundingClientRect().width);
     }
 
+    // ---- Reveal policy (spec) -------------------------------------
+    // All rows when hovering; otherwise only playingRow ± ACTIVE_CONTEXT_ROWS
+    // while synced, and nothing at all while not synced.
+    const { hovered, isSynced, activeLine } = viewRef.current;
+    const showAll = hovered;
+    const showWindow = !hovered && isSynced && activeLine >= 0;
+    const rowVisible = (i: number) =>
+      !detached[i] && (showAll || (showWindow && Math.abs(i - activeLine) <= ACTIVE_CONTEXT_ROWS));
+
+    // Reveal only when (a) the labels + gap + edge margin actually fit to the
+    // left of the card (never on narrow/mobile layouts) AND (b) the reveal
+    // policy above says there is something to show.
+    //
+    // `visibility` inherits, but a child can opt back in with `visible` — so the
+    // per-label write MUST be gated on showBox too, otherwise hiding the box
+    // would still leave `visible` labels painted (visible in the 768px gutter).
+    const boxLeft = shRect.left - GAP_PX - labelWidth;
+    let hasVisible = false;
+    for (let i = 0; i < centres.length; i++) {
+      if (rowVisible(i)) { hasVisible = true; break; }
+    }
+    const showBox = labelWidth > 0 && boxLeft >= EDGE_PX && hasVisible;
+
     // ---- Write pass ----
     box.style.top = `${Math.round(scRect.top - shRect.top)}px`;
     box.style.height = `${Math.round(scRect.height)}px`;
@@ -132,17 +170,14 @@ function LyricTimeAxis({
     for (let i = 0; i < centres.length; i++) {
       const label = labels[i];
       if (!label) continue;
-      label.style.visibility = detached[i] ? 'hidden' : 'visible';
+      label.style.visibility = showBox && rowVisible(i) ? 'visible' : 'hidden';
       const centre = centres[i];
       if (centre === undefined) continue;
       // CSS keeps `translateY(-50%)` on the label, so `top` is its centre.
       label.style.top = `${Math.round(centre)}px`;
     }
 
-    // Reveal only when the labels + gap + edge margin actually fit to the left
-    // of the card (so it never shows on narrow/mobile layouts).
-    const boxLeft = shRect.left - GAP_PX - labelWidth;
-    box.style.visibility = labelWidth > 0 && boxLeft >= EDGE_PX ? 'visible' : 'hidden';
+    box.style.visibility = showBox ? 'visible' : 'hidden';
 
     syncedTopRef.current = scrollTop;
     track.style.transform = `translate3d(0, ${-scrollTop}px, 0)`;
@@ -169,6 +204,12 @@ function LyricTimeAxis({
     observedRef.current = targets;
   }, [lineRefs, scrollRef]);
 
+  // Mirror the reveal inputs for measure(). Declared before the measuring
+  // layout effect so the values are current in the same commit.
+  useLayoutEffect(() => {
+    viewRef.current = { hovered, isSynced, activeLine };
+  });
+
   // Re-measure after every commit: rows move when font size, reading mode,
   // romanization or translations change, and those are all renders.
   useLayoutEffect(() => {
@@ -190,6 +231,13 @@ function LyricTimeAxis({
       tick();
     };
     scroller?.addEventListener('scroll', onScroll, { passive: true });
+    // Reveal while the pointer is over the lyrics themselves. The axis sits
+    // OUTSIDE the card and is `pointer-events: none`, so pointing at the
+    // labels never counts as a hover — only the lyrics do (spec).
+    const onEnter = () => setHovered(true);
+    const onLeave = () => setHovered(false);
+    scroller?.addEventListener('mouseenter', onEnter);
+    scroller?.addEventListener('mouseleave', onLeave);
     window.addEventListener('resize', scheduleMeasure);
     if (document.fonts) {
       document.fonts.ready.then(scheduleMeasure).catch(() => { /* metrics are best-effort */ });
@@ -201,6 +249,8 @@ function LyricTimeAxis({
 
     return () => {
       scroller?.removeEventListener('scroll', onScroll);
+      scroller?.removeEventListener('mouseenter', onEnter);
+      scroller?.removeEventListener('mouseleave', onLeave);
       window.removeEventListener('resize', scheduleMeasure);
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
       frameRef.current = 0;
