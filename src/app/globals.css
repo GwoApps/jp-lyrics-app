@@ -1211,7 +1211,7 @@ textarea {
   user-select: none;
   /* Small size, monospace style. */
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1.3;
   font-variant-numeric: tabular-nums;
   color: var(--muted-foreground);
@@ -1230,11 +1230,14 @@ textarea {
   /* `top` is written as the lyric line's centre — centre the label on it. */
   transform: translateY(-50%);
   white-space: nowrap;
-  transition: color 0.3s ease;
+  /* Non-current rows sit 40% back from the muted colour. */
+  opacity: 0.6;
+  transition: color 0.3s ease, opacity 0.3s ease;
 }
-/* Current line: album-tinted text colour. */
+/* Current line: album-tinted text colour, full strength. */
 .lyric-time-axis__label--active {
   color: var(--song-accent);
+  opacity: 1;
 }
 @media (prefers-reduced-motion: reduce) {
   .lyric-time-axis__label { transition: none; }
