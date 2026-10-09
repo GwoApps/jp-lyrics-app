@@ -5,7 +5,7 @@ import { parseLrc, findLrcConflicts } from '@/lib/lrc';
 import { getAuthUser } from '@/lib/auth';
 import { getSpotifyTrack } from '@/lib/spotify';
 import { parseJsonBody } from '@/lib/admin';
-import { songVisibilityWhere } from '@/lib/song-visibility';
+import { songVisibilityWhere, SONGS_S_COLUMNS } from '@/lib/song-visibility';
 import type { SQL } from 'drizzle-orm';
 import type { SongListItem } from '@/lib/types';
 
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
   // unconditionally, so `and(...filters)` can never collapse to `undefined` —
   // which drizzle would render as an empty string, yielding `WHERE  ORDER BY`
   // and a SQLite syntax error for admins (2026-10-08 outage, admin-only).
-  const visibleWhere = songVisibilityWhere(user);
+  const visibleWhere = songVisibilityWhere(user, SONGS_S_COLUMNS);
 
   const selectColumns = sql`s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at, s.lyrics_needs_review`;
 

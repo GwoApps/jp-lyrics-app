@@ -74,6 +74,12 @@ const SONGS_COLUMNS: SongVisibilityColumns = {
   createdBy: songs.createdBy,
 };
 
+/** For raw queries using `FROM songs s`; the unaliased schema columns are invalid there. */
+export const SONGS_S_COLUMNS: SongVisibilityColumns = {
+  isPublic: sql`s.is_public`,
+  createdBy: sql`s.created_by`,
+};
+
 /**
  * The canonical visibility rule as a SQL predicate (no leading AND):
  *

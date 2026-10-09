@@ -4,7 +4,7 @@ import { unlinkSync } from 'node:fs';
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import { and, sql, type SQL } from 'drizzle-orm';
-import { isSongVisibleToUser, songVisibilityWhere } from './song-visibility.ts';
+import { isSongVisibleToUser, songVisibilityWhere, SONGS_S_COLUMNS } from './song-visibility.ts';
 
 const admin = { id: 'admin@example.com', isAdmin: true };
 const owner = { id: 'owner@example.com', isAdmin: false };
@@ -160,6 +160,30 @@ test('songVisibilityWhere composes into executable SQL for every viewer shape', 
       });
       assert.ok(list.length >= 1, `${name}: list query returned no rows`);
       assert.ok(single.length >= 1, `${name}: single-predicate query returned no rows`);
+    }
+  } finally {
+    t.client.close();
+    try { unlinkSync(t.path); } catch { /* best effort */ }
+  }
+});
+
+test('songVisibilityWhere executes in song-list SQL with the songs s alias', async () => {
+  const t = makeSongsDb('aliased-list');
+  try {
+    await createSongs(t.client);
+    for (const { name, viewer } of VIEWERS) {
+      // GET /api/songs and collection GET both use FROM songs s. An unaliased
+      // schema column in the predicate raises "no such column: songs.is_public".
+      const rows = await t.db.all(sql`
+        SELECT s.id FROM songs s
+        WHERE ${and(songVisibilityWhere(viewer, SONGS_S_COLUMNS))}
+        ORDER BY s.updated_at DESC
+      `);
+      const ids = rows.map((row) => (row as { id: string }).id).sort();
+      const expected = name === 'admin'
+        ? ['mine-1', 'other-1', 'public-1']
+        : name === 'non-admin' ? ['mine-1', 'public-1'] : ['public-1'];
+      assert.deepEqual(ids, expected, name);
     }
   } finally {
     t.client.close();
