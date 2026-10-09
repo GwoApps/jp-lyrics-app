@@ -148,6 +148,25 @@ function LyricTimeAxis({
     const rowVisible = (i: number) =>
       !detached[i] && (showAll || (showWindow && Math.abs(i - activeLine) <= ACTIVE_CONTEXT_ROWS));
 
+    // ---- Opacity ladder (spec) ------------------------------------
+    // Playing row 1.0, ±1 at 0.6, ±2 and everything further out at 0.25;
+    // rows outside the reveal window go fully transparent (0). With no
+    // playing row (not synced) every revealed row keeps the uniform
+    // non-active alpha.
+    //
+    // Reveal rides on THIS, not on a per-label `visibility` write: labels
+    // inherit the box's `visibility`, so a hidden box can no longer be
+    // painted around by a child opting back in — and because the ladder
+    // only ever moves between four values, the CSS `opacity` transition
+    // turns every window slide (playback advancing) into a fade instead of
+    // a pop.
+    const anchor = isSynced && activeLine >= 0 ? activeLine : -1;
+    const alphaFor = (i: number) => {
+      if (anchor < 0) return 0.6;
+      const d = Math.abs(i - anchor);
+      return d === 0 ? 1 : d === 1 ? 0.6 : 0.25;
+    };
+
     // Reveal only when (a) the labels + gap + edge margin actually fit to the
     // left of the card (never on narrow/mobile layouts) AND (b) the reveal
     // policy above says there is something to show.
@@ -170,7 +189,12 @@ function LyricTimeAxis({
     for (let i = 0; i < centres.length; i++) {
       const label = labels[i];
       if (!label) continue;
-      label.style.visibility = showBox && rowVisible(i) ? 'visible' : 'hidden';
+      // `visibility` is the gutter-fit gate ONLY (instant, never transitioned:
+      // a transition here would leave a child opting back in — i.e. painted —
+      // outside the hidden box for its whole duration). Reveal + the opacity
+      // ladder ride on `opacity`, so window slides fade instead of popping.
+      label.style.visibility = showBox && !detached[i] ? 'visible' : 'hidden';
+      label.style.opacity = String(showBox && rowVisible(i) ? alphaFor(i) : 0);
       const centre = centres[i];
       if (centre === undefined) continue;
       // CSS keeps `translateY(-50%)` on the label, so `top` is its centre.

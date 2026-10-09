@@ -1230,14 +1230,23 @@ textarea {
   /* `top` is written as the lyric line's centre — centre the label on it. */
   transform: translateY(-50%);
   white-space: nowrap;
-  /* Non-current rows sit 40% back from the muted colour. */
-  opacity: 0.6;
+  /* Alpha is WRITTEN PER LABEL by LyricTimeAxis.measure() (the opacity
+     ladder: active 1.0, ±1 0.6, ±2 and beyond 0.25, outside the reveal
+     window 0). 0 is the pre-measure default so the very first measure pass
+     FADES labels in from transparent instead of showing every row for a
+     frame — the box is `visibility: hidden` until then either way. */
+  opacity: 0;
+  /* Fade both the tint and the ladder: when playback advances the ±2 window
+     slides one row, and every affected label cross-fades instead of popping
+     (spec: 滚动时渐变透明度). 0.3s tracks the auto-follow scroll (220-700ms)
+     closely enough to read as one motion. */
   transition: color 0.3s ease, opacity 0.3s ease;
 }
-/* Current line: album-tinted text colour, full strength. */
+/* Current line: album-tinted text colour. Its ALPHA comes from the ladder
+   written by measure(), not from this class — the ladder is the single
+   source of truth for opacity. */
 .lyric-time-axis__label--active {
   color: var(--song-accent);
-  opacity: 1;
 }
 @media (prefers-reduced-motion: reduce) {
   .lyric-time-axis__label { transition: none; }
