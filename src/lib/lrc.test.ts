@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createTimelineDraft, buildTimelineDraft, extractLrcMetadata, findLrcConflicts, findTimelineConflicts, getLrcTextLines, hasSameLrcText, isLrcMetadataLine, mapTimelineTimestamps, offsetLrcLines, parseLrc, parseLrcTimestamp, resolveLrcTextUpdate, resolveTimelineSave, serializeLrc, serializeTimelineDraft, updateLrcLineTime } from './lrc.ts';
+import { createTimelineDraft, buildTimelineDraft, extractLrcMetadata, findLrcConflicts, findTimelineConflicts, fmtMs, getLrcTextLines, hasSameLrcText, isLrcMetadataLine, mapTimelineTimestamps, offsetLrcLines, parseLrc, parseLrcTimestamp, resolveLrcTextUpdate, resolveTimelineSave, serializeLrc, serializeTimelineDraft, updateLrcLineTime } from './lrc.ts';
 
 test('offsetLrcLines shifts timestamps and clamps at zero', () => {
   const lines = parseLrc('[00:00.250]first\n[01:02.345]second');
@@ -464,4 +464,31 @@ test('buildTimelineDraft leaves exact full-table equality untouched', () => {
     { text: 'a', timeMs: 1000 },
     { text: 'b', timeMs: 2000 },
   ]);
+});
+
+// fmtMs is a FORMATTER: whatever number it is handed, its output must stay
+// MM:SS.mmm. Live playback positions are fractional (performance.now() carries
+// sub-ms precision), and the un-truncated millisecond segment used to be
+// pasted straight into the string — producing "02:49.613.8999998569489", an
+// extra dot and 9 extra digits on the focused lyric row (2026-10-08).
+test('fmtMs keeps the MM:SS.mmm contract for fractional input', () => {
+  assert.equal(fmtMs(169613.8999998569489), '02:49.613');
+  assert.equal(fmtMs(166610.5), '02:46.610');
+  assert.equal(fmtMs(166610.999), '02:46.610');
+  assert.equal(fmtMs(0.999), '00:00.000');
+});
+
+test('fmtMs keeps exact integer behaviour and boundary rounding', () => {
+  assert.equal(fmtMs(0), '00:00.000');
+  assert.equal(fmtMs(680), '00:00.680');
+  assert.equal(fmtMs(59999), '00:59.999');
+  assert.equal(fmtMs(60000), '01:00.000');
+  assert.equal(fmtMs(60500.5), '01:00.500');
+  assert.equal(fmtMs(3599999.4), '59:59.999');
+});
+
+test('fmtMs output always matches the MM:SS.mmm shape', () => {
+  for (const v of [0, 0.5, 999.999, 1000.1, 61234.5678, 169613.9, 3723456.789]) {
+    assert.match(fmtMs(v), /^\d{2}:\d{2}\.\d{3}$/, `fmtMs(${v})`);
+  }
 });

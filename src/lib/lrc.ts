@@ -543,10 +543,21 @@ export function findLrcConflicts(lrc: string): TimelineConflict[] {
   }
   return findTimelineConflicts(lines);
 }
+/**
+ * Format a millisecond position as `MM:SS.mmm`.
+ *
+ * Total on purpose: the millisecond segment is floored to a whole ms BEFORE it
+ * is pasted into the string, because live playback positions are fractional
+ * (`performance.now()` carries sub-ms precision) and a raw `ms % 1000` would
+ * leak those digits straight into the output — "02:49.613.8999998569489", an
+ * extra dot plus nine extra digits on the focused lyric row. Callers may hand
+ * in any number; the output always keeps the MM:SS.mmm contract.
+ */
 export function fmtMs(ms: number): string {
-  const m = Math.floor(ms / 60000);
-  const s = Math.floor((ms % 60000) / 1000);
-  const ss = ms % 1000;
+  const total = Math.max(0, Math.floor(ms));
+  const m = Math.floor(total / 60000);
+  const s = Math.floor((total % 60000) / 1000);
+  const ss = total % 1000;
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ss).padStart(3, '0')}`;
 }
 
