@@ -24,6 +24,14 @@ interface LyricTimeAxisProps {
   activeLine: number;
   /** Only light the active label up while THIS page's track is the playing one. */
   isSynced: boolean;
+  /**
+   * Smoothly interpolated playback position (ms) from `useSpotifySync`, or
+   * `null` when nothing is being followed. Read here from a dedicated rAF loop
+   * to drive the focused row's live clock — the hook is the single source of
+   * truth for the interpolation, this component never re-derives it from the
+   * 3s poll.
+   */
+  playbackMsRef: React.RefObject<number | null>;
 }
 
 /**
@@ -51,6 +59,7 @@ function LyricTimeAxis({
   timestamps,
   activeLine,
   isSynced,
+  playbackMsRef,
 }: LyricTimeAxisProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -73,6 +82,13 @@ function LyricTimeAxis({
   // Mirror of the render-driven visibility inputs for measure(), which is a
   // stable useCallback and must not be re-created on every hover change.
   const viewRef = useRef({ hovered: false, isSynced: false, activeLine: -1 });
+  // Mirror of the label texts: the live clock below overwrites textContent
+  // imperatively, so restoring a row needs the CURRENT prop, not the one
+  // captured when the effect last ran.
+  const timestampsRef = useRef(timestamps);
+  // Which row's textContent the live clock currently owns (so it can put the
+  // static line timestamp back when playback stops or the focus moves).
+  const liveRowRef = useRef<number | null>(null);
 
   // Write the scroll-follow transform, returning false when nothing changed.
   // A `scroll` event for a programmatic `scrollTop` write only fires on the
@@ -228,10 +244,61 @@ function LyricTimeAxis({
     observedRef.current = targets;
   }, [lineRefs, scrollRef]);
 
+  // ── Live clock on the focused row (spec: 播放中显示实时播放时间, rAF) ──
+  // The interpolation itself lives in useSpotifySync — `playbackMsRef` is
+  // written by its tick every frame. This loop only FORMATS that value into
+  // the focused row's label, once per rAF:
+  //  - React never rewrites this text (its own child string `fmtMs(time)` is
+  //    unchanged between renders, so React skips the DOM write) — hence no
+  //    re-render per frame, and hence the need to hand the static timestamp
+  //    back ourselves when focus moves or playback stops.
+  //  - The write is guarded by a string compare so a frozen clock (null
+  //    playbackMsRef, e.g. tab hidden) does no DOM work at all.
+  // Runs ONLY while synced+playing, so idle pages never spin (issue #244).
+  useEffect(() => {
+    if (!isSynced || !hasLabels) return undefined;
+
+    const restore = (row: number) => {
+      const label = labelRefs.current[row];
+      const time = timestampsRef.current[row];
+      if (label && time != null) label.textContent = fmtMs(time);
+    };
+
+    let raf = 0;
+    const frame = () => {
+      const { activeLine: focused } = viewRef.current;
+      const owned = liveRowRef.current;
+      if (owned !== null && owned !== focused) {
+        restore(owned);
+        liveRowRef.current = null;
+      }
+      // Narrow gutter → the box is `visibility: hidden`; don't pay for text
+      // writes nobody can see (measure() sets this inline every pass).
+      const boxVisible = boxRef.current?.style.visibility === 'visible';
+      const label = focused >= 0 ? labelRefs.current[focused] : undefined;
+      if (label && boxVisible) {
+        const ms = playbackMsRef.current;
+        const time = ms ?? timestampsRef.current[focused];
+        const next = fmtMs(time != null ? time : 0);
+        if (label.textContent !== next) label.textContent = next;
+        liveRowRef.current = focused;
+      }
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      if (liveRowRef.current !== null) restore(liveRowRef.current);
+      liveRowRef.current = null;
+    };
+  }, [isSynced, hasLabels, playbackMsRef]);
+
   // Mirror the reveal inputs for measure(). Declared before the measuring
   // layout effect so the values are current in the same commit.
   useLayoutEffect(() => {
     viewRef.current = { hovered, isSynced, activeLine };
+    timestampsRef.current = timestamps;
   });
 
   // Re-measure after every commit: rows move when font size, reading mode,

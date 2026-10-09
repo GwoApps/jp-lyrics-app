@@ -55,6 +55,13 @@ export interface UseSpotifySyncReturn {
   followPlaying: boolean;
   setFollowPlaying: React.Dispatch<React.SetStateAction<boolean>>;
   pipWindowRef: React.MutableRefObject<Window | null>;
+  /**
+   * Smoothly interpolated playback position in ms, or `null` when nothing is
+   * being followed (paused / other track / tab hidden). Written every rAF tick
+   * by the interpolation loop — read it from your OWN rAF loop for per-frame
+   * displays; do not re-derive it from the 3s `progress_ms` poll.
+   */
+  playbackMsRef: React.MutableRefObject<number | null>;
 }
 
 /** Shape used for identity checks against the song rendered on this page. */
@@ -96,6 +103,13 @@ export function useSpotifySync(
   const interpRef = useRef<InterpAnchor>({ progressMs: 0, pollTime: 0, isPlaying: false, trackName: '', trackId: '', trackArtist: '', durationMs: 0 });
   const rafRef = useRef<number>(0);
   const highlightRef = useRef(-1);
+  // Authoritative INTERPOLATED playback position (ms), written by the tick
+  // loop below every frame and nulled whenever there is nothing to follow
+  // (paused / other track / tab hidden / unmounted). Consumers that need a
+  // smooth per-frame clock — e.g. the time axis' focused-row timer — read this
+  // ref in their OWN rAF loop instead of re-deriving `progress_ms + elapsed`
+  // from the 3s poll, which would be a second, drifting source of truth.
+  const playbackMsRef = useRef<number | null>(null);
   const prevTrackKeyRef = useRef('');
   const navigatingRef = useRef(false);
   // Guards the async follow-playing match so a stale response (track changed
@@ -217,6 +231,7 @@ export function useSpotifySync(
         !songTitle ||
         !isSameTrackCached({ id: trackId || undefined, name: trackName, artist: trackArtist })
       ) {
+        playbackMsRef.current = null;
         if (highlightRef.current !== -1) {
           highlightRef.current = -1;
           setActiveLine(-1);
@@ -228,6 +243,8 @@ export function useSpotifySync(
       // Interpolate progress since last poll
       const elapsed = performance.now() - pollTime;
       const currentMs = progressMs + Math.max(0, elapsed);
+      // Publish the smooth position for per-frame readers (time axis clock).
+      playbackMsRef.current = currentMs;
 
       // Find active line
       const lts = refs.lineTimestamps;
@@ -284,6 +301,9 @@ export function useSpotifySync(
     const stop = () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = 0;
+      // No tick means no fresh interpolation — a stale position would keep the
+      // focused-row clock running on frozen time.
+      playbackMsRef.current = null;
     };
     startRafRef.current = start;
     stopRafRef.current = stop;
@@ -354,5 +374,6 @@ export function useSpotifySync(
     followPlaying,
     setFollowPlaying,
     pipWindowRef,
+    playbackMsRef,
   };
 }

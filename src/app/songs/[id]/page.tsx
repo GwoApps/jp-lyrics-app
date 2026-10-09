@@ -427,7 +427,7 @@ export default function SongViewPage() {
   const canEdit = song?.permissions?.can_edit === true;
   const lyricsSourceKey = song ? LYRICS_SOURCE_KEYS[song.lyrics_source] : undefined;
   const lyricsSourceLabel = song ? (lyricsSourceKey ? t(lyricsSourceKey) : song.lyrics_source) : '';
-  const { spotify, syncState, resumeSync, activeLine, isSameSong, followPlaying, setFollowPlaying, pipWindowRef } = sync;
+  const { spotify, syncState, resumeSync, activeLine, isSameSong, followPlaying, setFollowPlaying, pipWindowRef, playbackMsRef } = sync;
   const handleOpenPiP = () => data.openPiP(furiganaLines, song, activeLine, pipWindowRef, lineTimestamps);
   const isSynced = isSameSong && activeLine >= 0;
   const hasSyncData = syncLines.length > 0;
@@ -970,6 +970,7 @@ export default function SongViewPage() {
           timestamps={lineTimestamps}
           activeLine={activeLine}
           isSynced={!!isSynced}
+          playbackMsRef={playbackMsRef}
         />
       </div>
 
