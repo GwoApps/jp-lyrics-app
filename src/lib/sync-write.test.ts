@@ -1,8 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { unlinkSync } from 'node:fs';
-import { createClient } from '@libsql/client';
-import { drizzle } from 'drizzle-orm/libsql';
+import type { TestContext } from 'node:test';
+import { createTestDb, createSongsTable } from './test-db.ts';
 import { sql } from 'drizzle-orm';
 import { applySyncWrite, resolveSyncBaseline } from './sync-write.ts';
 import { songs } from './schema.ts';
@@ -26,11 +25,8 @@ import { songs } from './schema.ts';
 
 type TestDb = ReturnType<typeof makeTestDb>;
 
-function makeTestDb(path: string) {
-  try { unlinkSync(path); } catch { /* fresh */ }
-  const client = createClient({ url: `file:${path}`, timeout: 15_000 });
-  const db = drizzle(client, { schema: { songs } });
-  return { db, client, path };
+function makeTestDb(ctx: TestContext, label: string) {
+  return createTestDb(ctx, label, { songs });
 }
 
 const SONG_ID = 'song-sync-1';
@@ -38,43 +34,6 @@ const OLD_LYRICS = 'line one\nline two\nline three';
 const OLD_SYNCED = '[00:01.000]line one\n[00:02.000]line two\n[00:03.000]line three';
 const NEW_LYRICS = 'brand new line one\nbrand new line two';
 const NEW_SYNCED = '[00:01.000]brand new line one\n[00:02.000]brand new line two';
-
-async function createTables(t: TestDb) {
-  await t.client.execute('PRAGMA journal_mode=WAL');
-  await t.client.execute('PRAGMA busy_timeout=15000');
-  await t.db.run(sql`CREATE TABLE songs (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL DEFAULT '',
-    artist TEXT NOT NULL DEFAULT '',
-    lyrics_raw TEXT NOT NULL DEFAULT '',
-    lyrics_furigana TEXT NOT NULL DEFAULT '[]',
-    reading_scheme TEXT NOT NULL DEFAULT 'ja-kana',
-    reading_scheme_confirmed INTEGER NOT NULL DEFAULT 0,
-    lyrics_synced TEXT NOT NULL DEFAULT '',
-    lyrics_translation TEXT NOT NULL DEFAULT '[]',
-    lyrics_translation_lang TEXT,
-    lyrics_translation_reasoning TEXT,
-    lyrics_glossary TEXT,
-    cover_url TEXT,
-    cover_palette TEXT,
-    spotify_track_id TEXT,
-    spotify_uri TEXT,
-    spotify_album TEXT,
-    spotify_duration_ms INTEGER,
-    spotify_canonical_title TEXT,
-    spotify_canonical_artist TEXT,
-    lyrics_source TEXT NOT NULL DEFAULT 'manual',
-    lyrics_confidence INTEGER NOT NULL DEFAULT 100,
-    lyrics_needs_review INTEGER NOT NULL DEFAULT 0,
-    lyrics_fetched_at TEXT,
-    created_by TEXT NOT NULL DEFAULT '',
-    created_by_name TEXT NOT NULL DEFAULT '',
-    is_public INTEGER NOT NULL DEFAULT 0,
-    public_requested INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-  )`);
-}
 
 async function seedSong(t: TestDb) {
   await t.db.insert(songs).values({
@@ -145,9 +104,9 @@ test('resolveSyncBaseline rejects a snapshot that no longer matches the stored l
   });
 });
 
-test('applySyncWrite commits the fetched result and clears derived caches when the baseline matches', async () => {
-  const t = makeTestDb(`/tmp/sync-write-commit-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('applySyncWrite commits the fetched result and clears derived caches when the baseline matches', async (ctx) => {
+  const t = makeTestDb(ctx, 'sync-write-commit');
+  await createSongsTable(t.client);
   await seedSong(t);
 
   const result = await applySyncWrite(t.db, { id: SONG_ID, sourceLyrics: OLD_LYRICS, patch: syncPatch() });
@@ -165,9 +124,9 @@ test('applySyncWrite commits the fetched result and clears derived caches when t
   assert.equal(row?.lyricsGlossary, null);
 });
 
-test('applySyncWrite refuses (stale_source) and leaves every column untouched when lyrics were edited mid-flight', async () => {
-  const t = makeTestDb(`/tmp/sync-write-stale-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('applySyncWrite refuses (stale_source) and leaves every column untouched when lyrics were edited mid-flight', async (ctx) => {
+  const t = makeTestDb(ctx, 'sync-write-stale');
+  await createSongsTable(t.client);
   await seedSong(t);
 
   // Another tab edits the lyrics while the sync fetch is in flight — the
@@ -191,9 +150,9 @@ test('applySyncWrite refuses (stale_source) and leaves every column untouched wh
   assert.equal(row?.lyricsGlossary, 'glossary');
 });
 
-test('applySyncWrite refuses (stale_source) when a concurrent sync already won the race', async () => {
-  const t = makeTestDb(`/tmp/sync-write-race-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('applySyncWrite refuses (stale_source) when a concurrent sync already won the race', async (ctx) => {
+  const t = makeTestDb(ctx, 'sync-write-race');
+  await createSongsTable(t.client);
   await seedSong(t);
 
   // A concurrent request (started from the same baseline) committed first.

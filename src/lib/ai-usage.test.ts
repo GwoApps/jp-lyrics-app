@@ -1,8 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { unlinkSync } from 'node:fs';
-import { createClient } from '@libsql/client';
-import { drizzle } from 'drizzle-orm/libsql';
+import type { TestContext } from 'node:test';
+import { createTestDb, prepareTestDb } from './test-db.ts';
 import { sql } from 'drizzle-orm';
 import {
   reserveAiBudget,
@@ -34,24 +33,15 @@ const DAY = '2026-08-09';
 
 type TestDb = ReturnType<typeof makeTestDb>;
 
-function makeTestDb(path: string, opts: { fresh?: boolean } = {}) {
-  if (opts.fresh !== false) {
-    try { unlinkSync(path); } catch { /* fresh */ }
-  }
-  // timeout = SQLite busy timeout (ms). Concurrent writers must wait for the
-  // write lock instead of failing immediately with SQLITE_BUSY — the app's
-  // db.ts uses the same 15s timeout for local SQLite.
-  const client = createClient({ url: `file:${path}`, timeout: 15_000 });
-  const db = drizzle(client, { schema: { aiUsage, aiUsageReservations } });
-  return { db, client, path };
+function makeTestDb(ctx: TestContext, label: string) {
+  return createTestDb(ctx, label, { aiUsage, aiUsageReservations });
 }
 
 async function createTables(t: TestDb) {
   // WAL + a per-connection busy timeout let concurrent writers serialise on
   // the write lock instead of failing with SQLITE_BUSY — the same behaviour
   // Cloudflare D1 gives every Worker request its own binding.
-  await t.client.execute('PRAGMA journal_mode=WAL');
-  await t.client.execute('PRAGMA busy_timeout=15000');
+  await prepareTestDb(t.client);
   await t.db.run(sql`CREATE TABLE ai_usage (
     usage_date TEXT PRIMARY KEY,
     neurons INTEGER NOT NULL DEFAULT 0,
@@ -79,8 +69,8 @@ function nowRef() {
   return Date.now();
 }
 
-test('reserve + settle keeps total under the hard limit under concurrency', async () => {
-  const t = makeTestDb(`/tmp/ai-quota-conc-${process.pid}-${Date.now()}.db`);
+test('reserve + settle keeps total under the hard limit under concurrency', async (ctx) => {
+  const t = makeTestDb(ctx, 'ai-quota-conc');
   await createTables(t);
   const env = { AI_DAILY_NEURON_LIMIT: String(LIMIT) };
   const now = nowRef();
@@ -97,15 +87,12 @@ test('reserve + settle keeps total under the hard limit under concurrency', asyn
   const attempts = 20;
   const estimate = 3000;
   const jobs = Array.from({ length: attempts }, async (_, i) => {
-    const own = makeTestDb(t.path, { fresh: false });
+    const own = t.open();
     try {
       await own.client.execute('PRAGMA busy_timeout=15000');
-      const r = await reserveAiBudget(estimate, { db: own.db, env, now, date: DAY, requestId: `c-${i}` });
-      own.client.close();
-      return r;
-    } catch (e) {
-      own.client.close();
-      throw e;
+      return await reserveAiBudget(estimate, { db: own.db, env, now, date: DAY, requestId: `c-${i}` });
+    } finally {
+      own.close();
     }
   });
 
@@ -132,8 +119,8 @@ test('reserve + settle keeps total under the hard limit under concurrency', asyn
   assert.ok(neurons <= LIMIT, `settled usage ${neurons} must not exceed limit ${LIMIT}`);
 });
 
-test('rejects reservations that would exceed the daily cap', async () => {
-  const t = makeTestDb(`/tmp/ai-quota-over-${process.pid}-${Date.now()}.db`);
+test('rejects reservations that would exceed the daily cap', async (ctx) => {
+  const t = makeTestDb(ctx, 'ai-quota-over');
   await createTables(t);
   const env = { AI_DAILY_NEURON_LIMIT: String(LIMIT) };
   const now = nowRef();
@@ -152,8 +139,8 @@ test('rejects reservations that would exceed the daily cap', async () => {
   await settleAiBudget('a3', 6000, { db: t.db, env, now, date: DAY });
 });
 
-test('release frees budget without recording usage', async () => {
-  const t = makeTestDb(`/tmp/ai-quota-rel-${process.pid}-${Date.now()}.db`);
+test('release frees budget without recording usage', async (ctx) => {
+  const t = makeTestDb(ctx, 'ai-quota-rel');
   await createTables(t);
   const env = { AI_DAILY_NEURON_LIMIT: String(LIMIT) };
   const now = nowRef();
@@ -172,8 +159,8 @@ test('release frees budget without recording usage', async () => {
   assert.equal(requests, 1);
 });
 
-test('stale reservations are reclaimed into used budget (fail-closed)', async () => {
-  const t = makeTestDb(`/tmp/ai-quota-reclaim-${process.pid}-${Date.now()}.db`);
+test('stale reservations are reclaimed into used budget (fail-closed)', async (ctx) => {
+  const t = makeTestDb(ctx, 'ai-quota-reclaim');
   await createTables(t);
   const env = { AI_DAILY_NEURON_LIMIT: String(LIMIT) };
   const now = nowRef();

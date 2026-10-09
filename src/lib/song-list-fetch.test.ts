@@ -32,56 +32,43 @@ test('song list fetch: returns songs on a successful array response', async () =
   }
 });
 
-test('song list fetch: network failure resolves to an empty failed result (not a throw)', async () => {
-  const restore = installFetch(async () => {
-    throw new TypeError('Failed to fetch');
-  });
-  try {
-    const result = await requestSongList('all');
-    assert.equal(result.ok, false);
-    assert.deepEqual(result.songs, []);
-  } finally {
-    restore();
-  }
-});
+const failedResponses: { name: string; scope: 'all' | 'mine'; respond: FetchFn }[] = [
+  {
+    name: 'network failure resolves to an empty failed result (not a throw)',
+    scope: 'all',
+    respond: async () => { throw new TypeError('Failed to fetch'); },
+  },
+  {
+    name: 'HTTP 500 resolves to an empty failed result',
+    scope: 'mine',
+    respond: async () => ({ ok: false, json: async () => ({ error: 'boom' }) }),
+  },
+  {
+    name: 'non-array JSON resolves to an empty failed result (invalid body is not trusted)',
+    scope: 'all',
+    respond: async () => ({ ok: true, json: async () => ({ error: 'session expired' }) }),
+  },
+  {
+    name: 'non-JSON body resolves to an empty failed result',
+    scope: 'all',
+    respond: async () => ({
+      ok: true,
+      json: async () => { throw new SyntaxError('Unexpected token < in JSON'); },
+    }),
+  },
+];
 
-test('song list fetch: HTTP 500 resolves to an empty failed result', async () => {
-  const restore = installFetch(async (url) => {
-    assert.equal(url, '/api/songs?mine=1');
-    return { ok: false, json: async () => ({ error: 'boom' }) };
+for (const { name, scope, respond } of failedResponses) {
+  test(`song list fetch: ${name}`, async (t) => {
+    t.after(installFetch(async (url, init) => {
+      assert.equal(url, scope === 'mine' ? '/api/songs?mine=1' : '/api/songs');
+      return respond(url, init);
+    }));
+    const result = await requestSongList(scope);
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.songs, []);
   });
-  try {
-    const result = await requestSongList('mine');
-    assert.equal(result.ok, false);
-    assert.deepEqual(result.songs, []);
-  } finally {
-    restore();
-  }
-});
-
-test('song list fetch: non-array JSON resolves to an empty failed result (invalid body is not trusted)', async () => {
-  const restore = installFetch(async () => ({ ok: true, json: async () => ({ error: 'session expired' }) }));
-  try {
-    const result = await requestSongList('all');
-    assert.equal(result.ok, false);
-    assert.deepEqual(result.songs, []);
-  } finally {
-    restore();
-  }
-});
-
-test('song list fetch: non-JSON body resolves to an empty failed result', async () => {
-  const restore = installFetch(async () => {
-    throw new SyntaxError('Unexpected token < in JSON');
-  });
-  try {
-    const result = await requestSongList('all');
-    assert.equal(result.ok, false);
-    assert.deepEqual(result.songs, []);
-  } finally {
-    restore();
-  }
-});
+}
 
 test('song list fetch: caller abort resolves to a failed result without waiting for the 8s timeout', async () => {
   let requestStarted!: () => void;

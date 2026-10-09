@@ -1,8 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { unlinkSync } from 'node:fs';
-import { createClient } from '@libsql/client';
-import { drizzle } from 'drizzle-orm/libsql';
+import type { TestContext } from 'node:test';
+import { createTestDb, prepareTestDb } from './test-db.ts';
 import { sql } from 'drizzle-orm';
 import { saveTrackResult } from './playlist-import.ts';
 import {
@@ -30,18 +29,12 @@ import {
 
 type TestDb = ReturnType<typeof makeTestDb>;
 
-function makeTestDb(path: string, opts: { fresh?: boolean } = {}) {
-  if (opts.fresh !== false) {
-    try { unlinkSync(path); } catch { /* fresh */ }
-  }
-  const client = createClient({ url: `file:${path}`, timeout: 15_000 });
-  const db = drizzle(client, { schema: { playlistImportJobs, playlistImportTrackResults } });
-  return { db, client, path };
+function makeTestDb(ctx: TestContext, label: string) {
+  return createTestDb(ctx, label, { playlistImportJobs, playlistImportTrackResults });
 }
 
 async function createTables(t: TestDb) {
-  await t.client.execute('PRAGMA journal_mode=WAL');
-  await t.client.execute('PRAGMA busy_timeout=15000');
+  await prepareTestDb(t.client);
   await t.db.run(sql`CREATE TABLE playlist_import_jobs (
     id TEXT PRIMARY KEY,
     user_email TEXT NOT NULL,
@@ -89,8 +82,8 @@ async function getJob(t: TestDb, id: string) {
 
 const track = { id: 'track-1', uri: 'spotify:track:track-1', title: 'Song', artist: 'Artist', album: '', durationMs: 200000, coverUrl: null };
 
-test('a fresh insert increments counters once', async () => {
-  const t = makeTestDb(`/tmp/pi-fresh-${process.pid}-${Date.now()}.db`);
+test('a fresh insert increments counters once', async (ctx) => {
+  const t = makeTestDb(ctx, 'pi-fresh');
   await createTables(t);
   await insertJob(t, 'j');
 
@@ -107,8 +100,8 @@ test('a fresh insert increments counters once', async () => {
   assert.equal(rows.length, 1);
 });
 
-test('a duplicate submit is an idempotent no-op for counters', async () => {
-  const t = makeTestDb(`/tmp/pi-dup-${process.pid}-${Date.now()}.db`);
+test('a duplicate submit is an idempotent no-op for counters', async (ctx) => {
+  const t = makeTestDb(ctx, 'pi-dup');
   await createTables(t);
   await insertJob(t, 'j');
 
@@ -124,8 +117,8 @@ test('a duplicate submit is an idempotent no-op for counters', async () => {
   assert.equal(rows.length, 1, 'still exactly one track-result row');
 });
 
-test('sequential re-order retries are idempotent', async () => {
-  const t = makeTestDb(`/tmp/pi-order-${process.pid}-${Date.now()}.db`);
+test('sequential re-order retries are idempotent', async (ctx) => {
+  const t = makeTestDb(ctx, 'pi-order');
   await createTables(t);
   await insertJob(t, 'j');
 
@@ -144,8 +137,8 @@ test('sequential re-order retries are idempotent', async () => {
   assert.equal(rows[0].status, 'skipped');
 });
 
-test('concurrent duplicate submits never over-count', async () => {
-  const t = makeTestDb(`/tmp/pi-conc-${process.pid}-${Date.now()}.db`);
+test('concurrent duplicate submits never over-count', async (ctx) => {
+  const t = makeTestDb(ctx, 'pi-conc');
   await createTables(t);
   await insertJob(t, 'j');
 
@@ -153,12 +146,12 @@ test('concurrent duplicate submits never over-count', async () => {
   // same (job, track). Exactly one must win the insert and the counter bump.
   const attempts = 8;
   await Promise.all(Array.from({ length: attempts }, async () => {
-    const own = makeTestDb(t.path, { fresh: false });
+    const own = t.open();
     try {
       await own.client.execute('PRAGMA busy_timeout=15000');
       await saveTrackResult('j', track, { status: 'imported' }, own.db);
     } finally {
-      own.client.close();
+      own.close();
     }
   }));
 
@@ -170,8 +163,8 @@ test('concurrent duplicate submits never over-count', async () => {
   assert.equal(rows.length, 1);
 });
 
-test('mixed statuses count independently and sum to processed', async () => {
-  const t = makeTestDb(`/tmp/pi-mixed-${process.pid}-${Date.now()}.db`);
+test('mixed statuses count independently and sum to processed', async (ctx) => {
+  const t = makeTestDb(ctx, 'pi-mixed');
   await createTables(t);
   await insertJob(t, 'j', 3);
 
@@ -197,8 +190,8 @@ test('mixed statuses count independently and sum to processed', async () => {
   assert.equal(rows.length, 3);
 });
 
-test('an INSERT failure leaves the counters untouched (no counted-but-no-result)', async () => {
-  const t = makeTestDb(`/tmp/pi-fail-${process.pid}-${Date.now()}.db`);
+test('an INSERT failure leaves the counters untouched (no counted-but-no-result)', async (ctx) => {
+  const t = makeTestDb(ctx, 'pi-fail');
   await createTables(t);
   await insertJob(t, 'j');
 

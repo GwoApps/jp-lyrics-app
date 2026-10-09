@@ -1,8 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { unlinkSync } from 'node:fs';
-import { createClient } from '@libsql/client';
-import { drizzle } from 'drizzle-orm/libsql';
+import type { TestContext } from 'node:test';
+import { createTestDb, createSongsTable } from './test-db.ts';
 import { sql } from 'drizzle-orm';
 import { mergeLineEditsIntoCache, mergeSliceIntoCache, writeSongField } from './translation-cache.ts';
 import { parseTranslationCache } from './translation/parse.ts';
@@ -28,54 +27,12 @@ import { songs } from './schema.ts';
 
 type TestDb = ReturnType<typeof makeTestDb>;
 
-function makeTestDb(path: string, opts: { fresh?: boolean } = {}) {
-  if (opts.fresh !== false) {
-    try { unlinkSync(path); } catch { /* fresh */ }
-  }
-  const client = createClient({ url: `file:${path}`, timeout: 15_000 });
-  const db = drizzle(client, { schema: { songs } });
-  return { db, client, path };
+function makeTestDb(ctx: TestContext, label: string) {
+  return createTestDb(ctx, label, { songs });
 }
 
 const SONG_ID = 'song-1';
 const LYRICS = 'line one\nline two\nline three\nline four';
-
-async function createTables(t: TestDb) {
-  await t.client.execute('PRAGMA journal_mode=WAL');
-  await t.client.execute('PRAGMA busy_timeout=15000');
-  await t.db.run(sql`CREATE TABLE songs (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL DEFAULT '',
-    artist TEXT NOT NULL DEFAULT '',
-    lyrics_raw TEXT NOT NULL DEFAULT '',
-    lyrics_furigana TEXT NOT NULL DEFAULT '[]',
-    reading_scheme TEXT NOT NULL DEFAULT 'ja-kana',
-    reading_scheme_confirmed INTEGER NOT NULL DEFAULT 0,
-    lyrics_synced TEXT NOT NULL DEFAULT '',
-    lyrics_translation TEXT NOT NULL DEFAULT '[]',
-    lyrics_translation_lang TEXT,
-    lyrics_translation_reasoning TEXT,
-    lyrics_glossary TEXT,
-    cover_url TEXT,
-    cover_palette TEXT,
-    spotify_track_id TEXT,
-    spotify_uri TEXT,
-    spotify_album TEXT,
-    spotify_duration_ms INTEGER,
-    spotify_canonical_title TEXT,
-    spotify_canonical_artist TEXT,
-    lyrics_source TEXT NOT NULL DEFAULT 'manual',
-    lyrics_confidence INTEGER NOT NULL DEFAULT 100,
-    lyrics_needs_review INTEGER NOT NULL DEFAULT 0,
-    lyrics_fetched_at TEXT,
-    created_by TEXT NOT NULL DEFAULT '',
-    created_by_name TEXT NOT NULL DEFAULT '',
-    is_public INTEGER NOT NULL DEFAULT 0,
-    public_requested INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-  )`);
-}
 
 async function seedSong(t: TestDb, opts: { lyrics?: string; cache?: string | null } = {}) {
   await t.db.insert(songs).values({
@@ -98,9 +55,9 @@ function makeResolved(values: (string | null)[]): (string | null)[] {
   return values;
 }
 
-test('merge persists the merged cache before returning — immediately readable after await', async () => {
-  const t = makeTestDb(`/tmp/translation-cache-commit-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('merge persists the merged cache before returning — immediately readable after await', async (ctx) => {
+  const t = makeTestDb(ctx, 'translation-cache-commit');
+  await createSongsTable(t.client);
   await seedSong(t);
 
   const result = await mergeSliceIntoCache(t.db, {
@@ -118,9 +75,9 @@ test('merge persists the merged cache before returning — immediately readable 
   assert.equal(row?.lyricsTranslation, '["一","二","",""]');
 });
 
-test('merge into an existing partial cache keeps earlier lines', async () => {
-  const t = makeTestDb(`/tmp/translation-cache-partial-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('merge into an existing partial cache keeps earlier lines', async (ctx) => {
+  const t = makeTestDb(ctx, 'translation-cache-partial');
+  await createSongsTable(t.client);
   await seedSong(t, { cache: '["早","","",""]' });
 
   const result = await mergeSliceIntoCache(t.db, {
@@ -135,9 +92,9 @@ test('merge into an existing partial cache keeps earlier lines', async () => {
   assert.equal(row?.lyricsTranslation, '["早","","晚","好"]');
 });
 
-test('rejects the write when lyrics were edited mid-flight (stale source)', async () => {
-  const t = makeTestDb(`/tmp/translation-cache-stale-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('rejects the write when lyrics were edited mid-flight (stale source)', async (ctx) => {
+  const t = makeTestDb(ctx, 'translation-cache-stale');
+  await createSongsTable(t.client);
   await seedSong(t);
 
   // The user edits the lyrics while the AI request is running: the edit API
@@ -162,14 +119,14 @@ test('rejects the write when lyrics were edited mid-flight (stale source)', asyn
   assert.equal(row?.lyricsTranslation, '[]');
 });
 
-test('overlapping slice merges both survive (optimistic lock, no last-write-wins)', async () => {
-  const t = makeTestDb(`/tmp/translation-cache-conc-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('overlapping slice merges both survive (optimistic lock, no last-write-wins)', async (ctx) => {
+  const t = makeTestDb(ctx, 'translation-cache-conc');
+  await createSongsTable(t.client);
   await seedSong(t);
 
   // Two "requests" on their own connections merge different slices in parallel.
-  const own1 = makeTestDb(t.path, { fresh: false });
-  const own2 = makeTestDb(t.path, { fresh: false });
+  const own1 = t.open();
+  const own2 = t.open();
   try {
     await own1.client.execute('PRAGMA busy_timeout=15000');
     await own2.client.execute('PRAGMA busy_timeout=15000');
@@ -197,14 +154,14 @@ test('overlapping slice merges both survive (optimistic lock, no last-write-wins
     const row = await readSong(t);
     assert.equal(row?.lyricsTranslation, '["一","二","三","四"]');
   } finally {
-    own1.client.close();
-    own2.client.close();
+    own1.close();
+    own2.close();
   }
 });
 
-test('CAS retry merges on top of a concurrent write instead of clobbering it', async () => {
-  const t = makeTestDb(`/tmp/translation-cache-cas-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('CAS retry merges on top of a concurrent write instead of clobbering it', async (ctx) => {
+  const t = makeTestDb(ctx, 'translation-cache-cas');
+  await createSongsTable(t.client);
   await seedSong(t);
 
   // Simulate the race directly: the loser read the cache, then the winner
@@ -233,9 +190,9 @@ test('CAS retry merges on top of a concurrent write instead of clobbering it', a
   assert.equal(row?.lyricsTranslation, '["一","二","三","四"]');
 });
 
-test('merge stamps the target language alongside the cache', async () => {
-  const t = makeTestDb(`/tmp/translation-cache-lang-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('merge stamps the target language alongside the cache', async (ctx) => {
+  const t = makeTestDb(ctx, 'translation-cache-lang');
+  await createSongsTable(t.client);
   await seedSong(t);
 
   const result = await mergeSliceIntoCache(t.db, {
@@ -255,9 +212,9 @@ test('merge stamps the target language alongside the cache', async () => {
   assert.equal(row?.lyricsTranslationLang, 'en-US');
 });
 
-test('merge without a lang preserves an already-stored language', async () => {
-  const t = makeTestDb(`/tmp/translation-cache-lang-preserve-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('merge without a lang preserves an already-stored language', async (ctx) => {
+  const t = makeTestDb(ctx, 'translation-cache-lang-preserve');
+  await createSongsTable(t.client);
   await seedSong(t, { cache: '["一","","",""]' });
   await t.db.update(songs).set({ lyricsTranslationLang: 'zh-CN' }).where(sql`id = ${SONG_ID}`).run();
 
@@ -277,9 +234,9 @@ test('merge without a lang preserves an already-stored language', async () => {
   assert.equal(row?.lyricsTranslationLang, 'zh-CN');
 });
 
-test('writeSongField persists reasoning under the same source CAS', async () => {
-  const t = makeTestDb(`/tmp/translation-cache-field-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('writeSongField persists reasoning under the same source CAS', async (ctx) => {
+  const t = makeTestDb(ctx, 'translation-cache-field');
+  await createSongsTable(t.client);
   await seedSong(t);
 
   const ok = await writeSongField(t.db, {
@@ -338,9 +295,9 @@ test('a padded empty cache must not count as "has translation" (untranslated son
   assert.equal(partial.some((line) => line !== ''), true);
 });
 
-test('merge into a partial cache with a stale null slot does not shift later lines', async () => {
-  const t = makeTestDb(`/tmp/translation-cache-nullslot-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('merge into a partial cache with a stale null slot does not shift later lines', async (ctx) => {
+  const t = makeTestDb(ctx, 'translation-cache-nullslot');
+  await createSongsTable(t.client);
   // Damaged/legacy cache: line 2 is null. If the parser filtered it, line 3's
   // translation would shift up to line 2. It must stay at index 2.
   await seedSong(t, { cache: '["早", null, "晚"]' });
@@ -364,9 +321,9 @@ test('merge into a partial cache with a stale null slot does not shift later lin
  * silently rolled back to the editor's stale copy. The save now carries a
  * change-set that is merged into the latest cache under the optimistic lock.
  */
-test('manual line edits keep the lines an AI slice wrote while the editor was open', async () => {
-  const t = makeTestDb(`/tmp/translation-cache-manual-vs-ai-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('manual line edits keep the lines an AI slice wrote while the editor was open', async (ctx) => {
+  const t = makeTestDb(ctx, 'translation-cache-manual-vs-ai');
+  await createSongsTable(t.client);
   // The editor opened on a song with no translation yet.
   await seedSong(t, { cache: '[]' });
 
@@ -395,9 +352,9 @@ test('manual line edits keep the lines an AI slice wrote while the editor was op
   assert.equal(row?.lyricsTranslation, '["我的翻译","","三","四"]');
 });
 
-test('an AI slice merged after a manual save keeps the manual line', async () => {
-  const t = makeTestDb(`/tmp/translation-cache-ai-vs-manual-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('an AI slice merged after a manual save keeps the manual line', async (ctx) => {
+  const t = makeTestDb(ctx, 'translation-cache-ai-vs-manual');
+  await createSongsTable(t.client);
   await seedSong(t, { cache: '[]' });
 
   const manual = await mergeLineEditsIntoCache(t.db, {
@@ -421,9 +378,9 @@ test('an AI slice merged after a manual save keeps the manual line', async () =>
   assert.equal(row?.lyricsTranslation, '["","手改行","三","四"]');
 });
 
-test('manual line edits are refused when the lyrics changed mid-flight', async () => {
-  const t = makeTestDb(`/tmp/translation-cache-manual-stale-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('manual line edits are refused when the lyrics changed mid-flight', async (ctx) => {
+  const t = makeTestDb(ctx, 'translation-cache-manual-stale');
+  await createSongsTable(t.client);
   await seedSong(t, { cache: '["一","二","三","四"]' });
   await t.db.update(songs).set({ lyricsRaw: 'edited\nline two\nline three\nline four' })
     .where(sql`id = ${SONG_ID}`).run();
@@ -439,9 +396,9 @@ test('manual line edits are refused when the lyrics changed mid-flight', async (
   assert.equal(row?.lyricsTranslation, '["一","二","三","四"]');
 });
 
-test('manual line edits normalise to the current line count and can clear a line', async () => {
-  const t = makeTestDb(`/tmp/translation-cache-manual-normalise-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('manual line edits normalise to the current line count and can clear a line', async (ctx) => {
+  const t = makeTestDb(ctx, 'translation-cache-manual-normalise');
+  await createSongsTable(t.client);
   // Cache longer than the lyrics + a damaged slot, exactly what a stale editor
   // snapshot must not resurrect wholesale.
   await seedSong(t, { cache: '["一","二","三","四","多余的"]' });
@@ -460,9 +417,9 @@ test('manual line edits normalise to the current line count and can clear a line
   assert.equal(row?.lyricsTranslation, '["","二","三","四改"]');
 });
 
-test('manual line edits drop the stale AI reasoning and refresh the language stamp', async () => {
-  const t = makeTestDb(`/tmp/translation-cache-manual-patch-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('manual line edits drop the stale AI reasoning and refresh the language stamp', async (ctx) => {
+  const t = makeTestDb(ctx, 'translation-cache-manual-patch');
+  await createSongsTable(t.client);
   await seedSong(t, { cache: '["一","","",""]' });
   await t.db.update(songs).set({
     lyricsTranslationReasoning: 'old thinking…',
@@ -488,13 +445,13 @@ test('manual line edits drop the stale AI reasoning and refresh the language sta
   assert.equal(row?.lyricsTranslationReasoning, null);
 });
 
-test('concurrent manual saves of different lines both survive (optimistic lock)', async () => {
-  const t = makeTestDb(`/tmp/translation-cache-manual-conc-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('concurrent manual saves of different lines both survive (optimistic lock)', async (ctx) => {
+  const t = makeTestDb(ctx, 'translation-cache-manual-conc');
+  await createSongsTable(t.client);
   await seedSong(t, { cache: '[]' });
 
-  const own1 = makeTestDb(t.path, { fresh: false });
-  const own2 = makeTestDb(t.path, { fresh: false });
+  const own1 = t.open();
+  const own2 = t.open();
   try {
     await own1.client.execute('PRAGMA busy_timeout=15000');
     await own2.client.execute('PRAGMA busy_timeout=15000');
@@ -518,7 +475,7 @@ test('concurrent manual saves of different lines both survive (optimistic lock)'
     const row = await readSong(t);
     assert.equal(row?.lyricsTranslation, '["一","二","",""]');
   } finally {
-    own1.client.close();
-    own2.client.close();
+    own1.close();
+    own2.close();
   }
 });

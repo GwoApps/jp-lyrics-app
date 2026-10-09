@@ -6,63 +6,25 @@ import {
   extractCompletedArrayItems,
 } from './translation-progress.ts';
 
-test('counts completed items in a fully-closed array', () => {
-  assert.equal(countCompletedArrayItems('["你好","世界",""]'), 3);
-  assert.deepEqual(extractCompletedArrayItems('["你好","世界",""]'), ['你好', '世界', '']);
-});
+const streamCases: { name: string; input: string; items: string[]; count?: number; countInput?: string }[] = [
+  { name: 'counts completed items in a fully-closed array', input: '["你好","世界",""]', items: ['你好', '世界', ''], count: 3 },
+  { name: 'counts zero for an empty array', input: '[]', items: [], count: 0 },
+  { name: 'counts nothing before the array opens', input: 'no array here', countInput: 'Here is the translation: ', items: [], count: 0 },
+  { name: 'counts only complete items in an unterminated stream', input: '["one","two","thr', items: ['one', 'two'], count: 2 },
+  { name: 'handles escaped quotes inside strings', input: '["say \\"hi\\"","next","part', items: ['say "hi"', 'next'], count: 2 },
+  { name: 'handles trailing incomplete string without closing quote', input: '["a","b', items: ['a'], count: 1 },
+  { name: 'counts a completed trailing string before the array closes', input: '["a","b"', items: ['a', 'b'], count: 2 },
+  { name: 'handles an element with a comma inside a quoted string', input: '["hello, world","done"]', items: ['hello, world', 'done'], count: 2 },
+  { name: 'ignores nested arrays/objects noise and whitespace', input: '[\n  "a",\n  "b"\n', items: ['a', 'b'], count: 2 },
+  { name: 'extract ignores non-string primitives for progress purposes', input: '[1, "a", "b"', items: ['a', 'b'] },
+];
 
-test('counts zero for an empty array', () => {
-  assert.equal(countCompletedArrayItems('[]'), 0);
-  assert.deepEqual(extractCompletedArrayItems('[]'), []);
-});
-
-test('counts nothing before the array opens', () => {
-  assert.equal(countCompletedArrayItems('Here is the translation: '), 0);
-  assert.deepEqual(extractCompletedArrayItems('no array here'), []);
-});
-
-test('counts only complete items in an unterminated stream', () => {
-  const streamed = '["one","two","thr';
-  assert.equal(countCompletedArrayItems(streamed), 2);
-  assert.deepEqual(extractCompletedArrayItems(streamed), ['one', 'two']);
-});
-
-test('handles escaped quotes inside strings', () => {
-  const streamed = '["say \\"hi\\"","next","part';
-  assert.equal(countCompletedArrayItems(streamed), 2);
-  assert.deepEqual(extractCompletedArrayItems(streamed), ['say "hi"', 'next']);
-});
-
-test('handles trailing incomplete string without closing quote', () => {
-  const streamed = '["a","b';
-  // "a" is complete; "b never received its closing quote → not counted.
-  assert.equal(countCompletedArrayItems(streamed), 1);
-  assert.deepEqual(extractCompletedArrayItems(streamed), ['a']);
-});
-
-test('counts a completed trailing string before the array closes', () => {
-  const streamed = '["a","b"';
-  // Both elements are complete (closing quotes arrived) even though the array is still open.
-  assert.equal(countCompletedArrayItems(streamed), 2);
-  assert.deepEqual(extractCompletedArrayItems(streamed), ['a', 'b']);
-});
-
-test('handles an element with a comma inside a quoted string', () => {
-  const streamed = '["hello, world","done"]';
-  assert.equal(countCompletedArrayItems(streamed), 2);
-  assert.deepEqual(extractCompletedArrayItems(streamed), ['hello, world', 'done']);
-});
-
-test('ignores nested arrays/objects noise and whitespace', () => {
-  const streamed = '[\n  "a",\n  "b"\n';
-  assert.equal(countCompletedArrayItems(streamed), 2);
-  assert.deepEqual(extractCompletedArrayItems(streamed), ['a', 'b']);
-});
-
-test('extract ignores non-string primitives for progress purposes', () => {
-  const streamed = '[1, "a", "b"';
-  assert.deepEqual(extractCompletedArrayItems(streamed), ['a', 'b']);
-});
+for (const { name, input, items, count, countInput } of streamCases) {
+  test(name, () => {
+    if (count !== undefined) assert.equal(countCompletedArrayItems(countInput ?? input), count);
+    assert.deepEqual(extractCompletedArrayItems(input), items);
+  });
+}
 
 // --- issue #278: index-aligned extraction (persistence contract) ------------
 // The default extraction COMPRESSES the array (non-string items are skipped),
