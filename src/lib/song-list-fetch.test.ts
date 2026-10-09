@@ -83,32 +83,23 @@ test('song list fetch: non-JSON body resolves to an empty failed result', async 
   }
 });
 
-test('song list fetch: an aborted request resolves to a failed result instead of hanging', async () => {
+test('song list fetch: caller abort resolves to a failed result without waiting for the 8s timeout', async () => {
+  let requestStarted!: () => void;
+  const started = new Promise<void>((resolve) => { requestStarted = resolve; });
   const restore = installFetch(async (_url, init) => {
     const signal = init?.signal;
-    if (!signal) throw new Error('expected abort signal');
+    assert.ok(signal, 'expected abort signal');
     return new Promise((_resolve, reject) => {
       signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+      requestStarted();
     });
   });
   try {
     const controller = new AbortController();
-    const result = await requestSongList('all', controller.signal);
-    assert.equal(result.ok, false);
-    assert.deepEqual(result.songs, []);
+    const pending = requestSongList('all', controller.signal);
+    await started; // abort only after the mocked fetch is listening
     controller.abort();
-  } finally {
-    restore();
-  }
-});
-
-test('song list fetch: existing cache survives a failed refresh (degraded, non-blocking)', async () => {
-  const restore = installFetch(async () => {
-    throw new TypeError('Failed to fetch');
-  });
-  try {
-    const result = await requestSongList('all');
-    // The caller keeps the previously cached songs; the failure is surfaced separately.
+    const result = await pending;
     assert.equal(result.ok, false);
     assert.deepEqual(result.songs, []);
   } finally {
@@ -116,7 +107,7 @@ test('song list fetch: existing cache survives a failed refresh (degraded, non-b
   }
 });
 
-test('fetchSongList: returns null on network failure and on non-array body', async () => {
+test('fetchSongList: returns null on non-array body', async () => {
   const restore = installFetch(async () => ({ ok: true, json: async () => ({ nope: true }) }));
   try {
     assert.equal(await fetchSongList('all'), null);

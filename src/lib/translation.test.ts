@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import {
   getTranslationConfig,
   isTranslationConfigured,
@@ -30,6 +30,24 @@ function captureFetch(fetchImpl: typeof fetch, captured: { current?: CapturedCal
 
 function openAIBody(captured: CapturedCall): { model: string; reasoning_effort?: string; messages: { role: string; content: string }[] } {
   return JSON.parse(String(captured.init.body)) as { model: string; reasoning_effort?: string; messages: { role: string; content: string }[] };
+}
+
+/**
+ * Keep the production retry count and exponential delays observable while
+ * skipping wall-clock waiting on synthetic upstream responses. Other timers
+ * (30s/5min abort budgets) still use their real durations.
+ */
+function skipRetryWait(t: TestContext): number[] {
+  const original = globalThis.setTimeout;
+  const waits: number[] = [];
+  t.mock.method(globalThis, 'setTimeout', ((callback: Parameters<typeof setTimeout>[0], delay?: number, ...args: unknown[]) => {
+    if (delay === 1000 || delay === 2000) {
+      waits.push(delay);
+      return original(callback, 0, ...args);
+    }
+    return original(callback, delay, ...args);
+  }) as typeof setTimeout);
+  return waits;
 }
 
 /** Mock an OpenAI-compatible SSE stream whose content is `chunks` concatenated. */
@@ -273,11 +291,13 @@ test('empty source lines force empty translations even when the model returns te
   assert.deepEqual(out, ['', '歌曲']);
 });
 
-test('throws translation_failed on non-2xx upstream status', async () => {
+test('throws translation_failed on non-2xx upstream status', async (t) => {
+  const waits = skipRetryWait(t);
   await assert.rejects(
     translateLyricLines(['a'], CFG, mockFetch(429, { error: { message: 'rate limited' } })),
     (error: unknown) => error instanceof TranslationError && error.code === 'translation_failed',
   );
+  assert.deepEqual(waits, [1000, 2000], 'three attempts retain exponential backoff');
 });
 
 test('throws translation_invalid_response on empty model content', async () => {
@@ -427,11 +447,13 @@ test('glossary extraction returns an array on success (possibly empty = genuinel
   assert.deepEqual(none, []); // empty array: extraction succeeded, no terms
 });
 
-test('glossary extraction returns null on upstream failure so callers retry instead of pinning empty', async () => {
+test('glossary extraction returns null on upstream failure so callers retry instead of pinning empty', async (t) => {
+  const waits = skipRetryWait(t);
   const { extractLyricsGlossary } = await import('./translation/index.ts');
   // 5xx upstream → null (never retried internally once RETRY_ATTEMPTS exhausted).
   const failed = await extractLyricsGlossary('花火', 'AAA', ['花火'], CFG, mockFetch(503, { error: 'boom' }));
   assert.equal(failed, null);
+  assert.deepEqual(waits, [1000, 2000]);
 });
 
 test('glossary extraction returns null on a malformed (non-array) response', async () => {
@@ -442,28 +464,37 @@ test('glossary extraction returns null on a malformed (non-array) response', asy
   assert.equal(malformed, null);
 });
 
-test('glossary extraction receives a caller signal and aborts the upstream fetch on cancel (issue #359)', async () => {
+test('glossary extraction receives a caller signal and aborts the upstream fetch on cancel (issue #359)', async (t) => {
+  const waits = skipRetryWait(t);
   const { extractLyricsGlossary } = await import('./translation/index.ts');
   const controller = new AbortController();
   let signalSeen: AbortSignal | undefined;
+  let calls = 0;
+  let requestStarted!: () => void;
+  const started = new Promise<void>((resolve) => { requestStarted = resolve; });
   // Upstream accepts the connection but never responds (half-open gateway).
-  const hangingFetch = (async (input: string | URL | Request, init?: RequestInit) => {
-    signalSeen = init?.signal as AbortSignal | undefined;
+  const hangingFetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+    calls += 1;
+    signalSeen = init?.signal ?? undefined;
     assert.ok(signalSeen, 'glossary fetch received a signal');
-    return await new Promise<Response>((_resolve, reject) => {
+    return new Promise<Response>((_resolve, reject) => {
       signalSeen!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
+      requestStarted();
     });
   }) as typeof fetch;
 
   const run = extractLyricsGlossary('花火', 'AAA', ['花火'], CFG, hangingFetch, controller.signal);
-  await new Promise((resolve) => setTimeout(resolve, 0)); // request in flight
+  await started; // no arbitrary sleep: ensure fetch registered its abort listener
   assert.ok(!signalSeen!.aborted, 'upstream not aborted yet');
   controller.abort(); // client cancels the preparation stage
   assert.equal(await run, null); // best-effort → null, never a hang
   assert.ok(signalSeen!.aborted, 'upstream fetch aborted after caller cancel');
+  assert.equal(calls, 1, 'cancel must not reissue the request');
+  assert.deepEqual(waits, [], 'cancel must not enter exponential backoff');
 });
 
-test('glossary extraction resolves to null immediately when the caller signal is already aborted (issue #359)', async () => {
+test('glossary extraction resolves to null immediately when the caller signal is already aborted (issue #359)', async (t) => {
+  const waits = skipRetryWait(t);
   const { extractLyricsGlossary } = await import('./translation/index.ts');
   const controller = new AbortController();
   controller.abort();
@@ -472,6 +503,7 @@ test('glossary extraction resolves to null immediately when the caller signal is
   // Already-cancelled caller must not issue (or retry) any request.
   assert.equal(await extractLyricsGlossary('花火', 'AAA', ['花火'], CFG, countingFetch, controller.signal), null);
   assert.equal(calls, 0);
+  assert.deepEqual(waits, [], 'already-cancelled request must not enter backoff');
 });
 
 test('composeAbortBudget composes the caller signal with the deadline and clears its timer', async () => {

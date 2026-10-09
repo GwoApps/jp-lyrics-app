@@ -267,7 +267,7 @@ async function withRetry<T>(
       lastError = error;
       const retryable = error instanceof TranslationError
         ? error.retryable
-        : true; // network errors etc.
+        : !(error instanceof Error && error.name === 'AbortError'); // cancelled requests must not wait through backoff
       if (!retryable || attempt === attempts - 1) throw error;
       await new Promise((resolve) => setTimeout(resolve, baseDelayMs * 2 ** attempt));
     }
