@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { unlinkSync } from 'node:fs';
-import { createClient } from '@libsql/client';
+import type { TestContext } from 'node:test';
+import type { Client } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
+import { createTestDb } from './test-db.ts';
 import { and, sql, type SQL } from 'drizzle-orm';
 import { isSongVisibleToUser, songVisibilityWhere, SONGS_S_COLUMNS } from './song-visibility.ts';
 
@@ -114,15 +115,11 @@ const VIEWERS = [
   { name: 'admin', viewer: { email: 'admin@example.com', isAdmin: true } },
 ] as const;
 
-function makeSongsDb(tag: string) {
-  const path = `/tmp/song-visibility-${tag}-${process.pid}-${Date.now()}.db`;
-  try { unlinkSync(path); } catch { /* fresh */ }
-  const client = createClient({ url: `file:${path}`, timeout: 15_000 });
-  const db = drizzle(client);
-  return { db, client, path };
+function makeSongsDb(ctx: TestContext, tag: string) {
+  return createTestDb(ctx, `song-visibility-${tag}`, {});
 }
 
-async function createSongs(client: ReturnType<typeof createClient>) {
+async function createSongs(client: Client) {
   await client.execute(`CREATE TABLE songs (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL DEFAULT '',
@@ -147,70 +144,55 @@ async function runSinglePredicateQuery(db: ReturnType<typeof drizzle>, viewer: P
   return db.all(sql`SELECT id FROM songs WHERE ${and(songVisibilityWhere(viewer))}`);
 }
 
-test('songVisibilityWhere composes into executable SQL for every viewer shape', async () => {
-  const t = makeSongsDb('exec');
-  try {
-    await createSongs(t.client);
-    for (const { name, viewer } of VIEWERS) {
-      const list = await runListQuery(t.db, viewer).catch((e: unknown) => {
-        assert.fail(`list query threw for ${name}: ${String(e)}`);
-      });
-      const single = await runSinglePredicateQuery(t.db, viewer).catch((e: unknown) => {
-        assert.fail(`single-predicate query threw for ${name}: ${String(e)}`);
-      });
-      assert.ok(list.length >= 1, `${name}: list query returned no rows`);
-      assert.ok(single.length >= 1, `${name}: single-predicate query returned no rows`);
-    }
-  } finally {
-    t.client.close();
-    try { unlinkSync(t.path); } catch { /* best effort */ }
+test('songVisibilityWhere composes into executable SQL for every viewer shape', async (ctx) => {
+  const t = makeSongsDb(ctx, 'exec');
+  await createSongs(t.client);
+  for (const { name, viewer } of VIEWERS) {
+    const list = await runListQuery(t.db, viewer).catch((e: unknown) => {
+      assert.fail(`list query threw for ${name}: ${String(e)}`);
+    });
+    const single = await runSinglePredicateQuery(t.db, viewer).catch((e: unknown) => {
+      assert.fail(`single-predicate query threw for ${name}: ${String(e)}`);
+    });
+    assert.ok(list.length >= 1, `${name}: list query returned no rows`);
+    assert.ok(single.length >= 1, `${name}: single-predicate query returned no rows`);
   }
 });
 
-test('songVisibilityWhere executes in song-list SQL with the songs s alias', async () => {
-  const t = makeSongsDb('aliased-list');
-  try {
-    await createSongs(t.client);
-    for (const { name, viewer } of VIEWERS) {
-      // GET /api/songs and collection GET both use FROM songs s. An unaliased
-      // schema column in the predicate raises "no such column: songs.is_public".
-      const rows = await t.db.all(sql`
-        SELECT s.id FROM songs s
-        WHERE ${and(songVisibilityWhere(viewer, SONGS_S_COLUMNS))}
-        ORDER BY s.updated_at DESC
-      `);
-      const ids = rows.map((row) => (row as { id: string }).id).sort();
-      const expected = name === 'admin'
-        ? ['mine-1', 'other-1', 'public-1']
-        : name === 'non-admin' ? ['mine-1', 'public-1'] : ['public-1'];
-      assert.deepEqual(ids, expected, name);
-    }
-  } finally {
-    t.client.close();
-    try { unlinkSync(t.path); } catch { /* best effort */ }
+test('songVisibilityWhere executes in song-list SQL with the songs s alias', async (ctx) => {
+  const t = makeSongsDb(ctx, 'aliased-list');
+  await createSongs(t.client);
+  for (const { name, viewer } of VIEWERS) {
+    // GET /api/songs and collection GET both use FROM songs s. An unaliased
+    // schema column in the predicate raises "no such column: songs.is_public".
+    const rows = await t.db.all(sql`
+      SELECT s.id FROM songs s
+      WHERE ${and(songVisibilityWhere(viewer, SONGS_S_COLUMNS))}
+      ORDER BY s.updated_at DESC
+    `);
+    const ids = rows.map((row) => (row as { id: string }).id).sort();
+    const expected = name === 'admin'
+      ? ['mine-1', 'other-1', 'public-1']
+      : name === 'non-admin' ? ['mine-1', 'public-1'] : ['public-1'];
+    assert.deepEqual(ids, expected, name);
   }
 });
 
-test('songVisibilityWhere: the composed WHERE clause is never empty (admin included)', async () => {
-  const t = makeSongsDb('where');
-  try {
-    await createSongs(t.client);
-    for (const { name, viewer } of VIEWERS) {
-      const predicate = and(songVisibilityWhere(viewer));
-      assert.ok(predicate, `${name}: and() collapsed to undefined → empty WHERE clause`);
-      // Rows a viewer must NOT see, proving the predicate actually filters.
-      const ids = (await t.db.all(sql`SELECT id FROM songs WHERE ${predicate}`))
-        .map((r) => (r as { id: string }).id);
-      if (name === 'admin') {
-        assert.deepEqual([...ids].sort(), ['mine-1', 'other-1', 'public-1'], 'admin sees everything');
-      } else if (name === 'non-admin') {
-        assert.deepEqual([...ids].sort(), ['mine-1', 'public-1'], 'non-admin sees public + own');
-      } else {
-        assert.deepEqual(ids, ['public-1'], `${name} sees only public songs`);
-      }
+test('songVisibilityWhere: the composed WHERE clause is never empty (admin included)', async (ctx) => {
+  const t = makeSongsDb(ctx, 'where');
+  await createSongs(t.client);
+  for (const { name, viewer } of VIEWERS) {
+    const predicate = and(songVisibilityWhere(viewer));
+    assert.ok(predicate, `${name}: and() collapsed to undefined → empty WHERE clause`);
+    // Rows a viewer must NOT see, proving the predicate actually filters.
+    const ids = (await t.db.all(sql`SELECT id FROM songs WHERE ${predicate}`))
+      .map((r) => (r as { id: string }).id);
+    if (name === 'admin') {
+      assert.deepEqual([...ids].sort(), ['mine-1', 'other-1', 'public-1'], 'admin sees everything');
+    } else if (name === 'non-admin') {
+      assert.deepEqual([...ids].sort(), ['mine-1', 'public-1'], 'non-admin sees public + own');
+    } else {
+      assert.deepEqual(ids, ['public-1'], `${name} sees only public songs`);
     }
-  } finally {
-    t.client.close();
-    try { unlinkSync(t.path); } catch { /* best effort */ }
   }
 });
