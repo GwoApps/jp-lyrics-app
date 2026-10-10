@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { fmtMs } from '@/lib/lrc';
+import { timedRowDistances } from '@/lib/lyric-time-axis-window';
 
 /** Gap kept between the card's left edge and the time labels (mirrors the CSS). */
 const GAP_PX = 12;
@@ -156,19 +157,20 @@ function LyricTimeAxis({
     }
 
     // ---- Reveal policy (spec) -------------------------------------
-    // All rows when hovering; otherwise only playingRow ± ACTIVE_CONTEXT_ROWS
-    // while synced, and nothing at all while not synced.
+    // All timed rows on hover; otherwise the playing row plus two *timed*
+    // neighbours each way. Blank/untimed lyric rows do not render labels and
+    // must not consume a context slot (or one of the five labels disappears).
     const { hovered, isSynced, activeLine } = viewRef.current;
+    const distances = timedRowDistances(timestampsRef.current, activeLine);
     const showAll = hovered;
-    const showWindow = !hovered && isSynced && activeLine >= 0;
+    const showWindow = !hovered && isSynced && distances[activeLine] === 0;
     const rowVisible = (i: number) =>
-      !detached[i] && (showAll || (showWindow && Math.abs(i - activeLine) <= ACTIVE_CONTEXT_ROWS));
+      !detached[i] && (showAll || (showWindow && distances[i] != null && distances[i] <= ACTIVE_CONTEXT_ROWS));
 
     // ---- Opacity ladder (spec) ------------------------------------
-    // Playing row 1.0, ±1 at 0.6, ±2 and everything further out at 0.25;
-    // rows outside the reveal window go fully transparent (0). With no
-    // playing row (not synced) every revealed row keeps the uniform
-    // non-active alpha.
+    // Playing row 1.0, timed neighbours ±1 at 0.6, ±2 and everything
+    // further out at 0.25; rows outside the reveal window go fully
+    // transparent (0). With no playing row, hovered labels keep 0.6.
     //
     // Reveal rides on THIS, not on a per-label `visibility` write: labels
     // inherit the box's `visibility`, so a hidden box can no longer be
@@ -176,10 +178,9 @@ function LyricTimeAxis({
     // only ever moves between four values, the CSS `opacity` transition
     // turns every window slide (playback advancing) into a fade instead of
     // a pop.
-    const anchor = isSynced && activeLine >= 0 ? activeLine : -1;
     const alphaFor = (i: number) => {
-      if (anchor < 0) return 0.6;
-      const d = Math.abs(i - anchor);
+      const d = isSynced ? distances[i] : null;
+      if (d == null) return 0.6;
       return d === 0 ? 1 : d === 1 ? 0.6 : 0.25;
     };
 
