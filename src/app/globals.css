@@ -952,19 +952,14 @@ textarea {
 .song-view {
   --song-accent: var(--border);
 }
-/* Touch devices have no hover discovery: leave a small info badge visible
-   while keeping the cover itself unobscured and fully tappable. */
-.song-cover-touch-hint { display: none; }
+/* On touch browsers :active is unreliable; the button's pointer handlers
+   expose the held-press state without leaving a permanent hint on the cover. */
 @media (hover: none) {
-  .song-cover-touch-hint { display: flex; }
-  /* Some touch browsers never apply :active during a press. Pointer events
-     set this transient attribute without re-rendering the song page. */
   .song-cover-info-trigger[data-pressed="true"] { transform: scale(0.96); }
   .song-cover-info-trigger[data-pressed="true"] .song-cover-info-overlay {
     opacity: 1;
     background-color: rgb(0 0 0 / 0.55);
   }
-  .song-cover-info-trigger[data-pressed="true"] .song-cover-touch-hint { opacity: 0; }
 }
 .song-editor-page.song-view--accented {
   /* Match the themed body so editor workspaces do not render as a second page-sized tint. */

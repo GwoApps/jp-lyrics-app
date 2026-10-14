@@ -547,9 +547,6 @@ export default function SongViewPage() {
               <span aria-hidden="true" className="song-cover-info-overlay pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-[background-color,opacity] duration-200 motion-reduce:transition-none group-hover:bg-black/55 group-hover:opacity-100 group-focus-visible:bg-black/55 group-focus-visible:opacity-100 group-active:bg-black/55 group-active:opacity-100">
                 <Info className="h-6 w-6 drop-shadow-sm" />
               </span>
-              <span aria-hidden="true" className="song-cover-touch-hint pointer-events-none absolute bottom-1 right-1 h-5 w-5 items-center justify-center rounded-md bg-black/65 text-white transition-opacity group-active:opacity-0">
-                <Info className="h-3 w-3" />
-              </span>
             </button>
             <div className="flex-1 w-fit max-w-full min-w-0 space-y-0.5 sm:space-y-1">
               <h1 className="text-base sm:text-xl font-semibold tracking-tight break-words">{song.title}</h1>
