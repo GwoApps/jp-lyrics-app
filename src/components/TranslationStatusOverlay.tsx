@@ -89,7 +89,7 @@ export default function TranslationStatusOverlay({
   };
 
   const reasoningPanel = translationReasoning && showTranslationReasoning ? (
-    <div className="reasoning-glow-wrap w-[min(94vw,560px)]">
+    <div className="reasoning-glow-wrap pointer-events-auto w-[min(94vw,560px)]">
       <div aria-hidden="true" className="reasoning-glow-aura">
         <div className="reasoning-glow-ring">
           <div className="reasoning-glow-spin" />
@@ -182,7 +182,7 @@ export default function TranslationStatusOverlay({
   // rendered straight into the stack alongside the pill.
   return (
     <>
-      <div className="flex flex-col items-center gap-2">
+      <div className="pointer-events-auto flex flex-col items-center gap-2">
       {translationSaving ? (
         // The server is still persisting the completed lines after a cancel /
         // error — show a saving notice rather than a guessed progress number.
