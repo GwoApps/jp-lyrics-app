@@ -957,6 +957,14 @@ textarea {
 .song-cover-touch-hint { display: none; }
 @media (hover: none) {
   .song-cover-touch-hint { display: flex; }
+  /* Some touch browsers never apply :active during a press. Pointer events
+     set this transient attribute without re-rendering the song page. */
+  .song-cover-info-trigger[data-pressed="true"] { transform: scale(0.96); }
+  .song-cover-info-trigger[data-pressed="true"] .song-cover-info-overlay {
+    opacity: 1;
+    background-color: rgb(0 0 0 / 0.55);
+  }
+  .song-cover-info-trigger[data-pressed="true"] .song-cover-touch-hint { opacity: 0; }
 }
 .song-editor-page.song-view--accented {
   /* Match the themed body so editor workspaces do not render as a second page-sized tint. */

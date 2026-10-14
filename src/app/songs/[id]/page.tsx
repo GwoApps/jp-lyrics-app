@@ -533,12 +533,18 @@ export default function SongViewPage() {
             <button
               type="button"
               onClick={() => setShowSongInfo(true)}
+              onPointerDown={(event) => {
+                if (event.pointerType !== 'mouse') event.currentTarget.dataset.pressed = 'true';
+              }}
+              onPointerUp={(event) => { delete event.currentTarget.dataset.pressed; }}
+              onPointerCancel={(event) => { delete event.currentTarget.dataset.pressed; }}
+              onPointerLeave={(event) => { delete event.currentTarget.dataset.pressed; }}
               aria-label={t('song.info')}
               aria-haspopup="dialog"
-              className="group relative shrink-0 overflow-hidden rounded-xl text-white transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+              className="song-cover-info-trigger group relative shrink-0 overflow-hidden rounded-xl text-white transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
             >
               <CoverImage src={coverUrl} alt="" size="md" viewTransitionName={`song-cover-${id}`} />
-              <span aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-[background-color,opacity] duration-200 motion-reduce:transition-none group-hover:bg-black/55 group-hover:opacity-100 group-focus-visible:bg-black/55 group-focus-visible:opacity-100 group-active:bg-black/55 group-active:opacity-100">
+              <span aria-hidden="true" className="song-cover-info-overlay pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-[background-color,opacity] duration-200 motion-reduce:transition-none group-hover:bg-black/55 group-hover:opacity-100 group-focus-visible:bg-black/55 group-focus-visible:opacity-100 group-active:bg-black/55 group-active:opacity-100">
                 <Info className="h-6 w-6 drop-shadow-sm" />
               </span>
               <span aria-hidden="true" className="song-cover-touch-hint pointer-events-none absolute bottom-1 right-1 h-5 w-5 items-center justify-center rounded-md bg-black/65 text-white transition-opacity group-active:opacity-0">
