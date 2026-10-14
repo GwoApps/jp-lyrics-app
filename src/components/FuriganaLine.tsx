@@ -127,7 +127,7 @@ export default function FuriganaLineView({
           } ${onSeek && timestamp != null ? 'hover:!opacity-100' : ''}`}
           style={{ fontWeight: isActive ? 700 : 400 }}
         >
-          {normalizeFuriganaSegments(line.segments).map((seg, i) => {
+          {normalizeFuriganaSegments(line.segments, readingScheme).map((seg, i) => {
             if (readingMode === 'original') return <span key={i}>{seg.text}</span>;
             const reading = resolveFuriganaReading(seg.text, seg.reading, romanizeFurigana, readingScheme, seg);
             if (!reading) return <span key={i}>{seg.text}</span>;

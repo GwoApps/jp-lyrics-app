@@ -45,7 +45,7 @@ export function renderPipLyricsHtml(
 
   return furiganaLines.map((line, i) => {
     if (line.segments.length === 0) return `<div class="line empty" data-line="${i}"></div>`;
-    const html = normalizeFuriganaSegments(line.segments).map(seg => {
+    const html = normalizeFuriganaSegments(line.segments, scheme).map(seg => {
       if (readingMode === 'original') return escapeHtml(seg.text);
       const reading = resolveFuriganaReading(seg.text, seg.reading, romanize, scheme, seg);
       if (!reading) return escapeHtml(seg.text);

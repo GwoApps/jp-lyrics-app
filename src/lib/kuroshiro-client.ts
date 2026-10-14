@@ -2,6 +2,7 @@
 
 import type { FuriganaSegment, FuriganaLine } from './types';
 import { COMPOUND_READINGS, isKanji, katakanaToHiragana } from './compound-readings';
+import { splitJapaneseKanjiReading } from './japanese-kanji-reading';
 
 // Singleton tokenizer — loaded once, reused across all calls
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -137,7 +138,7 @@ export async function convertToFuriganaClient(rawLyrics: string): Promise<Furiga
       // kuromoji returns katakana reading; convert to hiragana
       const reading = token.reading ? katakanaToHiragana(token.reading) : '';
       // Only add reading for kanji-containing tokens where reading differs
-      const hasKanji = /[\u4E00-\u9FFF\u3400-\u4DBF]/.test(text);
+      const hasKanji = [...text].some(isKanji);
       const finalReading = hasKanji && reading !== text ? reading : '';
       // Issue #286: keep the token's part of speech so the romanizer can apply
       // particle-only readings (は→wa, へ→e). Particles are kana tokens without
@@ -146,7 +147,7 @@ export async function convertToFuriganaClient(rawLyrics: string): Promise<Furiga
       segments.push({ text, reading: finalReading, ...(pos ? { pos } : {}) });
     }
 
-    result.push({ segments: fixCompoundReadings(segments) });
+    result.push({ segments: fixCompoundReadings(segments).flatMap(splitJapaneseKanjiReading) });
   }
 
   return result;

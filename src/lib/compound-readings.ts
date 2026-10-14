@@ -93,10 +93,11 @@ export const COMPOUND_READINGS: Record<string, string> = {
   '一人前': 'いちにんまえ',
 };
 
-/** Check if a character is a kanji (CJK Unified Ideographs) */
+/** Check if a character is a kanji, including the Japanese kanji iteration mark (時々). */
 export function isKanji(ch: string): boolean {
   const code = ch.codePointAt(0)!;
-  return (code >= 0x4E00 && code <= 0x9FFF) ||
+  return code === 0x3005 ||
+    (code >= 0x4E00 && code <= 0x9FFF) ||
     (code >= 0x3400 && code <= 0x4DBF) ||
     (code >= 0x20000 && code <= 0x2A6DF);
 }
