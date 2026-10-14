@@ -544,8 +544,8 @@ export default function SongViewPage() {
               className="song-cover-info-trigger group relative shrink-0 overflow-hidden rounded-xl text-white transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
             >
               <CoverImage src={coverUrl} alt="" size="md" viewTransitionName={`song-cover-${id}`} />
-              <span aria-hidden="true" className="song-cover-info-overlay pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-[background-color,opacity] duration-200 motion-reduce:transition-none group-hover:bg-black/55 group-hover:opacity-100 group-focus-visible:bg-black/55 group-focus-visible:opacity-100 group-active:bg-black/55 group-active:opacity-100">
-                <Info className="h-6 w-6 drop-shadow-sm" />
+              <span aria-hidden="true" className="song-cover-info-overlay pointer-events-none absolute inset-0 flex items-center justify-center bg-black/55 opacity-0 transition-opacity duration-[320ms] ease-in-out motion-reduce:transition-none group-hover:opacity-100 group-focus-visible:opacity-100 group-active:opacity-100">
+                <Info className="h-6 w-6 scale-90 drop-shadow-sm transition-transform duration-[320ms] ease-in-out motion-reduce:transition-none group-hover:scale-100 group-focus-visible:scale-100 group-active:scale-100" />
               </span>
             </button>
             <div className="flex-1 w-fit max-w-full min-w-0 space-y-0.5 sm:space-y-1">
