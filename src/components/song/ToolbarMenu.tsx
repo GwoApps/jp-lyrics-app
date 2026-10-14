@@ -87,7 +87,10 @@ export function buildReadingMenuItems(
         }
       },
       disabled: data.translating || (!canEdit && !data.hasTranslation),
-      keepOpen: true,
+      // A translation request can outlive the menu; close the Radix modal so
+      // the completion toast (and its review action) remains focusable/clickable.
+      // A plain display-mode toggle may keep the menu open.
+      keepOpen: data.hasTranslation && data.untranslatedCount === 0,
     },
     // Force re-translate entry — after the user changes their target language
     // (or wants fresh output) the cache is no longer trusted; `force: true`
