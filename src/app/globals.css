@@ -955,6 +955,9 @@ textarea {
 /* On touch browsers :active is unreliable; the button's pointer handlers
    expose the held-press state without leaving a permanent hint on the cover. */
 @media (hover: none) {
+  /* Touch feedback should remain snappy; the longer 320ms easing is desktop-only. */
+  .song-cover-info-trigger .song-cover-info-overlay,
+  .song-cover-info-trigger .song-cover-info-overlay svg { transition-duration: 120ms; }
   .song-cover-info-trigger[data-pressed="true"] { transform: scale(0.96); }
   .song-cover-info-trigger[data-pressed="true"] .song-cover-info-overlay {
     opacity: 1;
