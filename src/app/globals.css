@@ -952,6 +952,12 @@ textarea {
 .song-view {
   --song-accent: var(--border);
 }
+/* Touch devices have no hover discovery: leave a small info badge visible
+   while keeping the cover itself unobscured and fully tappable. */
+.song-cover-touch-hint { display: none; }
+@media (hover: none) {
+  .song-cover-touch-hint { display: flex; }
+}
 .song-editor-page.song-view--accented {
   /* Match the themed body so editor workspaces do not render as a second page-sized tint. */
   background: color-mix(in srgb, var(--background) 96%, var(--song-accent));

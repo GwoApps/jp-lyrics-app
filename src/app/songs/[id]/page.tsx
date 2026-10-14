@@ -530,7 +530,21 @@ export default function SongViewPage() {
       <div className="shrink-0 mb-3 sm:mb-8">
         <div className="flex flex-col items-start gap-3 sm:gap-4">
           <div className="flex items-start gap-3 sm:gap-4 min-w-0 w-full">
-            <CoverImage src={coverUrl} alt={song.title} size="md" viewTransitionName={`song-cover-${id}`} />
+            <button
+              type="button"
+              onClick={() => setShowSongInfo(true)}
+              aria-label={t('song.info')}
+              aria-haspopup="dialog"
+              className="group relative shrink-0 overflow-hidden rounded-xl text-white transition-transform duration-150 active:scale-[0.96] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+            >
+              <CoverImage src={coverUrl} alt="" size="md" viewTransitionName={`song-cover-${id}`} />
+              <span aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-[background-color,opacity] duration-200 motion-reduce:transition-none group-hover:bg-black/55 group-hover:opacity-100 group-focus-visible:bg-black/55 group-focus-visible:opacity-100 group-active:bg-black/55 group-active:opacity-100">
+                <Info className="h-6 w-6 drop-shadow-sm" />
+              </span>
+              <span aria-hidden="true" className="song-cover-touch-hint pointer-events-none absolute bottom-1 right-1 h-5 w-5 items-center justify-center rounded-md bg-black/65 text-white transition-opacity group-active:opacity-0">
+                <Info className="h-3 w-3" />
+              </span>
+            </button>
             <div className="flex-1 w-fit max-w-full min-w-0 space-y-0.5 sm:space-y-1">
               <h1 className="text-base sm:text-xl font-semibold tracking-tight break-words">{song.title}</h1>
               {song.artist && <p className="text-xs sm:text-sm text-[var(--muted-foreground)]">{song.artist}</p>}
@@ -974,27 +988,18 @@ export default function SongViewPage() {
         />
       </div>
 
-      {/* Compact metadata footer */}
-      <div className={`shrink-0 mt-2 sm:mt-4 items-center justify-between gap-2 ${spotify?.connected ? 'hidden sm:flex' : 'flex'}`}>
-        <button
-          type="button"
-          onClick={() => setShowSongInfo(true)}
-          className="song-accent-button hidden h-8 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-medium sm:inline-flex"
-          aria-haspopup="dialog"
-        >
-          <Info className="h-3.5 w-3.5" />
-          {t('song.info')}
-        </button>
-        {!spotify?.connected && (
-          <SpotifyLoginButton className="ml-auto text-[11px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors disabled:opacity-60">{t('song.spotify')}</SpotifyLoginButton>
-        )}
-      </div>
+      {/* Spotify connection link only; song information now opens from the cover. */}
+      {!spotify?.connected && (
+        <div className="shrink-0 mt-2 sm:mt-4 flex items-center justify-end gap-2">
+          <SpotifyLoginButton className="text-[11px] text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] disabled:opacity-60">{t('song.spotify')}</SpotifyLoginButton>
+        </div>
+      )}
 
       {/* Mobile bottom toolbar */}
       <MobileMenu
         data={data} sync={sync} song={song} id={id} router={router}
         furiganaLines={furiganaLines} pipSupported={pipSupported}
-        onOpenPiP={handleOpenPiP} onShowSongInfo={() => setShowSongInfo(true)} onRecolorCover={() => {
+        onOpenPiP={handleOpenPiP} onRecolorCover={() => {
           clearCachedSongPalette(id);
           setCoverRefresh((n) => n + 1);
         }} onToggleDotParams={() => setShowDotParams((v) => !v)} onOpenExperiments={() => setShowExperiments(true)} onOpenDownload={() => setShowDownloadDialog(true)} canEdit={canEdit}
