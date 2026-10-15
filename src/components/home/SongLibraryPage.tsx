@@ -718,7 +718,7 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
               const headerId = `${albumGroupIdPrefix}-header-${albumGroupIndex}`;
               const contentId = `${albumGroupIdPrefix}-content-${albumGroupIndex}`;
               return (
-                <section key={group.key} className="album-group rounded-lg border border-[var(--border)] bg-[var(--card)]/40 p-2.5 sm:p-3">
+                <section key={group.key} className="album-group min-w-0 rounded-lg border border-[var(--border)] bg-[var(--card)]/40 p-2.5 sm:p-3">
                   <h2 className="min-w-0">
                     <button
                       type="button"
@@ -752,7 +752,7 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
                     className="overflow-hidden transition-[grid-template-rows] duration-200 ease-in-out"
                     style={{ display: 'grid', gridTemplateRows: isCollapsed ? '0fr' : '1fr' }}
                   >
-                    <div className="min-h-0 space-y-1.5">
+                    <div className="min-h-0 min-w-0 space-y-1.5">
                       {group.songs.map((song) => renderSongCard(song, 'list', true))}
                     </div>
                   </div>
