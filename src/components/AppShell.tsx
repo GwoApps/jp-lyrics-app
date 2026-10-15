@@ -9,7 +9,7 @@ import { useAuthSession } from '@/lib/auth-session';
 import { fetchAndSyncSettings } from '@/lib/sync-settings';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { APP_REPO_URL } from '@/lib/app-links';
-import { Sun, Moon, Settings } from 'lucide-react';
+import { Sun, Moon, Settings, Music2 } from 'lucide-react';
 
 function Nav() {
   const { t } = useI18n();
@@ -45,8 +45,9 @@ function Nav() {
   return (
     <nav className="app-topbar sticky top-0 z-50 border-b border-[var(--border)] bg-[var(--background)]/80 backdrop-blur-sm">
       <div className="mx-auto flex h-11 max-w-[860px] items-center px-4 sm:px-6">
-        <Link href="/" className="shrink-0 whitespace-nowrap text-sm font-bold tracking-tight text-[var(--primary)]">
-          {t('common.appName')}
+        <Link href="/" aria-label={t('common.appName')} title={t('common.appName')} className="shrink-0 whitespace-nowrap text-sm font-bold tracking-tight text-[var(--primary)]">
+          <Music2 className="h-4 w-4 min-[390px]:hidden" aria-hidden="true" />
+          <span className="hidden min-[390px]:inline">{t('common.appName')}</span>
         </Link>
         <span className="ml-2.5 hidden text-xs text-[var(--muted-foreground)] lg:inline">
           {t('common.appDesc')}
@@ -93,7 +94,7 @@ function Nav() {
             href={APP_REPO_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)] min-[390px]:inline-flex"
+            className="hidden rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] hover:bg-[var(--accent)] sm:inline-flex"
             title="GitHub"
             aria-label="GitHub"
           >

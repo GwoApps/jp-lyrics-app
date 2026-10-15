@@ -401,7 +401,8 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
     if (visibleCollection && !visibleCollectionSongs.has(s.id)) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      return s.title.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q);
+      return s.title.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q)
+        || (listKind === 'albums' && !!s.spotify_album?.toLowerCase().includes(q));
     }
     return true;
   });
@@ -414,6 +415,7 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
   }, []);
   const albumView = listKind === 'albums' ? groupSongsByAlbum(filteredSongs) : { entries: [], unclassified: [] };
   const albumGroups = albumView.entries.filter((e) => e.type === 'group').map((e) => e.group);
+  const albumTrackCount = albumGroups.reduce((count, group) => count + group.songs.length, 0);
   const collapseAllAlbums = () => {
     setCollapsedAlbums(new Set(albumGroups.map((group) => group.key)));
   };
@@ -508,7 +510,9 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
       <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">{t(listKind === 'albums' ? 'home.albumList' : 'home.songList')}</h1>
-          <p className="text-xs text-[var(--muted-foreground)] mt-1">{listKind === 'albums' ? `${t('home.albumCount', { count: albumGroups.length })} · ` : ''}{t('home.songCount', { count: filteredSongs.length })}{(searchQuery || mySongsOnly || favoritesOnly) && filteredSongs.length !== songs.length ? ` / ${songs.length}` : ''}</p>
+          <p className="text-xs text-[var(--muted-foreground)] mt-1">{listKind === 'albums'
+            ? `${t('home.albumCount', { count: albumGroups.length })} · ${t('home.songCount', { count: albumTrackCount })}`
+            : `${t('home.songCount', { count: filteredSongs.length })}${(searchQuery || mySongsOnly || favoritesOnly) && filteredSongs.length !== songs.length ? ` / ${songs.length}` : ''}`}</p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {spotify === null ? null : spotify.connected ? (
@@ -557,6 +561,7 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
 
       {/* Search & Filter: mobile keeps controls on one compact row and expands search on demand. */}
       <SongFilterBar
+        isAlbumList={listKind === 'albums'}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         mobileSearchOpen={mobileSearchOpen}
@@ -678,15 +683,15 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
       ) : songs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <Music className="h-10 w-10 mb-4 text-[var(--muted-foreground)] opacity-20" />
-          <p className="text-sm text-[var(--muted-foreground)]">{t('home.noSongs')}</p>
+          <p className="text-sm text-[var(--muted-foreground)]">{t(listKind === 'albums' ? 'home.noAlbums' : 'home.noSongs')}</p>
           <button onClick={() => router.push('/songs/new')} disabled={!spotify?.connected} className="mt-5 inline-flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-4 py-2 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
             <Plus className="h-3.5 w-3.5" /> {t('home.addFirst')}
           </button>
         </div>
-      ) : filteredSongs.length === 0 ? (
+      ) : (listKind === 'albums' ? albumGroups.length === 0 : filteredSongs.length === 0) ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Search className="h-8 w-8 mb-3 text-[var(--muted-foreground)] opacity-20" />
-          <p className="text-sm text-[var(--muted-foreground)]">{t('home.noResults')}</p>
+          <p className="text-sm text-[var(--muted-foreground)]">{t(listKind === 'albums' ? 'home.noAlbumResults' : 'home.noResults')}</p>
         </div>
       ) : (
         <div id="songs" ref={songListRef} className={listKind === 'albums'
@@ -754,7 +759,6 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
                 </section>
               );
             })}
-            {albumView.unclassified.map((song) => renderSongCard(song, 'list'))}
           </>) : filteredSongs.map((song) => renderSongCard(song, songViewMode))}
         </div>
       )}
