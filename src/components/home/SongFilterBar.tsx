@@ -1,9 +1,9 @@
 'use client';
 
-import { Disc3, LayoutGrid, List, Search, Star, User, X } from 'lucide-react';
+import { LayoutGrid, List, Search, Star, User, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
-export type SongViewMode = 'list' | 'grid' | 'album';
+export type SongViewMode = 'list' | 'grid';
 
 interface SongFilterBarProps {
   searchQuery: string;
@@ -43,7 +43,6 @@ export default function SongFilterBar({
     <div className="inline-flex shrink-0 rounded-md border border-[var(--border)] bg-[var(--accent)] p-0.5" role="group" aria-label={t('home.viewMode')}>
       <button type="button" onClick={() => onViewModeChange('list')} className={`rounded p-1.5 transition-colors ${viewMode === 'list' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`} title={t('home.listView')} aria-label={t('home.listView')} aria-pressed={viewMode === 'list'}><List className="h-3.5 w-3.5" /></button>
       <button type="button" onClick={() => onViewModeChange('grid')} className={`rounded p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`} title={t('home.gridView')} aria-label={t('home.gridView')} aria-pressed={viewMode === 'grid'}><LayoutGrid className="h-3.5 w-3.5" /></button>
-      <button type="button" onClick={() => onViewModeChange('album')} className={`rounded p-1.5 transition-colors ${viewMode === 'album' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`} title={t('home.albumView')} aria-label={t('home.albumView')} aria-pressed={viewMode === 'album'}><Disc3 className="h-3.5 w-3.5" /></button>
     </div>
   );
 

@@ -98,7 +98,8 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed guides:
 ```
 src/
 ├── app/
-│   ├── page.tsx                          # Song list: search, filters, now-playing
+│   ├── page.tsx                          # / — songs list route (shared SongLibraryPage)
+│   ├── albums/page.tsx                   # /albums — grouped album list route
 │   ├── layout.tsx                        # Root layout with PWA meta, SW registration
 │   ├── globals.css                       # Theme variables, animations
 │   ├── admin/page.tsx                    # Admin console (users / songs / pending / translation)
@@ -128,7 +129,7 @@ src/
 │       │   └── status/                   # Connection status
 │       └── me/                           # Current user
 ├── components/
-│   ├── home/                             # SongFilterBar, CollectionsPanel, PlaylistImportDialog
+│   ├── home/                             # Shared SongLibraryPage, SongFilterBar (List/Grid), CollectionsPanel, PlaylistImportDialog
 │   ├── song/                             # ToolbarMenu, MobileMenu (menu items/types)
 │   ├── admin/                            # AdminTabs, AdminUserList, AdminSongList, AdminPendingList, BlockUserDialog, TranslationConfigPanel, admin-types
 │   ├── timeline/                         # SpotifyStatusCard, OffsetControls, MarkCurrentLineCard, TimelineLineRow

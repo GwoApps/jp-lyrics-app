@@ -48,6 +48,10 @@
   },
   "home": {
     "songList": "曲一覧",
+    "albumList": "アルバム一覧",
+    "navSongs": "曲",
+    "navAlbums": "アルバム",
+    "albumCount": "{count} アルバム",
     "songCount": "{count} 曲",
     "disconnect": "切断",
     "view": "表示",

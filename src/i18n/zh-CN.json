@@ -48,6 +48,10 @@
   },
   "home": {
     "songList": "歌曲列表",
+    "albumList": "专辑列表",
+    "navSongs": "歌曲",
+    "navAlbums": "专辑",
+    "albumCount": "{count} 张专辑",
     "songCount": "{count} 首",
     "disconnect": "断开",
     "view": "查看",
