@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get('q')?.trim() || '';
   const mine = request.nextUrl.searchParams.get('mine') === '1';
   const favoritesOnly = request.nextUrl.searchParams.get('favorites') === '1';
+  const unclassifiedOnly = request.nextUrl.searchParams.get('unclassified') === '1';
   const user = await getAuthUser(request);
   const userEmail = user?.email || '';
 
@@ -64,6 +65,7 @@ export async function GET(request: NextRequest) {
         ? sql`(s.title LIKE ${pattern} OR s.artist LIKE ${pattern})`
         : undefined,
       mine ? sql`s.created_by = ${userEmail}` : undefined,
+      unclassifiedOnly ? sql`f.in_unclassified = 1` : undefined,
       visibleWhere,
     ];
     const rawSql = sql`

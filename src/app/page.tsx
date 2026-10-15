@@ -13,7 +13,7 @@ import type { SongItem } from '@/lib/types';
 import type { ImportAlertState, ImportReviewState } from '@/hooks/models';
 import { importErrorMsg } from '@/lib/import-errors';
 import SongFilterBar, { type SongViewMode } from '@/components/home/SongFilterBar';
-import CollectionsPanel from '@/components/home/CollectionsPanel';
+import CollectionsPanel, { UNCLASSIFIED_COLLECTION_FILTER } from '@/components/home/CollectionsPanel';
 import FavoriteCategoriesDialog, { type FavoriteCategories } from '@/components/home/FavoriteCategoriesDialog';
 import PlaylistImportDialog from '@/components/home/PlaylistImportDialog';
 import { findBestMatch, isSongPlaying } from '@/lib/match';
@@ -88,7 +88,7 @@ export default function HomePage() {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [collections, setCollections] = useState<{ id: string; name: string; songCount: number }[]>([]);
   const [filterCollection, setFilterCollection] = useState<string | null>(null);
-  const [collectionSongs, setCollectionSongs] = useState<Set<string>>(new Set());
+  const [collectionSongs, setCollectionSongs] = useState<{ id: string; ids: Set<string> } | null>(null);
   const [favoriteDialogSong, setFavoriteDialogSong] = useState<{ id: string; title: string } | null>(null);
   const [favoritePending, setFavoritePending] = useState<Set<string>>(new Set());
   const favoritePendingRef = useRef(new Set<string>());
@@ -214,12 +214,23 @@ export default function HomePage() {
   }, [mySongsOnly, applySongListResult]);
 
   useEffect(() => {
-    if (!filterCollection) return;
-    fetch(`/api/collections/${filterCollection}/songs`)
-      .then((r) => r.json())
-      .then((data) => setCollectionSongs(new Set(data.map((s: { id: string }) => s.id))))
-      .catch(() => setCollectionSongs(new Set()));
-  }, [filterCollection]);
+    if (!favoritesOnly || !filterCollection || !currentUser?.email) return;
+    const controller = new AbortController();
+    const url = filterCollection === UNCLASSIFIED_COLLECTION_FILTER
+      ? '/api/songs?favorites=1&unclassified=1'
+      : `/api/collections/${encodeURIComponent(filterCollection)}/songs`;
+    fetch(url, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('collection_load_failed');
+        const data: unknown = await response.json();
+        if (!Array.isArray(data)) throw new Error('collection_load_failed');
+        setCollectionSongs({ id: filterCollection, ids: new Set(data.map((song: { id: string }) => song.id)) });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setToast({ type: 'error', msg: t('home.loadFailed') });
+      });
+    return () => controller.abort();
+  }, [favoritesOnly, filterCollection, currentUser?.email, t]);
 
   const handleDelete = (id: string, title: string) => {
     setDeleteTarget({ id, title });
@@ -340,6 +351,10 @@ export default function HomePage() {
       const data = await res.json().catch(() => null);
       if (res.ok && data?.favorited === true) {
         setFavorites((prev) => new Set(prev).add(song.id));
+        if (filterCollection === UNCLASSIFIED_COLLECTION_FILTER) {
+          setCollectionSongs((prev) => prev?.id === UNCLASSIFIED_COLLECTION_FILTER
+            ? { ...prev, ids: new Set(prev.ids).add(song.id) } : prev);
+        }
         setToast({ type: 'success', msg: t('home.favoriteAdded'), actionSong: { id: song.id, title: song.title } });
       } else {
         showToast('error', writeErrorMsg(data?.error, 'home.favoriteToggleFailed'));
@@ -359,59 +374,25 @@ export default function HomePage() {
       return next;
     });
     setCollectionSongs((prev) => {
-      const next = new Set(prev);
-      if (favorited && filterCollection && categories.collectionIds.includes(filterCollection)) next.add(songId);
+      if (!prev || prev.id !== filterCollection) return prev;
+      const next = new Set(prev.ids);
+      const belongs = prev.id === UNCLASSIFIED_COLLECTION_FILTER
+        ? categories.inUnclassified : categories.collectionIds.includes(prev.id);
+      if (favorited && belongs) next.add(songId);
       else next.delete(songId);
-      return next;
+      return { ...prev, ids: next };
     });
     void fetch('/api/collections').then((response) => response.ok ? response.json() : null)
       .then((result) => { if (Array.isArray(result)) setCollections(result); }).catch(() => {});
     showToast('success', t(favorited ? 'home.favoriteSaved' : 'home.favoriteRemoved'));
   };
 
-  const handleCreateCollection = async (name: string): Promise<boolean> => {
-    try {
-      const res = await fetch('/api/collections', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      });
-      const data = await res.json().catch(() => null);
-      if (res.ok) {
-        setCollections((prev) => [...prev, { ...data, songCount: 0 }]);
-        showToast('success', t('home.collectionCreated'));
-        return true;
-      }
-      showToast('error', writeErrorMsg(data?.error, 'home.collectionCreateFailed'));
-      return false;
-    } catch {
-      showToast('error', t('home.collectionCreateFailed'));
-      return false;
-    }
-  };
-
-  const handleDeleteCollection = async (collectionId: string) => {
-    try {
-      const res = await fetch(`/api/collections/${collectionId}`, { method: 'DELETE' });
-      if (res.ok) {
-        setCollections((prev) => prev.filter((c) => c.id !== collectionId));
-        if (filterCollection === collectionId) setFilterCollection(null);
-      } else {
-        // Only remove from the UI when the server actually deleted it; a failed
-        // DELETE after a refresh would otherwise resurrect the collection.
-        const code = await readErrorCode(res);
-        showToast('error', writeErrorMsg(code, 'home.collectionDeleteFailed'));
-      }
-    } catch {
-      showToast('error', t('home.collectionDeleteFailed'));
-    }
-  };
-
   // Find matching song in DB for currently playing track (uses title + artist scoring)
   const matchedSong = findBestMatch(songs, nowPlaying?.track, currentUser?.email);
   const visibleFavorites = currentUser ? favorites : EMPTY_SONG_IDS;
-  const visibleCollection = currentUser ? filterCollection : null;
-  const visibleCollectionSongs = visibleCollection ? collectionSongs : EMPTY_SONG_IDS;
+  const visibleCollection = currentUser && favoritesOnly ? filterCollection : null;
+  const visibleCollectionSongs = visibleCollection && collectionSongs?.id === visibleCollection
+    ? collectionSongs.ids : EMPTY_SONG_IDS;
 
   // Filter songs by search query (mySongsOnly is handled server-side via ?mine=1)
   const filteredSongs = songs.filter((s) => {
@@ -581,21 +562,19 @@ export default function HomePage() {
         onToggleMobileSearch={() => setMobileSearchOpen((open) => !open)}
         showUserFilters={!!currentUser}
         favoritesOnly={favoritesOnly}
-        onToggleFavorites={() => setFavoritesOnly(!favoritesOnly)}
+        onToggleFavorites={() => { setFavoritesOnly((only) => !only); setFilterCollection(null); }}
         mySongsOnly={mySongsOnly}
         onToggleMine={() => setMySongsOnly(!mySongsOnly)}
         viewMode={songViewMode}
         onViewModeChange={changeSongViewMode}
       />
 
-      {/* Collections */}
-      {currentUser && (
+      {/* Favorite categories appear directly below the Favorites filter. */}
+      {currentUser && favoritesOnly && (
         <CollectionsPanel
           collections={collections}
           filterCollection={filterCollection}
           onFilterChange={setFilterCollection}
-          onDelete={handleDeleteCollection}
-          onCreate={handleCreateCollection}
         />
       )}
 

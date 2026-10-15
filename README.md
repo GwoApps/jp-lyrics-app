@@ -169,7 +169,7 @@ src/
 
 | Endpoint | Method | Description |
 |---|---|---|
-| `/api/songs` | GET | List songs (`?q=`, `?mine=1`, `?favorites=1`) |
+| `/api/songs` | GET | List songs (`?q=`, `?mine=1`, `?favorites=1`; `?favorites=1&unclassified=1` limits to favorites in the default category) |
 | `/api/songs` | POST | Create song |
 | `/api/songs/import` | POST | Import from lrclib by title + artist |
 | `/api/songs/import-playlist` | POST | Batch import from Spotify playlist |

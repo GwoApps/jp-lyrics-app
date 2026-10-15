@@ -121,7 +121,7 @@ export default function FavoriteCategoriesDialog({ song, onCreated, onChanged, o
         data-favorite-dialog="" className="w-[min(420px,calc(100vw-32px))] max-h-[min(80vh,640px)] flex flex-col rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] p-5"
         onClick={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
         <h2 id={titleId} className="text-left text-base font-semibold mb-4">{t('home.favoriteCategoriesTitle', { title: song.title })}</h2>
-        <div className="min-h-0 overflow-y-auto flex-1" role="group" aria-label={t('home.favoriteCategoriesLabel')}>
+        <div className="min-h-0 overflow-y-auto flex-1 space-y-0.5" role="group" aria-label={t('home.favoriteCategoriesLabel')}>
           <button type="button" onClick={() => setShowCreate(true)} disabled={busy || !categories || !availableCollections}
             className="w-full text-left flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-[var(--primary)] hover:bg-[var(--accent)] transition-colors disabled:opacity-50">
             <Plus className="size-4" aria-hidden="true" />{t('home.favoriteCreateCategory')}
@@ -135,7 +135,7 @@ export default function FavoriteCategoriesDialog({ song, onCreated, onChanged, o
             </form>
           )}
           {categories && (
-            <div role="group" aria-label={t('home.favoriteCategoriesLabel')}>
+            <div role="group" aria-label={t('home.favoriteCategoriesLabel')} className="flex flex-col gap-0.5">
               <label className={`flex cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${categories.inUnclassified ? 'bg-[var(--primary)]/15' : 'hover:bg-[var(--accent)]'}`}>
                 <input type="checkbox" checked={categories.inUnclassified} disabled={busy}
                   onChange={(event) => { setError(null); setCategories((prev) => prev && ({ ...prev, inUnclassified: event.target.checked })); }}
