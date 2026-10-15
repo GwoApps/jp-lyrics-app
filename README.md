@@ -176,7 +176,7 @@ src/
 | `/api/songs/[id]` | GET/PUT/DELETE | Single song CRUD |
 | `/api/songs/[id]/sync` | POST | Fetch synced lyrics (lrclib) |
 | `/api/songs/[id]/export` | GET | Export as `?format=txt\|lrc\|html` |
-| `/api/songs/[id]/favorite` | POST | Toggle favorite |
+| `/api/songs/[id]/favorite` | GET/POST/PUT/DELETE | Read category memberships; idempotently add to default; atomically replace selected categories (`inUnclassified`, `collectionIds`); remove from all categories |
 | `/api/songs/[id]/translate` | POST | SSE stream — `reasoning` / `done` (translations) / `error` events |
 | `/api/admin/users` | GET | List users (admin only) |
 | `/api/admin/users/[id]` | PUT/DELETE | Toggle admin/block, delete user (admin only) |

@@ -14,6 +14,7 @@ import type { ImportAlertState, ImportReviewState } from '@/hooks/models';
 import { importErrorMsg } from '@/lib/import-errors';
 import SongFilterBar, { type SongViewMode } from '@/components/home/SongFilterBar';
 import CollectionsPanel from '@/components/home/CollectionsPanel';
+import FavoriteCategoriesDialog, { type FavoriteCategories } from '@/components/home/FavoriteCategoriesDialog';
 import PlaylistImportDialog from '@/components/home/PlaylistImportDialog';
 import { findBestMatch, isSongPlaying } from '@/lib/match';
 import { useNowPlaying } from '@/hooks/useNowPlaying';
@@ -24,7 +25,7 @@ import { getCachedSongs, setCachedSongs } from '@/lib/song-list-cache';
 import { requestSongList } from '@/lib/song-list-fetch';
 import { groupSongsByAlbum } from '@/lib/song-albums';
 
-type ToastState = { type: 'success' | 'error'; msg: string } | null;
+type ToastState = { type: 'success' | 'error'; msg: string; actionSong?: { id: string; title: string } } | null;
 const EMPTY_SONG_IDS = new Set<string>();
 
 const SONG_VIEW_MODE_KEY = 'jplrc:songs:view-mode';
@@ -88,6 +89,10 @@ export default function HomePage() {
   const [collections, setCollections] = useState<{ id: string; name: string; songCount: number }[]>([]);
   const [filterCollection, setFilterCollection] = useState<string | null>(null);
   const [collectionSongs, setCollectionSongs] = useState<Set<string>>(new Set());
+  const [favoriteDialogSong, setFavoriteDialogSong] = useState<{ id: string; title: string } | null>(null);
+  const [favoritePending, setFavoritePending] = useState<Set<string>>(new Set());
+  const favoritePendingRef = useRef(new Set<string>());
+  const closeFavoriteDialog = useCallback(() => setFavoriteDialogSong(null), []);
   const router = useRouter();
   const nowPlayingCardRef = useRef<HTMLDivElement>(null);
   const updateNowPlayingPointer = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -319,25 +324,49 @@ export default function HomePage() {
     setCachedSongs(songs);
   };
 
-  const handleToggleFavorite = async (songId: string) => {
+  const handleToggleFavorite = async (song: SongItem) => {
+    if (favorites.has(song.id)) {
+      setToast(null);
+      setFavoriteDialogSong({ id: song.id, title: song.title });
+      return;
+    }
+    // A second click while the first POST is in flight must not open an empty
+    // dialog or submit two writes (React state alone updates too late).
+    if (favoritePendingRef.current.has(song.id)) return;
+    favoritePendingRef.current.add(song.id);
+    setFavoritePending(new Set(favoritePendingRef.current));
     try {
-      const res = await fetch(`/api/songs/${songId}/favorite`, { method: 'POST' });
+      const res = await fetch(`/api/songs/${song.id}/favorite`, { method: 'POST' });
       const data = await res.json().catch(() => null);
-      if (res.ok && data && typeof data.favorited === 'boolean') {
-        setFavorites((prev) => {
-          const next = new Set(prev);
-          if (data.favorited) next.add(songId);
-          else next.delete(songId);
-          return next;
-        });
+      if (res.ok && data?.favorited === true) {
+        setFavorites((prev) => new Set(prev).add(song.id));
+        setToast({ type: 'success', msg: t('home.favoriteAdded'), actionSong: { id: song.id, title: song.title } });
       } else {
-        // The server rejected the toggle (auth / permission / unknown song).
-        // Leave local favorites unchanged so state stays in sync with the server.
         showToast('error', writeErrorMsg(data?.error, 'home.favoriteToggleFailed'));
       }
     } catch {
       showToast('error', t('home.favoriteToggleFailed'));
+    } finally {
+      favoritePendingRef.current.delete(song.id);
+      setFavoritePending(new Set(favoritePendingRef.current));
     }
+  };
+
+  const handleFavoriteChanged = (songId: string, favorited: boolean, categories: FavoriteCategories) => {
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (favorited) next.add(songId); else next.delete(songId);
+      return next;
+    });
+    setCollectionSongs((prev) => {
+      const next = new Set(prev);
+      if (favorited && filterCollection && categories.collectionIds.includes(filterCollection)) next.add(songId);
+      else next.delete(songId);
+      return next;
+    });
+    void fetch('/api/collections').then((response) => response.ok ? response.json() : null)
+      .then((result) => { if (Array.isArray(result)) setCollections(result); }).catch(() => {});
+    showToast('success', t(favorited ? 'home.favoriteSaved' : 'home.favoriteRemoved'));
   };
 
   const handleCreateCollection = async (name: string): Promise<boolean> => {
@@ -476,14 +505,15 @@ export default function HomePage() {
         needsReviewLabel={t('admin.lyricsNeedsReview')}
         shareLabel={t('song.share')}
         openSongLabel={(title) => t('home.openSong', { title })}
-        favoriteLabel={(title, fav) => t(fav ? 'home.removeFromFavorites' : 'home.addToFavorites', { title })}
+        favoriteLabel={(title, fav) => t(fav ? 'home.manageFavoriteCategories' : 'home.addToFavorites', { title })}
+        favoritePending={favoritePending.has(song.id)}
         deleteLabel={(title) => t('home.deleteSongLabel', { title })}
         onPrefetch={() => {
           if ('connection' in navigator && (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData !== true) {
             fetch(`/api/songs/${song.id}`).catch(() => {});
           }
         }}
-        onToggleFavorite={() => handleToggleFavorite(song.id)}
+        onToggleFavorite={() => void handleToggleFavorite(song)}
         onShare={() => router.push(`/songs/${song.id}/share`)}
         onDelete={() => handleDelete(song.id, song.title)}
       />
@@ -747,7 +777,18 @@ export default function HomePage() {
         </div>
       )}
 
-      {toast && <Toast type={toast.type} message={toast.msg} />}
+      {toast && <Toast type={toast.type} message={toast.msg}
+        actionLabel={toast.actionSong ? t('home.favoriteCategoriesAction') : undefined}
+        onAction={toast.actionSong ? () => {
+          setFavoriteDialogSong(toast.actionSong!);
+          setToast(null);
+        } : undefined} />}
+      {favoriteDialogSong && (
+        <FavoriteCategoriesDialog key={favoriteDialogSong.id} song={favoriteDialogSong}
+          onCreated={(collection) => setCollections((prev) => [...prev, collection])}
+          onChanged={(favorited, categories) => handleFavoriteChanged(favoriteDialogSong.id, favorited, categories)}
+          onClose={closeFavoriteDialog} />
+      )}
 
       <ConfirmDialog
         open={!!deleteTarget}
