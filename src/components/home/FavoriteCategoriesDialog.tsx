@@ -26,7 +26,7 @@ export default function FavoriteCategoriesDialog({ song, onCreated, onChanged, o
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [draftCollections, setDraftCollections] = useState<CollectionInfo[]>([]);
   const [newName, setNewName] = useState('');
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -59,34 +59,21 @@ export default function FavoriteCategoriesDialog({ song, onCreated, onChanged, o
     return () => { active = false; };
   }, [song.id, t]);
 
-  const create = async () => {
+  const create = () => {
     const name = newName.trim();
-    if (!name || creating || busy) return;
-    requestInFlight.current = true;
-    setCreating(true);
+    if (!name || busy || !availableCollections) return;
+    // Only stage the new category. Cancel discards it together with checkbox edits;
+    // Save creates it atomically with the song memberships.
+    const collection = { id: `draft:${crypto.randomUUID()}`, name, songCount: 0 };
+    setDraftCollections((prev) => [...prev, collection]);
+    setCategories((prev) => prev && ({ ...prev, collectionIds: [...prev.collectionIds, collection.id] }));
+    setNewName('');
+    setShowCreate(false);
     setError(null);
-    try {
-      const response = await fetch('/api/collections', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
-      });
-      if (!response.ok) throw new Error();
-      const result = await response.json() as CollectionInfo;
-      const collection = { id: result.id, name: result.name, songCount: 0 };
-      setAvailableCollections((prev) => prev && [...prev, collection]);
-      onCreated(collection);
-      setCategories((prev) => prev && ({ ...prev, collectionIds: [...prev.collectionIds, collection.id] }));
-      setNewName('');
-      setShowCreate(false);
-    } catch {
-      setError(t('home.collectionCreateFailed'));
-    } finally {
-      requestInFlight.current = false;
-      setCreating(false);
-    }
   };
 
   const save = async (remove = false) => {
-    if (!categories || !availableCollections || busy || creating) return;
+    if (!categories || !availableCollections || busy) return;
     if (!remove && !categories.inUnclassified && categories.collectionIds.length === 0) {
       setError(t('home.favoriteSelectionRequired'));
       return;
@@ -99,11 +86,19 @@ export default function FavoriteCategoriesDialog({ song, onCreated, onChanged, o
         method: remove ? 'DELETE' : 'PUT',
         ...(remove ? {} : {
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ inUnclassified: categories.inUnclassified, collectionIds: categories.collectionIds }),
+          body: JSON.stringify({
+            inUnclassified: categories.inUnclassified,
+            collectionIds: categories.collectionIds.filter((id) => !id.startsWith('draft:')),
+            newCollections: draftCollections.filter((item) => categories.collectionIds.includes(item.id)).map((item) => item.name),
+          }),
         }),
       });
       if (!response.ok) throw new Error();
-      onChanged(!remove, remove ? { favorited: false, inUnclassified: false, collectionIds: [] } : categories);
+      if (!remove) {
+        const saved = await response.json() as FavoriteCategories & { createdCollections: CollectionInfo[] };
+        saved.createdCollections.forEach(onCreated);
+        onChanged(true, saved);
+      } else onChanged(false, { favorited: false, inUnclassified: false, collectionIds: [] });
       onClose();
     } catch {
       setError(t(remove ? 'home.favoriteRemoveFailed' : 'home.favoriteSaveFailed'));
@@ -132,7 +127,7 @@ export default function FavoriteCategoriesDialog({ song, onCreated, onChanged, o
             <Plus className="size-4" aria-hidden="true" />{t('home.favoriteCreateCategory')}
           </button>
           {showCreate && (
-            <form className="flex gap-2 p-2" onSubmit={(event) => { event.preventDefault(); void create(); }}>
+            <form className="flex gap-2 p-2" onSubmit={(event) => { event.preventDefault(); create(); }}>
               <input autoFocus value={newName} onChange={(event) => setNewName(event.target.value)}
                 maxLength={100} aria-label={t('home.newCollectionPlaceholder')} placeholder={t('home.newCollectionPlaceholder')}
                 className="min-w-0 flex-1 rounded-md border border-[var(--border)] bg-[var(--input)] px-2 py-1.5 text-sm focus-visible:outline-[var(--primary)]" />
@@ -142,14 +137,14 @@ export default function FavoriteCategoriesDialog({ song, onCreated, onChanged, o
           {categories && (
             <div role="group" aria-label={t('home.favoriteCategoriesLabel')}>
               <label className={`flex cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${categories.inUnclassified ? 'bg-[var(--primary)]/15' : 'hover:bg-[var(--accent)]'}`}>
-                <input type="checkbox" checked={categories.inUnclassified} disabled={busy || creating}
+                <input type="checkbox" checked={categories.inUnclassified} disabled={busy}
                   onChange={(event) => { setError(null); setCategories((prev) => prev && ({ ...prev, inUnclassified: event.target.checked })); }}
                   className="size-4 accent-[var(--primary)]" />{t('home.favoriteUnclassified')}
               </label>
-              {availableCollections?.map((collection) => {
+              {[...(availableCollections ?? []), ...draftCollections].map((collection) => {
                 const selected = categories.collectionIds.includes(collection.id);
                 return <label key={collection.id} className={`flex cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors ${selected ? 'bg-[var(--primary)]/15' : 'hover:bg-[var(--accent)]'}`}>
-                  <input type="checkbox" checked={selected} disabled={busy || creating} onChange={() => changeCollection(collection.id)}
+                  <input type="checkbox" checked={selected} disabled={busy} onChange={() => changeCollection(collection.id)}
                     className="size-4 accent-[var(--primary)]" /><span className="truncate">{collection.name}</span>
                 </label>;
               })}
@@ -159,11 +154,11 @@ export default function FavoriteCategoriesDialog({ song, onCreated, onChanged, o
         </div>
         {error && <p role="alert" className="mt-3 text-xs text-[var(--destructive)]">{error}</p>}
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[var(--border)] pt-4 mt-4">
-          <button ref={cancelRef} type="button" onClick={close} disabled={busy || creating}
+          <button ref={cancelRef} type="button" onClick={close} disabled={busy}
             className="rounded-md px-3 py-2 text-sm hover:bg-[var(--accent)] disabled:opacity-50">{t('common.cancel')}</button>
-          <button type="button" onClick={() => void save(true)} disabled={busy || !categories?.favorited || !availableCollections || creating}
+          <button type="button" onClick={() => void save(true)} disabled={busy || !categories?.favorited || !availableCollections}
             className="rounded-md px-3 py-2 text-sm text-[var(--destructive)] hover:bg-[var(--destructive)]/10 disabled:opacity-50">{t('home.favoriteRemove')}</button>
-          <button type="button" onClick={() => void save()} disabled={busy || !categories || !availableCollections || creating}
+          <button type="button" onClick={() => void save()} disabled={busy || !categories || !availableCollections}
             className="rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)] disabled:opacity-50">{t('common.save')}</button>
         </div>
       </div>

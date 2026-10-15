@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { v4 as uuidv4 } from 'uuid';
 import { getDB, schema, eq, and, inArray, sql } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { isSongVisibleToUser } from '@/lib/song-visibility';
@@ -60,14 +61,19 @@ export async function PUT(request: NextRequest, { params }: Params) {
   try { body = await request.json(); } catch {
     return NextResponse.json({ error: 'invalid_selection' }, { status: 400 });
   }
-  const value = body as { inUnclassified?: unknown; collectionIds?: unknown } | null;
+  const value = body as { inUnclassified?: unknown; collectionIds?: unknown; newCollections?: unknown } | null;
+  const requestedNew = value?.newCollections ?? [];
   if (!value || typeof value.inUnclassified !== 'boolean'
     || !Array.isArray(value.collectionIds) || value.collectionIds.length > 100
-    || value.collectionIds.some((x: unknown) => typeof x !== 'string')) {
+    || value.collectionIds.some((x: unknown) => typeof x !== 'string' || !x.length || x.length > 100)
+    || !Array.isArray(requestedNew) || requestedNew.length > 100
+    || requestedNew.some((x: unknown) => typeof x !== 'string' || !x.trim() || x.trim().length > 100)
+    || value.collectionIds.length + requestedNew.length > 100) {
     return NextResponse.json({ error: 'invalid_selection' }, { status: 400 });
   }
   const ids = [...new Set(value.collectionIds as string[])];
-  if (!value.inUnclassified && ids.length === 0) {
+  const newCollections = (requestedNew as string[]).map((name) => ({ id: uuidv4(), name: name.trim(), userEmail: user.email }));
+  if (!value.inUnclassified && ids.length === 0 && newCollections.length === 0) {
     return NextResponse.json({ error: 'selection_required' }, { status: 400 });
   }
   if (ids.length) {
@@ -93,9 +99,17 @@ export async function PUT(request: NextRequest, { params }: Params) {
     )),
     ...ids.map((collectionId) => db.insert(schema.collectionSongs)
       .values({ collectionId, songId: id, sortOrder: 0 })),
+    ...newCollections.flatMap((collection) => [
+      db.insert(schema.collections).values(collection),
+      db.insert(schema.collectionSongs).values({ collectionId: collection.id, songId: id, sortOrder: 0 }),
+    ]),
   ];
   await db.batch(writes);
-  return NextResponse.json({ favorited: true, inUnclassified: value.inUnclassified, collectionIds: ids });
+  return NextResponse.json({
+    favorited: true, inUnclassified: value.inUnclassified,
+    collectionIds: [...ids, ...newCollections.map((collection) => collection.id)],
+    createdCollections: newCollections.map(({ id, name }) => ({ id, name, songCount: 1 })),
+  });
 }
 
 export async function DELETE(request: NextRequest, { params }: Params) {
