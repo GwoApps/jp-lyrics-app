@@ -581,6 +581,8 @@
     "title": "シェア",
     "download": "画像を保存",
     "copyLink": "リンクをコピー",
+    "copyLyrics": "歌詞のみをコピー",
+    "copyLyricsWithTranslation": "歌詞と翻訳をコピー",
     "copied": "コピーしました",
     "loading": "読み込み中...",
     "error": "読み込みに失敗しました",

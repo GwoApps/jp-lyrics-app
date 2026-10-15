@@ -581,6 +581,8 @@
     "title": "分享",
     "download": "下載圖片",
     "copyLink": "複製連結",
+    "copyLyrics": "僅複製歌詞",
+    "copyLyricsWithTranslation": "複製歌詞及譯文",
     "copied": "已複製",
     "loading": "載入中...",
     "error": "載入失敗",

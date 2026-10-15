@@ -4,12 +4,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import QRCode from 'qrcode';
-import { ArrowLeft, Download, Link2, Loader2, Check, Smartphone, Monitor, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ClipboardCopy, Download, Link2, Loader2, Check, Smartphone, Monitor, RefreshCw } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { drawCard, getLyricLines, LANDSCAPE_H, LANDSCAPE_W, type Orientation, type ShareSong } from '@/lib/share-card';
 import { resolveTranslationLang } from '@/lib/target-lang';
 import { copyToClipboard } from '@/lib/clipboard';
+import { buildShareCopyText } from '@/lib/share-card-copy';
 import Toast from '@/components/Toast';
 
 export default function SharePage() {
@@ -29,7 +30,8 @@ export default function SharePage() {
   const [isLoadError, setIsLoadError] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
-  const [copied, setCopied] = useState(false);
+  // Which copy action just succeeded, so each button flashes its own state.
+  const [copiedKind, setCopiedKind] = useState<'link' | 'lyrics' | 'lyricsWithTranslation' | null>(null);
   const [toast, setToast] = useState<{ type: 'error'; msg: string } | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [orientation, setOrientation] = useState<Orientation>('landscape');
@@ -179,14 +181,27 @@ export default function SharePage() {
 
   // Issue #266: a failed clipboard write must be surfaced instead of silently
   // returning, matching the other copy paths across the app.
-  const handleCopyLink = async () => {
-    const ok = await copyToClipboard(pageUrl);
+  const flashCopied = (kind: 'link' | 'lyrics' | 'lyricsWithTranslation') => {
+    setCopiedKind(kind);
+    setTimeout(() => setCopiedKind((current) => (current === kind ? null : current)), 1500);
+  };
+
+  const copyText = async (text: string, kind: 'link' | 'lyrics' | 'lyricsWithTranslation') => {
+    const ok = await copyToClipboard(text);
     if (!ok) {
       setToast({ type: 'error', msg: t('song.copyFailed') });
       return;
     }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    flashCopied(kind);
+  };
+
+  const handleCopyLink = () => copyText(pageUrl, 'link');
+
+  // Share-page text copies reuse the card's already-parsed lyric lines, so LRC
+  // timestamps are always stripped and the translation pairing matches what the
+  // card renders (Issue: copy lyrics / lyrics+translation as plain text).
+  const handleCopyLyrics = (kind: 'lyrics' | 'lyricsWithTranslation') => {
+    void copyText(buildShareCopyText(lyricLines, kind === 'lyricsWithTranslation'), kind);
   };
 
   // Issue #266: auto-dismiss the copy-failure toast, same lifetime as the
@@ -232,6 +247,8 @@ export default function SharePage() {
   }
 
   const hasLyrics = lyricLines.length > 0;
+  // Only offer the translation copy when at least one line actually has one.
+  const hasTranslation = lyricLines.some((line) => line.translation);
   const cardAspectClass = orientation === 'portrait'
     ? 'max-w-md'
     : 'max-w-3xl';
@@ -340,13 +357,34 @@ export default function SharePage() {
             {t('share.download')}
           </button>
           <button
-            onClick={handleCopyLink}
+            onClick={() => void handleCopyLink()}
             className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-5 py-2.5 font-medium text-[var(--foreground)] hover:bg-[var(--muted)]"
           >
             <Link2 className="h-4 w-4" />
-            {copied ? t('share.copied') : t('share.copyLink')}
+            {copiedKind === 'link' ? t('share.copied') : t('share.copyLink')}
           </button>
         </div>
+
+        {hasLyrics && (
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-2 sm:mt-3 sm:gap-3">
+            <button
+              onClick={() => handleCopyLyrics('lyrics')}
+              className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-5 py-2.5 font-medium text-[var(--foreground)] hover:bg-[var(--muted)]"
+            >
+              {copiedKind === 'lyrics' ? <Check className="h-4 w-4" /> : <ClipboardCopy className="h-4 w-4" />}
+              {copiedKind === 'lyrics' ? t('share.copied') : t('share.copyLyrics')}
+            </button>
+            {hasTranslation && (
+              <button
+                onClick={() => handleCopyLyrics('lyricsWithTranslation')}
+                className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-5 py-2.5 font-medium text-[var(--foreground)] hover:bg-[var(--muted)]"
+              >
+                {copiedKind === 'lyricsWithTranslation' ? <Check className="h-4 w-4" /> : <ClipboardCopy className="h-4 w-4" />}
+                {copiedKind === 'lyricsWithTranslation' ? t('share.copied') : t('share.copyLyricsWithTranslation')}
+              </button>
+            )}
+          </div>
+        )}
 
         {hasLyrics && (
           <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3 sm:mt-8 sm:p-4">

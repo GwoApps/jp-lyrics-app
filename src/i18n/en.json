@@ -581,6 +581,8 @@
     "title": "Share",
     "download": "Download Image",
     "copyLink": "Copy Link",
+    "copyLyrics": "Copy lyrics only",
+    "copyLyricsWithTranslation": "Copy lyrics + translation",
     "copied": "Copied",
     "loading": "Loading...",
     "error": "Failed to load",
