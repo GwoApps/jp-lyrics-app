@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { fmtMs } from '@/lib/lrc';
+import { ROLLBACK_DURATION_MS, isContinuousPlaybackAdvance, rollbackTimeMs } from '@/lib/lyric-time-rollback';
 import { timedRowDistances } from '@/lib/lyric-time-axis-window';
 
 /** Gap kept between the card's left edge and the time labels (mirrors the CSS). */
@@ -90,6 +91,7 @@ function LyricTimeAxis({
   // Which row's textContent the live clock currently owns (so it can put the
   // static line timestamp back when playback stops or the focus moves).
   const liveRowRef = useRef<number | null>(null);
+  const liveMsRef = useRef<number | null>(null);
 
   // Write the scroll-follow transform, returning false when nothing changed.
   // A `scroll` event for a programmatic `scrollTop` write only fires on the
@@ -250,14 +252,15 @@ function LyricTimeAxis({
   // written by its tick every frame. This loop only FORMATS that value into
   // the focused row's label, once per rAF:
   //  - React never rewrites this text (its own child string `fmtMs(time)` is
-  //    unchanged between renders, so React skips the DOM write) — hence no
-  //    re-render per frame, and hence the need to hand the static timestamp
-  //    back ourselves when focus moves or playback stops.
+  //    unchanged between renders, so React skips the DOM write). On a natural
+  //    advance, the departing clock counts back to its lyric timestamp using
+  //    this SAME rAF loop; pause/unmount still restores it immediately.
   //  - The write is guarded by a string compare so a frozen clock (null
   //    playbackMsRef, e.g. tab hidden) does no DOM work at all.
   // Runs ONLY while synced+playing, so idle pages never spin (issue #244).
   useEffect(() => {
     if (!isSynced || !hasLabels) return undefined;
+    const rollbacks = new Map<number, { from: number; startedAt: number }>();
 
     const restore = (row: number) => {
       const label = labelRefs.current[row];
@@ -268,14 +271,51 @@ function LyricTimeAxis({
     let raf = 0;
     const frame = () => {
       const { activeLine: focused } = viewRef.current;
+      const boxVisible = boxRef.current?.style.visibility === 'visible';
       const owned = liveRowRef.current;
       if (owned !== null && owned !== focused) {
-        restore(owned);
+        // Only animate a continuous advance to the next TIMED row. A seek can
+        // land on that same row, but its playback clock jumps by >750ms; it
+        // must not play the natural line-end animation.
+        const nextTimed = timestampsRef.current.findIndex((time, index) => index > owned && time != null);
+        const target = timestampsRef.current[owned];
+        const from = liveMsRef.current;
+        if (focused === nextTimed && target != null && from != null && from > target
+          && boxVisible && document.visibilityState === 'visible'
+          && isContinuousPlaybackAdvance(from, playbackMsRef.current)
+          && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          // Earlier departing lines finish independently if two rows advance
+          // within 320ms. Reusing this rAF loop avoids a timer per label.
+          rollbacks.set(owned, { from, startedAt: performance.now() });
+        } else {
+          restore(owned);
+        }
         liveRowRef.current = null;
+        liveMsRef.current = null;
       }
+
+      if (rollbacks.size > 0) {
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        for (const [row, rollback] of rollbacks) {
+          const label = labelRefs.current[row];
+          const target = timestampsRef.current[row];
+          const elapsed = performance.now() - rollback.startedAt;
+          if (row === focused) {
+            // Seeking back gives the new focused clock ownership without
+            // painting a static timestamp for a frame.
+            rollbacks.delete(row);
+          } else if (!label || target == null || !boxVisible || reduceMotion || elapsed >= ROLLBACK_DURATION_MS) {
+            restore(row);
+            rollbacks.delete(row);
+          } else {
+            const next = fmtMs(rollbackTimeMs(rollback.from, target, elapsed));
+            if (label.textContent !== next) label.textContent = next;
+          }
+        }
+      }
+
       // Narrow gutter → the box is `visibility: hidden`; don't pay for text
       // writes nobody can see (measure() sets this inline every pass).
-      const boxVisible = boxRef.current?.style.visibility === 'visible';
       const label = focused >= 0 ? labelRefs.current[focused] : undefined;
       if (label && boxVisible) {
         const ms = playbackMsRef.current;
@@ -283,6 +323,7 @@ function LyricTimeAxis({
         const next = fmtMs(time != null ? time : 0);
         if (label.textContent !== next) label.textContent = next;
         liveRowRef.current = focused;
+        liveMsRef.current = ms;
       }
       raf = requestAnimationFrame(frame);
     };
@@ -291,7 +332,10 @@ function LyricTimeAxis({
     return () => {
       cancelAnimationFrame(raf);
       if (liveRowRef.current !== null) restore(liveRowRef.current);
+      for (const row of rollbacks.keys()) restore(row);
+      rollbacks.clear();
       liveRowRef.current = null;
+      liveMsRef.current = null;
     };
   }, [isSynced, hasLabels, playbackMsRef]);
 
