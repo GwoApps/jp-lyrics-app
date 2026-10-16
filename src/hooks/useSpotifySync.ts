@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { FuriganaLine } from '@/lib/types';
 import { isSameSpotifyTrack } from '@/lib/match';
 import { useNowPlaying, type SyncState } from './useNowPlaying';
-import { animateSmoothScroll } from '@/lib/scroll-ease';
+import { animateSmoothScroll, earliestTimedLyricMs, shouldScrollLyricsToStart } from '@/lib/scroll-ease';
 
 export interface SpotifyState {
   connected: boolean;
@@ -110,6 +110,9 @@ export function useSpotifySync(
   // ref in their OWN rAF loop instead of re-deriving `progress_ms + elapsed`
   // from the 3s poll, which would be a second, drifting source of truth.
   const playbackMsRef = useRef<number | null>(null);
+  // Keep the most recent Spotify poll even while paused or backgrounded (when
+  // playbackMsRef is intentionally cleared and no interpolation frame runs).
+  const lastPolledProgressRef = useRef<{ key: string; ms: number } | null>(null);
   const prevTrackKeyRef = useRef('');
   const navigatingRef = useRef(false);
   // Guards the async follow-playing match so a stale response (track changed
@@ -161,6 +164,22 @@ export function useSpotifySync(
 
     const refs = syncRefs.current;
     const track = nowPlayingData.track;
+    if (track && isSameSpotifyTrack(currentSongRef(refs), track)) {
+      const key = `${refs.currentSongId}||${track.id || track.uri || [track.name, track.artist].join('||')}`;
+      const previous = lastPolledProgressRef.current;
+      lastPolledProgressRef.current = { key, ms: nowPlayingData.progress_ms };
+      // While paused/hidden there is no rAF clock to compare against. Compare
+      // consecutive Spotify observations instead, scoped to this exact track.
+      // On resume the old rAF position may also be null before its first tick.
+      if ((!nowPlayingData.is_playing || document.hidden || playbackMsRef.current == null)
+        && !refs.debug && previous?.key === key
+        && shouldScrollLyricsToStart(previous.ms, nowPlayingData.progress_ms, earliestTimedLyricMs(refs.lineTimestamps))) {
+        const container = lyricsRef.current;
+        if (container) animateSmoothScroll(container, 0);
+      }
+    } else {
+      lastPolledProgressRef.current = null;
+    }
 
     if (nowPlayingData.is_playing && track) {
       interpRef.current = {
@@ -210,7 +229,7 @@ export function useSpotifySync(
         prevTrackKeyRef.current = '';
       }
     }
-  }, [nowPlayingData, syncRefs]);
+  }, [nowPlayingData, syncRefs, lyricsRef]);
 
   // Smooth rAF interpolation loop — runs at display refresh rate between polls,
   // but ONLY while the matched track is actively playing. When idle (paused /
@@ -243,11 +262,17 @@ export function useSpotifySync(
       // Interpolate progress since last poll
       const elapsed = performance.now() - pollTime;
       const currentMs = progressMs + Math.max(0, elapsed);
+      const previousMs = playbackMsRef.current;
       // Publish the smooth position for per-frame readers (time axis clock).
       playbackMsRef.current = currentMs;
 
-      // Find active line
+      // A rewind into the untimed intro has no active line to centre. Move the
+      // lyric container itself back to its beginning, even if the highlight
+      // was already -1. Ignore small backwards poll corrections, and retain
+      // the existing debug-mode no-follow behavior.
       const lts = refs.lineTimestamps;
+
+      // Find active line
       let newActive = -1;
 
       if (lts.length > 0) {
@@ -260,6 +285,11 @@ export function useSpotifySync(
         }
       }
       // No timestamps → newActive stays -1 (no follow)
+      if (!refs.debug && newActive === -1 && previousMs != null && previousMs > currentMs
+        && shouldScrollLyricsToStart(previousMs, currentMs, earliestTimedLyricMs(lts))) {
+        const container = lyricsRef.current;
+        if (container) animateSmoothScroll(container, 0);
+      }
 
       // Update highlight + scroll only when line actually changes
       if (newActive !== highlightRef.current) {

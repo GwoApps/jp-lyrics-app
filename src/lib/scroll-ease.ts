@@ -18,6 +18,26 @@ const clamp = (value: number, min: number, max: number) =>
 /** easeOutQuart: 1 - (1-t)^4 — fast start, graceful settle. */
 const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4);
 
+/** Chronological start of the timed lyrics, even if rows are out of order. */
+export function earliestTimedLyricMs(timestamps: readonly (number | null)[]): number | null {
+  let earliest: number | null = null;
+  for (const time of timestamps) {
+    if (time != null && Number.isFinite(time) && (earliest == null || time < earliest)) earliest = time;
+  }
+  return earliest;
+}
+
+/** Ignore tiny backward poll corrections; only a seek into the untimed intro resets scroll. */
+export function shouldScrollLyricsToStart(
+  previousMs: number | null,
+  currentMs: number,
+  firstTimedMs: number | null,
+): boolean {
+  return previousMs != null && firstTimedMs != null
+    && Number.isFinite(previousMs) && Number.isFinite(currentMs) && Number.isFinite(firstTimedMs)
+    && previousMs - currentMs > 750 && currentMs < firstTimedMs;
+}
+
 /**
  * Animate `container.scrollTop` toward `targetTop`. Any in-flight animation
  * on the same container is cancelled (a newer follow wins). Manual scrolling
@@ -30,12 +50,13 @@ export function animateSmoothScroll(
 ): void {
   const start = container.scrollTop;
   const distance = targetTop - start;
-  if (Math.abs(distance) < 1) return;
-
+  // Even when already at the target, cancel a pending follow before it can
+  // pull the container away on its next frame.
   if (activeAnim && activeAnim.container === container) {
     cancelAnimationFrame(activeAnim.raf);
     activeAnim = null;
   }
+  if (Math.abs(distance) < 1) return;
 
   // ~0.55ms per px, clamped: 220ms for an adjacent line, 700ms for a full jump.
   const duration =

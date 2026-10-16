@@ -28,7 +28,8 @@ import { fmtMs, fmtTime, findActiveLine } from '@/lib/lrc';
 import { isSpotifyAuthError, isSpotifyTransientError } from '@/lib/spotify-error';
 import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
-import { animateSmoothScroll } from '@/lib/scroll-ease';
+import { animateSmoothScroll, earliestTimedLyricMs } from '@/lib/scroll-ease';
+import { isSameSpotifyTrack } from '@/lib/match';
 import type { CoverColor } from '@/lib/cover-color';
 import type { CoverPalette } from '@/lib/cover-color';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
@@ -225,15 +226,22 @@ export default function SongViewPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playingTrackKey, sync.isSameSong, data.matchSong, id]);
 
-  // Re-center on active line when debug toggled off
+  // Re-center on the active line when debug toggles off; in the untimed intro
+  // there is no active line, so restore the beginning of the lyric container.
   useEffect(() => {
-    if (!data.debug && sync.activeLine >= 0 && lineRefs.current?.[sync.activeLine]) {
-      const lineEl = lineRefs.current[sync.activeLine];
-      const container = lyricsRef.current;
-      if (lineEl && container) {
+    if (data.debug) return;
+    const container = lyricsRef.current;
+    if (!container) return;
+    if (sync.activeLine >= 0) {
+      const lineEl = lineRefs.current?.[sync.activeLine];
+      if (lineEl) {
         const lineTop = lineEl.offsetTop - container.offsetTop;
         animateSmoothScroll(container, lineTop - container.clientHeight / 2 + lineEl.offsetHeight / 2);
       }
+    } else if (sync.activeLine === -1 && data.song && sync.spotify?.track
+      && isSameSpotifyTrack(data.song, sync.spotify.track)) {
+      const firstTimed = earliestTimedLyricMs(data.lineTimestamps);
+      if (firstTimed != null && sync.spotify.progress_ms < firstTimed) animateSmoothScroll(container, 0);
     }
   // activeLine changes are already scrolled by useSpotifySync; this effect is
   // intentionally only for the debug toggle transition.
