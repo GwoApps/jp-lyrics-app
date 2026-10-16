@@ -1364,9 +1364,9 @@ textarea {
 }
 .lyrics-immersive-active .lyrics-scroll::-webkit-scrollbar { display: none; }
 .lyrics-immersive-active .lyrics-scroll > div { max-width: 960px; margin-inline: auto; overflow-wrap: anywhere; }
-/* Keep the spacing between lyric rows (not wrapped text or translations) at
-   three times the previous .75em visual gap: .75em leading + 1.5em row margin. */
-.lyrics-immersive-active .lyrics-scroll > div:not(:last-child) { margin-block-end: 1.5em; }
+/* The fullscreen row margin is half the previous 1.5em; text line-height,
+   wrapping and translation layout are unchanged. */
+.lyrics-immersive-active .lyrics-scroll > div:not(:last-child) { margin-block-end: 0.75em; }
 .lyrics-immersive-active .lyric-line-context-trigger { justify-content: center; }
 .lyrics-immersive-active .lyric-line { line-height: 1.75; opacity: 0.496; transform-origin: center; text-wrap: balance; }
 .lyrics-immersive-active .lyric-line--active { opacity: 1; }
