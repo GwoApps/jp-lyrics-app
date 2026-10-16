@@ -30,7 +30,7 @@ import { isSpotifyAuthError, isSpotifyTransientError } from '@/lib/spotify-error
 import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
 import { useImmersiveLyrics } from '@/hooks/useImmersiveLyrics';
-import { animateSmoothScroll, earliestTimedLyricMs } from '@/lib/scroll-ease';
+import { animateSmoothScroll, cancelSmoothScroll, earliestTimedLyricMs } from '@/lib/scroll-ease';
 import { centeredLyricScrollTop } from '@/lib/immersive-lyrics';
 import { isSameSpotifyTrack } from '@/lib/match';
 import type { CoverColor } from '@/lib/cover-color';
@@ -444,7 +444,7 @@ export default function SongViewPage() {
   // Spotify seek — click lyrics line to jump to that time.
   // fetch() only rejects on network errors, so we must inspect res.ok to surface
   // HTTP failures (401 token expiry / 4xx / 5xx) instead of silently dropping them.
-  const handleSeek = async (positionMs: number) => {
+  const handleSeek = async (positionMs: number, lineIndex: number) => {
     let res: Response;
     try {
       res = await fetch('/api/spotify/seek', {
@@ -459,13 +459,13 @@ export default function SongViewPage() {
     if (res.ok) {
       if (immersive.active) {
         immersive.clearManualScroll();
-        const index = data.lineTimestamps.findIndex((timestamp) => timestamp === positionMs);
         const container = lyricsRef.current;
-        const line = lineRefs.current[index];
+        const line = lineRefs.current[lineIndex];
         if (container && line) {
           const box = line.getBoundingClientRect();
-          animateSmoothScroll(container, centeredLyricScrollTop(container.scrollTop,
-            container.clientHeight, box.top - container.getBoundingClientRect().top, box.height));
+          cancelSmoothScroll(container);
+          container.scrollTop = centeredLyricScrollTop(container.scrollTop,
+            container.clientHeight, box.top - container.getBoundingClientRect().top, box.height);
         }
       }
       return;
@@ -992,7 +992,7 @@ export default function SongViewPage() {
                     isActive={i === activeLine && !!isSynced}
                     debugTs={!immersive.active && data.debug && lineTimestamps[i] != null ? lineTimestamps[i] : undefined}
                     timestamp={hasSyncData && lineTimestamps[i] != null ? lineTimestamps[i] : undefined}
-                    onSeek={hasSyncData && spotify?.connected && (isSameSong || (immersive.active && spotify.track && isSameSpotifyTrack(song, spotify.track))) ? handleSeek : undefined}
+                    onSeek={hasSyncData && spotify?.connected && (isSameSong || (immersive.active && spotify.track && isSameSpotifyTrack(song, spotify.track))) ? (positionMs) => handleSeek(positionMs, i) : undefined}
                     onCopyLine={immersive.active ? undefined : () => copyLyricLine(line)}
                     onCopyTranslation={immersive.active ? undefined : () => copyLyricTranslation(i)}
                     onShareLine={immersive.active ? undefined : () => router.push(`/songs/${id}/share?line=${i}`)}
