@@ -1,5 +1,12 @@
 export const ROLLBACK_DURATION_MS = 320;
 
+// The progress ref may jump before React commits the next active row. Never
+// paint the NEW row's seek position onto the OLD focused label: doing so would
+// make the jump look continuous when the rollback guard finally checks it.
+export function shouldUpdateFocusedClock(current: number, nextTimed: number | null, focusedTimed: number | null): boolean {
+  return nextTimed == null || focusedTimed == null || nextTimed <= focusedTimed || current < nextTimed;
+}
+
 // A large delta between rendered clock frames means the user sought or the tab
 // stalled; don't play the natural line-end animation for that discontinuity.
 export function isContinuousPlaybackAdvance(previous: number | null, current: number | null): boolean {

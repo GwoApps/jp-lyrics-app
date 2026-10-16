@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { fmtMs } from '@/lib/lrc';
-import { ROLLBACK_DURATION_MS, isContinuousPlaybackAdvance, rollbackTimeMs } from '@/lib/lyric-time-rollback';
+import { ROLLBACK_DURATION_MS, isContinuousPlaybackAdvance, rollbackTimeMs, shouldUpdateFocusedClock } from '@/lib/lyric-time-rollback';
 import { timedRowDistances } from '@/lib/lyric-time-axis-window';
 
 /** Gap kept between the card's left edge and the time labels (mirrors the CSS). */
@@ -319,11 +319,18 @@ function LyricTimeAxis({
       const label = focused >= 0 ? labelRefs.current[focused] : undefined;
       if (label && boxVisible) {
         const ms = playbackMsRef.current;
-        const time = ms ?? timestampsRef.current[focused];
-        const next = fmtMs(time != null ? time : 0);
-        if (label.textContent !== next) label.textContent = next;
-        liveRowRef.current = focused;
-        liveMsRef.current = ms;
+        const focusedTimed = timestampsRef.current[focused];
+        const nextTimed = timestampsRef.current.find((time, index) => index > focused && time != null) ?? null;
+        // The sync rAF can publish a seek beyond the next line before React
+        // commits activeLine. Keep the old clock's last value until focus moves;
+        // otherwise its apparent one-frame leap hides the seek from rollback.
+        if (ms == null || shouldUpdateFocusedClock(ms, nextTimed, focusedTimed)) {
+          const time = ms ?? focusedTimed;
+          const next = fmtMs(time != null ? time : 0);
+          if (label.textContent !== next) label.textContent = next;
+          liveRowRef.current = focused;
+          liveMsRef.current = ms;
+        }
       }
       raf = requestAnimationFrame(frame);
     };
