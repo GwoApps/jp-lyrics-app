@@ -1,4 +1,4 @@
-export const ROLLBACK_DURATION_MS = 320;
+export const ROLLBACK_DURATION_MS = 200;
 
 // The progress ref may jump before React commits the next active row. Never
 // paint the NEW row's seek position onto the OLD focused label: doing so would
@@ -15,7 +15,7 @@ export function isContinuousPlaybackAdvance(previous: number | null, current: nu
     && current >= previous && current - previous <= 750;
 }
 
-/** Ease a departed live clock backwards to its lyric timestamp in 320ms. */
+/** Ease a departed live clock backwards to its lyric timestamp in 200ms. */
 export function rollbackTimeMs(from: number, target: number, elapsed: number): number {
   if (from <= target) return target;
   const progress = Math.max(0, Math.min(1, elapsed / ROLLBACK_DURATION_MS));

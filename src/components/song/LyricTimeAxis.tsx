@@ -285,7 +285,7 @@ function LyricTimeAxis({
           && isContinuousPlaybackAdvance(from, playbackMsRef.current)
           && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
           // Earlier departing lines finish independently if two rows advance
-          // within 320ms. Reusing this rAF loop avoids a timer per label.
+          // within 200ms. Reusing this rAF loop avoids a timer per label.
           rollbacks.set(owned, { from, startedAt: performance.now() });
         } else {
           restore(owned);

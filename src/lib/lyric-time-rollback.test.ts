@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { ROLLBACK_DURATION_MS, isContinuousPlaybackAdvance, rollbackTimeMs, shouldUpdateFocusedClock } from './lyric-time-rollback.ts';
 
 test('departing line counts backwards through intermediate milliseconds before its lyric timestamp', () => {
+  assert.equal(ROLLBACK_DURATION_MS, 200);
   const start = 112_480;
   const lyricTime = 90_270;
-  const samples = [0, 60, 120, 180, 240, ROLLBACK_DURATION_MS]
+  const samples = [0, 40, 80, 120, 160, ROLLBACK_DURATION_MS]
     .map((elapsed) => rollbackTimeMs(start, lyricTime, elapsed));
   assert.equal(samples[0], start);
   assert.equal(samples.at(-1), lyricTime);
