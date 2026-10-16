@@ -1256,11 +1256,15 @@ textarea {
      closely enough to read as one motion. */
   transition: color 0.3s ease, opacity 0.3s ease;
 }
-/* Current line: album-tinted text colour. Its ALPHA comes from the ladder
-   written by measure(), not from this class — the ladder is the single
-   source of truth for opacity. */
+/* Current line: use a contrast-checked derivative of the album palette; the
+   raw accent remains available for decorative lighting and other surfaces.
+   The gutter is on the page body, so dark/light text colours are selected by
+   the same root theme that chooses the body background. */
 .lyric-time-axis__label--active {
-  color: var(--song-accent);
+  color: var(--song-accent-text-dark, var(--foreground));
+}
+[data-theme="light"] .lyric-time-axis__label--active {
+  color: var(--song-accent-text-light, var(--foreground));
 }
 @media (prefers-reduced-motion: reduce) {
   .lyric-time-axis__label { transition: none; }
