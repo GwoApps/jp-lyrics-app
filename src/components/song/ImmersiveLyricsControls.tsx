@@ -86,10 +86,10 @@ export default function ImmersiveLyricsControls({
         </button>
       </div>
       <div className="immersive-song-info">
-        <CoverImage src={coverUrl} alt="" size="sm" />
+        <CoverImage src={coverUrl} alt="" size="sm" className="immersive-song-cover" />
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-[var(--foreground)]">{song.title}</div>
-          <div className="truncate text-xs text-[var(--muted-foreground)]">{song.artist || t('common.unknownArtist')}</div>
+          <div className="immersive-song-title truncate text-base sm:text-lg font-semibold text-[var(--foreground)]">{song.title}</div>
+          <div className="truncate text-sm text-[var(--muted-foreground)]">{song.artist || t('common.unknownArtist')}</div>
         </div>
       </div>
     </>
