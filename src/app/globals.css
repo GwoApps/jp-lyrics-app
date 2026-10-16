@@ -1314,3 +1314,99 @@ textarea {
   from { opacity: 0; transform: translate(-50%, -12px); }
   to { opacity: 1; transform: translateX(-50%); }
 }
+
+/* Immersive lyrics reuse the song page's ONE scroller and Spotify controller. */
+.song-view.lyrics-immersive-active {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: block;
+  width: 100vw;
+  height: 100dvh;
+  padding: 0;
+  overflow: hidden;
+  background: var(--background);
+}
+.lyrics-immersive-active > :not(.lyrics-panel-shell):not(.toast) { display: none; }
+.lyrics-immersive-active .lyrics-panel-shell {
+  height: 100%;
+  min-height: 0;
+  animation: none;
+}
+.lyrics-immersive-active .lyrics-panel {
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: color-mix(in srgb, var(--background) 98%, var(--lyric-orbit-accent));
+}
+.lyrics-immersive-active .lyrics-ambient-breath,
+.lyrics-immersive-active .lyrics-ambient-orbit,
+.lyrics-immersive-active .lyrics-panel canvas { display: none; }
+.lyrics-immersive-active .lyrics-scroll {
+  height: 100%;
+  max-height: none;
+  padding: 50dvh clamp(20px, 9vw, 128px);
+  font-size: clamp(26px, calc(var(--immersive-font-base) * 1.5), 40px);
+  text-align: center;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  /* Controls and song credit sit outside the scroller; fade rows before they pass underneath. */
+  mask-image: linear-gradient(to bottom, transparent, #000 96px, #000 calc(100% - 120px), transparent);
+}
+.lyrics-immersive-active .lyrics-scroll::-webkit-scrollbar { display: none; }
+.lyrics-immersive-active .lyrics-scroll > div { max-width: 960px; margin-inline: auto; overflow-wrap: anywhere; }
+.lyrics-immersive-active .lyric-line-context-trigger { justify-content: center; }
+.lyrics-immersive-active .lyric-line { line-height: 1.75; opacity: 0.62; transform-origin: center; text-wrap: balance; }
+.lyrics-immersive-active .lyric-line--active { opacity: 1; }
+.lyrics-immersive-active .lyric-translation {
+  text-align: center;
+  color: color-mix(in srgb, var(--foreground) 76%, var(--background));
+}
+@media (min-width: 640px) {
+  .lyrics-immersive-active .lyrics-scroll {
+    font-size: clamp(32px, calc(var(--immersive-font-base) * 2.1), 56px);
+  }
+}
+.immersive-actions {
+  position: absolute;
+  z-index: 5;
+  top: max(16px, env(safe-area-inset-top, 0px));
+  right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex;
+  gap: 8px;
+}
+.immersive-action {
+  display: flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--foreground);
+}
+.immersive-action:hover { background: var(--accent); }
+.immersive-action:focus-visible, .lyrics-immersive-active .lyrics-scroll:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.immersive-song-info {
+  position: absolute;
+  z-index: 5;
+  left: max(16px, env(safe-area-inset-left, 0px));
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(80vw, 380px);
+  min-width: 0;
+  padding: 8px 12px 8px 8px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--background) 92%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lyrics-immersive-active .lyric-active { animation: none; }
+  .lyrics-immersive-active .lyric-line { transition: none; }
+}

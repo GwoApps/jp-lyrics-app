@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useCallback
 import { useRouter, useParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
 import Link from 'next/link';
-import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, PictureInPicture, Repeat, Copy, Check, Languages, ChevronDown, Share2, Info, X, Palette, SlidersHorizontal, FlaskConical } from 'lucide-react';
+import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, PictureInPicture, Maximize2, Repeat, Copy, Check, Languages, ChevronDown, Share2, Info, X, Palette, SlidersHorizontal, FlaskConical } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import FuriganaLineView from '@/components/FuriganaLine';
@@ -19,6 +19,7 @@ import SongTopStatusStack from '@/components/SongTopStatusStack';
 import { ToolbarMenu, buildReadingMenuItems } from '@/components/song/ToolbarMenu';
 import { MobileMenu } from '@/components/song/MobileMenu';
 import DownloadDialog from '@/components/song/DownloadDialog';
+import ImmersiveLyricsControls from '@/components/song/ImmersiveLyricsControls';
 import LyricTimeAxis from '@/components/song/LyricTimeAxis';
 import { useModalFocus } from '@/hooks/useModalFocus';
 import { isEmptyAfterTrim } from '@/lib/lyrics-export';
@@ -28,7 +29,9 @@ import { fmtMs, fmtTime, findActiveLine } from '@/lib/lrc';
 import { isSpotifyAuthError, isSpotifyTransientError } from '@/lib/spotify-error';
 import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
+import { useImmersiveLyrics } from '@/hooks/useImmersiveLyrics';
 import { animateSmoothScroll, earliestTimedLyricMs } from '@/lib/scroll-ease';
+import { centeredLyricScrollTop } from '@/lib/immersive-lyrics';
 import { isSameSpotifyTrack } from '@/lib/match';
 import type { CoverColor } from '@/lib/cover-color';
 import type { CoverPalette } from '@/lib/cover-color';
@@ -176,6 +179,8 @@ export default function SongViewPage() {
     matchSong: null,
     currentSongId: id,
     currentUserEmail: '',
+    immersiveLyrics: false,
+    shouldFollowLyrics: () => true,
   });
 
   // Cached login state renders immediately; useAuthSession revalidates it on every entry.
@@ -186,6 +191,41 @@ export default function SongViewPage() {
 
   // Spotify sync hook (polling + rAF + follow-playing)
   const sync = useSpotifySync(syncRefs, lineRefs, lyricsRef, spotifyConnected === true);
+  const immersive = useImmersiveLyrics(lyricsRef, lineRefs, sync.activeLine, data.debug);
+  useEffect(() => {
+    syncRefs.current.immersiveLyrics = immersive.active;
+    syncRefs.current.shouldFollowLyrics = immersive.shouldFollow;
+  }, [immersive.active, immersive.shouldFollow]);
+  const priorLyricsScroll = useRef<number | null>(null);
+  const wasImmersive = useRef(false);
+  const enterImmersive = () => {
+    priorLyricsScroll.current = lyricsRef.current?.scrollTop ?? 0;
+    immersive.enter();
+  };
+  useEffect(() => {
+    if (immersive.active) {
+      wasImmersive.current = true;
+      const raf = requestAnimationFrame(immersive.centerCurrent);
+      return () => cancelAnimationFrame(raf);
+    }
+    if (!wasImmersive.current) return;
+    wasImmersive.current = false;
+    const raf = requestAnimationFrame(() => {
+      const container = lyricsRef.current;
+      const line = lineRefs.current[sync.activeLine];
+      if (!container) return;
+      if (sync.activeLine >= 0 && sync.isSameSong && line) {
+        animateSmoothScroll(container,
+          line.offsetTop - container.offsetTop - container.clientHeight / 2 + line.offsetHeight / 2);
+      } else if (priorLyricsScroll.current != null) {
+        container.scrollTop = priorLyricsScroll.current;
+      }
+      priorLyricsScroll.current = null;
+    });
+    return () => cancelAnimationFrame(raf);
+  // The normal view already follows active-line changes in useSpotifySync.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [immersive.active, immersive.centerCurrent, data.fontSize, data.readingMode, data.romanizeFurigana, data.showTranslation]);
 
   // Keep syncRefs in sync with state
   useEffect(() => { syncRefs.current.songTitle = data.song?.title || ''; }, [data.song?.title]);
@@ -416,7 +456,20 @@ export default function SongViewPage() {
       data.showToast('error', t('song.seekFailed'));
       return;
     }
-    if (res.ok) return;
+    if (res.ok) {
+      if (immersive.active) {
+        immersive.clearManualScroll();
+        const index = data.lineTimestamps.findIndex((timestamp) => timestamp === positionMs);
+        const container = lyricsRef.current;
+        const line = lineRefs.current[index];
+        if (container && line) {
+          const box = line.getBoundingClientRect();
+          animateSmoothScroll(container, centeredLyricScrollTop(container.scrollTop,
+            container.clientHeight, box.top - container.getBoundingClientRect().top, box.height));
+        }
+      }
+      return;
+    }
 
     if (res.status === 401) {
       // Token expired / Spotify not connected — link to the existing reconnect
@@ -524,7 +577,7 @@ export default function SongViewPage() {
   };
 
   return (
-    <div className={`song-view fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-visible sm:block sm:h-auto sm:pb-0${coverColor ? ' song-view--accented' : ''}`} style={songThemeStyle}>
+    <div className={`song-view fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-visible sm:block sm:h-auto sm:pb-0${coverColor ? ' song-view--accented' : ''}${immersive.active ? ' lyrics-immersive-active' : ''}`} style={{ ...songThemeStyle, ['--immersive-font-base' as string]: `${data.fontSize}px` }} role={immersive.active ? 'region' : undefined} aria-label={immersive.active ? t('song.immersiveEnter') : undefined}>
       {/* Breadcrumb */}
       <div className="shrink-0 mb-3 sm:mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
         <button onClick={() => transitionRouter.push('/')} className="hover:text-[var(--foreground)] transition-colors inline-flex items-center gap-1">
@@ -620,6 +673,13 @@ export default function SongViewPage() {
               )}
             </div>
           </div>
+          {furiganaLines.length > 0 && (
+            <button type="button" onClick={enterImmersive}
+              className="sm:hidden ml-auto inline-flex h-11 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--card)] px-3 text-sm font-medium text-[var(--foreground)]"
+              aria-label={t('song.immersiveEnter')}>
+              <Maximize2 className="h-4 w-4" />{t('song.immersiveEnter')}
+            </button>
+          )}
           {/* Desktop toolbar */}
           <div className="hidden self-end sm:flex flex-col items-end gap-3">
             <div className="flex flex-wrap items-center justify-end gap-2 [&>*]:shrink-0">
@@ -640,6 +700,12 @@ export default function SongViewPage() {
                 },
               ]}
             />
+            {furiganaLines.length > 0 && (
+              <button type="button" onClick={enterImmersive} className={btnCls()}
+                aria-label={t('song.immersiveEnter')} title={t('song.immersiveEnter')}>
+                <Maximize2 className="h-4 w-4" />
+              </button>
+            )}
             {furiganaLines.length > 0 && pipSupported && (
               <button
                 onClick={handleOpenPiP}
@@ -909,20 +975,28 @@ export default function SongViewPage() {
             params={dotParams}
             spectrumRef={spectrum.captureOn ? spectrum.spectrumRef : undefined}
           />
-          <div ref={lyricsRef} className="relative z-10 p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden" style={{ fontSize: `${data.fontSize}px` }}>
+          <div ref={lyricsRef} className="lyrics-scroll relative z-10 p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden"
+            style={immersive.active ? undefined : { fontSize: `${data.fontSize}px` }}
+            tabIndex={immersive.active ? 0 : undefined}
+            onWheel={immersive.noteManualScroll}
+            onTouchMove={immersive.noteManualScroll}
+            onPointerDown={immersive.noteManualScroll}
+            onKeyDown={(event) => {
+              if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) immersive.noteManualScroll();
+            }}>
             {furiganaLines.length > 0 ? (
               furiganaLines.map((line, i) => (
                 <div key={i} ref={(el) => { lineRefs.current[i] = el; }}>
                   <FuriganaLineView
                     line={line}
                     isActive={i === activeLine && !!isSynced}
-                    debugTs={data.debug && lineTimestamps[i] != null ? lineTimestamps[i] : undefined}
+                    debugTs={!immersive.active && data.debug && lineTimestamps[i] != null ? lineTimestamps[i] : undefined}
                     timestamp={hasSyncData && lineTimestamps[i] != null ? lineTimestamps[i] : undefined}
-                    onSeek={hasSyncData && isSameSong && spotify?.connected ? handleSeek : undefined}
-                    onCopyLine={() => copyLyricLine(line)}
-                    onCopyTranslation={() => copyLyricTranslation(i)}
-                    onShareLine={() => router.push(`/songs/${id}/share?line=${i}`)}
-                    onCorrectFurigana={() => router.push(`/songs/${id}/furigana/edit?line=${i}`)}
+                    onSeek={hasSyncData && spotify?.connected && (isSameSong || (immersive.active && spotify.track && isSameSpotifyTrack(song, spotify.track))) ? handleSeek : undefined}
+                    onCopyLine={immersive.active ? undefined : () => copyLyricLine(line)}
+                    onCopyTranslation={immersive.active ? undefined : () => copyLyricTranslation(i)}
+                    onShareLine={immersive.active ? undefined : () => router.push(`/songs/${id}/share?line=${i}`)}
+                    onCorrectFurigana={immersive.active ? undefined : () => router.push(`/songs/${id}/furigana/edit?line=${i}`)}
                     canCorrectFurigana={canEdit}
                     readingMode={data.readingMode}
                     romanizeFurigana={data.romanizeFurigana}
@@ -944,7 +1018,7 @@ export default function SongViewPage() {
                   <span>{data.furiganaError}</span>
                 </div>
                 <pre className="whitespace-pre-wrap font-sans leading-relaxed text-[var(--muted-foreground)]" style={{ fontSize: `${data.fontSize}px` }}>{song.lyrics_raw}</pre>
-                {canEdit && (
+                {canEdit && !immersive.active && (
                   <button
                     type="button"
                     onClick={data.retryFurigana}
@@ -959,7 +1033,7 @@ export default function SongViewPage() {
             ) : (
               <div className="flex flex-col items-center gap-3 py-10 text-center">
                 <p className="text-sm text-[var(--muted-foreground)]">{t('song.noLyricsSimple')}</p>
-                {canEdit ? (
+                {canEdit && !immersive.active ? (
                   <div className="flex flex-wrap items-center justify-center gap-2">
                     <button
                       type="button"
@@ -989,14 +1063,25 @@ export default function SongViewPage() {
 
         {/* Desktop time axis: sits in the left gutter, OUTSIDE the card, and is
             only revealed there when the gutter is wide enough (measured). */}
-        <LyricTimeAxis
-          scrollRef={lyricsRef}
-          lineRefs={lineRefs}
-          timestamps={lineTimestamps}
-          activeLine={activeLine}
-          isSynced={!!isSynced}
-          playbackMsRef={playbackMsRef}
-        />
+        {!immersive.active && (
+          <LyricTimeAxis
+            scrollRef={lyricsRef}
+            lineRefs={lineRefs}
+            timestamps={lineTimestamps}
+            activeLine={activeLine}
+            isSynced={!!isSynced}
+            playbackMsRef={playbackMsRef}
+          />
+        )}
+        {immersive.active && (
+          <ImmersiveLyricsControls
+            data={data} song={song} coverUrl={coverUrl}
+            browserFullscreen={immersive.browserFullscreen}
+            canRequestFullscreen={immersive.canRequestFullscreen}
+            onRequestFullscreen={immersive.requestBrowserFullscreen}
+            onClose={immersive.leave}
+          />
+        )}
       </div>
 
       {/* Spotify connection link only; song information now opens from the cover. */}

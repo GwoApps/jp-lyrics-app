@@ -38,10 +38,16 @@ export function shouldScrollLyricsToStart(
     && previousMs - currentMs > 750 && currentMs < firstTimedMs;
 }
 
+export function cancelSmoothScroll(container: HTMLElement): void {
+  if (activeAnim?.container !== container) return;
+  cancelAnimationFrame(activeAnim.raf);
+  activeAnim = null;
+}
+
 /**
  * Animate `container.scrollTop` toward `targetTop`. Any in-flight animation
- * on the same container is cancelled (a newer follow wins). Manual scrolling
- * is not interrupted — the animation simply finishes on its own.
+ * on the same container is cancelled (a newer follow wins). Call
+ * `cancelSmoothScroll` on manual input so the current animation yields too.
  */
 export function animateSmoothScroll(
   container: HTMLElement,
@@ -57,6 +63,10 @@ export function animateSmoothScroll(
     activeAnim = null;
   }
   if (Math.abs(distance) < 1) return;
+  if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    container.scrollTop = targetTop;
+    return;
+  }
 
   // ~0.55ms per px, clamped: 220ms for an adjacent line, 700ms for a full jump.
   const duration =

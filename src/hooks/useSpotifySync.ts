@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { FuriganaLine } from '@/lib/types';
 import { isSameSpotifyTrack } from '@/lib/match';
 import { useNowPlaying, type SyncState } from './useNowPlaying';
+import { centeredLyricScrollTop, isLyricsView, lyricsViewUrl } from '@/lib/immersive-lyrics';
 import { animateSmoothScroll, earliestTimedLyricMs, shouldScrollLyricsToStart } from '@/lib/scroll-ease';
 
 export interface SpotifyState {
@@ -43,6 +44,9 @@ export interface SyncRefs {
   } | null>) | null;
   currentSongId: string;
   currentUserEmail: string;
+  /** Fullscreen is a view of this same lyric controller, not another poller. */
+  immersiveLyrics: boolean;
+  shouldFollowLyrics: () => boolean;
 }
 
 export interface UseSpotifySyncReturn {
@@ -175,7 +179,7 @@ export function useSpotifySync(
         && !refs.debug && previous?.key === key
         && shouldScrollLyricsToStart(previous.ms, nowPlayingData.progress_ms, earliestTimedLyricMs(refs.lineTimestamps))) {
         const container = lyricsRef.current;
-        if (container) animateSmoothScroll(container, 0);
+        if (container && refs.shouldFollowLyrics()) animateSmoothScroll(container, 0);
       }
     } else {
       lastPolledProgressRef.current = null;
@@ -218,7 +222,10 @@ export function useSpotifySync(
           if (navigatingRef.current) return;
           if (match && match.id !== refs.currentSongId) {
             navigatingRef.current = true;
-            window.location.assign(`/songs/${match.id}`);
+            const destination = `/songs/${match.id}`;
+            window.location.assign(isLyricsView(window.location.href)
+              ? lyricsViewUrl(new URL(destination, window.location.href).href, true)
+              : destination);
           }
         })();
       }
@@ -288,19 +295,22 @@ export function useSpotifySync(
       if (!refs.debug && newActive === -1 && previousMs != null && previousMs > currentMs
         && shouldScrollLyricsToStart(previousMs, currentMs, earliestTimedLyricMs(lts))) {
         const container = lyricsRef.current;
-        if (container) animateSmoothScroll(container, 0);
+        if (container && refs.shouldFollowLyrics()) animateSmoothScroll(container, 0);
       }
 
       // Update highlight + scroll only when line actually changes
       if (newActive !== highlightRef.current) {
         highlightRef.current = newActive;
         setActiveLine(newActive);
-        if (!refs.debug && lineRefs.current?.[newActive]) {
+        if (!refs.debug && refs.shouldFollowLyrics() && lineRefs.current?.[newActive]) {
           const lineEl = lineRefs.current[newActive];
           const container = lyricsRef.current;
           if (lineEl && container) {
-            const lineTop = lineEl.offsetTop - container.offsetTop;
-            animateSmoothScroll(container, lineTop - container.clientHeight / 2 + lineEl.offsetHeight / 2);
+            const lineTop = refs.immersiveLyrics
+              ? centeredLyricScrollTop(container.scrollTop, container.clientHeight,
+                lineEl.getBoundingClientRect().top - container.getBoundingClientRect().top, lineEl.getBoundingClientRect().height)
+              : lineEl.offsetTop - container.offsetTop - container.clientHeight / 2 + lineEl.offsetHeight / 2;
+            animateSmoothScroll(container, lineTop);
           }
         }
         // Update PiP window if open
