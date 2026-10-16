@@ -1338,7 +1338,15 @@ textarea {
   border: 0;
   border-radius: 0;
   box-shadow: none;
-  background: color-mix(in srgb, var(--background) 98%, var(--lyric-orbit-accent));
+  background: var(--background);
+}
+/* Only a resolved cover palette may tint the full viewport. A missing or
+   unreadable cover keeps the neutral surface instead of inventing an accent. */
+.lyrics-immersive-active.song-view--accented .lyrics-panel {
+  background: color-mix(in srgb, var(--background) 72%, var(--lyric-orbit-accent));
+}
+[data-theme="light"] .lyrics-immersive-active.song-view--accented .lyrics-panel {
+  background: color-mix(in srgb, var(--background) 82%, var(--lyric-orbit-accent));
 }
 .lyrics-immersive-active .lyrics-ambient-breath,
 .lyrics-immersive-active .lyrics-ambient-orbit,
@@ -1364,7 +1372,8 @@ textarea {
 .lyrics-immersive-active .lyric-line--active { opacity: 1; }
 .lyrics-immersive-active .lyric-translation {
   text-align: center;
-  color: color-mix(in srgb, var(--foreground) 76%, var(--background));
+  color: var(--foreground);
+  opacity: 0.68;
 }
 @media (min-width: 640px) {
   .lyrics-immersive-active .lyrics-scroll {
@@ -1408,7 +1417,11 @@ textarea {
   min-width: 0;
   padding: 8px 14px 8px 8px;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--background) 92%, transparent);
+  background: color-mix(in srgb, var(--background) 58%, transparent);
+}
+.immersive-song-artist {
+  color: var(--foreground);
+  opacity: 0.68;
 }
 .immersive-song-info .immersive-song-cover {
   width: var(--immersive-cover-size);
