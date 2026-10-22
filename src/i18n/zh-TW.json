@@ -254,6 +254,8 @@
     "immersiveSettings": "閱讀設定",
     "immersiveSmaller": "縮小歌詞",
     "immersiveLarger": "放大歌詞",
+    "immersiveFollowPaused": "已暫停跟隨 · 停止操作 6 秒後恢復",
+    "immersiveResumeFollowing": "回到目前歌詞",
     "immersiveBrowserFullscreen": "隱藏瀏覽器介面",
     "share": "分享",
     "followOn": "跟隨中",

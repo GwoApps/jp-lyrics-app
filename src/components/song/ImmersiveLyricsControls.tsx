@@ -1,6 +1,6 @@
 'use client';
 
-import { Maximize2, Minus, Plus, Settings2, X } from 'lucide-react';
+import { LocateFixed, Maximize2, Minus, Plus, Settings2, X } from 'lucide-react';
 import CoverImage from '@/components/CoverImage';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -8,11 +8,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useI18n } from '@/lib/i18n';
 import type { useSongData } from '@/hooks/useSongData';
+import { IMMERSIVE_FONT_SIZES } from '@/lib/immersive-lyrics';
 
 type SongData = ReturnType<typeof useSongData>;
 
 export default function ImmersiveLyricsControls({
   data, song, coverUrl, browserFullscreen, canRequestFullscreen, onRequestFullscreen, onClose,
+  fontStep, onChangeFontStep, showResumeFollowing, onResumeFollowing,
 }: {
   data: SongData;
   song: NonNullable<SongData['song']>;
@@ -21,6 +23,10 @@ export default function ImmersiveLyricsControls({
   canRequestFullscreen: boolean;
   onRequestFullscreen: () => void;
   onClose: () => void;
+  fontStep: number;
+  onChangeFontStep: (direction: -1 | 1) => void;
+  showResumeFollowing: boolean;
+  onResumeFollowing: () => void;
 }) {
   const { t } = useI18n();
   const itemCls = 'gap-2 rounded-md px-3 py-2.5 text-sm data-[highlighted]:bg-[var(--accent)]';
@@ -36,13 +42,17 @@ export default function ImmersiveLyricsControls({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="end" style={{ zIndex: 130 }} className="w-60 p-1.5">
-            <DropdownMenuItem className={itemCls} disabled={data.fontSize <= 14} onSelect={(event) => {
-              keepOpen(event); data.setFontSize((size) => Math.max(14, size - 2));
+            <div className="flex items-center justify-between px-3 py-2 text-xs text-[var(--muted-foreground)]" aria-live="polite" aria-atomic="true">
+              <span>{t('song.fontSize')}</span>
+              <span className="tabular-nums">{fontStep + 1} / {IMMERSIVE_FONT_SIZES.length}</span>
+            </div>
+            <DropdownMenuItem className={itemCls} disabled={fontStep === 0} onSelect={(event) => {
+              keepOpen(event); onChangeFontStep(-1);
             }}>
               <Minus className="h-4 w-4" />{t('song.immersiveSmaller')}
             </DropdownMenuItem>
-            <DropdownMenuItem className={itemCls} disabled={data.fontSize >= 32} onSelect={(event) => {
-              keepOpen(event); data.setFontSize((size) => Math.min(32, size + 2));
+            <DropdownMenuItem className={itemCls} disabled={fontStep === IMMERSIVE_FONT_SIZES.length - 1} onSelect={(event) => {
+              keepOpen(event); onChangeFontStep(1);
             }}>
               <Plus className="h-4 w-4" />{t('song.immersiveLarger')}
             </DropdownMenuItem>
@@ -85,6 +95,15 @@ export default function ImmersiveLyricsControls({
           <X className="h-5 w-5" />
         </button>
       </div>
+      {showResumeFollowing && (
+        <div className="immersive-follow-control">
+          <span role="status" className="text-xs text-[var(--muted-foreground)]">{t('song.immersiveFollowPaused')}</span>
+          <button type="button" className="immersive-resume" onClick={onResumeFollowing}>
+            <LocateFixed className="h-4 w-4" aria-hidden="true" />
+            {t('song.immersiveResumeFollowing')}
+          </button>
+        </div>
+      )}
       <div className="immersive-song-info">
         <CoverImage src={coverUrl} alt="" size="sm" className="immersive-song-cover" />
         <div className="immersive-song-text min-w-0">

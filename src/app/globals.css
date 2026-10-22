@@ -1355,7 +1355,7 @@ textarea {
   height: 100%;
   max-height: none;
   padding: 50dvh clamp(20px, 9vw, 128px);
-  font-size: clamp(26px, calc(var(--immersive-font-base) * 1.5), 40px);
+  font-size: var(--immersive-font-mobile, 34px);
   text-align: center;
   overscroll-behavior: contain;
   scrollbar-width: none;
@@ -1364,20 +1364,35 @@ textarea {
 }
 .lyrics-immersive-active .lyrics-scroll::-webkit-scrollbar { display: none; }
 .lyrics-immersive-active .lyrics-scroll > div { max-width: 960px; margin-inline: auto; overflow-wrap: anywhere; }
-/* The fullscreen row margin is half the previous 1.5em; text line-height,
-   wrapping and translation layout are unchanged. */
-.lyrics-immersive-active .lyrics-scroll > div:not(:last-child) { margin-block-end: 0.75em; }
+/* Fade the entire original/reading/translation pair together. Untimed lyrics
+   and manual browsing retain normal reading contrast. */
+.lyrics-immersive-active .lyrics-scroll > div { transition: opacity 300ms ease; }
+.lyrics-immersive-active .lyrics-scroll > div:not(:last-child) { margin-block-end: 1.15em; }
+.lyrics-immersive-active .lyrics-scroll > [data-lyric-distance="1"] { opacity: 0.62; }
+.lyrics-immersive-active .lyrics-scroll > [data-lyric-distance="2"] { opacity: 0.38; }
+.lyrics-immersive-active .lyrics-scroll[data-follow-paused="true"] > [data-lyric-distance] { opacity: 1; }
 .lyrics-immersive-active .lyric-line-context-trigger { justify-content: center; }
-.lyrics-immersive-active .lyric-line { line-height: 1.75; opacity: 0.496; transform-origin: center; text-wrap: balance; }
-.lyrics-immersive-active .lyric-line--active { opacity: 1; }
-.lyrics-immersive-active .lyric-translation {
+.lyrics-immersive-active .lyric-line { line-height: 1.75; opacity: 1; transform-origin: center; text-wrap: balance; }
+.lyrics-immersive-active .lyric-line rt { opacity: 0.75; }
+.lyrics-immersive-active .lyric-translation,
+.lyrics-immersive-active .lyric-translation-placeholder {
+  /* Replace the normal view's negative margins; a pair is closer together
+     than two successive lyric rows, including when the translation wraps. */
+  margin-block-start: clamp(12px, 0.4em, 16px);
+  margin-inline: auto;
+  padding-block-end: 0;
+  max-width: min(90%, 46ch);
+  font-size: max(18px, 0.62em);
+  line-height: 1.55;
   text-align: center;
+  text-wrap: pretty;
   color: var(--foreground);
-  opacity: 0.68;
+  opacity: 0.85;
 }
+.lyrics-immersive-active .lyric-translation-placeholder { opacity: 0.6; }
 @media (min-width: 640px) {
   .lyrics-immersive-active .lyrics-scroll {
-    font-size: clamp(32px, calc(var(--immersive-font-base) * 2.1), 56px);
+    font-size: var(--immersive-font-desktop, 44px);
   }
 }
 .immersive-actions {
@@ -1400,10 +1415,35 @@ textarea {
   color: var(--foreground);
 }
 .immersive-action:hover { background: var(--accent); }
-.immersive-action:focus-visible, .lyrics-immersive-active .lyrics-scroll:focus-visible {
+.immersive-action:focus-visible, .immersive-resume:focus-visible, .lyrics-immersive-active .lyrics-scroll:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
+.immersive-follow-control {
+  position: absolute;
+  z-index: 5;
+  top: calc(max(16px, env(safe-area-inset-top, 0px)) + 56px);
+  right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: calc(100% - 32px);
+}
+.immersive-resume {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 14px;
+}
+.immersive-resume:hover { background: var(--accent); }
 .immersive-song-info {
   --immersive-cover-size: clamp(52px, 5vw, 64px);
   position: absolute;
@@ -1447,5 +1487,6 @@ textarea {
 @media (prefers-reduced-motion: reduce) {
   .lyrics-immersive-active .lyric-active { animation: none; }
   .lyrics-immersive-active .lyric-line,
+  .lyrics-immersive-active .lyrics-scroll > div,
   .immersive-song-cover, .immersive-song-text { transition: none; }
 }

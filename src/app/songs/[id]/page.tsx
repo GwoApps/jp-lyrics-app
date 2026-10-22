@@ -191,7 +191,8 @@ export default function SongViewPage() {
 
   // Spotify sync hook (polling + rAF + follow-playing)
   const sync = useSpotifySync(syncRefs, lineRefs, lyricsRef, spotifyConnected === true);
-  const immersive = useImmersiveLyrics(lyricsRef, lineRefs, sync.activeLine, data.debug);
+  const immersive = useImmersiveLyrics(lyricsRef, lineRefs, sync.activeLine,
+    data.debug, !!(sync.isSameSong && sync.spotify?.connected));
   useEffect(() => {
     syncRefs.current.immersiveLyrics = immersive.active;
     syncRefs.current.shouldFollowLyrics = immersive.shouldFollow;
@@ -225,7 +226,7 @@ export default function SongViewPage() {
     return () => cancelAnimationFrame(raf);
   // The normal view already follows active-line changes in useSpotifySync.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [immersive.active, immersive.centerCurrent, data.fontSize, data.readingMode, data.romanizeFurigana, data.showTranslation]);
+  }, [immersive.active, immersive.centerCurrent, immersive.fontStep, data.fontSize, data.readingMode, data.romanizeFurigana, data.showTranslation]);
 
   // Keep syncRefs in sync with state
   useEffect(() => { syncRefs.current.songTitle = data.song?.title || ''; }, [data.song?.title]);
@@ -491,6 +492,7 @@ export default function SongViewPage() {
   const { spotify, syncState, resumeSync, activeLine, isSameSong, followPlaying, setFollowPlaying, pipWindowRef, playbackMsRef } = sync;
   const handleOpenPiP = () => data.openPiP(furiganaLines, song, activeLine, pipWindowRef, lineTimestamps);
   const isSynced = isSameSong && activeLine >= 0;
+  const immersiveSynced = !!(isSynced && spotify?.connected && !data.debug);
   const hasSyncData = syncLines.length > 0;
   const debugSyncActive = spotify?.is_playing && syncLines.length > 0 ? findActiveLine(syncLines, spotify.progress_ms) : -1;
   // Best-matching *other* song for the playing track — resolved lazily via the
@@ -577,7 +579,7 @@ export default function SongViewPage() {
   };
 
   return (
-    <div className={`song-view fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-visible sm:block sm:h-auto sm:pb-0${coverColor ? ' song-view--accented' : ''}${immersive.active ? ' lyrics-immersive-active' : ''}`} style={{ ...songThemeStyle, ['--immersive-font-base' as string]: `${data.fontSize}px` }} role={immersive.active ? 'region' : undefined} aria-label={immersive.active ? t('song.immersiveEnter') : undefined}>
+    <div className={`song-view fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-visible sm:block sm:h-auto sm:pb-0${coverColor ? ' song-view--accented' : ''}${immersive.active ? ' lyrics-immersive-active' : ''}`} style={{ ...songThemeStyle, ['--immersive-font-mobile' as string]: `${immersive.fontSize.mobile}px`, ['--immersive-font-desktop' as string]: `${immersive.fontSize.desktop}px` }} role={immersive.active ? 'region' : undefined} aria-label={immersive.active ? t('song.immersiveEnter') : undefined}>
       {/* Breadcrumb */}
       <div className="shrink-0 mb-3 sm:mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
         <button onClick={() => transitionRouter.push('/')} className="hover:text-[var(--foreground)] transition-colors inline-flex items-center gap-1">
@@ -976,6 +978,7 @@ export default function SongViewPage() {
             spectrumRef={spectrum.captureOn ? spectrum.spectrumRef : undefined}
           />
           <div ref={lyricsRef} className="lyrics-scroll relative z-10 p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden"
+            data-follow-paused={immersive.active && immersive.manualBrowsing ? true : undefined}
             style={immersive.active ? undefined : { fontSize: `${data.fontSize}px` }}
             tabIndex={immersive.active ? 0 : undefined}
             onWheel={immersive.noteManualScroll}
@@ -986,7 +989,9 @@ export default function SongViewPage() {
             }}>
             {furiganaLines.length > 0 ? (
               furiganaLines.map((line, i) => (
-                <div key={i} ref={(el) => { lineRefs.current[i] = el; }}>
+                <div key={i} ref={(el) => { lineRefs.current[i] = el; }}
+                  data-lyric-distance={immersive.active && immersiveSynced ? Math.min(2, Math.abs(i - activeLine)) : undefined}
+                  aria-current={immersive.active && immersiveSynced && i === activeLine ? true : undefined}>
                   <FuriganaLineView
                     line={line}
                     isActive={i === activeLine && !!isSynced}
@@ -1080,6 +1085,10 @@ export default function SongViewPage() {
             canRequestFullscreen={immersive.canRequestFullscreen}
             onRequestFullscreen={immersive.requestBrowserFullscreen}
             onClose={immersive.leave}
+            fontStep={immersive.fontStep}
+            onChangeFontStep={immersive.changeFontStep}
+            showResumeFollowing={immersive.manualBrowsing && immersiveSynced}
+            onResumeFollowing={immersive.resumeFollowing}
           />
         )}
       </div>

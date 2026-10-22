@@ -5,6 +5,7 @@ import { animateSmoothScroll, cancelSmoothScroll } from '@/lib/scroll-ease';
 import {
   centeredLyricScrollTop, isLyricsView, lyricsViewUrl,
   LYRIC_FOLLOW_RESUME_MS, shouldFollowImmersiveLyrics,
+  IMMERSIVE_FONT_SIZES, IMMERSIVE_FONT_STORAGE_KEY, parseImmersiveFontStep,
 } from '@/lib/immersive-lyrics';
 
 /** The native browser fullscreen and the lyric-reading view are intentionally independent. */
@@ -13,21 +14,38 @@ export function useImmersiveLyrics(
   lineRefs: React.RefObject<(HTMLDivElement | null)[]>,
   activeLine: number,
   debug: boolean,
+  followEnabled: boolean,
 ) {
   const [active, setActive] = useState(false);
   const [browserFullscreen, setBrowserFullscreen] = useState(false);
+  const [manualBrowsing, setManualBrowsing] = useState(false);
+  const [fontStep, setFontStep] = useState(() => {
+    try {
+      return parseImmersiveFontStep(typeof window === 'undefined' ? null : localStorage.getItem(IMMERSIVE_FONT_STORAGE_KEY));
+    } catch {
+      return parseImmersiveFontStep(null);
+    }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(IMMERSIVE_FONT_STORAGE_KEY, String(fontStep)); } catch { /* Storage may be unavailable. */ }
+  }, [fontStep]);
+  const changeFontStep = useCallback((direction: -1 | 1) => {
+    setFontStep((step) => Math.max(0, Math.min(IMMERSIVE_FONT_SIZES.length - 1, step + direction)));
+  }, []);
   const activeRef = useRef(false);
   const ownedFullscreen = useRef(false);
   const manualUntil = useRef(0);
   const returnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentLine = useRef(activeLine);
   const debugRef = useRef(debug);
+  const followEnabledRef = useRef(followEnabled);
   useEffect(() => { currentLine.current = activeLine; }, [activeLine]);
   useEffect(() => { debugRef.current = debug; }, [debug]);
+  useEffect(() => { followEnabledRef.current = followEnabled; }, [followEnabled]);
   const shouldFollow = useCallback(() => !activeRef.current || shouldFollowImmersiveLyrics(performance.now(), manualUntil.current), []);
 
   const centerCurrent = useCallback(() => {
-    if (!activeRef.current || debugRef.current || !shouldFollowImmersiveLyrics(performance.now(), manualUntil.current)) return;
+    if (!activeRef.current || debugRef.current || !followEnabledRef.current || !shouldFollowImmersiveLyrics(performance.now(), manualUntil.current)) return;
     const container = lyricsRef.current;
     if (!container) return;
     const line = lineRefs.current[currentLine.current];
@@ -48,22 +66,31 @@ export function useImmersiveLyrics(
     if (!active || !shouldFollow()) return;
     const raf = requestAnimationFrame(centerCurrent);
     return () => cancelAnimationFrame(raf);
-  }, [active, activeLine, centerCurrent, shouldFollow]);
+  }, [active, activeLine, followEnabled, centerCurrent, shouldFollow]);
 
   const clearManualScroll = useCallback(() => {
     manualUntil.current = 0;
+    setManualBrowsing(false);
     if (returnTimer.current) clearTimeout(returnTimer.current);
     returnTimer.current = null;
   }, []);
 
+  const resumeFollowing = useCallback(() => {
+    clearManualScroll();
+    centerCurrent();
+    lyricsRef.current?.focus({ preventScroll: true });
+  }, [clearManualScroll, centerCurrent, lyricsRef]);
+
   const noteManualScroll = useCallback(() => {
     if (!activeRef.current) return;
     if (lyricsRef.current) cancelSmoothScroll(lyricsRef.current);
+    setManualBrowsing(true);
     manualUntil.current = performance.now() + LYRIC_FOLLOW_RESUME_MS;
     if (returnTimer.current) clearTimeout(returnTimer.current);
     returnTimer.current = setTimeout(() => {
       returnTimer.current = null;
       manualUntil.current = 0;
+      setManualBrowsing(false);
       if (currentLine.current >= 0) centerCurrent();
     }, LYRIC_FOLLOW_RESUME_MS);
   }, [centerCurrent, lyricsRef]);
@@ -160,7 +187,8 @@ export function useImmersiveLyrics(
   }, [active, centerCurrent]);
 
   return {
-    active, browserFullscreen,
+    active, browserFullscreen, manualBrowsing, resumeFollowing,
+    fontStep, fontSize: IMMERSIVE_FONT_SIZES[fontStep], changeFontStep,
     canRequestFullscreen: typeof document !== 'undefined' && !!document.documentElement.requestFullscreen,
     enter, leave, requestBrowserFullscreen, noteManualScroll, clearManualScroll, centerCurrent,
     shouldFollow,

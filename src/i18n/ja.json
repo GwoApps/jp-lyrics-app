@@ -254,6 +254,8 @@
     "immersiveSettings": "表示設定",
     "immersiveSmaller": "歌詞を小さく",
     "immersiveLarger": "歌詞を大きく",
+    "immersiveFollowPaused": "自動スクロールを一時停止 · 操作終了から6秒後に再開",
+    "immersiveResumeFollowing": "現在の歌詞に戻る",
     "immersiveBrowserFullscreen": "ブラウザーの表示を隠す",
     "share": "シェア",
     "followOn": "フォロー中",

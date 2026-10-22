@@ -254,6 +254,8 @@
     "immersiveSettings": "Reading settings",
     "immersiveSmaller": "Smaller lyrics",
     "immersiveLarger": "Larger lyrics",
+    "immersiveFollowPaused": "Following paused · Resumes after 6 seconds of inactivity",
+    "immersiveResumeFollowing": "Back to current line",
     "immersiveBrowserFullscreen": "Hide browser chrome",
     "share": "Share",
     "followOn": "Following",
