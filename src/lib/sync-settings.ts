@@ -23,6 +23,7 @@ export const SETTING_TO_LS: Record<string, string> = {
   romanize_furigana: 'jplrc-romanize-furigana',
   show_translation: 'jplrc-show-translation',
   follow_playing: 'jplrc-follow-playing',
+  disable_video_pip: 'jplrc-disable-video-pip',
   translation_target_lang: 'jplrc-translation-target-lang',
   sync_settings: SYNC_SETTINGS_LS_KEY,
 };
@@ -40,6 +41,7 @@ export const SYNCABLE_KEYS: readonly (keyof typeof SETTING_TO_LS)[] = [
   'romanize_furigana',
   'show_translation',
   'follow_playing',
+  'disable_video_pip',
   'translation_target_lang',
 ];
 
@@ -69,6 +71,9 @@ export function syncSettingsToLocalStorage(settings: SettingsPayload) {
     const lsKey = SETTING_TO_LS[key];
     if (!lsKey || value === undefined) continue;
     try { localStorage.setItem(lsKey, value); } catch {}
+    if (key === 'disable_video_pip') {
+      window.dispatchEvent(new CustomEvent('jplrc-disable-video-pip-change', { detail: value === 'true' }));
+    }
   }
 }
 

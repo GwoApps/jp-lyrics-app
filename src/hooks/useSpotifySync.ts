@@ -302,6 +302,7 @@ export function useSpotifySync(
       if (newActive !== highlightRef.current) {
         highlightRef.current = newActive;
         setActiveLine(newActive);
+        window.dispatchEvent(new CustomEvent('lyrics-pip-active-line', { detail: { activeLine: newActive } }));
         if (!refs.debug && refs.shouldFollowLyrics() && lineRefs.current?.[newActive]) {
           const lineEl = lineRefs.current[newActive];
           const container = lyricsRef.current;

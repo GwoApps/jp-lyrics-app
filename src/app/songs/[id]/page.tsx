@@ -43,6 +43,7 @@ import { useAuthSession } from '@/lib/auth-session';
 import type { SyncRefs } from '@/hooks/useSpotifySync';
 import { LYRICS_SOURCE_KEYS } from '@/lib/lyrics-source';
 import { copyToClipboard } from '@/lib/clipboard';
+import { getPiPCapabilities } from '@/lib/pip-support';
 
 /** Reusable button class builder */
 function btnCls(active?: boolean, variant?: 'danger') {
@@ -127,13 +128,8 @@ function clamp(value: number, min: number, max: number) {
 }
 
 const subscribeStaticCapability = () => () => {};
-function getDocumentPiPSupport() {
-  if (typeof window === 'undefined') return false;
-  const pipWindow = window as Window & {
-    documentPictureInPicture?: { requestWindow?: unknown };
-  };
-  return typeof pipWindow.documentPictureInPicture?.requestWindow === 'function';
-}
+const getDocumentPiPSupport = () => getPiPCapabilities().document;
+const getVideoPiPSupport = () => getPiPCapabilities().video && getPiPCapabilities().canvasCapture;
 
 /** Normalizes source output to a restrained range: dim art gets a modest lift, bright art is capped. */
 function ambientBrightness(color: CoverColor) {
@@ -290,7 +286,9 @@ export default function SongViewPage() {
   }, [data.debug]);
 
   // PiP detection
-  const pipSupported = useSyncExternalStore(subscribeStaticCapability, getDocumentPiPSupport, () => false);
+  const documentPiPSupported = useSyncExternalStore(subscribeStaticCapability, getDocumentPiPSupport, () => false);
+  const videoPiPSupported = useSyncExternalStore(subscribeStaticCapability, getVideoPiPSupport, () => false);
+  const pipSupported = documentPiPSupported || (!data.disableVideoPiP && videoPiPSupported);
 
   // Start with the list's cached cover so the shared element has real visual content on its first render.
   const [fallbackCoverUrl, setFallbackCoverUrl] = useState<string | null>(() => getCachedSongCover(id));

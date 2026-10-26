@@ -46,6 +46,7 @@ export interface UseSongDataReturn {
   translatedCount: number;
   showTranslation: boolean;
   setShowTranslation: React.Dispatch<React.SetStateAction<boolean>>;
+  disableVideoPiP: boolean;
   translating: boolean;
   // True briefly after a cancellation/error while the client re-reads the
   // server's final persisted result to show a reliable coverage number.
@@ -138,6 +139,7 @@ export function useSongData(id: string): UseSongDataReturn {
     readingMode, setReadingMode,
     romanizeFurigana, setRomanizeFurigana,
     showTranslation, setShowTranslation,
+    disableVideoPiP,
     debug, setDebug,
     fontSize, setFontSize,
   } = useReadingPreferences();
@@ -253,6 +255,7 @@ export function useSongData(id: string): UseSongDataReturn {
   // placeholder then mirrors the detail page (`showUntranslatedHint`).
   const { openPiP } = usePiP({
     fontSize, readingMode, romanizeFurigana, song, furiganaLines, lineTimestamps,
+    disableVideoPiP,
     translationLines: showTranslation && hasTranslation ? translations : undefined,
     showUntranslatedHint: untranslatedCount > 0,
     showToast, t,
@@ -381,6 +384,7 @@ export function useSongData(id: string): UseSongDataReturn {
     translatedCount,
     showTranslation,
     setShowTranslation,
+    disableVideoPiP,
     translating,
     translationSaving,
     translationError,

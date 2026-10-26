@@ -4,11 +4,15 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { FuriganaLine, ReadingMode, SongData } from '@/lib/types';
 import { escapeHtml } from '@/lib/escape-html';
 import { renderPipLyricsHtml } from '@/lib/pip-render';
+import { normalizeFuriganaSegments, resolveFuriganaReading } from '@/lib/romaji';
+import { normalizeReadingScheme } from '@/lib/lyrics-reading';
+import { getPiPCapabilities } from '@/lib/pip-support';
 
 interface UsePiPDeps {
   fontSize: number;
   readingMode: ReadingMode;
   romanizeFurigana: boolean;
+  disableVideoPiP: boolean;
   song: SongData | null;
   furiganaLines: FuriganaLine[];
   lineTimestamps: (number | null)[];
@@ -40,7 +44,7 @@ interface PipLyricsSource {
 
 export function usePiP(deps: UsePiPDeps) {
   const {
-    fontSize, readingMode, romanizeFurigana, song, furiganaLines, lineTimestamps,
+    fontSize, readingMode, romanizeFurigana, disableVideoPiP, song, furiganaLines, lineTimestamps,
     translationLines, showUntranslatedHint, showToast, t,
   } = deps;
 
@@ -48,6 +52,160 @@ export function usePiP(deps: UsePiPDeps) {
   // can push live font-size / reading-mode updates into an already-open PiP
   // window (the callback receives it per call, but the effect needs it too).
   const pipWindowRefInternal = useRef<React.MutableRefObject<Window | null> | null>(null);
+  const videoPipElements = useRef<{ canvas: HTMLCanvasElement; video: HTMLVideoElement; stream: MediaStream } | null>(null);
+  const videoPipSource = useRef<PipLyricsSource | null>(null);
+  const videoPipActiveLine = useRef(-1);
+  const videoPipRenderConfig = useRef({ readingMode, romanizeFurigana });
+  videoPipRenderConfig.current = { readingMode, romanizeFurigana };
+
+  const drawVideoPiP = useCallback(() => {
+    const elements = videoPipElements.current;
+    const source = videoPipSource.current;
+    if (!elements || !source) return;
+
+    const { canvas } = elements;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    const width = canvas.width;
+    const height = canvas.height;
+    const activeLine = videoPipActiveLine.current;
+    const { readingMode: currentReadingMode, romanizeFurigana: currentRomanize } = videoPipRenderConfig.current;
+    const scheme = normalizeReadingScheme(source.song?.reading_scheme);
+    const lineText = (index: number) => {
+      const line = source.furiganaLines[index];
+      if (!line) return '';
+      return normalizeFuriganaSegments(line.segments, scheme).map(segment => {
+        if (currentReadingMode === 'original') return segment.text;
+        return resolveFuriganaReading(segment.text, segment.reading, currentRomanize, scheme, segment) || segment.text;
+      }).join('');
+    };
+    const fitText = (text: string, maxWidth: number, font: string) => {
+      context.font = font;
+      if (context.measureText(text).width <= maxWidth) return text;
+      let shortened = text;
+      while (shortened.length > 1 && context.measureText(`${shortened}…`).width > maxWidth) shortened = shortened.slice(0, -1);
+      return `${shortened}…`;
+    };
+    const drawWrapped = (text: string, x: number, y: number, maxWidth: number, lineHeight: number, maxLines: number) => {
+      context.font = '500 38px system-ui, -apple-system, sans-serif';
+      const chars = Array.from(text || ' ');
+      let row = '';
+      let rows = 0;
+      for (const char of chars) {
+        const next = row + char;
+        if (row && context.measureText(next).width > maxWidth) {
+          context.fillText(row, x, y + rows * lineHeight, maxWidth);
+          rows += 1;
+          row = char;
+          if (rows >= maxLines) break;
+        } else {
+          row = next;
+        }
+      }
+      if (row && rows < maxLines) context.fillText(row, x, y + rows * lineHeight, maxWidth);
+    };
+
+    context.clearRect(0, 0, width, height);
+    context.fillStyle = '#09090b';
+    context.fillRect(0, 0, width, height);
+    context.fillStyle = '#a1a1aa';
+    context.font = '500 18px system-ui, -apple-system, sans-serif';
+    const title = [source.song?.title, source.song?.artist].filter(Boolean).join(' · ');
+    context.fillText(fitText(title, width - 64, context.font), 32, 46);
+    context.fillStyle = '#3f3f46';
+    context.fillRect(32, 66, width - 64, 1);
+
+    const current = activeLine >= 0 ? activeLine : 0;
+    context.fillStyle = '#ffffff';
+    drawWrapped(lineText(current), 32, 145, width - 64, 48, 2);
+    const translation = source.translations[current]?.trim();
+    const hint = !translation && source.untranslatedHint ? source.untranslatedHint : '';
+    if (translation || hint) {
+      context.fillStyle = translation ? '#a1a1aa' : '#71717a';
+      context.font = '400 24px system-ui, -apple-system, sans-serif';
+      context.fillText(fitText(translation || hint, width - 64, context.font), 32, 250);
+    }
+
+    const next = current + 1;
+    if (next < source.furiganaLines.length) {
+      context.fillStyle = '#71717a';
+      drawWrapped(lineText(next), 32, 315, width - 64, 38, 1);
+    }
+  }, []);
+
+  // Keep a muted, real video stream ready so the PiP request can be made
+  // directly from the user's click without waiting for media setup.
+  useEffect(() => {
+    const capabilities = getPiPCapabilities();
+    if (disableVideoPiP || capabilities.document || !capabilities.video || !capabilities.canvasCapture) return;
+    if (typeof document === 'undefined' || typeof HTMLCanvasElement === 'undefined'
+      || typeof HTMLCanvasElement.prototype.captureStream !== 'function') return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 360;
+    let stream: MediaStream;
+    try {
+      stream = canvas.captureStream(2);
+    } catch {
+      return;
+    }
+    const video = document.createElement('video');
+    video.muted = true;
+    video.defaultMuted = true;
+    video.playsInline = true;
+    video.autoplay = true;
+    video.setAttribute('aria-hidden', 'true');
+    Object.assign(video.style, {
+      position: 'fixed', width: '1px', height: '1px', opacity: '0',
+      pointerEvents: 'none', left: '-2px', bottom: '0',
+    });
+    video.srcObject = stream;
+    document.body.appendChild(video);
+    videoPipElements.current = { canvas, video, stream };
+    drawVideoPiP();
+    void video.play().catch(() => { /* the click handler retries playback */ });
+
+    return () => {
+      if (document.pictureInPictureElement === video && document.exitPictureInPicture) {
+        void document.exitPictureInPicture().catch(() => {});
+      }
+      stream.getTracks().forEach(track => track.stop());
+      video.srcObject = null;
+      video.remove();
+      videoPipElements.current = null;
+    };
+  }, [drawVideoPiP, disableVideoPiP]);
+
+  // The playback sync loop runs outside this hook. Forward active-line changes
+  // so a video PiP canvas stays current even though it has no DOM to update.
+  useEffect(() => {
+    const onActiveLine = (event: Event) => {
+      const detail = (event as CustomEvent<{ activeLine?: number }>).detail;
+      if (typeof detail?.activeLine !== 'number') return;
+      videoPipActiveLine.current = detail.activeLine;
+      drawVideoPiP();
+    };
+    window.addEventListener('lyrics-pip-active-line', onActiveLine);
+    return () => window.removeEventListener('lyrics-pip-active-line', onActiveLine);
+  }, [drawVideoPiP]);
+
+  useEffect(() => {
+    const shownTranslations = translationLines?.length ? translationLines : undefined;
+    videoPipSource.current = {
+      furiganaLines,
+      song,
+      timestamps: lineTimestamps,
+      translations: shownTranslations ?? [],
+      untranslatedHint: shownTranslations && showUntranslatedHint ? t('song.untranslatedHint') : undefined,
+    };
+    drawVideoPiP();
+  }, [furiganaLines, song, lineTimestamps, translationLines, showUntranslatedHint, t, drawVideoPiP]);
+
+  useEffect(() => {
+    drawVideoPiP();
+  }, [readingMode, romanizeFurigana, drawVideoPiP]);
 
   // PiP is complex and needs external refs, so it's a callback the page calls with context
   const openPiP = useCallback(async (
@@ -59,14 +217,21 @@ export function usePiP(deps: UsePiPDeps) {
     translations?: (string | null)[],
     showTranslationHint?: boolean,
   ) => {
-    if (pipWindowRef.current && !pipWindowRef.current.closed) {
-      pipWindowRef.current.close();
-      pipWindowRef.current = null;
+    const existingVideoPiP = typeof document !== 'undefined' ? document.pictureInPictureElement : null;
+    const localVideo = videoPipElements.current?.video as (HTMLVideoElement & { webkitPresentationMode?: string; webkitSetPresentationMode?: (mode: string) => void }) | undefined;
+    const isVideoPiPActive = (typeof HTMLVideoElement !== 'undefined' && existingVideoPiP instanceof HTMLVideoElement)
+      || localVideo?.webkitPresentationMode === 'picture-in-picture';
+    if (isVideoPiPActive) {
+      try {
+        if (existingVideoPiP && document.exitPictureInPicture) await document.exitPictureInPicture();
+        else localVideo?.webkitSetPresentationMode?.('inline');
+      } catch { /* already closed by the browser */ }
       return;
     }
 
-    if (!('documentPictureInPicture' in window)) {
-      showToast('error', t('song.pipUnsupported'));
+    if (pipWindowRef.current && !pipWindowRef.current.closed) {
+      pipWindowRef.current.close();
+      pipWindowRef.current = null;
       return;
     }
 
@@ -88,9 +253,55 @@ export function usePiP(deps: UsePiPDeps) {
       untranslatedHint: shownTranslations && showTranslationHint ? t('song.untranslatedHint') : undefined,
     };
 
+    const pipWindowApi = (window as Window & {
+      documentPictureInPicture?: { requestWindow?: (options: { width: number; height: number }) => Promise<Window> };
+    }).documentPictureInPicture;
+
+    if (typeof pipWindowApi?.requestWindow !== 'function') {
+      if (disableVideoPiP) {
+        showToast('error', t('song.pipUnsupported'));
+        return;
+      }
+      const elements = videoPipElements.current;
+      if (!elements) {
+        showToast('error', t('song.pipUnsupported'));
+        return;
+      }
+
+      videoPipSource.current = pipSource;
+      videoPipActiveLine.current = highlightLine;
+      drawVideoPiP();
+      const { video } = elements;
+      const legacyVideo = video as HTMLVideoElement & {
+        webkitSupportsPresentationMode?: (mode: string) => boolean;
+        webkitSetPresentationMode?: (mode: string) => void;
+      };
+      const canUseStandardPiP = document.pictureInPictureEnabled !== false
+        && typeof video.requestPictureInPicture === 'function';
+      const canUseWebKitPiP = typeof legacyVideo.webkitSupportsPresentationMode === 'function'
+        && legacyVideo.webkitSupportsPresentationMode('picture-in-picture')
+        && typeof legacyVideo.webkitSetPresentationMode === 'function';
+
+      try {
+        // Do not await play(): request PiP while this click's transient user
+        // activation is still available.
+        void video.play().catch(() => {});
+        if (canUseStandardPiP) {
+          await video.requestPictureInPicture();
+        } else if (canUseWebKitPiP) {
+          legacyVideo.webkitSetPresentationMode?.('picture-in-picture');
+        } else {
+          showToast('error', t('song.pipUnsupported'));
+        }
+      } catch (e) {
+        console.error('Video PiP failed:', e);
+        showToast('error', t('song.pipFailed'));
+      }
+      return;
+    }
+
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pipWindow = await (window as any).documentPictureInPicture.requestWindow({
+      const pipWindow = await pipWindowApi.requestWindow({
         width: 380,
         height: 520,
       });
@@ -246,7 +457,7 @@ export function usePiP(deps: UsePiPDeps) {
       console.error('PiP failed:', e);
       showToast('error', t('song.pipFailed'));
     }
-  }, [fontSize, readingMode, romanizeFurigana, t, showToast]);
+  }, [fontSize, readingMode, romanizeFurigana, disableVideoPiP, t, showToast, drawVideoPiP]);
 
   // Keep an already-open PiP window in sync with the main page.
   // Font size is applied live via the CSS variable (no rebuild needed).

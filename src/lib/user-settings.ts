@@ -24,6 +24,7 @@ export type SettingKey =
   | 'romanize_furigana'       // boolean
   | 'show_translation'        // boolean
   | 'follow_playing'          // boolean
+  | 'disable_video_pip'       // boolean — disable canvas-backed video PiP fallback
   | 'translation_target_lang' // BCP-47 tag, e.g. 'zh-CN' | 'en-US'
   | 'sync_settings'           // boolean — master switch for cross-device sync
 
@@ -35,6 +36,7 @@ export const USER_SETTING_KEYS: readonly SettingKey[] = [
   'romanize_furigana',
   'show_translation',
   'follow_playing',
+  'disable_video_pip',
   'translation_target_lang',
   'sync_settings',
 ];

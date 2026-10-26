@@ -59,6 +59,7 @@ export function validateSettingValue(
     case 'romanize_furigana':
     case 'show_translation':
     case 'follow_playing':
+    case 'disable_video_pip':
     case 'sync_settings':
       return value === 'true' || value === 'false'
         ? { ok: true, value }
