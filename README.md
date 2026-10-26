@@ -98,7 +98,8 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed guides:
 ```
 src/
 ├── app/
-│   ├── page.tsx                          # Song list: search, filters, now-playing
+│   ├── page.tsx                          # / — songs list route (shared SongLibraryPage)
+│   ├── albums/page.tsx                   # /albums — grouped album list route
 │   ├── layout.tsx                        # Root layout with PWA meta, SW registration
 │   ├── globals.css                       # Theme variables, animations
 │   ├── admin/page.tsx                    # Admin console (users / songs / pending / translation)
@@ -128,7 +129,7 @@ src/
 │       │   └── status/                   # Connection status
 │       └── me/                           # Current user
 ├── components/
-│   ├── home/                             # SongFilterBar, CollectionsPanel, PlaylistImportDialog
+│   ├── home/                             # Shared SongLibraryPage, SongFilterBar (List/Grid), CollectionsPanel, PlaylistImportDialog
 │   ├── song/                             # ToolbarMenu, MobileMenu (menu items/types)
 │   ├── admin/                            # AdminTabs, AdminUserList, AdminSongList, AdminPendingList, BlockUserDialog, TranslationConfigPanel, admin-types
 │   ├── timeline/                         # SpotifyStatusCard, OffsetControls, MarkCurrentLineCard, TimelineLineRow
@@ -169,14 +170,14 @@ src/
 
 | Endpoint | Method | Description |
 |---|---|---|
-| `/api/songs` | GET | List songs (`?q=`, `?mine=1`, `?favorites=1`) |
+| `/api/songs` | GET | List songs (`?q=`, `?mine=1`, `?favorites=1`; `?favorites=1&unclassified=1` limits to favorites in the default category) |
 | `/api/songs` | POST | Create song |
 | `/api/songs/import` | POST | Import from lrclib by title + artist |
 | `/api/songs/import-playlist` | POST | Batch import from Spotify playlist |
 | `/api/songs/[id]` | GET/PUT/DELETE | Single song CRUD |
 | `/api/songs/[id]/sync` | POST | Fetch synced lyrics (lrclib) |
 | `/api/songs/[id]/export` | GET | Export as `?format=txt\|lrc\|html` |
-| `/api/songs/[id]/favorite` | POST | Toggle favorite |
+| `/api/songs/[id]/favorite` | GET/POST/PUT/DELETE | Read category memberships; idempotently add to default; atomically save selected categories (`inUnclassified`, `collectionIds`, optional `newCollections` names); remove from all categories |
 | `/api/songs/[id]/translate` | POST | SSE stream — `reasoning` / `done` (translations) / `error` events |
 | `/api/admin/users` | GET | List users (admin only) |
 | `/api/admin/users/[id]` | PUT/DELETE | Toggle admin/block, delete user (admin only) |

@@ -19,6 +19,7 @@ for the split of responsibility and the upstream API notes).
 | `/manifest.json` | `GET` | capability negotiation |
 | `/v1/search` | `POST` | lyric candidates for one structured track |
 | `/health` | `GET` | liveness probe |
+| `/health?deep=1` | `GET` | liveness **+ upstream** probe (503 when upstream is down) |
 
 ```bash
 # capability document
@@ -29,6 +30,33 @@ curl -X POST http://localhost:8910/v1/search \
   -H 'Content-Type: application/json' \
   -d '{"protocol_version":1,"request_id":"demo","track":{"title":"夜に駆ける","artists":["YOASOBI"],"duration_ms":261000},"accept":["synced","plain"],"max_candidates":20}'
 ```
+
+### Health probes
+
+`GET /health` answers "is this process listening?" without touching the
+network, so it is safe for a reverse proxy. `GET /health?deep=1` additionally
+runs one cheap upstream search (one request, no lyrics lookups) and returns
+`503 {"ok": false}` when the session cannot get data back. The result is cached
+for a minute (`provider_core.HEALTH_PROBE_TTL_S`), so polling it cannot turn
+into upstream load:
+
+```bash
+curl -fsS http://localhost:8910/health?deep=1   # -f makes the probe fail on 503
+```
+
+An empty search result counts as failure on purpose. A degraded session does
+not raise: an expired/malformed `YT_MUSIC_OAUTH` falls back to an unauthenticated
+session (warning only), and upstream soft-throttling answers `200` with no
+results. Only a probe that treats "no data" as "not healthy" catches those — the
+same states after which the app just reports "no lyrics found".
+
+Note that `/health` is *not* part of the jplrc-lyrics-provider protocol
+(`examples/provider-plugin/README.md`): jplrc never calls it, so it stays a
+plain service endpoint. It also stays open under `PROVIDER_TOKEN`, since
+container probes carry no credentials. This is why the deep probe is a cheap
+session check rather than a real `/v1/search` — the latter would spend three
+upstream lyrics lookups per call, be rate-limitable, and mistake "that song has
+no lyrics" for "the provider is broken".
 
 No match is a normal `200` with `"candidates": []`. Upstream failures map to
 `503 {"error":{"code":"temporary_unavailable", …}}`; a wrong `protocol_version`

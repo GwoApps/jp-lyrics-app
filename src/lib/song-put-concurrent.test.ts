@@ -16,18 +16,14 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { unlinkSync } from 'node:fs';
-import { createClient } from '@libsql/client';
-import { drizzle } from 'drizzle-orm/libsql';
+import type { TestContext } from 'node:test';
+import { createTestDb, createSongsTable } from './test-db.ts';
 import { sql } from 'drizzle-orm';
 
 type TestDb = ReturnType<typeof makeTestDb>;
 
-function makeTestDb(path: string) {
-  try { unlinkSync(path); } catch { /* fresh */ }
-  const client = createClient({ url: `file:${path}`, timeout: 15_000 });
-  const db = drizzle(client);
-  return { db, client, path };
+function makeTestDb(ctx: TestContext, label: string) {
+  return createTestDb(ctx, label, {});
 }
 
 const SONG_ID = 'song-put-concurrent-1';
@@ -41,43 +37,6 @@ const PALETTE = JSON.stringify({
   secondary: { r: 40, g: 50, b: 60 },
   tertiary: { r: 70, g: 80, b: 90 },
 });
-
-async function createTables(t: TestDb) {
-  await t.client.execute('PRAGMA journal_mode=WAL');
-  await t.client.execute('PRAGMA busy_timeout=15000');
-  await t.db.run(sql`CREATE TABLE songs (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL DEFAULT '',
-    artist TEXT NOT NULL DEFAULT '',
-    lyrics_raw TEXT NOT NULL DEFAULT '',
-    lyrics_furigana TEXT NOT NULL DEFAULT '[]',
-    reading_scheme TEXT NOT NULL DEFAULT 'ja-kana',
-    reading_scheme_confirmed INTEGER NOT NULL DEFAULT 0,
-    lyrics_synced TEXT NOT NULL DEFAULT '',
-    lyrics_translation TEXT NOT NULL DEFAULT '[]',
-    lyrics_translation_lang TEXT,
-    lyrics_translation_reasoning TEXT,
-    lyrics_glossary TEXT,
-    cover_url TEXT,
-    cover_palette TEXT,
-    spotify_track_id TEXT,
-    spotify_uri TEXT,
-    spotify_album TEXT,
-    spotify_duration_ms INTEGER,
-    spotify_canonical_title TEXT,
-    spotify_canonical_artist TEXT,
-    lyrics_source TEXT NOT NULL DEFAULT 'manual',
-    lyrics_confidence INTEGER NOT NULL DEFAULT 100,
-    lyrics_needs_review INTEGER NOT NULL DEFAULT 0,
-    lyrics_fetched_at TEXT,
-    created_by TEXT NOT NULL DEFAULT '',
-    created_by_name TEXT NOT NULL DEFAULT '',
-    is_public INTEGER NOT NULL DEFAULT 0,
-    public_requested INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
-  )`);
-}
 
 async function seedSong(t: TestDb) {
   await t.db.run(sql`INSERT INTO songs (
@@ -112,9 +71,9 @@ function lyricsEditSql(newRaw: string) {
   WHERE id = ${SONG_ID}`;
 }
 
-test('cover-palette-only PUT does not resurrect stale lyrics/derived caches', async () => {
-  const t = makeTestDb(`/tmp/song-put-palette-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('cover-palette-only PUT does not resurrect stale lyrics/derived caches', async (ctx) => {
+  const t = makeTestDb(ctx, 'song-put-palette');
+  await createSongsTable(t.client);
   await seedSong(t);
 
   // --- Simulate the two interleaved requests described in issue #211. ---
@@ -150,9 +109,9 @@ test('cover-palette-only PUT does not resurrect stale lyrics/derived caches', as
   assert.equal(row.lyrics_fetched_at, null, 'fetched_at must be cleared');
 });
 
-test('lyrics-only PUT does not resurrect stale palette/metadata', async () => {
-  const t = makeTestDb(`/tmp/song-put-lyrics-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('lyrics-only PUT does not resurrect stale palette/metadata', async (ctx) => {
+  const t = makeTestDb(ctx, 'song-put-lyrics');
+  await createSongsTable(t.client);
   await seedSong(t);
 
   // Step 1: A lyrics-edit request reads the row (snapshot at T0 — no palette).
@@ -175,9 +134,9 @@ test('lyrics-only PUT does not resurrect stale palette/metadata', async () => {
   assert.equal(row.lyrics_furigana, '[]', 'furigana must be cleared for new lyrics');
 });
 
-test('scheme-only PUT preserves lyrics and only clears furigana when scheme actually changes', async () => {
-  const t = makeTestDb(`/tmp/song-put-scheme-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('scheme-only PUT preserves lyrics and only clears furigana when scheme actually changes', async (ctx) => {
+  const t = makeTestDb(ctx, 'song-put-scheme');
+  await createSongsTable(t.client);
   await seedSong(t);
 
   // Change only the reading scheme.
@@ -194,9 +153,9 @@ test('scheme-only PUT preserves lyrics and only clears furigana when scheme actu
   assert.equal(row.lyrics_translation, OLD_TRANSLATION, 'translation must be preserved');
 });
 
-test('same-value PUT does not clear derived caches', async () => {
-  const t = makeTestDb(`/tmp/song-put-same-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('same-value PUT does not clear derived caches', async (ctx) => {
+  const t = makeTestDb(ctx, 'song-put-same');
+  await createSongsTable(t.client);
   await seedSong(t);
 
   // Submit the same lyrics_raw — the CASE should see new === current and
@@ -213,9 +172,9 @@ test('same-value PUT does not clear derived caches', async () => {
   assert.equal(row.lyrics_translation, OLD_TRANSLATION, 'translation must be preserved when lyrics unchanged');
 });
 
-test('lyrics-only PUT respects concurrently-changed reading_scheme for confirmed auto-reset', async () => {
-  const t = makeTestDb(`/tmp/song-put-confirmed-reset-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('lyrics-only PUT respects concurrently-changed reading_scheme for confirmed auto-reset', async (ctx) => {
+  const t = makeTestDb(ctx, 'song-put-confirmed-reset');
+  await createSongsTable(t.client);
   await seedSong(t);
 
   // Step 1: A lyrics-edit request reads the row (snapshot: reading_scheme='ja-kana').
@@ -241,9 +200,9 @@ test('lyrics-only PUT respects concurrently-changed reading_scheme for confirmed
     'reading_scheme_confirmed must NOT reset when live scheme is yue-jyutping');
 });
 
-test('lyrics-only PUT resets reading_scheme_confirmed when concurrent change made live scheme ja-kana', async () => {
-  const t = makeTestDb(`/tmp/song-put-confirmed-reset2-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('lyrics-only PUT resets reading_scheme_confirmed when concurrent change made live scheme ja-kana', async (ctx) => {
+  const t = makeTestDb(ctx, 'song-put-confirmed-reset2');
+  await createSongsTable(t.client);
   await seedSong(t);
 
   // Start with yue-jyutping + confirmed.
@@ -272,9 +231,9 @@ test('lyrics-only PUT resets reading_scheme_confirmed when concurrent change mad
     'reading_scheme_confirmed must reset when live scheme is ja-kana');
 });
 
-test('lyrics PUT with explicit reading_scheme in payload uses submitted scheme for confirmed auto-reset', async () => {
-  const t = makeTestDb(`/tmp/song-put-confirmed-explicit-${process.pid}-${Date.now()}.db`);
-  await createTables(t);
+test('lyrics PUT with explicit reading_scheme in payload uses submitted scheme for confirmed auto-reset', async (ctx) => {
+  const t = makeTestDb(ctx, 'song-put-confirmed-explicit');
+  await createSongsTable(t.client);
   await seedSong(t);
 
   // Submit lyrics change WITH an explicit reading_scheme='yue-jyutping'.

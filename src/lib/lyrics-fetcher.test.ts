@@ -5,14 +5,15 @@ import {
   decodeBase64Utf8,
   decodePetitLyricsLsyToLrc,
   durationStatus,
-  fetchFromLrclib,
+  fetchFromLrclib as fetchFromLrclibRaw,
   fetchFromUtaNet,
   lrclibConfidence,
   parsePetitLyricsResponse,
   parseUtaNetCandidates,
   petitLyricsXmlToLrc,
   petitLyricsCandidateMatches,
-  searchLrclib,
+  searchLrclib as searchLrclibRaw,
+  type LrclibEvidence,
   stripTimestamps,
   unescapeLyrics,
   utaNetConfidence,
@@ -183,6 +184,14 @@ function mockFetch(handler: (url: string) => Response | null): () => void {
   return () => { globalThis.fetch = original; };
 }
 
+// The tests mock every HTTP response. Waiting on the public LRCLIB quota
+// between synthetic requests adds ~30s but validates no extra behaviour; keep
+// production defaults untouched and disable only the throttle in this fixture.
+const fetchFromLrclib = (title: string, artist: string, evidence?: LrclibEvidence) =>
+  fetchFromLrclibRaw(title, artist, evidence, undefined, { rateLimitMs: 0 });
+const searchLrclib = (query: string, title: string, artist: string, evidence?: LrclibEvidence) =>
+  searchLrclibRaw(query, title, artist, evidence, undefined, { rateLimitMs: 0 });
+
 const lrclibTrack = (overrides: Record<string, unknown>) => ({
   id: 1,
   trackName: 'Idol',
@@ -192,6 +201,23 @@ const lrclibTrack = (overrides: Record<string, unknown>) => ({
   syncedLyrics: '[00:00.10]テスト',
   plainLyrics: 'テスト',
   ...overrides,
+});
+
+test('LRCLIB throttle still spaces requests when a nonzero interval is configured', async () => {
+  const calls: number[] = [];
+  const restore = mockFetch(() => {
+    calls.push(performance.now());
+    return new Response(JSON.stringify(lrclibTrack({})), { status: 200 });
+  });
+  try {
+    const opts = { rateLimitMs: 35 };
+    await fetchFromLrclibRaw('Idol', 'YOASOBI', undefined, undefined, opts);
+    await fetchFromLrclibRaw('Idol', 'YOASOBI', undefined, undefined, opts);
+    assert.equal(calls.length, 2);
+    assert.ok(calls[1] - calls[0] >= 25, `throttle elapsed ${calls[1] - calls[0]}ms`);
+  } finally {
+    restore();
+  }
 });
 
 test('fetchFromLrclib returns a plain hit unchanged when duration agrees with Spotify', async () => {
@@ -230,54 +256,30 @@ test('fetchFromLrclib prefers an album-scoped hit when the bare exact duration c
   }
 });
 
-test('fetchFromLrclib keeps the bare hit when the album fallback fails with a temporary error', async () => {
-  const restore = mockFetch((url) => {
-    if (url.includes('album_name')) return new Response('boom', { status: 500 });
-    // Bare entry is the 90s TV-size version of the same title + artist.
-    return new Response(JSON.stringify(lrclibTrack({ duration: 90 })), { status: 200 });
-  });
-  try {
-    // Spotify duration 213s → conflict, but a 500 means "we could not check",
-    // not "the album version does not exist" — the candidate must survive as a
-    // reviewable duration-conflict hit instead of becoming "not found".
-    const hit = await fetchFromLrclib('Idol', 'YOASOBI', { durationMs: 213_000, album: 'Idol' });
-    assert.equal(hit.hit?.duration, 'conflict');
-    assert.equal(hit.hit?.result.synced, '[00:00.10]テスト');
-    assert.equal(hit.rateLimited, false);
-  } finally {
-    restore();
-  }
-});
-
-test('fetchFromLrclib keeps the bare hit when the album fallback response is not JSON', async () => {
-  const restore = mockFetch((url) => {
-    if (url.includes('album_name')) return new Response('<html>gateway error</html>', { status: 200 });
-    return new Response(JSON.stringify(lrclibTrack({ duration: 90 })), { status: 200 });
-  });
-  try {
-    const hit = await fetchFromLrclib('Idol', 'YOASOBI', { durationMs: 213_000, album: 'Idol' });
-    assert.equal(hit.hit?.duration, 'conflict');
-    assert.equal(hit.rateLimited, false);
-  } finally {
-    restore();
-  }
-});
-
-test('fetchFromLrclib keeps the bare hit when the album fallback 404s', async () => {
-  const restore = mockFetch((url) => {
-    if (url.includes('album_name')) {
-      return new Response(JSON.stringify({ message: 'Not found', name: 'TrackNotFound' }), { status: 404 });
+// Three failure shapes of the album-scoped fallback share one invariant: the
+// bare 90s recording remains a reviewable duration conflict, never a miss.
+for (const { name, albumResponse } of [
+  { name: 'temporary error', albumResponse: () => new Response('boom', { status: 500 }) },
+  { name: 'non-JSON response', albumResponse: () => new Response('<html>gateway error</html>', { status: 200 }) },
+  { name: '404', albumResponse: () => new Response(JSON.stringify({ message: 'Not found', name: 'TrackNotFound' }), { status: 404 }) },
+]) {
+  test(`fetchFromLrclib keeps the bare hit when the album fallback returns ${name}`, async () => {
+    let albumRequests = 0;
+    const restore = mockFetch((url) => {
+      if (url.includes('album_name')) { albumRequests += 1; return albumResponse(); }
+      return new Response(JSON.stringify(lrclibTrack({ duration: 90 })), { status: 200 });
+    });
+    try {
+      const hit = await fetchFromLrclib('Idol', 'YOASOBI', { durationMs: 213_000, album: 'Idol' });
+      assert.equal(albumRequests, 1, 'the album fallback was attempted');
+      assert.equal(hit.hit?.duration, 'conflict');
+      assert.equal(hit.hit?.result.synced, '[00:00.10]テスト');
+      assert.equal(hit.rateLimited, false);
+    } finally {
+      restore();
     }
-    return new Response(JSON.stringify(lrclibTrack({ duration: 90 })), { status: 200 });
   });
-  try {
-    const hit = await fetchFromLrclib('Idol', 'YOASOBI', { durationMs: 213_000, album: 'Idol' });
-    assert.equal(hit.hit?.duration, 'conflict');
-    assert.equal(hit.rateLimited, false);
-  } finally {
-    restore();
-  }
-});
+}
 
 test('fetchFromLrclib falls back to the album-scoped query when the bare exact 404s', async () => {
   let albumScopedCalled = false;
@@ -359,7 +361,7 @@ test('lrclib 429 is retried once then surfaced as rateLimited, not a silent miss
     attempts += 1;
     // First two requests 429 (with Retry-After), then a successful hit.
     if (attempts <= 2) {
-      return new Response('too many requests', { status: 429, headers: { 'Retry-After': '1' } });
+      return new Response('too many requests', { status: 429, headers: { 'Retry-After': '0.001' } });
     }
     return new Response(JSON.stringify(lrclibTrack({})), { status: 200 });
   });
@@ -378,7 +380,7 @@ test('lrclib 429 retry succeeds after Retry-After and returns the hit', async ()
   const restore = mockFetch(() => {
     attempts += 1;
     if (attempts === 1) {
-      return new Response('too many requests', { status: 429, headers: { 'Retry-After': '1' } });
+      return new Response('too many requests', { status: 429, headers: { 'Retry-After': '0.001' } });
     }
     return new Response(JSON.stringify(lrclibTrack({})), { status: 200 });
   });

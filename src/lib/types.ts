@@ -44,6 +44,8 @@ export interface FuriganaSegment {
    * a missing value simply means "unknown" and keeps the literal reading.
    */
   pos?: string;
+  /** Adjacent part of the preceding tokenizer word after splitting kanji/okurigana. */
+  joinPrev?: boolean;
 }
 
 export interface FuriganaLine {

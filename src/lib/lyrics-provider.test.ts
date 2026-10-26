@@ -66,13 +66,15 @@ test('isMetadataIpv6 rejects IPv4-mapped cloud metadata even in hex form', () =>
 });
 
 test('validateProviderBaseUrl forbids hex-mapped metadata IPv6 regardless of switches', async () => {
-  // Even with private network + http allowed, hex-mapped metadata must be rejected.
-  const p = { allowHttp: true, allowPrivateNetwork: true };
-  assert.equal(await validateProviderBaseUrl('http://[::ffff:a9fe:a9fe]/latest', p), 'metadata_forbidden');
-  assert.equal(await validateProviderBaseUrl('https://[::ffff:169.254.169.254]/', p), 'metadata_forbidden');
-  // Private (non-metadata) mapped IPv6 is allowed only when private net is on.
-  assert.equal(await validateProviderBaseUrl('https://[::ffff:7f00:1]:8787/', { allowHttp: false, allowPrivateNetwork: true }), null);
-  assert.equal(await validateProviderBaseUrl('https://[::ffff:7f00:1]:8787/', { allowHttp: false, allowPrivateNetwork: false }), 'unsafe_host');
+  const cases = [
+    { url: 'http://[::ffff:a9fe:a9fe]/latest', allowHttp: true, allowPrivateNetwork: true, expected: 'metadata_forbidden' },
+    { url: 'https://[::ffff:169.254.169.254]/', allowHttp: true, allowPrivateNetwork: true, expected: 'metadata_forbidden' },
+    { url: 'https://[::ffff:7f00:1]:8787/', allowHttp: false, allowPrivateNetwork: true, expected: null },
+    { url: 'https://[::ffff:7f00:1]:8787/', allowHttp: false, allowPrivateNetwork: false, expected: 'unsafe_host' },
+  ];
+  for (const { url, allowHttp, allowPrivateNetwork, expected } of cases) {
+    assert.equal(await validateProviderBaseUrl(url, { allowHttp, allowPrivateNetwork }), expected, url);
+  }
 });
 
 test('normalizeProviderBaseUrl keeps path prefix and trims trailing slash', () => {
@@ -93,19 +95,19 @@ test('deriveEndpoints resolves relative to the base path, never the Origin root'
 });
 
 test('validateProviderBaseUrl rejects http when disallowed, unsafe hosts, and metadata always', async () => {
-  // HTTP disallowed by default.
-  assert.equal(await validateProviderBaseUrl('http://example.com/x', { allowHttp: false, allowPrivateNetwork: false }), 'http_disallowed');
-  // Metadata always forbidden, even when private network is allowed.
-  assert.equal(await validateProviderBaseUrl('http://169.254.169.254/latest', { allowHttp: true, allowPrivateNetwork: true }), 'metadata_forbidden');
-  assert.equal(await validateProviderBaseUrl('https://169.254.169.254/', { allowHttp: true, allowPrivateNetwork: true }), 'metadata_forbidden');
-  // Loopback private IP rejected unless private net allowed.
-  assert.equal(await validateProviderBaseUrl('https://127.0.0.1:8787/', { allowHttp: false, allowPrivateNetwork: false }), 'unsafe_host');
-  // Public https is fine.
-  assert.equal(await validateProviderBaseUrl('https://example.com/x', { allowHttp: false, allowPrivateNetwork: false }), null);
+  const cases = [
+    { url: 'http://example.com/x', policy: { allowHttp: false, allowPrivateNetwork: false }, expected: 'http_disallowed' },
+    { url: 'http://169.254.169.254/latest', policy: { allowHttp: true, allowPrivateNetwork: true }, expected: 'metadata_forbidden' },
+    { url: 'https://169.254.169.254/', policy: { allowHttp: true, allowPrivateNetwork: true }, expected: 'metadata_forbidden' },
+    { url: 'https://127.0.0.1:8787/', policy: { allowHttp: false, allowPrivateNetwork: false }, expected: 'unsafe_host' },
+    { url: 'https://example.com/x', policy: { allowHttp: false, allowPrivateNetwork: false }, expected: null },
+  ];
+  for (const { url, policy, expected } of cases) {
+    assert.equal(await validateProviderBaseUrl(url, policy), expected, url);
+  }
 });
 
 test('validateProviderBaseUrl allows private network when the switch is on', async () => {
-  // 127.0.0.1 with private net allowed.
   assert.equal(await validateProviderBaseUrl('https://127.0.0.1:8787/', { allowHttp: true, allowPrivateNetwork: true }), null);
 });
 
@@ -133,13 +135,16 @@ test('resolveProviderTimeoutMs falls back to the default and clamps to the max',
     manifestTimeoutMs: 15000,
     chainTimeoutMs: 180000,
   };
-  assert.equal(resolveProviderTimeoutMs(null, budget), PROVIDER_DEFAULT_TIMEOUT_MS);
-  assert.equal(resolveProviderTimeoutMs(undefined, budget), PROVIDER_DEFAULT_TIMEOUT_MS);
-  // Below the 5s floor is clamped up.
-  assert.equal(resolveProviderTimeoutMs(1000, budget), 5000);
-  // Above the max is clamped down.
-  assert.equal(resolveProviderTimeoutMs(120000, budget), PROVIDER_MAX_TIMEOUT_MS);
-  assert.equal(resolveProviderTimeoutMs(30000, budget), 30000);
+  const cases: [number | null | undefined, number][] = [
+    [null, PROVIDER_DEFAULT_TIMEOUT_MS],
+    [undefined, PROVIDER_DEFAULT_TIMEOUT_MS],
+    [1000, 5000], // below the floor
+    [120000, PROVIDER_MAX_TIMEOUT_MS], // above the ceiling
+    [30000, 30000],
+  ];
+  for (const [configured, expected] of cases) {
+    assert.equal(resolveProviderTimeoutMs(configured, budget), expected, String(configured));
+  }
 });
 
 test('clampConfiguredTimeoutMs returns null for blank and clamps valid ranges', () => {
@@ -149,11 +154,16 @@ test('clampConfiguredTimeoutMs returns null for blank and clamps valid ranges', 
     manifestTimeoutMs: 15000,
     chainTimeoutMs: 180000,
   };
-  assert.equal(clampConfiguredTimeoutMs(null, budget), null);
-  assert.equal(clampConfiguredTimeoutMs(undefined, budget), null);
-  assert.equal(clampConfiguredTimeoutMs(NaN, budget), null);
-  assert.equal(clampConfiguredTimeoutMs(120000, budget), 60000);
-  assert.equal(clampConfiguredTimeoutMs(30000, budget), 30000);
+  const cases: [number | null | undefined, number | null][] = [
+    [null, null],
+    [undefined, null],
+    [NaN, null],
+    [120000, 60000],
+    [30000, 30000],
+  ];
+  for (const [configured, expected] of cases) {
+    assert.equal(clampConfiguredTimeoutMs(configured, budget), expected, String(configured));
+  }
 });
 
 test('getBudgetConfig applies explicit bounds and fails closed on invalid env', () => {

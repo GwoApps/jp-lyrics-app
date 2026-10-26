@@ -74,6 +74,9 @@ LYRICS_PROVIDER_SECRET_KEY=
 # `ytmusicapi oauth` / `ytmusicapi browser`, drop the file at
 # /data0/docker/jplrc-secrets/yt-music-oauth.json (mounted read-only at
 # /app/oauth.json). An empty/invalid file falls back to unauth.
+# To notice a dead/soft-throttled session, probe `http://yt-sidecar:8910/health?deep=1`
+# from inside the compose network — it runs one real upstream search, caches the
+# answer for 60s, and returns 503 within a minute of the upstream going quiet.
 # Optional request budget (see yt-sidecar/README.md, ISSUE #353). Keep the
 # deadline below LYRICS_PROVIDER_DEFAULT_TIMEOUT_MS so a stalled upstream
 # surfaces as the sidecar's own 503 instead of jplrc's client-side timeout.

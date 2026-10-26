@@ -94,7 +94,7 @@ export function renderFuriganaLineToHtml(
   readingScheme: ReadingScheme,
 ): string {
   if (line.segments.length === 0) return '<p class="empty">&nbsp;</p>';
-  const inner = normalizeFuriganaSegments(line.segments).map((seg) => {
+  const inner = normalizeFuriganaSegments(line.segments, readingScheme).map((seg) => {
     if (readingMode === 'none') return escapeHtml(seg.text);
     const reading = resolveFuriganaReading(seg.text, seg.reading, readingMode === 'romaji', readingScheme, seg);
     if (!reading) return escapeHtml(seg.text);
@@ -196,11 +196,18 @@ export function buildTextExport(
     const furiganaLine = furiganaLines[index];
     const source = furiganaLine && furiganaLine.segments.length > 0 && readingMode !== 'none'
       ? (() => {
-          const parts = furiganaLine.segments.map((seg) => {
-            if (readingMode === 'furigana') return seg.reading || seg.text;
-            const reading = resolveFuriganaReading(seg.text, seg.reading, true, song.reading_scheme, seg);
-            return reading || seg.text;
-          });
+          const parts: string[] = [];
+          for (const seg of furiganaLine.segments) {
+            const part = readingMode === 'furigana'
+              ? seg.reading || seg.text
+              : resolveFuriganaReading(seg.text, seg.reading, true, song.reading_scheme, seg) || seg.text;
+            // A kanji token split into ruby/plain okurigana is still one word.
+            // Keep its romanization together without changing the existing
+            // spaces between independently tokenized Japanese words.
+            if (readingMode === 'romaji' && song.reading_scheme === 'ja-kana'
+              && seg.joinPrev && parts.length) parts[parts.length - 1] += part;
+            else parts.push(part);
+          }
           return joinReadingParts(parts, song.reading_scheme, readingMode);
         })()
       : rawLine;

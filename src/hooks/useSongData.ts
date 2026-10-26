@@ -190,10 +190,6 @@ export function useSongData(id: string): UseSongDataReturn {
     return mapTimelineTimestamps(renderedRows, song.lyrics_raw || '', song.lyrics_synced || '');
   }, [song, furiganaLines]);
 
-  const { openPiP } = usePiP({
-    fontSize, readingMode, romanizeFurigana, song, furiganaLines, lineTimestamps, showToast, t,
-  });
-
   const updateReadingPreference = useCallback(async (payload: {
     reading_scheme?: ReadingScheme;
     reading_scheme_confirmed: boolean;
@@ -251,6 +247,16 @@ export function useSongData(id: string): UseSongDataReturn {
     setShowTranslation, showToast, dismissToast, t, refreshSong, setSong,
   });
 
+  // Issue #331: PiP follows the same "show translation" preference as the main
+  // lyric list — no separate switch. `undefined` keeps PiP source-only when the
+  // preference is off or nothing has been translated yet; the partial-coverage
+  // placeholder then mirrors the detail page (`showUntranslatedHint`).
+  const { openPiP } = usePiP({
+    fontSize, readingMode, romanizeFurigana, song, furiganaLines, lineTimestamps,
+    translationLines: showTranslation && hasTranslation ? translations : undefined,
+    showUntranslatedHint: untranslatedCount > 0,
+    showToast, t,
+  });
 
   // Fetch the single song. Distinguishes a genuine 404 (song absent) from
   // every other failure (HTTP 5xx/429, network or timeout). Pure fetch — no

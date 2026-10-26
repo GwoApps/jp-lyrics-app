@@ -173,6 +173,11 @@ export function useTranslation(deps: UseTranslationDeps): UseTranslationReturn {
   }, []);
 
   // ── Main translate handler ──────────────────────────────
+  const openSavedReasoning = useCallback(() => {
+    reasoningUserHiddenRef.current = false;
+    setShowTranslationReasoning(true);
+  }, []);
+
   const handleTranslate = useCallback(async (force = false) => {
     if (translating) return;
     const total = furiganaLinesLength;
@@ -183,6 +188,7 @@ export function useTranslation(deps: UseTranslationDeps): UseTranslationReturn {
     setTranslating(true);
     setTranslationError(null);
     setTranslationReasoning('');
+    setShowTranslationReasoning(false);
     setHasSavedReasoning(false);
     reasoningUserHiddenRef.current = false;
     setTranslationProgress(null);
@@ -248,7 +254,20 @@ export function useTranslation(deps: UseTranslationDeps): UseTranslationReturn {
           : streamLang
             ? t('song.translationReadyLang', { lang: targetLangDisplay(streamLang) })
             : t('song.translationReady');
-        showToast(partial ? 'info' : 'success', msg);
+        // Keep the streamed reasoning for later review, but leave no panel
+        // open once the translation has completed (including partial results).
+        reasoningUserHiddenRef.current = true;
+        setShowTranslationReasoning(false);
+        const reviewAvailable = streamedReasoning.trim().length > 0;
+        showToast(
+          partial ? 'info' : 'success',
+          msg,
+          reviewAvailable ? t('song.translationReasoningView') : undefined,
+          reviewAvailable ? () => {
+            dismissToast();
+            openSavedReasoning();
+          } : undefined,
+        );
         return;
       }
 
@@ -299,7 +318,7 @@ export function useTranslation(deps: UseTranslationDeps): UseTranslationReturn {
       translateAbortRef.current = null;
       setTranslating(false);
     }
-  }, [id, song, furiganaLinesLength, t, showToast, translating, refreshSong, coverageOf, setShowTranslation, setSong]);
+  }, [id, song, furiganaLinesLength, t, showToast, dismissToast, openSavedReasoning, translating, refreshSong, coverageOf, setShowTranslation, setSong]);
 
   const cancelTranslate = useCallback(() => {
     translateAbortRef.current?.abort();
@@ -338,11 +357,6 @@ export function useTranslation(deps: UseTranslationDeps): UseTranslationReturn {
       reasoningUserHiddenRef.current = !next;
       return next;
     });
-  }, []);
-
-  const openSavedReasoning = useCallback(() => {
-    reasoningUserHiddenRef.current = false;
-    setShowTranslationReasoning(true);
   }, []);
 
   const dismissTranslationError = useCallback(() => {

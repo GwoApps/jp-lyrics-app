@@ -96,6 +96,11 @@ test('fresh DB applying full journal yields all required tables/columns', async 
     for (const col of requiredSongColumns) {
       assert.ok(songColNames.has(col), `missing songs.${col} column`);
     }
+    const favoritesCols = await client.execute('PRAGMA table_info(`favorites`)');
+    const defaultCategory = favoritesCols.rows.find(row => row.name === 'in_unclassified');
+    assert.ok(defaultCategory, 'favorites.in_unclassified must persist multi-select independently');
+    assert.equal(defaultCategory.notnull, 1);
+    assert.equal(defaultCategory.dflt_value, '1');
   } finally {
     client.close();
     try { unlinkSync(dbPath); } catch { /* ignore */ }

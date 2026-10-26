@@ -6,7 +6,7 @@ A reference implementation of the plugin protocol documented in
 
   GET  /manifest.json  → capability negotiation
   POST /v1/search      → lyric candidates for one structured track
-  GET  /health         → liveness probe
+  GET  /health         → liveness probe (?deep=1 also probes the upstream)
 
 The plugin only *retrieves candidates*; scoring, LRC validation, low-confidence
 review and persistence are owned by jplrc. Wire shapes and the upstream
@@ -39,9 +39,11 @@ from provider_core import (
     MAX_LYRICS_FETCHES,
     PROTOCOL_VERSION,
     EmptySearchGuard,
+    UpstreamHealthProbe,
     bearer_ok,
     deadline_exceeded,
     manifest,
+    probe_upstream,
     register_deadline_exception,
     search_candidates,
 )
@@ -124,6 +126,11 @@ _guard = EmptySearchGuard()
 #: Serialises the guard's read-modify-write (see `_observe_empty_search`).
 _guard_lock = threading.Lock()
 _ytmusic_holder = YTMusicHolder()
+#: Answers `GET /health?deep=1`: one upstream search, cached for
+#: `provider_core.HEALTH_PROBE_TTL_S` so a healthcheck loop cannot turn into an
+#: upstream load generator. Going through the holder keeps the client (and its
+#: bounded session) shared instead of building a second one.
+_upstream_probe = UpstreamHealthProbe(lambda: probe_upstream(_ytmusic_holder.get()[0]))
 
 
 def _observe_empty_search(hit_count: int, client_generation: int) -> None:
@@ -215,9 +222,14 @@ def _run_search(req: SearchRequest) -> list[dict]:
             min(req.max_candidates or MAX_LYRICS_FETCHES, MAX_LYRICS_FETCHES),
             deadline=deadline,
         )
+    except UpstreamDeadlineExceeded:
+        # Our own budget stopped the search: the upstream is *slow*, not
+        # soft-throttled, so counting it would recycle a perfectly good session
+        # (rebuilt sessions are the expensive ones — a fresh OAuth handshake).
+        raise
     except Exception:
-        # A failed or budget-exhausted search counts as an empty one for the
-        # soft-throttling guard, then propagates for the handler to classify.
+        # Any other failure counts as an empty search for the soft-throttling
+        # guard, then propagates for the handler to classify.
         _observe_empty_search(0, generation)
         raise
     _observe_empty_search(len(candidates), generation)
@@ -230,8 +242,26 @@ def _is_deadline_error(exc: BaseException) -> bool:
 
 
 @app.get("/health")
-async def health():
-    return {"ok": True}
+async def health(deep: int = 0):
+    """Liveness by default; `?deep=1` also reports whether the upstream answers.
+
+    The plain form must stay cheap (it answers "is this process listening?"), so
+    it never touches the network. The deep form is what a container healthcheck
+    or a human should call: it costs one cached upstream search and returns 503
+    when the session is dead or soft-throttled — the failure mode that otherwise
+    shows up only as "no lyrics found" in the app.
+
+    It is deliberately *not* our /v1/search: that would spend three upstream
+    lyrics lookups, be rate-limitable, and conflate "no such song" with
+    "upstream down". `/health` is also outside the plugin protocol (see
+    examples/provider-plugin/README.md) and open even under PROVIDER_TOKEN, so
+    this stays consistent with probes needing no credentials.
+    """
+    if not deep:
+        return {"ok": True}
+    if _upstream_probe.check():
+        return {"ok": True}
+    return JSONResponse(status_code=503, content={"ok": False})
 
 
 @app.get("/manifest.json")

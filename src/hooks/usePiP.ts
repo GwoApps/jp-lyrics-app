@@ -12,13 +12,36 @@ interface UsePiPDeps {
   song: SongData | null;
   furiganaLines: FuriganaLine[];
   lineTimestamps: (number | null)[];
+  /**
+   * Issue #331: per-line translations, index-aligned with `furiganaLines`.
+   * The caller (detail page) already gates these on `song.showTranslation`
+   * and on there being any translated line, so PiP needs no switch of its
+   * own — it follows the same preference as the main lyric list.
+   */
+  translationLines?: string[];
+  /** True when the song is only partially translated → show the placeholder. */
+  showUntranslatedHint?: boolean;
   showToast: (type: 'success' | 'error' | 'info', msg: string, actionLabel?: string, onAction?: () => void) => void;
   t: (key: string, params?: Record<string, string>) => string;
 }
 
+/**
+ * Everything the PiP window needs to render the lyric list. Kept in one object
+ * so the initial build and the in-place `pip-lyrics-render` redraw always pass
+ * the exact same inputs — a new render input only has to be added here.
+ */
+interface PipLyricsSource {
+  furiganaLines: FuriganaLine[];
+  song: SongData | null;
+  timestamps?: (number | null)[];
+  translations: (string | null)[];
+  untranslatedHint?: string;
+}
+
 export function usePiP(deps: UsePiPDeps) {
   const {
-    fontSize, readingMode, romanizeFurigana, song, furiganaLines, lineTimestamps, showToast, t,
+    fontSize, readingMode, romanizeFurigana, song, furiganaLines, lineTimestamps,
+    translationLines, showUntranslatedHint, showToast, t,
   } = deps;
 
   // Keep a reference to the page-provided pipWindowRef so the useEffect below
@@ -33,6 +56,8 @@ export function usePiP(deps: UsePiPDeps) {
     highlightLine: number,
     pipWindowRef: React.MutableRefObject<Window | null>,
     timestamps?: (number | null)[],
+    translations?: (string | null)[],
+    showTranslationHint?: boolean,
   ) => {
     if (pipWindowRef.current && !pipWindowRef.current.closed) {
       pipWindowRef.current.close();
@@ -49,6 +74,19 @@ export function usePiP(deps: UsePiPDeps) {
       showToast('error', t('song.noLyrics'));
       return;
     }
+
+    // Issue #331: the PiP follows the page's "show translation" preference —
+    // the caller has already applied it to `translations`, so a non-empty list
+    // is the only switch. Keeping the source in one object means the initial
+    // build and every later `pip-lyrics-render` redraw render identically.
+    const shownTranslations = translations?.length ? translations : undefined;
+    const pipSource: PipLyricsSource = {
+      furiganaLines: furiganaLinesArg,
+      song: songArg,
+      timestamps,
+      translations: shownTranslations ?? [],
+      untranslatedHint: shownTranslations && showTranslationHint ? t('song.untranslatedHint') : undefined,
+    };
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -70,7 +108,7 @@ export function usePiP(deps: UsePiPDeps) {
       pipWindow.document.documentElement.innerHTML = `
         <head>
           <meta name="color-scheme" content="dark">
-          <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500&display=swap" rel="stylesheet">
+          <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500&family=Noto+Sans+SC:wght@400;500&family=Noto+Sans+TC:wght@400;500&display=swap" rel="stylesheet">
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             html { --pip-font-size: ${pipFontSize}px; }
@@ -90,12 +128,25 @@ export function usePiP(deps: UsePiPDeps) {
             ruby.cantonese-reading rt { padding-inline: 0.08em; }
             ruby.katakana-chunk { ruby-overhang: none; white-space: nowrap; }
             .line.active ruby rt { color: #d4d4d4; }
+            /* Issue #331: translation typography mirrors the detail page
+               (FuriganaLine): 0.72em, pulled into the source line's half-leading
+               and padded back so line spacing stays uniform. */
+            .line .translation { margin-top: -0.6em; padding-bottom: 0.6em; font-size: 0.72em; line-height: 1.6; color: #8a8a8a; }
+            .line.untranslated-hint .translation, .line .translation.untranslated-hint { font-style: italic; color: #5c5c5c; }
+            .line.active .translation { color: #a3a3a3; }
+            /* Per-language fonts, same policy as globals.css: a Chinese
+               translation must not be drawn with Japanese glyph shapes, and
+               readings (romaji / jyutping) stay in the Latin stack. */
+            [lang="ja"] { font-family: 'Noto Sans JP', 'system-ui', system-ui, -apple-system, sans-serif; }
+            [lang^="zh"] { font-family: 'Noto Sans SC', 'Noto Sans JP', 'system-ui', system-ui, -apple-system, sans-serif; }
+            [lang^="zh-TW"], [lang^="zh-HK"], [lang^="zh-Hant"], [lang="yue-Hant"] { font-family: 'Noto Sans TC', 'Noto Sans JP', 'system-ui', system-ui, -apple-system, sans-serif; }
+            [lang="en"], [lang="yue-Latn"] { font-family: 'Inter', 'Noto Sans JP', 'system-ui', system-ui, -apple-system, sans-serif; }
           </style>
         </head>
         <body>
           <div id="pip-header"><span class="title">${title}</span>${artist ? ` — ${artist}` : ''}</div>
           <div id="pip-lyrics">
-            ${renderPipLyricsHtml(furiganaLinesArg, songArg?.reading_scheme, readingMode, romanizeFurigana, timestamps)}
+            ${renderPipLyricsHtml(pipSource.furiganaLines, pipSource.song?.reading_scheme, readingMode, romanizeFurigana, pipSource.timestamps, pipSource)}
           </div>
         </body>
       `;
@@ -205,8 +256,10 @@ export function usePiP(deps: UsePiPDeps) {
     pipWin.postMessage({ type: 'pip-font-size', fontSize }, '*');
   }, [fontSize]);
 
-  // Reading mode / romanize toggle (and lyric data changes) regenerate the
-  // PiP lyrics list in place instead of forcing a close/re-open.
+  // Reading mode / romanize toggle, translation updates (issue #331) and lyric
+  // data changes regenerate the PiP lyrics list in place instead of forcing a
+  // close/re-open. Deliberately a whole-block redraw: a per-line diff would
+  // cost more than it saves while a translation streams in.
   useEffect(() => {
     const pipWin = pipWindowRefInternal.current?.current;
     if (!pipWin || pipWin.closed) return;
@@ -216,12 +269,16 @@ export function usePiP(deps: UsePiPDeps) {
       const activeEl = pipWin.document.querySelector('#pip-lyrics .line.active');
       activeLine = activeEl ? lines.indexOf(activeEl) : -1;
     } catch { /* window gone */ }
+    const shownTranslations = translationLines?.length ? translationLines : undefined;
     pipWin.postMessage({
       type: 'pip-lyrics-render',
-      html: renderPipLyricsHtml(furiganaLines, song?.reading_scheme, readingMode, romanizeFurigana, lineTimestamps),
+      html: renderPipLyricsHtml(furiganaLines, song?.reading_scheme, readingMode, romanizeFurigana, lineTimestamps, {
+        translations: shownTranslations,
+        untranslatedHint: shownTranslations && showUntranslatedHint ? t('song.untranslatedHint') : undefined,
+      }),
       activeLine,
     }, '*');
-  }, [readingMode, romanizeFurigana, song, furiganaLines, lineTimestamps]);
+  }, [readingMode, romanizeFurigana, song, furiganaLines, lineTimestamps, translationLines, showUntranslatedHint, t]);
 
 
   return { openPiP };

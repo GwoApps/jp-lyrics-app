@@ -5,7 +5,7 @@ import { parseLrc, findLrcConflicts } from '@/lib/lrc';
 import { getAuthUser } from '@/lib/auth';
 import { getSpotifyTrack } from '@/lib/spotify';
 import { parseJsonBody } from '@/lib/admin';
-import { songVisibilityWhere } from '@/lib/song-visibility';
+import { songVisibilityWhere, SONGS_S_COLUMNS } from '@/lib/song-visibility';
 import type { SQL } from 'drizzle-orm';
 import type { SongListItem } from '@/lib/types';
 
@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
   const q = request.nextUrl.searchParams.get('q')?.trim() || '';
   const mine = request.nextUrl.searchParams.get('mine') === '1';
   const favoritesOnly = request.nextUrl.searchParams.get('favorites') === '1';
+  const unclassifiedOnly = request.nextUrl.searchParams.get('unclassified') === '1';
   const user = await getAuthUser(request);
   const userEmail = user?.email || '';
 
@@ -44,8 +45,13 @@ export async function GET(request: NextRequest) {
   // - logged-in non-admin -> `is_public = 1 OR created_by = <email>`
   // - anonymous          -> `is_public = 1` (a history row with an empty
   //                         created_by must NOT match)
-  // - admin              -> undefined (no restriction)
-  const visibleWhere = songVisibilityWhere(user);
+  // - admin              -> 1 = 1 (no restriction)
+  //
+  // `visibleWhere` is TOTAL (never undefined) and is pushed into `filters`
+  // unconditionally, so `and(...filters)` can never collapse to `undefined` —
+  // which drizzle would render as an empty string, yielding `WHERE  ORDER BY`
+  // and a SQLite syntax error for admins (2026-10-08 outage, admin-only).
+  const visibleWhere = songVisibilityWhere(user, SONGS_S_COLUMNS);
 
   const selectColumns = sql`s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at, s.lyrics_needs_review`;
 
@@ -59,6 +65,7 @@ export async function GET(request: NextRequest) {
         ? sql`(s.title LIKE ${pattern} OR s.artist LIKE ${pattern})`
         : undefined,
       mine ? sql`s.created_by = ${userEmail}` : undefined,
+      unclassifiedOnly ? sql`f.in_unclassified = 1` : undefined,
       visibleWhere,
     ];
     const rawSql = sql`

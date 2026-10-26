@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { FuriganaLine } from '@/lib/types';
 import { isSameSpotifyTrack } from '@/lib/match';
 import { useNowPlaying, type SyncState } from './useNowPlaying';
-import { animateSmoothScroll } from '@/lib/scroll-ease';
+import { centeredLyricScrollTop, isLyricsView, lyricsViewUrl } from '@/lib/immersive-lyrics';
+import { animateSmoothScroll, earliestTimedLyricMs, shouldScrollLyricsToStart } from '@/lib/scroll-ease';
 
 export interface SpotifyState {
   connected: boolean;
@@ -43,6 +44,9 @@ export interface SyncRefs {
   } | null>) | null;
   currentSongId: string;
   currentUserEmail: string;
+  /** Fullscreen is a view of this same lyric controller, not another poller. */
+  immersiveLyrics: boolean;
+  shouldFollowLyrics: () => boolean;
 }
 
 export interface UseSpotifySyncReturn {
@@ -55,6 +59,13 @@ export interface UseSpotifySyncReturn {
   followPlaying: boolean;
   setFollowPlaying: React.Dispatch<React.SetStateAction<boolean>>;
   pipWindowRef: React.MutableRefObject<Window | null>;
+  /**
+   * Smoothly interpolated playback position in ms, or `null` when nothing is
+   * being followed (paused / other track / tab hidden). Written every rAF tick
+   * by the interpolation loop — read it from your OWN rAF loop for per-frame
+   * displays; do not re-derive it from the 3s `progress_ms` poll.
+   */
+  playbackMsRef: React.MutableRefObject<number | null>;
 }
 
 /** Shape used for identity checks against the song rendered on this page. */
@@ -96,6 +107,16 @@ export function useSpotifySync(
   const interpRef = useRef<InterpAnchor>({ progressMs: 0, pollTime: 0, isPlaying: false, trackName: '', trackId: '', trackArtist: '', durationMs: 0 });
   const rafRef = useRef<number>(0);
   const highlightRef = useRef(-1);
+  // Authoritative INTERPOLATED playback position (ms), written by the tick
+  // loop below every frame and nulled whenever there is nothing to follow
+  // (paused / other track / tab hidden / unmounted). Consumers that need a
+  // smooth per-frame clock — e.g. the time axis' focused-row timer — read this
+  // ref in their OWN rAF loop instead of re-deriving `progress_ms + elapsed`
+  // from the 3s poll, which would be a second, drifting source of truth.
+  const playbackMsRef = useRef<number | null>(null);
+  // Keep the most recent Spotify poll even while paused or backgrounded (when
+  // playbackMsRef is intentionally cleared and no interpolation frame runs).
+  const lastPolledProgressRef = useRef<{ key: string; ms: number } | null>(null);
   const prevTrackKeyRef = useRef('');
   const navigatingRef = useRef(false);
   // Guards the async follow-playing match so a stale response (track changed
@@ -147,6 +168,22 @@ export function useSpotifySync(
 
     const refs = syncRefs.current;
     const track = nowPlayingData.track;
+    if (track && isSameSpotifyTrack(currentSongRef(refs), track)) {
+      const key = `${refs.currentSongId}||${track.id || track.uri || [track.name, track.artist].join('||')}`;
+      const previous = lastPolledProgressRef.current;
+      lastPolledProgressRef.current = { key, ms: nowPlayingData.progress_ms };
+      // While paused/hidden there is no rAF clock to compare against. Compare
+      // consecutive Spotify observations instead, scoped to this exact track.
+      // On resume the old rAF position may also be null before its first tick.
+      if ((!nowPlayingData.is_playing || document.hidden || playbackMsRef.current == null)
+        && !refs.debug && previous?.key === key
+        && shouldScrollLyricsToStart(previous.ms, nowPlayingData.progress_ms, earliestTimedLyricMs(refs.lineTimestamps))) {
+        const container = lyricsRef.current;
+        if (container && refs.shouldFollowLyrics()) animateSmoothScroll(container, 0);
+      }
+    } else {
+      lastPolledProgressRef.current = null;
+    }
 
     if (nowPlayingData.is_playing && track) {
       interpRef.current = {
@@ -185,7 +222,10 @@ export function useSpotifySync(
           if (navigatingRef.current) return;
           if (match && match.id !== refs.currentSongId) {
             navigatingRef.current = true;
-            window.location.assign(`/songs/${match.id}`);
+            const destination = `/songs/${match.id}`;
+            window.location.assign(isLyricsView(window.location.href)
+              ? lyricsViewUrl(new URL(destination, window.location.href).href, true)
+              : destination);
           }
         })();
       }
@@ -196,7 +236,7 @@ export function useSpotifySync(
         prevTrackKeyRef.current = '';
       }
     }
-  }, [nowPlayingData, syncRefs]);
+  }, [nowPlayingData, syncRefs, lyricsRef]);
 
   // Smooth rAF interpolation loop — runs at display refresh rate between polls,
   // but ONLY while the matched track is actively playing. When idle (paused /
@@ -217,6 +257,7 @@ export function useSpotifySync(
         !songTitle ||
         !isSameTrackCached({ id: trackId || undefined, name: trackName, artist: trackArtist })
       ) {
+        playbackMsRef.current = null;
         if (highlightRef.current !== -1) {
           highlightRef.current = -1;
           setActiveLine(-1);
@@ -228,9 +269,17 @@ export function useSpotifySync(
       // Interpolate progress since last poll
       const elapsed = performance.now() - pollTime;
       const currentMs = progressMs + Math.max(0, elapsed);
+      const previousMs = playbackMsRef.current;
+      // Publish the smooth position for per-frame readers (time axis clock).
+      playbackMsRef.current = currentMs;
+
+      // A rewind into the untimed intro has no active line to centre. Move the
+      // lyric container itself back to its beginning, even if the highlight
+      // was already -1. Ignore small backwards poll corrections, and retain
+      // the existing debug-mode no-follow behavior.
+      const lts = refs.lineTimestamps;
 
       // Find active line
-      const lts = refs.lineTimestamps;
       let newActive = -1;
 
       if (lts.length > 0) {
@@ -243,17 +292,25 @@ export function useSpotifySync(
         }
       }
       // No timestamps → newActive stays -1 (no follow)
+      if (!refs.debug && newActive === -1 && previousMs != null && previousMs > currentMs
+        && shouldScrollLyricsToStart(previousMs, currentMs, earliestTimedLyricMs(lts))) {
+        const container = lyricsRef.current;
+        if (container && refs.shouldFollowLyrics()) animateSmoothScroll(container, 0);
+      }
 
       // Update highlight + scroll only when line actually changes
       if (newActive !== highlightRef.current) {
         highlightRef.current = newActive;
         setActiveLine(newActive);
-        if (!refs.debug && lineRefs.current?.[newActive]) {
+        if (!refs.debug && refs.shouldFollowLyrics() && lineRefs.current?.[newActive]) {
           const lineEl = lineRefs.current[newActive];
           const container = lyricsRef.current;
           if (lineEl && container) {
-            const lineTop = lineEl.offsetTop - container.offsetTop;
-            animateSmoothScroll(container, lineTop - container.clientHeight / 2 + lineEl.offsetHeight / 2);
+            const lineTop = refs.immersiveLyrics
+              ? centeredLyricScrollTop(container.scrollTop, container.clientHeight,
+                lineEl.getBoundingClientRect().top - container.getBoundingClientRect().top, lineEl.getBoundingClientRect().height)
+              : lineEl.offsetTop - container.offsetTop - container.clientHeight / 2 + lineEl.offsetHeight / 2;
+            animateSmoothScroll(container, lineTop);
           }
         }
         // Update PiP window if open
@@ -284,6 +341,9 @@ export function useSpotifySync(
     const stop = () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = 0;
+      // No tick means no fresh interpolation — a stale position would keep the
+      // focused-row clock running on frozen time.
+      playbackMsRef.current = null;
     };
     startRafRef.current = start;
     stopRafRef.current = stop;
@@ -354,5 +414,6 @@ export function useSpotifySync(
     followPlaying,
     setFollowPlaying,
     pipWindowRef,
+    playbackMsRef,
   };
 }

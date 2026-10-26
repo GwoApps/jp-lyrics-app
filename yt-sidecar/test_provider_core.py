@@ -17,8 +17,10 @@ import unittest
 
 from provider_core import (
     MAX_LYRICS_FETCHES,
+    PROBE_QUERY,
     PROVIDER_ID,
     EmptySearchGuard,
+    UpstreamHealthProbe,
     bearer_ok,
     build_query,
     candidate_from_song,
@@ -26,6 +28,7 @@ from provider_core import (
     lyrics_payload_to_texts,
     manifest,
     ms_to_lrc,
+    probe_upstream,
     register_deadline_exception,
     search_candidates,
 )
@@ -83,6 +86,16 @@ class FakeYTMusic:
     def search(self, query, filter=None, limit=None, **kwargs):
         self.search_queries.append({"query": query, "filter": filter, "limit": limit})
         self.search_kwargs.append(kwargs)
+        return self._results()
+
+    def search_error(self, error):
+        """Make the next `search` raise (upstream 5xx, broken session, …)."""
+        self.songs = error
+        return self
+
+    def _results(self):
+        if isinstance(self.songs, Exception):
+            raise self.songs
         return self.songs
 
     def get_watch_playlist(self, videoId=None, **kwargs):
@@ -261,6 +274,57 @@ class TestAuth(unittest.TestCase):
         self.assertFalse(bearer_ok("Bearer wrong", "s3cret"))
         self.assertFalse(bearer_ok("bearer s3cret", "s3cret"))
         self.assertFalse(bearer_ok("s3cret", "s3cret"))
+
+
+class TestUpstreamProbe(unittest.TestCase):
+    def probe(self, yt):
+        return lambda: probe_upstream(yt)
+
+    def test_non_empty_result_set_is_healthy(self):
+        yt = FakeYTMusic([SONG])
+        self.assertTrue(probe_upstream(yt))
+        self.assertEqual(yt.search_queries[0], {"query": PROBE_QUERY, "filter": "songs", "limit": 1})
+
+    def test_empty_result_set_is_a_failure(self):
+        # Soft-throttled sessions answer 200 with no results and no error: this
+        # is the degradation the probe exists to catch, so it must not read ok.
+        self.assertFalse(probe_upstream(FakeYTMusic([])))
+
+    def test_probe_result_is_cached_for_the_ttl(self):
+        yt = FakeYTMusic([SONG])
+        calls = []
+
+        def probe():
+            calls.append(1)
+            return probe_upstream(yt)
+
+        p = UpstreamHealthProbe(probe, ttl_s=60.0)
+        self.assertTrue(p.check(now=1000.0))
+        self.assertTrue(p.check(now=1059.9))  # inside the TTL: served from cache
+        self.assertEqual(len(calls), 1)
+        p.check(now=1060.0)                   # TTL lapsed: probe again
+        self.assertEqual(len(calls), 2)
+
+    def test_a_later_probe_overrides_a_cached_success(self):
+        yt = FakeYTMusic([SONG])
+        probe = UpstreamHealthProbe(self.probe(yt), ttl_s=60.0)
+        self.assertTrue(probe.check(now=0.0))
+        yt.songs = []                         # upstream starts returning nothing
+        self.assertFalse(probe.check(now=61.0))
+
+    def test_upstream_exception_and_cache_reset(self):
+        broken = FakeYTMusic([]).search_error(RuntimeError("upstream 500"))
+        probe = UpstreamHealthProbe(self.probe(broken), ttl_s=30.0)
+        self.assertFalse(probe.check(now=0.0))
+        broken.songs = [SONG]                 # session recovers
+        self.assertTrue(probe.check(now=30.0))
+
+    def test_zero_ttl_always_probes(self):
+        calls = []
+        probe = UpstreamHealthProbe(lambda: calls.append(1) or True, ttl_s=0.0)
+        probe.check(now=0.0)
+        probe.check(now=0.0)
+        self.assertEqual(len(calls), 2)
 
 
 class TestEmptySearchGuard(unittest.TestCase):
