@@ -23,9 +23,11 @@ the plugin only *retrieves candidates* with their real matched identity
 persistence all belong to jplrc — never fabricate identity evidence here.
 """
 
-import time
-from typing import Any, Callable, Optional
 import hmac
+import inspect
+import time
+from functools import lru_cache
+from typing import Any, Callable, Optional
 
 PROTOCOL_NAME = "jplrc-lyrics-provider"
 PROTOCOL_VERSION = 1
@@ -109,6 +111,54 @@ def ms_to_lrc(ms: float) -> str:
     return f"{minutes:02d}:{seconds:02d}.{centis:02d}"
 
 
+@lru_cache(maxsize=256)
+def _accepts_timeout(func: Callable[..., Any]) -> bool:
+    """
+    True when `func` declares a `timeout` parameter (or `**kwargs`).
+
+    Decided from the signature, never by catching a `TypeError` from the call
+    itself — a `TypeError` raised *inside* the upstream method must not cause a
+    silent retry (and a duplicate upstream request).
+    """
+    try:
+        parameters = inspect.signature(func).parameters
+    except (TypeError, ValueError):  # builtins / exotic callables
+        return False
+    if "timeout" in parameters:
+        return True
+    return any(p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters.values())
+
+
+def _bounded_call(func: Callable[..., Any], timeout: Optional[float], *args, **kwargs) -> Any:
+    """
+    Call an upstream adapter method with an optional per-call `timeout`.
+
+    ytmusicapi's methods take no `timeout`, so the argument is carried only when
+    the callable accepts it (its transport bound lives in `yt_client` instead).
+    """
+    if timeout is not None and _accepts_timeout(func):
+        kwargs["timeout"] = timeout
+    return func(*args, **kwargs)
+
+
+#: Exception types that mean "the whole-search budget is spent" rather than
+#: "this song has no lyrics". `yt_client.UpstreamDeadlineExceeded` is registered
+#: by the server (and the tests) via `register_deadline_exception`, keeping this
+#: module transport-agnostic (no import cycle: `yt_client` never imports it).
+_DEADLINE_EXCEPTIONS: tuple[type, ...] = ()
+
+
+def register_deadline_exception(*exc_types: type) -> None:
+    """Add exception types that must abort a search instead of skipping a song."""
+    global _DEADLINE_EXCEPTIONS
+    _DEADLINE_EXCEPTIONS = tuple(dict.fromkeys((*_DEADLINE_EXCEPTIONS, *exc_types)))
+
+
+def deadline_exceeded(exc: BaseException) -> bool:
+    """True when `exc` reports that the search budget was spent."""
+    return bool(_DEADLINE_EXCEPTIONS) and isinstance(exc, _DEADLINE_EXCEPTIONS)
+
+
 def _line_fields(line: Any) -> tuple[str, float]:
     """(text, start_ms) from a LyricLine object or an equivalent dict."""
     if isinstance(line, dict):
@@ -174,11 +224,21 @@ def _song_duration_ms(song: dict) -> Optional[int]:
     return None
 
 
-def candidate_from_song(ytmusic: Any, song: dict) -> Optional[dict]:
+def candidate_from_song(
+    ytmusic: Any,
+    song: dict,
+    timeout: Optional[float] = None,
+) -> Optional[dict]:
     """
     Build one protocol candidate from a search result, or None when the song has
     no usable lyrics or lacks identity evidence. Per-song upstream failures are
-    soft-skipped so one broken track cannot fail the whole search.
+    soft-skipped so one broken track cannot fail the whole search, and a
+    ``timeout`` (seconds) bounds each upstream call when the adapter accepts it
+    (ytmusicapi does not, so the transport-level bound in `yt_client` applies).
+
+    A spent budget is **not** a per-song failure: it is re-raised so the caller
+    aborts the search and the server can answer `503 temporary_unavailable`
+    instead of reporting a misleading empty result.
     """
     video_id = str(song.get("videoId") or "").strip()
     title = str(song.get("title") or "").strip()
@@ -189,15 +249,19 @@ def candidate_from_song(ytmusic: Any, song: dict) -> Optional[dict]:
         return None
 
     try:
-        watch = ytmusic.get_watch_playlist(videoId=video_id) or {}
-    except Exception:
+        watch = _bounded_call(ytmusic.get_watch_playlist, timeout, videoId=video_id) or {}
+    except Exception as exc:
+        if deadline_exceeded(exc):
+            raise
         return None
     browse_id = watch.get("lyrics")
     if not browse_id:
         return None
     try:
-        payload = ytmusic.get_lyrics(browse_id, timestamps=True)
-    except Exception:
+        payload = _bounded_call(ytmusic.get_lyrics, timeout, browse_id, timestamps=True)
+    except Exception as exc:
+        if deadline_exceeded(exc):
+            raise
         return None
 
     plain, synced = lyrics_payload_to_texts(payload)
@@ -234,17 +298,35 @@ def search_candidates(
     ytmusic: Any,
     track: dict,
     max_candidates: Optional[int] = None,
+    deadline: Any = None,
+    timeout: Optional[float] = None,
 ) -> list[dict]:
     """
     Retrieve up to `MAX_LYRICS_FETCHES` candidates for one track.
 
     Raises on a failing upstream search (the server maps it to 503
     `temporary_unavailable`); per-song lookup failures just skip that song.
+
+    ``deadline`` is an optional `yt_client.Deadline`: it is checked *between*
+    upstream calls and shrinks each call's timeout, so a stall ends the search
+    with a deadline error instead of pinning the worker. Such an error always
+    propagates (never soft-skipped as "this song has no lyrics"), so the server
+    can answer 503 `temporary_unavailable`. ``timeout`` is an optional per-call
+    bound passed through to adapters that accept one.
     """
+
+    def remaining() -> Optional[float]:
+        """Per-call bound for the next upstream call, or None when unbounded."""
+        if deadline is None:
+            return timeout
+        if timeout is None:
+            return deadline.remaining_timeout(float("inf"))
+        return deadline.remaining_timeout(timeout)
+
     query = build_query(track)
     if not query:
         return []
-    results = ytmusic.search(query, filter="songs", limit=SEARCH_LIMIT) or []
+    results = _bounded_call(ytmusic.search, remaining(), query, filter="songs", limit=SEARCH_LIMIT) or []
 
     cap = MAX_LYRICS_FETCHES
     if isinstance(max_candidates, (int, float)) and max_candidates > 0:
@@ -254,7 +336,12 @@ def search_candidates(
     for song in results:
         if len(candidates) >= cap:
             break
-        candidate = candidate_from_song(ytmusic, song)
+        if deadline is not None:
+            deadline.check()
+        # A spent budget must abort the search (-> 503) rather than look like
+        # "this song has no lyrics"; per-song lookup failures are already
+        # soft-skipped inside candidate_from_song.
+        candidate = candidate_from_song(ytmusic, song, timeout=remaining())
         if candidate:
             candidates.append(candidate)
     return candidates
