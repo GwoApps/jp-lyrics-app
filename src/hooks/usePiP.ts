@@ -56,7 +56,6 @@ export function usePiP(deps: UsePiPDeps) {
   const videoPipSource = useRef<PipLyricsSource | null>(null);
   const videoPipActiveLine = useRef(-1);
   const videoPipRenderConfig = useRef({ readingMode, romanizeFurigana });
-  videoPipRenderConfig.current = { readingMode, romanizeFurigana };
 
   const drawVideoPiP = useCallback(() => {
     const elements = videoPipElements.current;
@@ -204,6 +203,7 @@ export function usePiP(deps: UsePiPDeps) {
   }, [furiganaLines, song, lineTimestamps, translationLines, showUntranslatedHint, t, drawVideoPiP]);
 
   useEffect(() => {
+    videoPipRenderConfig.current = { readingMode, romanizeFurigana };
     drawVideoPiP();
   }, [readingMode, romanizeFurigana, drawVideoPiP]);
 
