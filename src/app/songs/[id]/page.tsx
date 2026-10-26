@@ -1108,6 +1108,8 @@ export default function SongViewPage() {
           hasReadingData={furiganaLines.length > 0}
           hasTranslation={data.hasTranslation}
           hasSynced={!isEmptyAfterTrim(data.song.lyrics_synced)}
+          songTitle={data.song.title}
+          songArtist={data.song.artist}
           onClose={() => setShowDownloadDialog(false)}
         />
       )}

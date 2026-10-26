@@ -1,9 +1,11 @@
 'use client';
 
 import { useId, useRef, useState } from 'react';
-import { Download, FileText, FileClock, FileCode2, Check, X, AlertCircle, Ban } from 'lucide-react';
+import { Download, FileText, FileClock, FileCode2, Check, X, AlertCircle, Ban, Loader2 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { useModalFocus } from '@/hooks/useModalFocus';
+import { exportErrorMsg } from '@/lib/export-errors';
+import { exportFilename, extensionForFormat, fallbackFilename, saveBlob } from '@/lib/download';
 import type { ExportFormat, ExportReadingMode } from '@/lib/lyrics-export';
 
 interface DownloadDialogProps {
@@ -14,6 +16,9 @@ interface DownloadDialogProps {
   hasTranslation: boolean;
   /** True when the song has a non-empty synced timeline (whitespace-insensitive). */
   hasSynced: boolean;
+  /** Song metadata used for the client-side fallback filename. */
+  songTitle: string;
+  songArtist?: string | null;
   onClose: () => void;
 }
 
@@ -28,6 +33,8 @@ export default function DownloadDialog({
   hasReadingData,
   hasTranslation,
   hasSynced,
+  songTitle,
+  songArtist,
   onClose,
 }: DownloadDialogProps) {
   const { t } = useI18n();
@@ -39,6 +46,8 @@ export default function DownloadDialog({
   const [format, setFormat] = useState<ExportFormat>('text');
   const [reading, setReading] = useState<ExportReadingMode>('none');
   const [includeTranslation, setIncludeTranslation] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Focus trap + inert background + focus restore on close.
   useModalFocus({
@@ -75,11 +84,52 @@ export default function DownloadDialog({
     }
   };
 
-  const buildUrl = () => {
-    const params = new URLSearchParams({ format: selectedFormat });
+  const buildUrl = (format: ExportFormat = selectedFormat) => {
+    const params = new URLSearchParams({ format });
     if (showReadingOptions && reading !== 'none') params.set('reading', reading);
     if (showTranslationOption && includeTranslation) params.set('include_translation', '1');
     return `/api/songs/${songId}/export?${params.toString()}`;
+  };
+
+  // A bare <a download> saves whatever the server returns — including the
+  // error JSON of a 4xx/5xx. Fetch instead so the status code is observable:
+  // success saves the blob, failure surfaces a localized message + retry.
+  const handleDownload = async (format: ExportFormat = selectedFormat) => {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(buildUrl(format));
+      if (!res.ok) {
+        let code: string | undefined;
+        try {
+          const body = await res.json();
+          code = typeof body?.error === 'string' ? body.error : undefined;
+        } catch {
+          // Non-JSON body (proxy error page, gateway timeout): generic message.
+        }
+        setError(exportErrorMsg(t, code));
+        return;
+      }
+      const blob = await res.blob();
+      saveBlob(
+        blob,
+        exportFilename(
+          res.headers.get('Content-Disposition'),
+          res.headers.get('Content-Type'),
+          songTitle,
+          songArtist,
+          format,
+          // Prefer the UI-visible name so the saved file keeps "title - artist".
+          fallbackFilename(songTitle, songArtist, extensionForFormat(format)),
+        ),
+      );
+      onClose();
+    } catch {
+      // Network failure / aborted body.
+      setError(t('song.exportFailed'));
+    } finally {
+      setPending(false);
+    }
   };
 
   const lrcOptionTitle = lrcDisabled
@@ -134,6 +184,7 @@ export default function DownloadDialog({
                     onClick={() => {
                       if (disabled) return;
                       setFormat(f);
+                      setError(null);
                     }}
                     aria-pressed={selectedFormat === f}
                     aria-disabled={disabled}
@@ -166,7 +217,10 @@ export default function DownloadDialog({
                   <button
                     key={mode}
                     type="button"
-                    onClick={() => setReading(mode)}
+                    onClick={() => {
+                      setReading(mode);
+                      setError(null);
+                    }}
                     aria-pressed={reading === mode}
                     className={`flex w-full items-start gap-3 rounded-xl border px-3 py-2 text-left transition-colors ${
                       reading === mode
@@ -217,7 +271,10 @@ export default function DownloadDialog({
                 type="checkbox"
                 className="sr-only"
                 checked={includeTranslation}
-                onChange={(event) => setIncludeTranslation(event.target.checked)}
+                onChange={(event) => {
+                  setIncludeTranslation(event.target.checked);
+                  setError(null);
+                }}
               />
             </label>
           )}
@@ -235,21 +292,42 @@ export default function DownloadDialog({
               <span>{t('song.exportLrcUnavailable')}</span>
             </div>
           )}
+
+          {error && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-xl border border-[var(--destructive)]/30 bg-[var(--destructive)]/10 px-3 py-2.5 text-xs text-[var(--destructive)]"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1">{error}</span>
+              <button
+                type="button"
+                onClick={() => void handleDownload()}
+                disabled={pending}
+                className="shrink-0 font-medium underline underline-offset-2 disabled:opacity-60"
+              >
+                {t('song.exportRetry')}
+              </button>
+            </div>
+          )}
         </div>
 
         <footer className="flex items-center justify-between gap-2 border-t border-[var(--border)] px-4 py-3 sm:px-5">
-          <a
-            href={buildUrl()}
-            download
-            className="song-editor-primary-button inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-medium"
+          <button
+            type="button"
+            onClick={() => void handleDownload()}
+            disabled={pending}
+            aria-busy={pending}
+            className="song-editor-primary-button inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <Download className="h-3.5 w-3.5" />
-            {t('song.exportDownloadBtn')}
-          </a>
+            {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            {pending ? t('song.exportDownloading') : t('song.exportDownloadBtn')}
+          </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-4 py-2 text-xs font-medium text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+            disabled={pending}
+            className="rounded-md px-4 py-2 text-xs font-medium text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--foreground)] disabled:opacity-60"
           >
             {t('common.cancel')}
           </button>
