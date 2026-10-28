@@ -23,10 +23,11 @@ const SSE_HEADERS = {
 //     stored cache so partial translations survive failures (resume/continue support).
 //     Combined with `force`, cache reuse inside the slice is disabled so the requested lines
 //     are re-translated even when a previous translation is stored (targeted re-translate).
-//   - With `stream: true`: responds text/event-stream (SSE) — the provider's
-//     reasoning/translation deltas are forwarded live as `reasoning` and
-//     `translation` events, then a final `done` event carries the aligned
-//     translations array. Errors arrive as `error` events.
+//   - With `stream: true`: responds text/event-stream (SSE) — `stage` and `progress`
+//     report preparation and line coverage; optional `reasoning` deltas are
+//     forwarded live, then `done` carries the aligned translations array. The
+//     provider's translation chunks are NOT sent as `translation` events.
+//     Errors arrive as `error` events.
 //   - With `persist: false`: returns the translated slice WITHOUT merging it into the stored
 //     cache (and without persisting glossary/reasoning). Used by the editor's AI fill /
 //     single-line re-translate so results stay inside the「草稿 + 保存/放弃」boundary — the

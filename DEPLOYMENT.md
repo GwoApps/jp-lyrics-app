@@ -1,6 +1,9 @@
 # Deployment Guide
 
-Three deployment targets with increasing levels of edge-readiness:
+Three deployment targets. The included Docker Compose file is tailored to an
+existing Traefik installation, not a standalone localhost demo. For a quick
+local trial without that infrastructure, follow the Node.js steps in
+[README.md](README.md#local-quick-start).
 
 | | Docker (self-hosted) | Cloudflare Workers (D1) | Vercel (Turso) |
 |---|---|---|---|
@@ -9,31 +12,70 @@ Three deployment targets with increasing levels of edge-readiness:
 | Spotify poll | `server` or `client` | `client` only | `client` only |
 | Cover storage | SQLite BLOB (automatic) | R2 object storage (optional, automatic fallback to BLOB) | SQLite BLOB (automatic) |
 | Filesystem | ✅ Required | ❌ Not available | ❌ Not available |
-| Node.js runtime | ✅ Required | ❌ Edge only | ⚡ Edge or Node |
+| Node.js runtime | ✅ Required | ❌ Workers runtime | ✅ Node.js routes supported |
 
 ---
 
 ## 1. Docker (Self-Hosted)
 
-The simplest path. Local SQLite file, no external database needed.
+For hosts already using Traefik. The app stores data in a local SQLite volume;
+no external database is needed.
 
-### Prerequisites
+### Prerequisites for the included `docker-compose.yml`
 
-- Docker + Docker Compose
-- (Optional) Traefik or other reverse proxy
-- (Optional) Spotify Developer App
+- Docker + Docker Compose, plus an **already running Traefik** installation with
+  the external network named by `TRAEFIK_NETWORK` (default in `.env.example`:
+  `traefik_traefik-net`). The Compose file does not create the network or
+  publish a host port.
+- An existing Traefik auth middleware named by `TRAEFIK_AUTH_MIDDLEWARE`.
+  Change the sample value to your own middleware; it is not bundled with this
+  repository. Set a domain, TLS entrypoint and cert resolver that work in your
+  own Traefik installation.
+- A regular host **file** at
+  `/data0/docker/jplrc-secrets/yt-music-oauth.json`, because the bundled
+  `yt-sidecar` mounts that absolute path read-only. An empty file enables the
+  unauthenticated fallback; for reliable YouTube Music searches configure an
+  authenticated session as described in [yt-sidecar/README.md](yt-sidecar/README.md).
+- A Spotify Developer App if you want to sign in, create/manage songs, use
+  playback sync or import playlists. Anonymous users can only read public
+  songs; a fresh database contains none.
 
 ### Steps
 
 ```bash
 git clone https://cnb.cool/siubeng/jp-lyrics-app.git
 cd jp-lyrics-app
+cp .env.example .env
 ```
 
-Create `.env`:
+Edit `.env` for your installation. In particular, replace the sample domain,
+network and middleware values, and set a dedicated `SESSION_SECRET` in
+production. The relevant Compose interpolation values are:
+
+```dotenv
+JPLRC_DOMAIN=jplrc.example.com
+JPLRC_PORT=3000
+TRAEFIK_NETWORK=traefik_traefik-net
+TRAEFIK_ENTRYPOINT=websecure
+TRAEFIK_CERTRESOLVER=letsencrypt
+TRAEFIK_AUTH_MIDDLEWARE=your-auth@docker
+```
+
+Check that your external network exists, and create the sidecar's host file
+*only if it does not already exist* (never overwrite an authenticated session):
 
 ```bash
-# Spotify (optional)
+# Match the name to TRAEFIK_NETWORK in your .env
+docker network inspect traefik_traefik-net
+sudo mkdir -p /data0/docker/jplrc-secrets
+test -f /data0/docker/jplrc-secrets/yt-music-oauth.json || \
+  sudo touch /data0/docker/jplrc-secrets/yt-music-oauth.json
+```
+
+Optional application settings in `.env`:
+
+```bash
+# Spotify OAuth: required to log in, optional for anonymous public reading
 SPOTIFY_CLIENT_ID=your_client_id
 SPOTIFY_CLIENT_SECRET=your_client_secret
 SPOTIFY_REDIRECT_URI=https://your-domain.com/api/auth/callback
@@ -62,8 +104,10 @@ SESSION_SECRET=your_session_secret
 # HTTP lyrics providers (ISSUE #148) — deployment-level network policy + budgets.
 # These are env-only; admins/users cannot override them from the UI or database.
 # Boolean values accept only an explicit `true` (any other value = false / fail-closed).
-# NOTE: the bundled yt-sidecar plugin (see yt-sidecar/README.md) runs over plaintext
-# HTTP on the compose network — deploying it requires both switches below to be `true`.
+# NOTE: this Compose file explicitly overrides BOTH switches to true for its
+# bundled HTTP yt-sidecar on the private Docker network. These false values are
+# the fail-closed defaults for deployments that do not use that Compose file;
+# changing .env alone does NOT override Compose's true values.
 LYRICS_PROVIDER_ALLOW_HTTP=false
 LYRICS_PROVIDER_ALLOW_PRIVATE_NETWORK=false
 # Required to store Bearer-token providers (AES-GCM encryption at rest).
@@ -89,13 +133,20 @@ LYRICS_PROVIDER_MANIFEST_TIMEOUT_MS=15000
 LYRICS_PROVIDER_CHAIN_TIMEOUT_MS=180000
 ```
 
-Start:
+Validate the Compose configuration and start both the app and sidecar:
 
 ```bash
+docker compose config --quiet
 docker compose up -d --build
 ```
 
-The database (`data/local.db`) is automatically created on first run via `CREATE TABLE IF NOT EXISTS`. No migrations or seed files needed.
+Access the site through the configured Traefik domain; there is **no**
+`localhost:3000` host port in this Compose file. Node/local SQLite and Turso
+use the checked-in `drizzle/` journal and SQL migrations when the database
+module loads (including the first request); you do not need to run a manual
+schema-creation command on a new local database. Back up an existing database
+before upgrading. Cloudflare D1 follows a **different manual migration path**
+described below.
 
 ### Data Persistence
 
@@ -155,9 +206,9 @@ Edge-deployed, globally distributed. Uses Cloudflare D1 (built-in SQLite).
 
 ```bash
 # Create D1 database via Wrangler
-wrangler d1 create jplrc-db
+wrangler d1 create jp-lyrics-app
 
-# Note the database_id from the output, then add to wrangler.toml
+# Note the database_id and update the existing wrangler.jsonc DB binding
 ```
 
 ### Step 1b: Create R2 Buckets (album covers + OpenNext cache)
@@ -189,81 +240,75 @@ How cover storage behaves:
 
 ### Step 2: Set Up Schema
 
-Apply the schema to D1:
+For a **new, empty** D1 database, use Drizzle Kit's D1 HTTP driver to push
+the current schema. `drizzle.config.ts` otherwise defaults to the *local*
+`data/local.db` file; running `npx drizzle-kit push` without the D1 driver
+would initialize the wrong database. Supply the Cloudflare account ID, the
+database ID returned by `wrangler d1 create`, and an API token as environment
+variables (do not commit them):
 
 ```bash
-# Using Drizzle Kit (recommended)
-npx drizzle-kit push
-
-# Or using Wrangler directly
-wrangler d1 execute jplrc-db --file=./schema.sql
+DB_DRIVER=d1-http npx drizzle-kit push
+# Requires CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_DATABASE_ID,
+# and CLOUDFLARE_API_TOKEN in the environment.
 ```
 
-To migrate existing local data:
+Schema push does **not** run the data inserts from historical migrations, so a
+new D1 database otherwise has **no built-in lyrics sources** and cannot find
+lyrics. Seed the three current built-in providers on that remote database:
+
 ```bash
-# Export from local SQLite
-sqlite3 data/local.db .dump > dump.sql
-# Import into D1
-wrangler d1 execute jplrc-db --file=./dump.sql
+wrangler d1 execute jp-lyrics-app --remote --file=./scripts/seed-d1-builtin-providers.sql
 ```
+
+The seed is idempotent and leaves existing rows untouched. It does not seed
+the YouTube Music sidecar: that is an optional HTTP plugin unavailable on
+Workers by default. Verify the provider rows in the admin System panel after
+the first login. **Do not** run the entire historical `0019` migration on a
+schema already created by `drizzle-kit push` — it would repeat schema changes.
+
+This initializes the current schema and built-in providers, **not**
+historical songs. Migrating data
+from an existing local database needs a reviewed export/import plan; do not
+blindly import a full SQLite `.dump` into a database whose schema was already
+created. For subsequent releases, apply reviewed **pending** `drizzle/*.sql`
+changes to the correct remote D1 database in journal order before deploying
+the Worker; D1 does not run the Node startup migrator. Back up production D1
+before a schema change and do not replay migrations already incorporated by
+the fresh schema push.
 
 ### Step 3: Configure Wrangler
 
-Create `wrangler.jsonc` (not `.toml` — OpenNext uses JSONC format):
+**Edit the existing [`wrangler.jsonc`](wrangler.jsonc), do not replace it with a
+minimal example.** It already declares the `DB` D1 binding, `AI` Workers AI
+binding, both R2 buckets, the OpenNext cache and the worker self-reference.
+Set the D1 `database_id`/`database_name` to the database you provisioned;
+if you rename the Worker, update its self-reference service name too. Check
+that the R2 bucket names match those created above. Set
+`SPOTIFY_POLL_MODE=client` in `vars`, configure the public HTTPS
+`SPOTIFY_REDIRECT_URI`, and keep the existing `TRANSLATION_PROVIDER=workers-ai`
+if you want translation without an external LLM key. Do not put credentials in
+`vars` or commit them.
 
-```jsonc
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "main": ".open-next/worker.js",
-  "name": "jplrc",
-  "compatibility_date": "2025-01-01",
-  "compatibility_flags": ["nodejs_compat"],
-  "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
-  },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "jplrc-db",
-      "database_id": "<your-database-id>"
-    }
-  ],
-  "vars": {
-    "SPOTIFY_POLL_MODE": "client",
-    "SPOTIFY_REDIRECT_URI": "https://jplrc.your-domain.com/api/auth/callback",
-    "TRANSLATION_PROVIDER": "openai",
-    "TRANSLATION_BASE_URL": "https://api.deepseek.com/v1",
-    "TRANSLATION_MODEL": "deepseek-v4-flash",
-    "TRANSLATION_TARGET_LANG": "zh-CN",
-    "AI_DAILY_NEURON_LIMIT": "9000",
-    "LYRICS_PROVIDER_ALLOW_HTTP": "false",
-    "LYRICS_PROVIDER_ALLOW_PRIVATE_NETWORK": "false",
-    "LYRICS_PROVIDER_DEFAULT_TIMEOUT_MS": "20000",
-    "LYRICS_PROVIDER_MAX_TIMEOUT_MS": "60000",
-    "LYRICS_PROVIDER_MANIFEST_TIMEOUT_MS": "15000",
-    "LYRICS_PROVIDER_CHAIN_TIMEOUT_MS": "180000"
-  }
-}
-```
-
-Set secrets:
+Set secrets interactively (the latter two only if used):
 
 ```bash
 wrangler secret put SPOTIFY_CLIENT_ID
 wrangler secret put SPOTIFY_CLIENT_SECRET
-wrangler secret put SESSION_SECRET   # optional, falls back to SPOTIFY_CLIENT_SECRET
-wrangler secret put TRANSLATION_API_KEY   # optional, for the translation feature
-# Required only if you configure Bearer-token HTTP lyrics providers (ISSUE #148)
-wrangler secret put LYRICS_PROVIDER_SECRET_KEY
+wrangler secret put SESSION_SECRET
+# For an external OpenAI-compatible / Anthropic translation provider only:
+# wrangler secret put TRANSLATION_API_KEY
+# For Bearer-token HTTP lyrics providers only:
+# wrangler secret put LYRICS_PROVIDER_SECRET_KEY
 ```
 
 #### YouTube Music source (yt-sidecar) on Cloudflare
 
-The bundled `yt-sidecar` service cannot run on Workers — migration 0021 seeds a
-`ytmusic-sidecar` plugin row with `http://yt-sidecar:8910`, which is unreachable
-here. It fails closed (the network policy rejects plaintext HTTP before any
-network call), so it only adds one skipped stage per sync:
+The bundled `yt-sidecar` service cannot run on Workers. **Existing databases**
+that ran migration 0021 may have a seeded `ytmusic-sidecar` provider row at
+`http://yt-sidecar:8910`, which is unreachable here; the network policy rejects
+it before any call. A **new D1 database initialized with schema push alone**
+has no seeded row; add an external provider only if you need one:
 
 - **Disable or delete** the `ytmusic-sidecar` row in the admin 系统 → 歌词源
   panel, unless you point it at an external sidecar.
@@ -279,26 +324,21 @@ network call), so it only adds one skipped stage per sync:
   since migration 0021.
 
 > **Note:** when using the `workers-ai` translation provider, no API key is
-> needed — add the `ai` binding in `wrangler.jsonc` instead and set
-> `TRANSLATION_PROVIDER=workers-ai`.
+> needed — the checked-in `wrangler.jsonc` already declares an `AI` binding
+> and `TRANSLATION_PROVIDER=workers-ai` by default.
 
 ### Step 4: Build & Deploy
 
 ```bash
-# Install OpenNext Cloudflare adapter (one-time)
-npm install -D @opennextjs/cloudflare
-
 # Build — this runs next build internally and outputs to .open-next/
 npx @opennextjs/cloudflare build
 
 # Verify output exists
 ls .open-next/worker.js  # must exist before deploy
 
-# Apply release migrations before sending traffic to the new Worker.
-# D1 intentionally does not run the Node/local startup migrator.
-wrangler d1 execute jplrc-db --remote --file=./drizzle/0004_lovely_doctor_faustus.sql
-wrangler d1 execute jplrc-db --remote --file=./drizzle/0014_add_playlist_import_jobs.sql
-wrangler d1 execute jplrc-db --remote --file=./drizzle/0018_add_lyrics_provider_configs.sql
+# For an existing D1 database only, apply each reviewed pending migration
+# to the REMOTE database in journal order before deploy (example filename).
+# wrangler d1 execute jp-lyrics-app --remote --file=./drizzle/NNNN_name.sql
 
 # Deploy
 wrangler deploy
@@ -307,9 +347,9 @@ wrangler deploy
 ### Important Notes
 
 - **`SPOTIFY_POLL_MODE=client` is mandatory** — Workers have no persistent process for the server-side poller
-- **D1 binding (`DB`)** is automatically available via `process.env.DB` in the OpenNext adapter
-- **Run every new `drizzle/NNNN_*.sql` against D1 before `wrangler deploy`**; D1 skips the local startup migrator by design
-- **`getDB(env.DB)`** in route handlers receives the D1 binding — no TURSO_URL needed
+- **D1 binding (`DB`)** is read by `getDB()` from the OpenNext Cloudflare request context; the app does not use `process.env.DB` or pass an argument to `getDB()`.
+- **Run reviewed pending `drizzle/NNNN_*.sql` changes against the correct remote D1 before `wrangler deploy`**; D1 skips the Node startup migrator. A fresh DB initialized via schema push has already incorporated existing migrations — do not replay them.
+- **Turso variables are not needed for D1** — the D1 binding is configured in `wrangler.jsonc` and resolved inside `src/lib/db.ts`.
 - Furigana is computed client-side via CDN-loaded kuromoji-es (no server dependency)
 - The SSE stream endpoint returns `501` in client mode (by design)
 
@@ -334,7 +374,11 @@ Zero-config deploys from GitHub. Requires Turso for the database.
 
 ### Step 1: Set Up Turso
 
-Same as Cloudflare Step 1 above.
+Create a **Turso/libSQL** database in the Turso dashboard, obtain its URL and
+an auth token, then set `TURSO_URL` and `TURSO_AUTH_TOKEN` in Vercel (Step 2).
+Do not use the Cloudflare D1 / Wrangler setup steps for Turso. The Node
+database module applies checked-in Drizzle migrations on initial load; back
+up an existing Turso database before upgrading.
 
 ### Step 2: Configure Vercel Project
 
@@ -365,9 +409,8 @@ vercel
 ### Important Notes
 
 - **`output: 'standalone'`** is set in `next.config.ts` — Vercel handles this automatically
-- **Edge Runtime**: All API routes run on Vercel's Edge Runtime by default. If you need Node.js runtime for specific routes (e.g., `spotify/now-playing/stream`), add `export const runtime = 'nodejs'` to that route
-- **`SPOTIFY_POLL_MODE=client` is mandatory** — Vercel serverless functions are stateless
-- The `spotify-poller.ts` singleton won't work (no persistent process)
+- **Runtime**: Do not assume every API route runs on the Edge Runtime. This is a Next.js app with Node.js routes (for example, `spotify/now-playing/stream` explicitly sets `runtime = 'nodejs'`).
+- **`SPOTIFY_POLL_MODE=client` is mandatory** — Vercel serverless functions cannot host the persistent `spotify-poller.ts` singleton.
 
 ### Custom Domain
 
@@ -375,33 +418,23 @@ In Vercel dashboard → **Settings → Domains**, add your custom domain and con
 
 ---
 
-## Database Schema
+## Database Schema and Migrations
 
-The schema is self-initializing — tables are created automatically on first request via `CREATE TABLE IF NOT EXISTS`. No migration files or seed data needed.
+[`src/lib/schema.ts`](src/lib/schema.ts) defines the current tables and columns;
+[`drizzle/meta/_journal.json`](drizzle/meta/_journal.json) lists the ordered
+SQL migration files in [`drizzle/`](drizzle/). Do not rely on a hand-copied
+table/column list or run ad-hoc `ALTER TABLE` statements from an old guide.
 
-```sql
-songs           — id, title, artist, lyrics_raw, lyrics_furigana, lyrics_synced,
-                  created_by, created_by_name, created_at, updated_at
-spotify_auth    — user_email, access_token, refresh_token, expires_at,
-                  display_name, updated_at
-favorites       — user_email, song_id, created_at
-collections     — id, user_email, name, created_at
-collection_songs— collection_id, song_id, sort_order
-lyrics_provider_configs — admin-configured global HTTP lyrics providers (ISSUE #148)
-                  id, name, base_url, auth_type, auth_secret_ciphertext, enabled,
-                  priority, timeout_ms, protocol_version, manifest_json,
-                  last_check_status/code/latency_ms, checked_at, created_at, updated_at
-```
-
-### Manual Schema Migration
-
-New columns are added via `ALTER TABLE ... ADD COLUMN` in `src/lib/db.ts`. These are idempotent (catch errors if column already exists). If you need to run them manually:
-
-```sql
-ALTER TABLE songs ADD COLUMN lyrics_synced TEXT NOT NULL DEFAULT '';
-ALTER TABLE songs ADD COLUMN created_by TEXT NOT NULL DEFAULT '';
-ALTER TABLE songs ADD COLUMN created_by_name TEXT NOT NULL DEFAULT '';
-```
+- **Docker / Node / Turso:** `src/lib/db.ts` checks the migration journal and
+  applies pending SQL files inside a write transaction when the module loads.
+  A fresh database is initialized by those migrations; an existing database
+  must be backed up before a release. There is no need to manually replay
+  migration SQL for these backends.
+- **Cloudflare D1:** the Node startup migrator is skipped. Push the current
+  schema only for a **fresh empty** D1 (Step 2 above); for later upgrades,
+  back up D1 and apply reviewed, unapplied SQL changes to the correct remote
+  database before deploying the Worker. Do not replay old migrations against
+  a database initialized with the latest schema.
 
 ---
 
@@ -444,7 +477,14 @@ database, and ordinary users cannot configure providers at all.**
 - Boolean variables only accept an explicit `true` (case-insensitive); a
   missing, empty or any other value is treated as `false` — the policy never
   fails open.
-- Default (both `false`) only allows **HTTPS + public addresses**.
+- The **code defaults** (both `false`) only allow **HTTPS + public addresses**.
+  The included Docker Compose file intentionally **overrides both flags to
+  `true`** to reach its bundled HTTP sidecar on a private network. This relaxes
+  the transport and private-address policy for *all configured HTTP plugins*,
+  not just the sidecar. Only enable trusted admin-configured plugins on that
+  deployment; setting the flags to `false` in `.env` alone will not undo the
+  Compose override. For a stricter deployment, change/override the Compose
+  `jplrc.environment` values and use an HTTPS/public-address provider instead.
 - Cloud metadata targets (e.g. `169.254.169.254`, `100.100.100.200`) are
   **always denied**, regardless of these flags. Redirects are never followed
   (`redirect: 'error'`).
@@ -481,11 +521,13 @@ database, and ordinary users cannot configure providers at all.**
 - **Docker / Vercel**: set these as regular environment variables (see the
   `.env` example in the Docker section, or Vercel's Environment Variables).
   The `lyrics_provider_configs` table is created automatically on first run.
-- **Cloudflare Workers (D1)**: add the budget/policy vars to `vars` in
-  `wrangler.jsonc`, and store `LYRICS_PROVIDER_SECRET_KEY` via
-  `wrangler secret put LYRICS_PROVIDER_SECRET_KEY`. **You must also run the
-  new migration `drizzle/0018_add_lyrics_provider_configs.sql` against D1**
-  (D1 does not run the local startup migrator) — see Step 4 above.
+- **Cloudflare Workers (D1)**: optionally set budgets/policy in
+  `wrangler.jsonc` `vars` and, only for Bearer providers, store
+  `LYRICS_PROVIDER_SECRET_KEY` via Wrangler secrets. A **fresh D1 database**
+  gets the provider table from schema push and requires the separate built-in
+  seed in Step 2; do **not** replay migration 0018 on it. An **older D1
+  database** lacking the table needs the reviewed pending migration(s) applied
+  in journal order before upgrading, not an unconditional replay.
 
 ### Plugin protocol & example
 
