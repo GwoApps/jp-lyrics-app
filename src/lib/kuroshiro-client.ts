@@ -125,7 +125,9 @@ export async function convertToFuriganaClient(rawLyrics: string): Promise<Furiga
 
   for (const line of lines) {
     if (line.trim() === '') {
-      result.push({ segments: [] });
+      // A CRLF blank row becomes "\r" after splitting on "\n". Keep its
+      // original characters so the server's exact-source validation succeeds.
+      result.push({ segments: line ? [{ text: line, reading: '' }] : [] });
       continue;
     }
 

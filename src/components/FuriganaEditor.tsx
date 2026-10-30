@@ -308,10 +308,11 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
         <p className="text-sm text-[var(--muted-foreground)]">{t('furigana.empty')}</p>
       )}
       {lines.map((line, li) => {
-        // The converter preserves blank lyric rows as empty segments; do not render editor chrome for them.
-        if (line.segments.length === 0) return null;
-
         const raw = rawLines?.[li];
+        // Whitespace-only source rows still need a segment for exact-source
+        // validation, but should not become editable blank cards.
+        if (line.segments.length === 0 || (raw !== undefined && !raw.trim())) return null;
+
         const isActiveLine = active?.lineIndex === li;
         return (
           <div

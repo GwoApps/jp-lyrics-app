@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { ReadingScheme } from './types.ts';
+import { validateFuriganaPayload } from './furigana-validation.ts';
 import {
   convertCantoneseLyrics,
   detectCantoneseLyrics,
@@ -70,6 +71,18 @@ test('convertCantoneseLyrics preserves every source character and blank line', a
     { text: '港', reading: 'gong2' },
   ]);
   assert.equal(lines[2].segments.find((segment) => segment.text === 'H')?.reading, '');
+});
+
+test('convertCantoneseLyrics preserves nonempty whitespace-only CRLF rows', async () => {
+  const source = '\r\n \t\r\n\n';
+  const lines = await convertCantoneseLyrics(source);
+  assert.deepEqual(lines, [
+    { segments: [{ text: '\r', reading: '' }] },
+    { segments: [{ text: ' \t\r', reading: '' }] },
+    { segments: [] },
+    { segments: [] },
+  ]);
+  assert.equal(validateFuriganaPayload(lines, source).ok, true);
 });
 
 test('getCantoneseReadingCandidates returns the contextual reading and alternatives', async () => {
