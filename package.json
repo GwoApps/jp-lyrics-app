@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "license": "MIT",
   "scripts": {
+    "icons:generate": "node scripts/generate-app-icons.mjs",
+    "icons:check": "node scripts/generate-app-icons.mjs --check",
     "build": "next build",
     "dev": "next dev",
     "start": "next start",
@@ -10,7 +12,7 @@
     "validate:i18n": "node scripts/validate-i18n.mjs",
     "lint": "eslint src scripts --max-warnings 0",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm run lint && npm run validate:i18n && npm test",
+    "check": "npm run typecheck && npm run lint && npm run validate:i18n && npm run icons:check && npm test",
     "check:full": "npm run check && npm run build",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
@@ -53,6 +55,7 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.7",
+    "sharp": "0.35.3",
     "tailwindcss": "^4",
     "typescript": "^5",
     "wrangler": "^4.119.0"

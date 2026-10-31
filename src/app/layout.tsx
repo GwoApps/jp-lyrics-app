@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { ViewTransitions } from 'next-view-transitions';
 import AppShell from '@/components/AppShell';
+import { APP_ICON_REVISION } from '@/lib/app-icon';
 
 export const metadata: Metadata = {
   title: '歌词笔记 — Lyrics Note',
@@ -14,12 +15,12 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: '/icon-16x16.png', sizes: '16x16', type: 'image/png' },
-      { url: '/icon-32x32.png', sizes: '32x32', type: 'image/png' },
-      { url: '/icon-192x192.png', sizes: '192x192', type: 'image/png' },
-      { url: '/icon-512x512.png', sizes: '512x512', type: 'image/png' },
+      { url: `/icon.svg?v=${APP_ICON_REVISION}`, sizes: 'any', type: 'image/svg+xml' },
+      { url: `/icon-16x16.png?v=${APP_ICON_REVISION}`, sizes: '16x16', type: 'image/png' },
+      { url: `/icon-32x32.png?v=${APP_ICON_REVISION}`, sizes: '32x32', type: 'image/png' },
     ],
-    apple: '/apple-touch-icon.png',
+    shortcut: `/favicon.ico?v=${APP_ICON_REVISION}`,
+    apple: [{ url: `/apple-touch-icon.png?v=${APP_ICON_REVISION}`, sizes: '180x180', type: 'image/png' }],
   },
 };
 
