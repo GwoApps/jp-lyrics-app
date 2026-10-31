@@ -377,17 +377,11 @@ textarea {
   background: rgba(0,0,0,0.45); backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center;
   padding: 16px;
-  animation: fadeIn 0.2s ease-out;
 }
 .confirm-dialog {
   background: var(--card); border: 1px solid var(--border);
   border-radius: 16px; padding: 28px 24px 20px; max-width: 360px; width: 100%;
   box-shadow: 0 20px 60px rgba(0,0,0,0.25);
-  animation: dialogIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-@keyframes dialogIn {
-  from { opacity: 0; transform: translateY(12px) scale(0.97); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .confirm-dialog-icon { font-size: 36px; text-align: center; margin-bottom: 12px; }
 .confirm-dialog-title { font-size: 15px; font-weight: 600; text-align: center; margin-bottom: 12px; }
@@ -416,7 +410,8 @@ textarea {
      the label onto its own line and inflate the button height. */
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 500;
-  cursor: pointer; border: 1px solid var(--border); transition: all 0.15s;
+  cursor: pointer; border: 1px solid var(--border);
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, opacity 150ms ease;
 }
 .confirm-dialog-btn--cancel { background: transparent; color: var(--muted-foreground); }
 .confirm-dialog-btn--cancel:hover { background: var(--muted); color: var(--foreground); }
@@ -430,7 +425,6 @@ textarea {
   background: var(--card); border: 1px solid var(--border);
   border-radius: 16px; padding: 20px; max-width: 480px; width: 100%;
   box-shadow: 0 20px 60px rgba(0,0,0,0.25);
-  animation: dialogIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .import-dialog-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
 .import-dialog-hint { font-size: 12px; line-height: 1.7; color: var(--muted-foreground); margin-bottom: 12px; }

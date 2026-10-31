@@ -3,10 +3,11 @@
 import { useId, useRef, useState } from 'react';
 import { Download, FileText, FileClock, FileCode2, Check, X, AlertCircle, Ban } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
-import { useModalFocus } from '@/hooks/useModalFocus';
+import Dialog from '@/components/ui/dialog';
 import type { ExportFormat, ExportReadingMode } from '@/lib/lyrics-export';
 
 interface DownloadDialogProps {
+  open: boolean;
   songId: string;
   /** True when furigana/reading options should be offered (reading_scheme-dependent). */
   hasReadingData: boolean;
@@ -24,6 +25,7 @@ const FORMAT_OPTIONS: { format: ExportFormat; icon: typeof FileText }[] = [
 ];
 
 export default function DownloadDialog({
+  open,
   songId,
   hasReadingData,
   hasTranslation,
@@ -32,7 +34,6 @@ export default function DownloadDialog({
 }: DownloadDialogProps) {
   const { t } = useI18n();
   const titleId = useId();
-  const dialogRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   // The dialog is conditionally rendered by the caller, so it always mounts
   // fresh with a clean selection — no stale state from a previous download.
@@ -40,13 +41,15 @@ export default function DownloadDialog({
   const [reading, setReading] = useState<ExportReadingMode>('none');
   const [includeTranslation, setIncludeTranslation] = useState(false);
 
-  // Focus trap + inert background + focus restore on close.
-  useModalFocus({
-    open: true,
-    dialogRef,
-    initialFocusRef: closeRef,
-    onEscape: onClose,
-  });
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (open) {
+      setFormat('text');
+      setReading('none');
+      setIncludeTranslation(false);
+    }
+  }
 
   const showReadingOptions = hasReadingData && format !== 'lrc';
   // LRC now supports pairing each timed row with its translation, so the
@@ -87,18 +90,8 @@ export default function DownloadDialog({
     : t('song.exportLrcHint');
 
   return (
-    <div
-      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-      onMouseDown={onClose}
-    >
-      <section
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="w-full max-w-md overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
+    <Dialog open={open} onClose={onClose} title={t('song.export')} initialFocusRef={closeRef} overlayOpacity={.6}
+      className="w-full max-w-md overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl">
         <header className="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3 sm:px-5 sm:py-4">
           <span className="song-accent-surface inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
             <Download className="h-4 w-4" />
@@ -254,7 +247,6 @@ export default function DownloadDialog({
             {t('common.cancel')}
           </button>
         </footer>
-      </section>
-    </div>
+    </Dialog>
   );
 }

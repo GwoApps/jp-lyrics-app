@@ -558,17 +558,15 @@ export default function TranslationConfigPanel({ onConfigChange }: TranslationCo
         </div>
       </div>
 
-      {showClearConfirm && (
-        <ConfirmDialog
-          open
-          title={t('admin.translationClear')}
-          body={t('admin.translationClearConfirm')}
-          confirmLabel={t('admin.translationClear')}
-          variant="danger"
-          onConfirm={() => { void handleClear(); }}
-          onCancel={() => setShowClearConfirm(false)}
-        />
-      )}
+      <ConfirmDialog
+        open={showClearConfirm}
+        title={t('admin.translationClear')}
+        body={t('admin.translationClearConfirm')}
+        confirmLabel={t('admin.translationClear')}
+        variant="danger"
+        onConfirm={() => { void handleClear(); }}
+        onCancel={() => setShowClearConfirm(false)}
+      />
 
       {toast && <Toast type={toast.type} message={toast.msg} />}
     </div>

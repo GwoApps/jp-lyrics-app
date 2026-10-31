@@ -25,7 +25,7 @@ import SongPlayer from '@/components/song/SongPlayer';
 import SongPlaybackStatus from '@/components/song/SongPlaybackStatus';
 import { useSimulatedPlayback } from '@/hooks/useSimulatedPlayback';
 import { previewTimeline } from '@/lib/simulated-playback';
-import { useModalFocus } from '@/hooks/useModalFocus';
+import Dialog from '@/components/ui/dialog';
 import { isEmptyAfterTrim } from '@/lib/lyrics-export';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useI18n } from '@/lib/i18n';
@@ -169,7 +169,6 @@ export default function SongViewPage() {
   const seekContextRef = useRef({ active: false, songId: id, trackKey: '' });
 
   // Mutable ref bag for the rAF sync loop (avoids stale closures)
-  const songInfoDialogRef = useRef<HTMLElement>(null);
   const songInfoCloseRef = useRef<HTMLButtonElement>(null);
   const syncRefs = useRef<SyncRefs>({
     songTitle: '',
@@ -363,12 +362,6 @@ export default function SongViewPage() {
       cacheSongCover(id, data.song.cover_url);
     }
   }, [data.song?.cover_url, id]);
-  useModalFocus({
-    open: showSongInfo,
-    dialogRef: songInfoDialogRef,
-    initialFocusRef: songInfoCloseRef,
-    onEscape: () => setShowSongInfo(false),
-  });
   useEffect(() => {
     if (!id || !currentUserEmail || !spotifyConnected || coverUrl || !data.song?.permissions?.can_edit) return;
     fetch(`/api/songs/${id}/cover`)
@@ -1133,15 +1126,13 @@ export default function SongViewPage() {
       />
 
       {/* Download dialog — replaces the previous three export menu items. */}
-      {showDownloadDialog && (
-        <DownloadDialog
+      <DownloadDialog open={showDownloadDialog}
           songId={id}
           hasReadingData={furiganaLines.length > 0}
           hasTranslation={data.hasTranslation}
           hasSynced={!isEmptyAfterTrim(data.song.lyrics_synced)}
           onClose={() => setShowDownloadDialog(false)}
         />
-      )}
 
       {data.debug && showDotParams && (
         <LyricsDotParamsPanel
@@ -1226,19 +1217,9 @@ export default function SongViewPage() {
       </SongTopStatusStack>
       {data.toast && <Toast type={data.toast.type} message={data.toast.msg} actionLabel={data.toast.actionLabel} onAction={data.toast.onAction} />}
 
-      {showSongInfo && (
-        <div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-          onMouseDown={() => setShowSongInfo(false)}
-        >
-          <section
-            ref={songInfoDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="song-info-title"
-            className="w-full max-w-md overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
+      <Dialog open={showSongInfo} onClose={() => setShowSongInfo(false)} title={t('song.info')} overlayOpacity={.6}
+        initialFocusRef={songInfoCloseRef}
+        className="w-full max-w-md overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl">
             <header className="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3 sm:px-5 sm:py-4">
               <span className="song-accent-surface inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
                 <Info className="h-4 w-4" />
@@ -1303,9 +1284,7 @@ export default function SongViewPage() {
                 {t('common.close')}
               </button>
             </footer>
-          </section>
-        </div>
-      )}
+      </Dialog>
 
       <ConfirmDialog open={data.deleteConfirm} title={t('dialog.deleteConfirmTitle', { title: song?.title || '' })} body={t('dialog.deleteConfirmBody')} confirmLabel={t('common.delete')} cancelLabel={t('common.cancel')} variant="danger" onConfirm={data.confirmDelete} onCancel={() => data.setDeleteConfirm(false)} />
       <ConfirmDialog

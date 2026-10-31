@@ -1,5 +1,7 @@
 'use client';
 
+import { useRef } from 'react';
+import Dialog from '@/components/ui/dialog';
 import { useI18n } from '@/lib/i18n';
 import type { AdminUser } from './admin-types';
 
@@ -14,11 +16,14 @@ interface BlockUserDialogProps {
 /** Block / unblock dialog with an optional reason input when blocking. */
 export default function BlockUserDialog({ target, reason, onReasonChange, onConfirm, onCancel }: BlockUserDialogProps) {
   const { t } = useI18n();
-  if (!target) return null;
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const title = target
+    ? `${target.is_blocked === 1 ? t('admin.unblock') : t('admin.block')} ${target.display_name || target.id}`
+    : '';
 
   return (
-    <div className="confirm-overlay" onClick={onCancel}>
-      <div className="confirm-dialog" onClick={(e) => e.stopPropagation()}>
+    <Dialog open={!!target} onClose={onCancel} title={title} className="confirm-dialog" initialFocusRef={cancelRef}>
+      {target && <>
         <div className="confirm-dialog-icon">{target.is_blocked === 1 ? '✅' : '🚫'}</div>
         <div className="confirm-dialog-title">
           {target.is_blocked === 1 ? t('admin.unblock') : t('admin.block')}
@@ -36,7 +41,7 @@ export default function BlockUserDialog({ target, reason, onReasonChange, onConf
           </div>
         )}
         <div className="confirm-dialog-actions">
-          <button className="confirm-dialog-btn confirm-dialog-btn--cancel" onClick={onCancel}>
+          <button ref={cancelRef} className="confirm-dialog-btn confirm-dialog-btn--cancel" onClick={onCancel}>
             {t('common.cancel')}
           </button>
           <button
@@ -46,7 +51,7 @@ export default function BlockUserDialog({ target, reason, onReasonChange, onConf
             {target.is_blocked === 1 ? t('admin.unblock') : t('admin.block')}
           </button>
         </div>
-      </div>
-    </div>
+      </>}
+    </Dialog>
   );
 }

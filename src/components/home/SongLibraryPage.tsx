@@ -769,12 +769,12 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
           setFavoriteDialogSong(toast.actionSong!);
           setToast(null);
         } : undefined} />}
-      {favoriteDialogSong && (
-        <FavoriteCategoriesDialog key={favoriteDialogSong.id} song={favoriteDialogSong}
-          onCreated={(collection) => setCollections((prev) => [...prev, collection])}
-          onChanged={(favorited, categories) => handleFavoriteChanged(favoriteDialogSong.id, favorited, categories)}
-          onClose={closeFavoriteDialog} />
-      )}
+      <FavoriteCategoriesDialog open={!!favoriteDialogSong} song={favoriteDialogSong}
+        onCreated={(collection) => setCollections((prev) => [...prev, collection])}
+        onChanged={(favorited, categories) => {
+          if (favoriteDialogSong) handleFavoriteChanged(favoriteDialogSong.id, favorited, categories);
+        }}
+        onClose={closeFavoriteDialog} />
 
       <ConfirmDialog
         open={!!deleteTarget}

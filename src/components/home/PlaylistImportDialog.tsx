@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Loader2, AlertTriangle, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
-import { useModalFocus } from '@/hooks/useModalFocus';
+import Dialog from '@/components/ui/dialog';
 import { importErrorMsg } from '@/lib/import-errors';
 import type { SongItem } from '@/lib/types';
 import ConfirmDialog from '@/components/ConfirmDialog';
@@ -90,13 +90,27 @@ export default function PlaylistImportDialog({ open, onImported, onClose }: Play
   const [alert, setAlert] = useState<{ message: string } | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const cancelRef = useRef(false);
-  const titleId = useId();
   const hintId = useId();
-  const dialogRef = useRef<HTMLDivElement>(null);
   const urlInputRef = useRef<HTMLInputElement>(null);
+  const [previousOpen, setPreviousOpen] = useState(open);
+
+  // Keep the closed Dialog mounted for its exit animation, but never carry a
+  // previous form, summary or alert into a new open session.
+  if (previousOpen !== open) {
+    setPreviousOpen(open);
+    if (open && !importing) {
+      setUrl('');
+      setJob(null);
+      setResult([]);
+      setCurrentTitle('');
+      setAlert(null);
+      setToast(null);
+      setResumeState(readResumeState());
+    }
+  }
 
   /**
-   * Close the dialog and drop the transient import state, so reopening always
+   * Close the dialog, retaining its current view for exit motion. The next open
    * starts from a clean confirm form (an unfinished import survives through the
    * localStorage resume state instead).
    *
@@ -105,14 +119,8 @@ export default function PlaylistImportDialog({ open, onImported, onClose }: Play
    */
   const handleClose = useCallback(() => {
     if (importing) return;
-    setUrl('');
-    setJob(null);
-    setResult([]);
-    setCurrentTitle('');
     onClose();
   }, [importing, onClose]);
-
-  useModalFocus({ open, dialogRef, initialFocusRef: urlInputRef, onEscape: handleClose });
 
   // The import summary toast is transient, matching the other copy/import paths.
   useEffect(() => {
@@ -300,18 +308,9 @@ export default function PlaylistImportDialog({ open, onImported, onClose }: Play
 
   return (
     <>
-      {open && (
-        <div className="confirm-overlay" onClick={handleClose}>
-          <div
-            className="import-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={titleId}
-            ref={dialogRef}
-            onClick={(e) => e.stopPropagation()}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <div id={titleId} className="import-dialog-title">
+      <Dialog open={open} onClose={handleClose} title={t('home.playlistImportTitle')}
+        className="import-dialog" initialFocusRef={urlInputRef} dismissible={!importing && !alert}>
+            <div className="import-dialog-title">
               {t('home.playlistImportTitle')}
             </div>
 
@@ -469,9 +468,7 @@ export default function PlaylistImportDialog({ open, onImported, onClose }: Play
                 </div>
               </>
             )}
-          </div>
-        </div>
-      )}
+      </Dialog>
 
       <ConfirmDialog
         open={!!alert}

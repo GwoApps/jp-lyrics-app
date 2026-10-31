@@ -1,6 +1,7 @@
 'use client';
 
-import { FormEvent, ReactNode, useCallback, useEffect, useId, useState } from 'react';
+import { FormEvent, ReactNode, useCallback, useId, useRef, useState } from 'react';
+import Dialog from '@/components/ui/dialog';
 import { ExternalLink, KeyRound, Loader2, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { APP_REPO_URL } from '@/lib/app-links';
@@ -15,6 +16,7 @@ export default function SpotifyLoginButton({ children, className, title }: Spoti
   const { t } = useI18n();
   const titleId = useId();
   const descriptionId = useId();
+  const passphraseRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -27,15 +29,6 @@ export default function SpotifyLoginButton({ children, className, title }: Spoti
     setPassphrase('');
     setError(null);
   }, [submitting]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !submitting) closeDialog();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [closeDialog, open, submitting]);
 
   const beginLogin = async () => {
     if (checking) return;
@@ -98,20 +91,9 @@ export default function SpotifyLoginButton({ children, className, title }: Spoti
         {children}
       </button>
 
-      {open && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closeDialog();
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={titleId}
-            aria-describedby={descriptionId}
-            className="fade-in w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-2xl sm:p-6"
-          >
+      <Dialog open={open} onClose={closeDialog} title={t('loginGate.title')} overlayOpacity={.6}
+        dismissible={!submitting} initialFocusRef={passphraseRef} aria-describedby={descriptionId}
+        className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-2xl sm:p-6">
             <div className="mb-4 flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#1DB954]/15 text-[#1DB954]">
                 <KeyRound className="h-4.5 w-4.5" />
@@ -153,6 +135,7 @@ export default function SpotifyLoginButton({ children, className, title }: Spoti
                 {t('loginGate.passphraseLabel')}
               </label>
               <input
+                  ref={passphraseRef}
                 id={`${titleId}-passphrase`}
                 type="password"
                 value={passphrase}
@@ -187,9 +170,7 @@ export default function SpotifyLoginButton({ children, className, title }: Spoti
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+      </Dialog>
     </>
   );
 }

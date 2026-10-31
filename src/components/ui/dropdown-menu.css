@@ -1,0 +1,81 @@
+.dropdown-menu-motion {
+  /* Shared overlay layer; later portals (nested menus/dialogs) paint above earlier ones. */
+  z-index: 100;
+  --dropdown-menu-motion-x: 0px;
+  --dropdown-menu-motion-y: 0px;
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin);
+  animation-timing-function: cubic-bezier(.22, 1, .36, 1);
+  animation-fill-mode: both;
+}
+
+.dropdown-menu-motion[data-side="top"] {
+  --dropdown-menu-motion-y: 4px;
+}
+
+.dropdown-menu-motion[data-side="bottom"] {
+  --dropdown-menu-motion-y: -4px;
+}
+
+.dropdown-menu-motion[data-side="left"] {
+  --dropdown-menu-motion-x: 4px;
+}
+
+.dropdown-menu-motion[data-side="right"] {
+  --dropdown-menu-motion-x: -4px;
+}
+
+/* Radix Presence observes CSS animation events to retain content through exit.
+   Use distinct keyframes, not a transition or permanently mounted content. */
+.dropdown-menu-motion[data-state="open"] {
+  animation-name: dropdown-menu-enter;
+  animation-duration: 170ms;
+}
+
+.dropdown-menu-motion[data-state="closed"] {
+  animation-name: dropdown-menu-exit;
+  animation-duration: 130ms;
+}
+
+@keyframes dropdown-menu-enter {
+  from {
+    opacity: 0;
+    transform: translate(var(--dropdown-menu-motion-x), var(--dropdown-menu-motion-y)) scale(.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@keyframes dropdown-menu-exit {
+  from {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(var(--dropdown-menu-motion-x), var(--dropdown-menu-motion-y)) scale(.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dropdown-menu-motion[data-state="open"] {
+    animation-name: dropdown-menu-fade-in;
+    animation-duration: 100ms;
+  }
+
+  .dropdown-menu-motion[data-state="closed"] {
+    animation-name: dropdown-menu-fade-out;
+    animation-duration: 80ms;
+  }
+}
+
+@keyframes dropdown-menu-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dropdown-menu-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}

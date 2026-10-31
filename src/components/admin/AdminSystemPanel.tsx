@@ -2,11 +2,12 @@
 
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Activity, CheckCircle2, CircleAlert, Clock, Loader2, Plug, ServerCrash, Settings2, X, XCircle,
 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import Dialog from '@/components/ui/dialog';
 import { localeToBCP47 } from './admin-types';
 import TranslationConfigPanel from './TranslationConfigPanel';
 import LyricsProvidersPanel from './LyricsProvidersPanel';
@@ -69,8 +70,6 @@ export default function AdminSystemPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
-  const configTitleId = useId();
-  const configTriggerRef = useRef<HTMLButtonElement>(null);
   const configCloseRef = useRef<HTMLButtonElement>(null);
 
   const load = useCallback(async (silent = false) => {
@@ -93,25 +92,6 @@ export default function AdminSystemPanel() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (!configOpen) return;
-    const scrollX = window.scrollX;
-    const scrollY = window.scrollY;
-    const trigger = configTriggerRef.current;
-    configCloseRef.current?.focus({ preventScroll: true });
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setConfigOpen(false);
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      requestAnimationFrame(() => {
-        window.scrollTo(scrollX, scrollY);
-        trigger?.focus({ preventScroll: true });
-      });
-    };
-  }, [configOpen]);
 
   if (loading) {
     return (
@@ -163,7 +143,6 @@ export default function AdminSystemPanel() {
           <h2 className="text-sm font-semibold">{t('admin.systemTranslation')}</h2>
           <div className="ml-auto flex items-center gap-2">
             <button
-              ref={configTriggerRef}
               type="button"
               onClick={() => setConfigOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-xs font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--muted)]"
@@ -288,39 +267,32 @@ export default function AdminSystemPanel() {
         )}
       </section>
 
-      {configOpen && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center overscroll-contain bg-black/45 p-4 backdrop-blur-sm"
-          onMouseDown={() => setConfigOpen(false)}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={configTitleId}
-            className="flex max-h-[calc(100dvh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background)] shadow-2xl"
-            onMouseDown={(event) => event.stopPropagation()}
+      <Dialog
+        open={configOpen}
+        onClose={() => setConfigOpen(false)}
+        title={t('admin.translationConfigTitle')}
+        initialFocusRef={configCloseRef}
+        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background)] shadow-2xl"
+      >
+        <header className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] px-5 py-4">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold">{t('admin.translationConfigTitle')}</h2>
+            <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">{t('admin.translationEnvFallback')}</p>
+          </div>
+          <button
+            ref={configCloseRef}
+            type="button"
+            onClick={() => setConfigOpen(false)}
+            className="ml-auto rounded-md p-2 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+            aria-label={t('common.close')}
           >
-            <header className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] px-5 py-4">
-              <div className="min-w-0">
-                <h2 id={configTitleId} className="text-sm font-semibold">{t('admin.translationConfigTitle')}</h2>
-                <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">{t('admin.translationEnvFallback')}</p>
-              </div>
-              <button
-                ref={configCloseRef}
-                type="button"
-                onClick={() => setConfigOpen(false)}
-                className="ml-auto rounded-md p-2 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
-                aria-label={t('common.close')}
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </header>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5">
-              <TranslationConfigPanel onConfigChange={() => { void load(true); }} />
-            </div>
-          </section>
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5">
+          <TranslationConfigPanel onConfigChange={() => { void load(true); }} />
         </div>
-      )}
+      </Dialog>
     </div>
   );
 }

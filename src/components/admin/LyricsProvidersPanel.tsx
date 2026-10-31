@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   DndContext, DragOverlay, KeyboardSensor, PointerSensor,
   closestCenter, useSensor, useSensors,
@@ -15,6 +15,7 @@ import {
   CheckCircle2, CircleAlert, Loader2, Plus, Plug, X,
 } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import Dialog from '@/components/ui/dialog';
 import { useI18n } from '@/lib/i18n';
 import { ApiError } from '@/client/api/request';
 import { lyricsProviderSaveErrorKey } from '@/lib/lyrics-provider/error-keys';
@@ -91,8 +92,6 @@ export default function LyricsProvidersPanel() {
   // dnd-kit sortable: id of the row currently being dragged (drives the
   // DragOverlay preview + the placeholder styling on the source row).
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
-  const dialogTitleId = useId();
-  const closeRef = useRef<HTMLButtonElement>(null);
   const formNameRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async (silent = false) => {
@@ -113,22 +112,12 @@ export default function LyricsProvidersPanel() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (!editing) return;
-    closeRef.current?.focus({ preventScroll: true });
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setEditing(null);
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [editing]);
 
   const openCreate = () => {
     setForm(EMPTY_PROVIDER_FORM);
     setTestResult({});
     setEditing(null); // null editing + open dialog → create mode
     setDialogOpen(true);
-    requestAnimationFrame(() => formNameRef.current?.focus());
   };
 
   const openEdit = (p: ProviderWire) => {
@@ -143,13 +132,16 @@ export default function LyricsProvidersPanel() {
     });
     setTestResult({});
     setDialogOpen(true);
-    requestAnimationFrame(() => formNameRef.current?.focus());
   };
 
   const closeDialog = () => {
     setDialogOpen(false);
     setEditing(null);
     setTestResult({});
+  };
+
+  const requestCloseDialog = () => {
+    if (!saving) closeDialog();
   };
 
   const save = async () => {
@@ -428,111 +420,105 @@ export default function LyricsProvidersPanel() {
         cancelLabel={t('common.cancel')}
         variant="danger"
         onConfirm={() => { if (!deleting) void confirmRemove(); }}
-        onCancel={() => setDeleteTarget(null)}
+        onCancel={() => { if (!deleting) setDeleteTarget(null); }}
       />
 
-      {dialogOpen && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center overscroll-contain bg-black/45 p-4 backdrop-blur-sm"
-          onMouseDown={closeDialog}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={dialogTitleId}
-            className="flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background)] shadow-2xl"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <header className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] px-5 py-4">
-              <div>
-                <h2 id={dialogTitleId} className="text-sm font-semibold">
-                  {editing ? t('admin.lyricsProviderEdit') : t('admin.lyricsProviderNew')}
-                </h2>
-                {editing?.insecure_transport && (
-                  <p className="mt-0.5 text-[11px] text-[var(--warning)]">{t('admin.lyricsProviderHttpWarning')}</p>
-                )}
-              </div>
-              <button ref={closeRef} type="button" onClick={closeDialog} className="ml-auto rounded-md p-2 text-[var(--muted-foreground)] hover:bg-[var(--muted)]" aria-label={t('common.close')}>
-                <X className="h-4 w-4" />
-              </button>
-            </header>
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-5">
+      <Dialog
+        open={dialogOpen}
+        onClose={requestCloseDialog}
+        title={editing ? t('admin.lyricsProviderEdit') : t('admin.lyricsProviderNew')}
+        initialFocusRef={formNameRef}
+        dismissible={!saving}
+        className="flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--background)] shadow-2xl"
+      >
+        <header className="flex shrink-0 items-center gap-3 border-b border-[var(--border)] px-5 py-4">
+          <div>
+            <h2 className="text-sm font-semibold">
+              {editing ? t('admin.lyricsProviderEdit') : t('admin.lyricsProviderNew')}
+            </h2>
+            {editing?.insecure_transport && (
+              <p className="mt-0.5 text-[11px] text-[var(--warning)]">{t('admin.lyricsProviderHttpWarning')}</p>
+            )}
+          </div>
+          <button type="button" onClick={requestCloseDialog} disabled={saving} className="ml-auto rounded-md p-2 text-[var(--muted-foreground)] hover:bg-[var(--muted)] disabled:opacity-50" aria-label={t('common.close')}>
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-5">
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium">{t('admin.lyricsProviderName')}</span>
+            <input ref={formNameRef} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-sm outline-none focus:border-[var(--primary)]" />
+          </label>
+          {editing?.kind === 'builtin' ? (
+            <>
+              <p className="rounded-md bg-[var(--muted)]/50 px-3 py-2 text-[11px] text-[var(--muted-foreground)]">
+                {t('admin.lyricsProviderBuiltinHint')}
+              </p>
+              <BuiltinSourceConfigFields
+                provider={editing}
+                form={form}
+                setForm={setForm}
+                schemas={data?.source_schemas}
+              />
+            </>
+          ) : (
+            <>
               <label className="block">
-                <span className="mb-1 block text-xs font-medium">{t('admin.lyricsProviderName')}</span>
-                <input ref={formNameRef} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-sm outline-none focus:border-[var(--primary)]" />
-              </label>
-              {editing?.kind === 'builtin' ? (
-                <>
-                  <p className="rounded-md bg-[var(--muted)]/50 px-3 py-2 text-[11px] text-[var(--muted-foreground)]">
-                    {t('admin.lyricsProviderBuiltinHint')}
-                  </p>
-                  <BuiltinSourceConfigFields
-                    provider={editing}
-                    form={form}
-                    setForm={setForm}
-                    schemas={data?.source_schemas}
-                  />
-                </>
-              ) : (
-                <>
-                  <label className="block">
-                    <span className="mb-1 block text-xs font-medium">{t('admin.lyricsProviderBaseUrl')}</span>
-                    <input value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })}
-                      placeholder="https://lyrics.example.com/providers/lrclib-proxy"
-                      className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 font-mono text-xs outline-none focus:border-[var(--primary)]" />
-                  </label>
-                  <label className="block">
-                    <span className="mb-1 block text-xs font-medium">{t('admin.lyricsProviderAuthType')}</span>
-                    <select value={form.auth_type} onChange={(e) => setForm({ ...form, auth_type: e.target.value as 'none' | 'bearer' })}
-                      className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-sm outline-none focus:border-[var(--primary)]">
-                      <option value="none">{t('admin.lyricsProviderAuthNone')}</option>
-                      <option value="bearer">{t('admin.lyricsProviderAuthBearer')}</option>
-                    </select>
-                  </label>
-                  {form.auth_type === 'bearer' && (
-                    <label className="block">
-                      <span className="mb-1 block text-xs font-medium">{t('admin.lyricsProviderAuthSecret')}</span>
-                      <input type="password" value={form.auth_secret} onChange={(e) => setForm({ ...form, auth_secret: e.target.value })}
-                        placeholder={editing?.has_secret ? t('admin.lyricsProviderAuthSecretKeep') : ''}
-                        className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-sm outline-none focus:border-[var(--primary)]" />
-                      <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]">{t('admin.lyricsProviderAuthSecretHint')}</span>
-                    </label>
-                  )}
-                </>
-              )}
-              <label className="block">
-                <span className="mb-1 block text-xs font-medium">{t('admin.lyricsProviderTimeout')}</span>
-                <input value={form.timeout_ms} onChange={(e) => setForm({ ...form, timeout_ms: e.target.value })}
-                  placeholder={String(data?.budgets.defaultTimeoutMs ?? 20000)}
+                <span className="mb-1 block text-xs font-medium">{t('admin.lyricsProviderBaseUrl')}</span>
+                <input value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })}
+                  placeholder="https://lyrics.example.com/providers/lrclib-proxy"
                   className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 font-mono text-xs outline-none focus:border-[var(--primary)]" />
-                <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]">
-                  {t('admin.lyricsProviderTimeoutHint', {
-                    min: '5',
-                    max: String((data?.budgets?.maxTimeoutMs ?? 60000) / 1000),
-                  })}
-                </span>
               </label>
-              {notice && (
-                <p className={`flex items-center gap-1 text-xs ${notice.kind === 'ok' ? 'text-[var(--success)]' : 'text-[var(--destructive)]'}`}>
-                  {notice.kind === 'ok' ? <CheckCircle2 className="h-3.5 w-3.5" /> : <CircleAlert className="h-3.5 w-3.5" />}
-                  {notice.text}
-                </p>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium">{t('admin.lyricsProviderAuthType')}</span>
+                <select value={form.auth_type} onChange={(e) => setForm({ ...form, auth_type: e.target.value as 'none' | 'bearer' })}
+                  className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-sm outline-none focus:border-[var(--primary)]">
+                  <option value="none">{t('admin.lyricsProviderAuthNone')}</option>
+                  <option value="bearer">{t('admin.lyricsProviderAuthBearer')}</option>
+                </select>
+              </label>
+              {form.auth_type === 'bearer' && (
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium">{t('admin.lyricsProviderAuthSecret')}</span>
+                  <input type="password" value={form.auth_secret} onChange={(e) => setForm({ ...form, auth_secret: e.target.value })}
+                    placeholder={editing?.has_secret ? t('admin.lyricsProviderAuthSecretKeep') : ''}
+                    className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-sm outline-none focus:border-[var(--primary)]" />
+                  <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]">{t('admin.lyricsProviderAuthSecretHint')}</span>
+                </label>
               )}
-            </div>
-            <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-[var(--border)] px-5 py-3">
-              <button type="button" onClick={closeDialog} className="rounded-md border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--muted)]">
-                {t('common.cancel')}
-              </button>
-              <button type="button" onClick={() => void save()} disabled={saving || !form.name || (editing?.kind !== 'builtin' && !form.base_url)}
-                className="inline-flex items-center gap-1.5 rounded-md bg-[var(--primary)] px-3 py-1.5 text-xs font-medium text-[var(--primary-foreground)] hover:opacity-90 disabled:opacity-50">
-                {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {t('common.save')}
-              </button>
-            </footer>
-          </section>
+            </>
+          )}
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium">{t('admin.lyricsProviderTimeout')}</span>
+            <input value={form.timeout_ms} onChange={(e) => setForm({ ...form, timeout_ms: e.target.value })}
+              placeholder={String(data?.budgets.defaultTimeoutMs ?? 20000)}
+              className="w-full rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 font-mono text-xs outline-none focus:border-[var(--primary)]" />
+            <span className="mt-1 block text-[11px] text-[var(--muted-foreground)]">
+              {t('admin.lyricsProviderTimeoutHint', {
+                min: '5',
+                max: String((data?.budgets?.maxTimeoutMs ?? 60000) / 1000),
+              })}
+            </span>
+          </label>
+          {notice && (
+            <p className={`flex items-center gap-1 text-xs ${notice.kind === 'ok' ? 'text-[var(--success)]' : 'text-[var(--destructive)]'}`}>
+              {notice.kind === 'ok' ? <CheckCircle2 className="h-3.5 w-3.5" /> : <CircleAlert className="h-3.5 w-3.5" />}
+              {notice.text}
+            </p>
+          )}
         </div>
-      )}
+        <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-[var(--border)] px-5 py-3">
+          <button type="button" onClick={requestCloseDialog} disabled={saving} className="rounded-md border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--muted)] disabled:opacity-50">
+            {t('common.cancel')}
+          </button>
+          <button type="button" onClick={() => void save()} disabled={saving || !form.name || (editing?.kind !== 'builtin' && !form.base_url)}
+            className="inline-flex items-center gap-1.5 rounded-md bg-[var(--primary)] px-3 py-1.5 text-xs font-medium text-[var(--primary-foreground)] hover:opacity-90 disabled:opacity-50">
+            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {t('common.save')}
+          </button>
+        </footer>
+      </Dialog>
     </section>
   );
 }

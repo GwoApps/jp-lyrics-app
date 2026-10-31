@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
+import './dropdown-menu.css';
 
 const DropdownMenu = DropdownMenuPrimitive.Root;
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
@@ -15,7 +16,7 @@ const DropdownMenuContent = React.forwardRef<
     <DropdownMenuPrimitive.Content
       ref={ref}
       sideOffset={4}
-      className={`z-50 min-w-40 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--card)] p-1 text-[var(--foreground)] shadow-xl shadow-black/15 outline-none ${className}`}
+      className={`dropdown-menu-motion z-50 min-w-40 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--card)] p-1 text-[var(--foreground)] shadow-xl shadow-black/15 outline-none ${className}`}
       {...props}
     />
   </DropdownMenuPrimitive.Portal>
@@ -58,7 +59,7 @@ const DropdownMenuSubContent = React.forwardRef<
 >(({ className = '', ...props }, ref) => (
   <DropdownMenuPrimitive.SubContent
     ref={ref}
-    className={`z-50 min-w-40 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--card)] p-1 text-[var(--foreground)] shadow-xl shadow-black/15 outline-none ${className}`}
+    className={`dropdown-menu-motion z-50 min-w-40 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--card)] p-1 text-[var(--foreground)] shadow-xl shadow-black/15 outline-none ${className}`}
     {...props}
   />
 ));
