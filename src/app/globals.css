@@ -1076,10 +1076,10 @@ textarea {
   width: 100%;
   margin-bottom: 12px;
   padding: 12px 16px;
-  border: 1px solid color-mix(in srgb, var(--border) 65%, color-mix(in srgb, var(--song-accent) 24%, transparent));
+  border: 0;
   border-radius: 8px;
-  /* Match the lyric panel's primary-color 90/10 mix; only this surface is translucent. */
-  background: color-mix(in srgb, color-mix(in srgb, var(--card) 90%, var(--song-accent-primary, var(--border))) 72%, transparent);
+  /* Match the lyric panel's primary-color 90/10 mix; background alone is 40% opaque. */
+  background: color-mix(in srgb, color-mix(in srgb, var(--card) 90%, var(--song-accent-primary, var(--border))) 40%, transparent);
   color: var(--foreground);
 }
 .song-player__toggle {
