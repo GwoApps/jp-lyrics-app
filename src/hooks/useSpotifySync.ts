@@ -66,6 +66,8 @@ export interface UseSpotifySyncReturn {
    * displays; do not re-derive it from the 3s `progress_ms` poll.
    */
   playbackMsRef: React.MutableRefObject<number | null>;
+  /** Apply a Spotify-confirmed seek immediately, scoped to the clicked track. */
+  confirmSeek: (positionMs: number, expectedTrackKey: string, serverAppliedAt: number) => boolean;
 }
 
 /** Shape used for identity checks against the song rendered on this page. */
@@ -89,7 +91,7 @@ export function useSpotifySync(
   lyricsRef: React.RefObject<HTMLDivElement | null>,
   enabled = true,
 ): UseSpotifySyncReturn {
-  const { data: nowPlayingData, syncState, resumeSync } = useNowPlaying(enabled);
+  const { data: nowPlayingData, syncState, resumeSync, applySuccessfulSeek } = useNowPlaying(enabled);
   const spotify = nowPlayingData as SpotifyState | null;
   const [activeLine, setActiveLine] = useState(-1);
   const [followPlaying, setFollowPlaying] = useState(() => {
@@ -406,6 +408,18 @@ export function useSpotifySync(
   }, []);
 
 
+  const confirmSeek = useCallback((positionMs: number, expectedTrackKey: string, serverAppliedAt: number): boolean => {
+    const applied = applySuccessfulSeek(positionMs, expectedTrackKey, serverAppliedAt);
+    if (applied == null) return false; // Track changed while the request was in flight.
+    interpRef.current.progressMs = applied;
+    interpRef.current.pollTime = performance.now();
+    playbackMsRef.current = applied;
+    if (interpRef.current.isPlaying && isSameSongRef.current && !document.hidden) {
+      startRafRef.current();
+    }
+    return true;
+  }, [applySuccessfulSeek]);
+
   return {
     spotify,
     syncState,
@@ -416,5 +430,6 @@ export function useSpotifySync(
     setFollowPlaying,
     pipWindowRef,
     playbackMsRef,
+    confirmSeek,
   };
 }

@@ -22,6 +22,8 @@ export interface DiffMessage {
   d: Partial<NowPlayingData>; // changed fields only (empty = no change)
   /** Current sync state — lets clients distinguish degraded pushes from real data. */
   _sync?: SyncState;
+  /** Timestamp of the Spotify GET start, separate from checksum-protected playback data. */
+  _observedAt?: number;
 }
 
 type Subscriber = (data: NowPlayingData, diff: DiffMessage) => void;
@@ -30,6 +32,7 @@ interface UserPoller {
   subscribers: Map<Subscriber, { lastData: NowPlayingData | null; lastSeq: number }>;
   timer: ReturnType<typeof setTimeout> | null;
   lastData: NowPlayingData | null;
+  lastObservedAt: number;
   seq: number;
   consecutiveErrors: number;
   syncState: SyncState;
@@ -72,13 +75,14 @@ function computeDiff(prev: NowPlayingData | null, curr: NowPlayingData): Partial
 }
 
 /** Broadcast the current data + diff to all subscribers. */
-function broadcast(poller: UserPoller, data: NowPlayingData) {
+function broadcast(poller: UserPoller, data: NowPlayingData, observedAt: number) {
   poller.seq++;
   const checksum = computeChecksum(data);
   const diff = computeDiff(poller.lastData, data);
   poller.lastData = data;
+  poller.lastObservedAt = observedAt;
 
-  const diffMsg: DiffMessage = { seq: poller.seq, c: checksum, d: diff, _sync: poller.syncState };
+  const diffMsg: DiffMessage = { seq: poller.seq, c: checksum, d: diff, _sync: poller.syncState, _observedAt: observedAt };
   poller.subscribers.forEach((state, cb) => {
     cb(data, diffMsg);
     state.lastData = data;
@@ -89,13 +93,14 @@ function broadcast(poller: UserPoller, data: NowPlayingData) {
 /** Push a degraded-state notification to subscribers (keeps last-known playback data). */
 function notifyDegraded(poller: UserPoller) {
   const data = poller.lastData ?? { connected: false, is_playing: false, progress_ms: 0, duration_ms: 0, track: null };
-  broadcast(poller, data);
+  broadcast(poller, data, poller.lastObservedAt);
 }
 
-async function fetchNowPlaying(userEmail: string): Promise<NowPlayingData> {
+async function fetchNowPlaying(userEmail: string, onFetchStart: (at: number) => void): Promise<NowPlayingData> {
   const accessToken = await getSpotifyTokenForUser(userEmail);
   if (!accessToken) return { connected: false, is_playing: false, progress_ms: 0, duration_ms: 0, track: null };
 
+  onFetchStart(Date.now()); // token refresh may take time; timestamp the actual Spotify GET
   const res = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -149,21 +154,22 @@ async function tick(userEmail: string, poller: UserPoller) {
   }
 
   try {
-    const data = await fetchNowPlaying(userEmail);
+    let observedAt = 0;
+    const data = await fetchNowPlaying(userEmail, at => { observedAt = at; });
     // Transient Spotify fault (429/5xx): back off but NEVER count toward the
     // fatal-error stop — these auto-recover without user action. This prevents
     // a brief Spotify outage from permanently stopping sync (issue #117).
     if (data.error && isSpotifyTransientError(data.error)) {
       poller.consecutiveErrors = 0;
       if (poller.syncState !== 'retrying') poller.syncState = 'retrying';
-      broadcast(poller, data);
+      broadcast(poller, data, observedAt);
       scheduleTick(userEmail, poller, backoffDelay(1));
       return;
     }
     // Success → reset failure counter, restore normal cadence.
     poller.consecutiveErrors = 0;
     if (poller.syncState !== 'connected') poller.syncState = 'connected';
-    broadcast(poller, data);
+    broadcast(poller, data, observedAt);
     scheduleTick(userEmail, poller, POLL_INTERVAL_MS);
   } catch {
     poller.consecutiveErrors++;
@@ -207,7 +213,7 @@ export function subscribe(
 ): () => void {
   let poller = pollers.get(userEmail);
   if (!poller) {
-    poller = { subscribers: new Map(), timer: null, lastData: null, seq: 0, consecutiveErrors: 0, syncState: 'connected' };
+    poller = { subscribers: new Map(), timer: null, lastData: null, lastObservedAt: 0, seq: 0, consecutiveErrors: 0, syncState: 'connected' };
     pollers.set(userEmail, poller);
   }
 
@@ -215,7 +221,7 @@ export function subscribe(
 
   // Send full data immediately if available (always full for first message)
   if (poller.lastData) {
-    const fullMsg: DiffMessage = { seq: poller.seq, c: computeChecksum(poller.lastData), d: poller.lastData, _sync: poller.syncState };
+    const fullMsg: DiffMessage = { seq: poller.seq, c: computeChecksum(poller.lastData), d: poller.lastData, _sync: poller.syncState, _observedAt: poller.lastObservedAt };
     callback(poller.lastData, fullMsg);
     const state = poller.subscribers.get(callback);
     if (state) { state.lastData = poller.lastData; state.lastSeq = poller.seq; }

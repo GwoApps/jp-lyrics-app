@@ -12,3 +12,10 @@ test('normal SSE payload keeps the diff and adds protocol version', () => {
   const diff = { seq: 8, c: 43, d: { progress_ms: 456 } };
   assert.deepEqual(buildSsePayload({ connected: true, progress_ms: 456 }, diff, false), { ...diff, v: 2 });
 });
+
+test('seek observation timestamp remains outside the checksum-protected data', () => {
+  const full = { connected: true, progress_ms: 123 };
+  const diff = { seq: 9, c: 42, d: { progress_ms: 123 }, _observedAt: 1000 };
+  assert.deepEqual(buildSsePayload(full, diff, false), { ...diff, v: 2 });
+  assert.deepEqual(buildSsePayload(full, diff, true), { ...diff, d: full, v: 2, _full: true });
+});

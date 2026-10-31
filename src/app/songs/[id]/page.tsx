@@ -33,6 +33,7 @@ import { useImmersiveLyrics } from '@/hooks/useImmersiveLyrics';
 import { animateSmoothScroll, cancelSmoothScroll, earliestTimedLyricMs } from '@/lib/scroll-ease';
 import { centeredLyricScrollTop } from '@/lib/immersive-lyrics';
 import { isSameSpotifyTrack } from '@/lib/match';
+import { trackIdentity } from '@/lib/spotify-seek-override';
 import type { CoverColor } from '@/lib/cover-color';
 import type { CoverPalette } from '@/lib/cover-color';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
@@ -160,6 +161,9 @@ export default function SongViewPage() {
   } | null>(null);
   const lyricsRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLDivElement | null)[]>([]);
+  // Serialize device-wide seeks: response order must match execution order.
+  const seekQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const seekContextRef = useRef({ active: false, songId: id, trackKey: '' });
 
   // Mutable ref bag for the rAF sync loop (avoids stale closures)
   const songInfoDialogRef = useRef<HTMLElement>(null);
@@ -187,6 +191,15 @@ export default function SongViewPage() {
 
   // Spotify sync hook (polling + rAF + follow-playing)
   const sync = useSpotifySync(syncRefs, lineRefs, lyricsRef, spotifyConnected === true);
+  useEffect(() => {
+    const context = seekContextRef.current;
+    context.active = true;
+    return () => { context.active = false; };
+  }, []);
+  useEffect(() => {
+    seekContextRef.current.songId = id;
+    seekContextRef.current.trackKey = sync.spotify?.connected ? trackIdentity(sync.spotify.track) : '';
+  }, [id, sync.spotify?.connected, sync.spotify?.track]);
   const immersive = useImmersiveLyrics(lyricsRef, lineRefs, sync.activeLine,
     data.debug, !!(sync.isSameSong && sync.spotify?.connected));
   useEffect(() => {
@@ -312,7 +325,7 @@ export default function SongViewPage() {
     // Keep the toggle and the capture running — closing the panel only hides
     // it; the mic stops on page leave (cleanup effect) or manual toggle-off.
     setShowExperiments(false);
-  }, []);
+  }, [setShowExperiments]);
   const [dotParams, setDotParams] = useState<DotGridParams>(DEFAULT_DOT_GRID_PARAMS);
   const coverUrl = data.song?.cover_url ?? fallbackCoverUrl;
   const paletteSong = data.song;
@@ -443,43 +456,59 @@ export default function SongViewPage() {
   // Spotify seek — click lyrics line to jump to that time.
   // fetch() only rejects on network errors, so we must inspect res.ok to surface
   // HTTP failures (401 token expiry / 4xx / 5xx) instead of silently dropping them.
-  const handleSeek = async (positionMs: number, lineIndex: number) => {
-    let res: Response;
-    try {
-      res = await fetch('/api/spotify/seek', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ position_ms: positionMs }),
-      });
-    } catch {
-      data.showToast('error', t('song.seekFailed'));
-      return;
-    }
-    if (res.ok) {
-      if (immersive.active) {
-        immersive.clearManualScroll();
-        const container = lyricsRef.current;
-        const line = lineRefs.current[lineIndex];
-        if (container && line) {
-          const box = line.getBoundingClientRect();
-          cancelSmoothScroll(container);
-          container.scrollTop = centeredLyricScrollTop(container.scrollTop,
-            container.clientHeight, box.top - container.getBoundingClientRect().top, box.height);
-        }
+  const handleSeek = (positionMs: number, lineIndex: number) => {
+    const clickedTrackKey = trackIdentity(sync.spotify?.track ?? null);
+    const clickedSongId = id;
+    const stillOnTrack = () => {
+      const context = seekContextRef.current;
+      return context.active && context.songId === clickedSongId && context.trackKey === clickedTrackKey;
+    };
+    const performSeek = async () => {
+      // A queued click may outlive this page or the Spotify track it targeted.
+      if (!stillOnTrack()) return;
+      let res: Response;
+      try {
+        res = await fetch('/api/spotify/seek', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ position_ms: positionMs, expected_track_id: clickedTrackKey }),
+        });
+      } catch {
+        if (stillOnTrack()) data.showToast('error', t('song.seekFailed'));
+        return;
       }
-      return;
-    }
+      if (!stillOnTrack()) return;
+      if (res.ok) {
+        const receipt = await res.json().catch(() => null) as { track_id?: string | null; seek_applied_at?: number } | null;
+        // Spotify's seek response has no identity. The server checks the
+        // clicked track before PUT and uses a post-seek read-back when available.
+        if (!stillOnTrack() || receipt?.track_id !== clickedTrackKey || typeof receipt.seek_applied_at !== 'number'
+          || !sync.confirmSeek(positionMs, clickedTrackKey, receipt.seek_applied_at)) return;
+        if (immersive.active) {
+          immersive.clearManualScroll();
+          const container = lyricsRef.current;
+          const line = lineRefs.current[lineIndex];
+          if (container && line) {
+            const box = line.getBoundingClientRect();
+            cancelSmoothScroll(container);
+            container.scrollTop = centeredLyricScrollTop(container.scrollTop,
+              container.clientHeight, box.top - container.getBoundingClientRect().top, box.height);
+          }
+        }
+        return;
+      }
 
-    if (res.status === 401) {
-      // Token expired / Spotify not connected — link to the existing reconnect
-      // flow so the user can take action rather than clicking repeatedly.
-      data.showToast('error', t('song.seekAuthFailed'), t('song.reconnect'), () => {
-        window.location.assign('/api/auth/login');
-      });
-      return;
-    }
-
-    data.showToast('error', t('song.seekFailed'));
+      if (res.status === 401) {
+        data.showToast('error', t('song.seekAuthFailed'), t('song.reconnect'), () => {
+          window.location.assign('/api/auth/login');
+        });
+        return;
+      }
+      data.showToast('error', t('song.seekFailed'));
+    };
+    // A later click waits for the first Spotify operation to finish. Otherwise
+    // responses can arrive in reverse order and leave the local clock wrong.
+    seekQueueRef.current = seekQueueRef.current.then(performSeek, performSeek);
   };
 
   // Derived state
