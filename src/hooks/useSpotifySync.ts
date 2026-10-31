@@ -54,7 +54,7 @@ export interface UseSpotifySyncReturn {
   syncState: SyncState;
   resumeSync: () => void;
   activeLine: number;
-  /** Whether the currently-playing Spotify track is the song rendered on this page. */
+  /** Whether the selected playback source matches this song, including while paused. */
   isSameSong: boolean;
   followPlaying: boolean;
   setFollowPlaying: React.Dispatch<React.SetStateAction<boolean>>;
@@ -68,6 +68,7 @@ export interface UseSpotifySyncReturn {
   playbackMsRef: React.MutableRefObject<number | null>;
   /** Apply a Spotify-confirmed seek immediately, scoped to the clicked track. */
   confirmSeek: (positionMs: number, expectedTrackKey: string, serverAppliedAt: number) => boolean;
+  refreshPlayback: () => Promise<void>;
 }
 
 /** Shape used for identity checks against the song rendered on this page. */
@@ -90,9 +91,11 @@ export function useSpotifySync(
   lineRefs: React.RefObject<(HTMLDivElement | null)[]>,
   lyricsRef: React.RefObject<HTMLDivElement | null>,
   enabled = true,
+  simulatedPlayback: SpotifyState | null = null,
 ): UseSpotifySyncReturn {
-  const { data: nowPlayingData, syncState, resumeSync, applySuccessfulSeek } = useNowPlaying(enabled);
-  const spotify = nowPlayingData as SpotifyState | null;
+  const { data: observedPlayback, syncState, resumeSync, applySuccessfulSeek, refreshPlayback } = useNowPlaying(enabled);
+  const spotify = observedPlayback as SpotifyState | null;
+  const nowPlayingData = enabled ? observedPlayback : simulatedPlayback;
   const [activeLine, setActiveLine] = useState(-1);
   const [followPlaying, setFollowPlaying] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem('jplrc-follow-playing') !== 'false';
@@ -100,11 +103,11 @@ export function useSpotifySync(
   });
 
   // Derived identity: is the song rendered on this page the one currently
-  // playing on Spotify? ID-authoritative when both sides have a Track ID;
+  // selected for playback? ID-authoritative when both sides have a Track ID;
   // falls back to title + artist scoring for legacy songs. The page badge,
   // seek, share and highlight all consume this single result.
-  const isSameSong = !!spotify?.is_playing && !!spotify?.track
-    && isSameSpotifyTrack(currentSongRef(syncRefs.current), spotify.track);
+  const isSameSong = !!nowPlayingData?.track
+    && isSameSpotifyTrack(currentSongRef(syncRefs.current), nowPlayingData.track);
 
   const interpRef = useRef<InterpAnchor>({ progressMs: 0, pollTime: 0, isPlaying: false, trackName: '', trackId: '', trackArtist: '', durationMs: 0 });
   const rafRef = useRef<number>(0);
@@ -187,11 +190,11 @@ export function useSpotifySync(
       lastPolledProgressRef.current = null;
     }
 
-    if (nowPlayingData.is_playing && track) {
+    if (track) {
       interpRef.current = {
         progressMs: nowPlayingData.progress_ms,
         pollTime: performance.now(),
-        isPlaying: true,
+        isPlaying: nowPlayingData.is_playing,
         trackName: track.name,
         trackId: track.id || '',
         trackArtist: track.artist,
@@ -203,7 +206,7 @@ export function useSpotifySync(
       // same-name track (different version / artist / cover) always triggers a move.
       const trackKey = track.id || track.uri || `${track.name}||${track.artist}`;
       if (
-        refs.followPlaying &&
+        enabled && nowPlayingData.is_playing && refs.followPlaying &&
         !navigatingRef.current &&
         prevTrackKeyRef.current &&
         prevTrackKeyRef.current !== trackKey
@@ -238,7 +241,7 @@ export function useSpotifySync(
         prevTrackKeyRef.current = '';
       }
     }
-  }, [nowPlayingData, syncRefs, lyricsRef]);
+  }, [nowPlayingData, syncRefs, lyricsRef, enabled]);
 
   // Smooth rAF interpolation loop — runs at display refresh rate between polls,
   // but ONLY while the matched track is actively playing. When idle (paused /
@@ -251,11 +254,10 @@ export function useSpotifySync(
       const refs = syncRefs.current;
       const songTitle = refs.songTitle;
 
-      // Not following (paused / no song loaded / track mismatch): clear the
+      // Not following (no song loaded / track mismatch): clear the
       // highlight and STOP the loop — do NOT reschedule. Identity reuses the
       // same matching rule as the page badge / seek / share (ID-authoritative).
       if (
-        !isPlaying ||
         !songTitle ||
         !isSameTrackCached({ id: trackId || undefined, name: trackName, artist: trackArtist })
       ) {
@@ -270,10 +272,10 @@ export function useSpotifySync(
 
       // Interpolate progress since last poll
       const elapsed = performance.now() - pollTime;
-      const currentMs = progressMs + Math.max(0, elapsed);
+      const currentMs = Math.min(progressMs + (isPlaying ? Math.max(0, elapsed) : 0), interpRef.current.durationMs || Infinity);
       const previousMs = playbackMsRef.current;
       // Publish the smooth position for per-frame readers (time axis clock).
-      playbackMsRef.current = currentMs;
+      playbackMsRef.current = isPlaying ? currentMs : null;
 
       // A rewind into the untimed intro has no active line to centre. Move the
       // lyric container itself back to its beginning, even if the highlight
@@ -333,8 +335,8 @@ export function useSpotifySync(
         } catch { /* PiP window closed */ }
       }
 
-      // Keep interpolating while still following.
-      rafRef.current = requestAnimationFrame(tick);
+      // Paused snapshots update the focused lyric once, without an idle frame loop.
+      rafRef.current = isPlaying ? requestAnimationFrame(tick) : 0;
     };
 
     const start = () => {
@@ -367,13 +369,11 @@ export function useSpotifySync(
   // being the same: paused or a different/next track). The loop only runs while
   // it is truly needed, so idle pages no longer spin at 60fps (issue #244).
   useEffect(() => {
-    if (isSameSong) {
-      if (!rafEligibleRef.current) {
-        // Song/track identity may have changed since the last run — drop stale
-        // cached match results before restarting the loop.
-        matchCacheRef.current.clear();
-        startRafRef.current();
-      }
+    if (isSameSong && !document.hidden) {
+      // Each source snapshot resets the anchor. Paused snapshots get one tick;
+      // playing snapshots continue until paused, hidden, or a different track.
+      matchCacheRef.current.clear();
+      startRafRef.current();
       rafEligibleRef.current = true;
     } else {
       if (rafEligibleRef.current) {
@@ -385,7 +385,7 @@ export function useSpotifySync(
       }
       rafEligibleRef.current = false;
     }
-  }, [isSameSong]);
+  }, [isSameSong, nowPlayingData]);
 
   // Pause the loop while the tab is hidden, and resume it when the user returns
   // and the matched track is still playing (issue #244). rAF is already throttled
@@ -431,5 +431,6 @@ export function useSpotifySync(
     pipWindowRef,
     playbackMsRef,
     confirmSeek,
+    refreshPlayback,
   };
 }

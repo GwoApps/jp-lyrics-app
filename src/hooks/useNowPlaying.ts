@@ -76,7 +76,13 @@ export function useNowPlaying(enabled = true) {
   // Only the displayed state receives a successful seek while the server catches up.
   const displayedDataRef = useRef<NowPlayingData | null>(null);
   const seekOverrideRef = useRef<SeekOverride | null>(null);
+  const latestObservationRef = useRef({ client: 0, server: 0 });
   const publishData = useCallback((observation: NowPlayingData, observed: SeekObservation) => {
+    // A delayed pre-command poll/SSE observation must not undo a newer control readback.
+    // Keep raw SSE/checksum state untouched; this orders only the displayed observations.
+    const latest = latestObservationRef.current[observed.source];
+    if (observed.startedAt > 0 && observed.startedAt < latest) return;
+    latestObservationRef.current[observed.source] = Math.max(latest, observed.startedAt);
     const reconciled = reconcileSeek(observation, seekOverrideRef.current, performance.now(), observed);
     seekOverrideRef.current = reconciled.pending;
     displayedDataRef.current = reconciled.data;
@@ -370,6 +376,18 @@ export function useNowPlaying(enabled = true) {
     }
   }, [pollMode, scheduleClientPoll, stopClientPolling, connectSSE]);
 
+  /** Read actual Spotify state after a control operation, without replacing the SSE stream. */
+  const refreshPlayback = useCallback(async () => {
+    if (!enabled) return;
+    const startedAt = Date.now();
+    const response = await fetch('/api/spotify/now-playing', { cache: 'no-store' });
+    if (!response.ok) throw new Error('playback_state_unavailable');
+    const observedAt = Number(response.headers.get('X-Spotify-Observed-At'));
+    const observation = await response.json() as NowPlayingData;
+    if (mountedRef.current) publishData(observation, Number.isFinite(observedAt) && observedAt > 0
+      ? { source: 'server', startedAt: observedAt } : { source: 'client', startedAt });
+  }, [enabled, publishData]);
+
   // ─── Start appropriate mode once config is loaded ───
   useEffect(() => {
     if (!enabled || pollMode === null) return; // disabled or still loading config
@@ -436,5 +454,6 @@ export function useNowPlaying(enabled = true) {
     syncState: enabled ? syncState : 'connected',
     resumeSync,
     applySuccessfulSeek,
+    refreshPlayback,
   };
 }

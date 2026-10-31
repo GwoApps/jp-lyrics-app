@@ -1037,6 +1037,104 @@ textarea {
   background: color-mix(in srgb, var(--accent) 88%, var(--song-accent));
   border: 1px solid color-mix(in srgb, var(--border) 86%, var(--song-accent));
 }
+.song-playback-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 4px;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+}
+.song-playback-tag--warning { color: var(--warning); }
+.song-playback-tag.song-playing-surface--synced { color: var(--success); }
+.song-playback-tag__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 4px 6px;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: inherit;
+}
+.song-playback-tag__trigger > span { max-width: min(44vw, 420px); }
+.song-playback-tag .song-playing-action { display: inline-flex; align-items: center; gap: 4px; flex: none; padding: 3px 6px; border-radius: 999px; font-size: 10px; }
+.song-playback-tag__chevron { transition: transform 160ms ease; }
+.song-playback-tag__chevron--open { transform: rotate(180deg); }
+/* Explicitly translucent: the lyric halo can pass behind this card. No clipping or opaque underlay. */
+.song-player {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  border: 1px solid color-mix(in srgb, var(--border) 65%, color-mix(in srgb, var(--song-accent) 24%, transparent));
+  border-radius: 8px;
+  background: color-mix(in srgb, color-mix(in srgb, var(--card) 84%, var(--song-accent-secondary, var(--song-accent))) 72%, transparent);
+  color: var(--foreground);
+}
+.song-player__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--foreground) 9%, transparent);
+  cursor: pointer;
+  transition: transform 120ms ease, background-color 120ms ease;
+}
+.song-player__toggle:hover:not(:disabled) { background: color-mix(in srgb, var(--foreground) 15%, transparent); }
+.song-player__toggle:active:not(:disabled) { transform: scale(.95); }
+.song-player__toggle:disabled { opacity: .5; cursor: not-allowed; }
+.song-player__body { flex: 1; min-width: 0; }
+.song-player__meta { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 12px; line-height: 20px; }
+.song-player__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.song-player__state, .song-player__note, .song-player__time { color: var(--muted-foreground); }
+.song-player__note { flex: none; }
+.song-player__timeline { display: flex; align-items: center; gap: 10px; }
+.song-player__time { flex: none; min-width: 32px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.song-player__time:last-child { text-align: right; }
+.song-player input[type="range"] {
+  --player-ink: var(--song-accent-text-dark, var(--foreground));
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  cursor: pointer;
+  background: transparent;
+  touch-action: pan-y;
+}
+[data-theme="light"] .song-player input[type="range"] { --player-ink: var(--song-accent-text-light, var(--foreground)); }
+.song-player input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: linear-gradient(to right, var(--player-ink) var(--player-progress), color-mix(in srgb, var(--foreground) 15%, transparent) var(--player-progress)); }
+.song-player input[type="range"]::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 12px; height: 12px; margin-top: -4px; border: 0; border-radius: 50%; background: var(--player-ink); }
+.song-player input[type="range"]::-moz-range-track { height: 4px; border-radius: 4px; background: color-mix(in srgb, var(--foreground) 15%, transparent); }
+.song-player input[type="range"]::-moz-range-progress { height: 4px; border-radius: 4px; background: var(--player-ink); }
+.song-player input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 50%; background: var(--player-ink); }
+.song-player input:disabled { opacity: .5; cursor: not-allowed; }
+.song-player :focus-visible, .song-playback-tag__trigger:focus-visible { outline: 2px solid var(--foreground); outline-offset: 3px; }
+@media (max-width: 639px) {
+  .song-playback-tag__trigger { min-height: 36px; }
+  .song-player { padding: 10px 12px; gap: 10px; }
+  .song-player__toggle { width: 44px; height: 44px; }
+  .song-player__meta { display: block; }
+  .song-player__note { display: block; font-size: 11px; line-height: 16px; }
+  .song-player input[type="range"] { height: 28px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .song-playback-tag__chevron, .song-player__toggle { transition: none; }
+}
+
 .song-playing-surface {
   background: color-mix(in srgb, var(--accent) 88%, var(--song-accent));
   border: 1px solid color-mix(in srgb, var(--border) 86%, var(--song-accent));

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useCallback
 import { useRouter, useParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
 import Link from 'next/link';
-import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Music, Download, Loader2, ExternalLink, PictureInPicture, Maximize2, Repeat, Copy, Check, Languages, ChevronDown, Share2, Info, X, Palette, SlidersHorizontal, FlaskConical } from 'lucide-react';
+import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Download, Loader2, ExternalLink, PictureInPicture, Maximize2, Repeat, Copy, Check, Languages, ChevronDown, Share2, Info, X, Palette, SlidersHorizontal, FlaskConical } from 'lucide-react';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import FuriganaLineView from '@/components/FuriganaLine';
@@ -21,12 +21,15 @@ import { MobileMenu } from '@/components/song/MobileMenu';
 import DownloadDialog from '@/components/song/DownloadDialog';
 import ImmersiveLyricsControls from '@/components/song/ImmersiveLyricsControls';
 import LyricTimeAxis from '@/components/song/LyricTimeAxis';
+import SongPlayer from '@/components/song/SongPlayer';
+import SongPlaybackStatus from '@/components/song/SongPlaybackStatus';
+import { useSimulatedPlayback } from '@/hooks/useSimulatedPlayback';
+import { previewTimeline } from '@/lib/simulated-playback';
 import { useModalFocus } from '@/hooks/useModalFocus';
 import { isEmptyAfterTrim } from '@/lib/lyrics-export';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useI18n } from '@/lib/i18n';
 import { fmtMs, fmtTime, findActiveLine } from '@/lib/lrc';
-import { isSpotifyAuthError, isSpotifyTransientError } from '@/lib/spotify-error';
 import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
 import { useImmersiveLyrics } from '@/hooks/useImmersiveLyrics';
@@ -189,8 +192,14 @@ export default function SongViewPage() {
   const isAdmin = session?.user?.isAdmin === true;
   const spotifyConnected = session ? session.spotify.connected : null;
 
-  // Spotify sync hook (polling + rAF + follow-playing)
-  const sync = useSpotifySync(syncRefs, lineRefs, lyricsRef, spotifyConnected === true);
+  const [playerExpanded, setPlayerExpanded] = useState(false);
+  const preview = useMemo(() => previewTimeline(data.lineTimestamps, data.furiganaLines, data.song?.spotify_duration_ms),
+    [data.lineTimestamps, data.furiganaLines, data.song?.spotify_duration_ms]);
+  const simulated = spotifyConnected === false;
+  const simulation = useSimulatedPlayback(data.song, simulated, preview.durationMs);
+  const playbackTimestamps = simulated ? preview.timestamps : data.lineTimestamps;
+  // Both sources use the same lyric interpolation, highlight, scroll and PiP controller.
+  const sync = useSpotifySync(syncRefs, lineRefs, lyricsRef, spotifyConnected === true, simulation.playback);
   useEffect(() => {
     const context = seekContextRef.current;
     context.active = true;
@@ -201,7 +210,7 @@ export default function SongViewPage() {
     seekContextRef.current.trackKey = sync.spotify?.connected ? trackIdentity(sync.spotify.track) : '';
   }, [id, sync.spotify?.connected, sync.spotify?.track]);
   const immersive = useImmersiveLyrics(lyricsRef, lineRefs, sync.activeLine,
-    data.debug, !!(sync.isSameSong && sync.spotify?.connected));
+    data.debug, !!sync.isSameSong);
   useEffect(() => {
     syncRefs.current.immersiveLyrics = immersive.active;
     syncRefs.current.shouldFollowLyrics = immersive.shouldFollow;
@@ -242,7 +251,7 @@ export default function SongViewPage() {
   useEffect(() => { syncRefs.current.songArtist = data.song?.artist || ''; }, [data.song?.artist]);
   useEffect(() => { syncRefs.current.spotifyTrackId = data.song?.spotify_track_id || null; }, [data.song?.spotify_track_id]);
   useEffect(() => { syncRefs.current.furiganaLines = data.furiganaLines; }, [data.furiganaLines]);
-  useEffect(() => { syncRefs.current.lineTimestamps = data.lineTimestamps; }, [data.lineTimestamps]);
+  useEffect(() => { syncRefs.current.lineTimestamps = playbackTimestamps; }, [playbackTimestamps]);
   useEffect(() => { syncRefs.current.debug = data.debug; }, [data.debug]);
   useEffect(() => { syncRefs.current.followPlaying = sync.followPlaying; }, [sync.followPlaying]);
   useEffect(() => { syncRefs.current.matchSong = data.matchSong; }, [data.matchSong]);
@@ -456,7 +465,12 @@ export default function SongViewPage() {
   // Spotify seek — click lyrics line to jump to that time.
   // fetch() only rejects on network errors, so we must inspect res.ok to surface
   // HTTP failures (401 token expiry / 4xx / 5xx) instead of silently dropping them.
-  const handleSeek = (positionMs: number, lineIndex: number) => {
+  const handleSeek = (positionMs: number, lineIndex = -1) => {
+    if (simulated) {
+      simulation.seek(positionMs);
+      immersive.clearManualScroll();
+      return;
+    }
     const clickedTrackKey = trackIdentity(sync.spotify?.track ?? null);
     const clickedSongId = id;
     const stillOnTrack = () => {
@@ -509,6 +523,7 @@ export default function SongViewPage() {
     // A later click waits for the first Spotify operation to finish. Otherwise
     // responses can arrive in reverse order and leave the local clock wrong.
     seekQueueRef.current = seekQueueRef.current.then(performSeek, performSeek);
+    return seekQueueRef.current;
   };
 
   // Derived state
@@ -517,9 +532,40 @@ export default function SongViewPage() {
   const lyricsSourceKey = song ? LYRICS_SOURCE_KEYS[song.lyrics_source] : undefined;
   const lyricsSourceLabel = song ? (lyricsSourceKey ? t(lyricsSourceKey) : song.lyrics_source) : '';
   const { spotify, syncState, resumeSync, activeLine, isSameSong, followPlaying, setFollowPlaying, pipWindowRef, playbackMsRef } = sync;
+  const playerPlayback = simulated ? simulation.playback : spotify;
+  const handlePlaybackToggle = () => {
+    if (simulated) { simulation.toggle(); return; }
+    const clickedTrackKey = trackIdentity(spotify?.track ?? null);
+    const clickedSongId = id;
+    const stillCurrent = () => seekContextRef.current.active && seekContextRef.current.songId === clickedSongId
+      && seekContextRef.current.trackKey === clickedTrackKey;
+    const perform = async () => {
+      if (!clickedTrackKey || !stillCurrent()) return;
+      try {
+        const response = await fetch('/api/spotify/playback', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: spotify?.is_playing ? 'pause' : 'play', expected_track_id: clickedTrackKey }),
+        });
+        if (!stillCurrent()) return;
+        if (!response.ok) {
+          const body = await response.json().catch(() => null) as { error?: string } | null;
+          const key = response.status === 401 ? 'player.authFailed' : response.status === 403 ? 'player.premiumRequired'
+            : response.status === 404 ? 'player.noDevice' : response.status === 409 || body?.error === 'track_changed' ? 'player.trackChanged'
+              : response.status === 429 ? 'player.rateLimited' : 'player.controlFailed';
+          data.showToast('error', t(key));
+          return;
+        }
+        await sync.refreshPlayback();
+      } catch {
+        if (stillCurrent()) data.showToast('error', t('player.controlFailed'));
+      }
+    };
+    seekQueueRef.current = seekQueueRef.current.then(perform, perform);
+    return seekQueueRef.current;
+  };
   const handleOpenPiP = () => data.openPiP(furiganaLines, song, activeLine, pipWindowRef, lineTimestamps);
   const isSynced = isSameSong && activeLine >= 0;
-  const immersiveSynced = !!(isSynced && spotify?.connected && !data.debug);
+  const immersiveSynced = !!(isSynced && !data.debug);
   const hasSyncData = syncLines.length > 0;
   const debugSyncActive = spotify?.is_playing && syncLines.length > 0 ? findActiveLine(syncLines, spotify.progress_ms) : -1;
   // Best-matching *other* song for the playing track — resolved lazily via the
@@ -850,80 +896,18 @@ export default function SongViewPage() {
 
         {/* Spotify playback status stays mounted so loading/resolved state cannot move the lyrics layout. */}
         <div className="mt-2 sm:mt-4 flex min-h-7 items-center gap-2">
-            {syncState === 'stopped' ? (
-              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--warning-muted)] border border-[var(--warning)]/40 px-2 sm:px-3 py-1">
-                <span className="inline-block h-2 w-2 rounded-full bg-[var(--warning)]" />
-                <span className="text-xs text-[var(--warning)]">{t('song.syncStopped')}</span>
-                <button onClick={() => void resumeSync()} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--warning)]/20 text-[var(--warning)] hover:bg-[var(--warning)]/30 transition-colors shrink-0">
-                  <RefreshCw className="h-3 w-3" /><span>{t('song.resumeSync')}</span>
+            <SongPlaybackStatus connected={spotifyConnected} spotify={spotify} syncState={syncState}
+              matching={!simulated && isSameSong} simulatedPlaying={simulation.playback?.is_playing === true}
+              expanded={playerExpanded} onToggle={() => setPlayerExpanded((value) => !value)} onResume={() => void resumeSync()}
+              otherTrackAction={playingMatch ? (
+                <button type="button" onClick={() => router.push(`/songs/${playingMatch.id}`)} className="song-playing-action inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-[var(--foreground)] transition-colors shrink-0">
+                  <ExternalLink className="h-3 w-3" /><span>{t('song.show')}</span>
                 </button>
-              </div>
-            ) : syncState === 'retrying' ? (
-              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--warning-muted)] border border-[var(--warning)]/30 px-2 sm:px-3 py-1">
-                <Loader2 className="h-3 w-3 animate-spin text-[var(--warning)]" />
-                <span className="text-xs text-[var(--warning)]">{t('song.syncRetrying')}</span>
-              </div>
-            ) : spotifyConnected === null || !spotify ? (
-              <div className="song-playing-surface flex items-center gap-1.5 sm:gap-2 rounded-full px-2 sm:px-3 py-1">
-                {spotifyConnected === null ? <Loader2 className="h-3 w-3 animate-spin text-[var(--muted-foreground)]" /> : <span className="inline-block h-2 w-2 rounded-full bg-[var(--muted-foreground)]" />}
-                <span className="text-xs text-[var(--muted-foreground)] truncate max-w-[180px] sm:max-w-none">
-                  {spotifyConnected === null ? t('song.spotifyLoading') : t('song.spotifyDisconnected')}
-                </span>
-              </div>
-            ) : spotify.error ? isSpotifyAuthError(spotify.error) ? (
-              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--warning-muted)] border border-[var(--warning)]/30 px-2 sm:px-3 py-1">
-                <span className="inline-block h-2 w-2 rounded-full bg-[var(--warning)]" />
-                <span className="text-xs text-[var(--warning)]">{t('song.tokenExpired')}</span>
-                <SpotifyLoginButton className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--warning)]/20 text-[var(--warning)] hover:bg-[var(--warning)]/30 transition-colors shrink-0 disabled:opacity-60">
-                  <RefreshCw className="h-3 w-3" /><span>{t('song.reconnect')}</span>
-                </SpotifyLoginButton>
-              </div>
-            ) : isSpotifyTransientError(spotify.error) ? (
-              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--warning-muted)] border border-[var(--warning)]/30 px-2 sm:px-3 py-1">
-                <Loader2 className="h-3 w-3 animate-spin text-[var(--warning)]" />
-                <span className="text-xs text-[var(--warning)]">{t('song.spotifyTempUnavailable')}</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-[var(--warning-muted)] border border-[var(--warning)]/30 px-2 sm:px-3 py-1">
-                <span className="inline-block h-2 w-2 rounded-full bg-[var(--warning)]" />
-                <span className="text-xs text-[var(--warning)]">{t('song.spotifyError', { code: spotify.error })}</span>
-              </div>
-            ) : isSynced ? (
-              <div className="song-playing-surface song-playing-surface--synced flex items-center gap-1.5 sm:gap-2 rounded-full px-2 sm:px-3 py-1">
-                <span className="inline-block h-2 w-2 rounded-full bg-[var(--success)] animate-pulse" />
-                <Music className="h-3 w-3 text-[var(--success)]" />
-                <span className="text-xs text-[var(--success)] truncate max-w-[180px] sm:max-w-none">
-                  {spotify.track!.name}
-                  {data.debug && spotify && <span className="ml-1 sm:ml-2 font-mono text-[var(--success)]/70 text-[10px]">[{fmtTime(spotify.progress_ms)}/{fmtTime(spotify.duration_ms)}]#{activeLine}</span>}
-                </span>
-              </div>
-            ) : isSameSong ? (
-              <div className="song-playing-surface song-playing-surface--matching flex items-center gap-1.5 sm:gap-2 rounded-full px-2 sm:px-3 py-1">
-                <span className="inline-block h-2 w-2 rounded-full bg-[var(--success)]/50 animate-pulse" />
-                <Music className="h-3 w-3 text-[var(--success)]/50" />
-                <span className="text-xs text-[var(--success)]/60 truncate max-w-[180px] sm:max-w-none">
-                  {spotify.track!.name}
-                  {data.debug && <span className="ml-1 font-mono text-[10px]">[{fmtTime(spotify.progress_ms)}/{fmtTime(spotify.duration_ms)}] #{activeLine}</span>}
-                </span>
-              </div>
-            ) : spotify.is_playing && spotify.track ? (
-              <div className="song-playing-surface flex items-center gap-1.5 sm:gap-2 rounded-full px-2 sm:px-3 py-1">
-                <span className="inline-block h-2 w-2 rounded-full bg-[var(--muted-foreground)]" />
-                <span className="text-xs text-[var(--muted-foreground)] truncate max-w-[140px] sm:max-w-none">
-                  {spotify.track.name}
-                  {data.debug && <span className="ml-1 font-mono text-[10px]">[{fmtTime(spotify.progress_ms)}/{fmtTime(spotify.duration_ms)}]</span>}
-                </span>
-                {playingMatch ? (
-                  <button onClick={() => router.push(`/songs/${playingMatch.id}`)} className="song-playing-action inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-[var(--foreground)] transition-colors shrink-0">
-                    <ExternalLink className="h-3 w-3" /><span>{t('song.show')}</span>
-                  </button>
-                ) : spotifyConnected ? (
-                  <button onClick={() => data.handleImportPlaying(spotify)} disabled={data.importing} className="song-playing-action--primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0">
-                    {data.importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}<span>{data.importing ? t('home.importing') : t('song.importBtn')}</span>
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
+              ) : spotifyConnected && spotify?.track ? (
+                <button type="button" onClick={() => data.handleImportPlaying(spotify)} disabled={data.importing} className="song-playing-action--primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0">
+                  {data.importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}<span>{data.importing ? t('home.importing') : t('song.importBtn')}</span>
+                </button>
+              ) : null} />
             {spotify?.connected && (
               <button
                 onClick={() => setFollowPlaying((v) => !v)}
@@ -992,6 +976,12 @@ export default function SongViewPage() {
           </div>
         </div>
       )}
+      {playerExpanded && !immersive.active && (
+        <SongPlayer playback={playerPlayback} playbackMsRef={playbackMsRef} matching={isSameSong}
+          simulated={simulated} estimated={preview.estimated} loading={spotifyConnected === null || (!simulated && !spotify)}
+          unavailable={!simulated && (!!spotify?.error || syncState !== 'connected')}
+          onToggle={handlePlaybackToggle} onSeek={handleSeek} />
+      )}
       <div className="lyrics-panel-shell relative isolate flex-1 min-h-0" style={lyricPanelStyle}>
         <div className="lyrics-ambient-breath" aria-hidden="true" />
         <div className="lyrics-ambient-orbit" aria-hidden="true" />
@@ -1023,8 +1013,8 @@ export default function SongViewPage() {
                     line={line}
                     isActive={i === activeLine && !!isSynced}
                     debugTs={!immersive.active && data.debug && lineTimestamps[i] != null ? lineTimestamps[i] : undefined}
-                    timestamp={hasSyncData && lineTimestamps[i] != null ? lineTimestamps[i] : undefined}
-                    onSeek={hasSyncData && spotify?.connected && (isSameSong || (immersive.active && spotify.track && isSameSpotifyTrack(song, spotify.track))) ? (positionMs) => handleSeek(positionMs, i) : undefined}
+                    timestamp={playbackTimestamps[i] != null ? playbackTimestamps[i] : undefined}
+                    onSeek={(simulated || (hasSyncData && spotify?.connected && (isSameSong || (immersive.active && spotify.track && isSameSpotifyTrack(song, spotify.track))))) && playbackTimestamps[i] != null ? () => handleSeek(playbackTimestamps[i]!, i) : undefined}
                     onCopyLine={immersive.active ? undefined : () => copyLyricLine(line)}
                     onCopyTranslation={immersive.active ? undefined : () => copyLyricTranslation(i)}
                     onShareLine={immersive.active ? undefined : () => router.push(`/songs/${id}/share?line=${i}`)}
@@ -1099,7 +1089,7 @@ export default function SongViewPage() {
           <LyricTimeAxis
             scrollRef={lyricsRef}
             lineRefs={lineRefs}
-            timestamps={lineTimestamps}
+            timestamps={playbackTimestamps}
             activeLine={activeLine}
             isSynced={!!isSynced}
             playbackMsRef={playbackMsRef}
