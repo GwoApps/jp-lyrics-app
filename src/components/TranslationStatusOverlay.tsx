@@ -96,7 +96,7 @@ export default function TranslationStatusOverlay({
         </div>
       </div>
       <div className="reasoning-glow w-full overflow-hidden rounded-xl">
-        <div className="relative rounded-[11px] bg-[var(--card)]/95 backdrop-blur-sm">
+        <div className="relative rounded-[11px] bg-[var(--card)]">
           <div className="flex items-center gap-1.5 border-b border-[var(--border)]/60 px-3 py-2 text-[11px] font-medium text-[var(--muted-foreground)]">
             <Brain className="h-3 w-3 text-[var(--primary)]" />
             <span className="min-w-0 flex-1 truncate">{t('song.translationReasoning')}</span>
