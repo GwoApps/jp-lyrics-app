@@ -1065,6 +1065,45 @@ textarea {
 .song-playback-tag .song-playing-action { display: inline-flex; align-items: center; gap: 4px; flex: none; padding: 3px 6px; border-radius: 999px; font-size: 10px; }
 .song-playback-tag__chevron { transition: transform 160ms ease; }
 .song-playback-tag__chevron--open { transform: rotate(180deg); }
+/* A short accordion reflow moves the lyric panel with the card; retain the card for its exit. */
+.song-view {
+  --song-player-motion-duration: 220ms;
+  --song-player-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+.song-player-disclosure {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  flex-shrink: 0;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition: grid-template-rows var(--song-player-motion-duration) var(--song-player-motion-ease),
+    visibility 0s linear var(--song-player-motion-duration);
+}
+.song-player-disclosure[data-expanded="true"] {
+  grid-template-rows: 1fr;
+  visibility: visible;
+  transition-delay: 0s;
+}
+.song-player-disclosure__clip { min-height: 0; overflow: hidden; }
+.song-player-disclosure .song-player {
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity var(--song-player-motion-duration) var(--song-player-motion-ease),
+    transform var(--song-player-motion-duration) var(--song-player-motion-ease);
+}
+.song-player-disclosure[data-expanded="true"] .song-player {
+  opacity: 1;
+  transform: translateY(0);
+}
+@media (min-width: 640px) {
+  .song-detail-header { transition: margin-bottom var(--song-player-motion-duration) var(--song-player-motion-ease); }
+  .song-view[data-player-expanded="true"] > .song-detail-header { margin-bottom: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .song-player-disclosure, .song-player-disclosure .song-player, .song-detail-header { transition: none; }
+  .song-player-disclosure .song-player { transform: none; }
+}
 /* Explicitly translucent: the lyric halo can pass behind this card. No clipping or opaque underlay. */
 .song-player {
   position: relative;

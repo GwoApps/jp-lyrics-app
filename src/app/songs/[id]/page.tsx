@@ -652,7 +652,7 @@ export default function SongViewPage() {
   };
 
   return (
-    <div className={`song-view fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-visible sm:block sm:h-auto sm:pb-0${coverColor ? ' song-view--accented' : ''}${immersive.active ? ' lyrics-immersive-active' : ''}`} style={{ ...songThemeStyle, ['--immersive-font-mobile' as string]: `${immersive.fontSize.mobile}px`, ['--immersive-font-desktop' as string]: `${immersive.fontSize.desktop}px` }} role={immersive.active ? 'region' : undefined} aria-label={immersive.active ? t('song.immersiveEnter') : undefined}>
+    <div className={`song-view fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-visible sm:block sm:h-auto sm:pb-0${coverColor ? ' song-view--accented' : ''}${immersive.active ? ' lyrics-immersive-active' : ''}`} style={{ ...songThemeStyle, ['--immersive-font-mobile' as string]: `${immersive.fontSize.mobile}px`, ['--immersive-font-desktop' as string]: `${immersive.fontSize.desktop}px` }} data-player-expanded={playerExpanded} role={immersive.active ? 'region' : undefined} aria-label={immersive.active ? t('song.immersiveEnter') : undefined}>
       {/* Breadcrumb */}
       <div className="shrink-0 mb-3 sm:mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
         <button onClick={() => transitionRouter.push('/')} className="hover:text-[var(--foreground)] transition-colors inline-flex items-center gap-1">
@@ -663,7 +663,7 @@ export default function SongViewPage() {
       </div>
 
       {/* Header */}
-      <div className="shrink-0 mb-3 sm:mb-8">
+      <div className="song-detail-header shrink-0 mb-3 sm:mb-8">
         <div className="flex flex-col items-start gap-3 sm:gap-4">
           <div className="flex items-start gap-3 sm:gap-4 min-w-0 w-full">
             <button
@@ -976,11 +976,16 @@ export default function SongViewPage() {
           </div>
         </div>
       )}
-      {playerExpanded && !immersive.active && (
-        <SongPlayer playback={playerPlayback} playbackMsRef={playbackMsRef} matching={isSameSong}
-          simulated={simulated} estimated={preview.estimated} loading={spotifyConnected === null || (!simulated && !spotify)}
-          unavailable={!simulated && (!!spotify?.error || syncState !== 'connected')}
-          onToggle={handlePlaybackToggle} onSeek={handleSeek} />
+      {!immersive.active && (
+        <div className="song-player-disclosure" data-expanded={playerExpanded}
+          aria-hidden={!playerExpanded} inert={!playerExpanded}>
+          <div className="song-player-disclosure__clip">
+            <SongPlayer active={playerExpanded} playback={playerPlayback} playbackMsRef={playbackMsRef} matching={isSameSong}
+              simulated={simulated} estimated={preview.estimated} loading={spotifyConnected === null || (!simulated && !spotify)}
+              unavailable={!simulated && (!!spotify?.error || syncState !== 'connected')}
+              onToggle={handlePlaybackToggle} onSeek={handleSeek} />
+          </div>
+        </div>
       )}
       <div className="lyrics-panel-shell relative isolate flex-1 min-h-0" style={lyricPanelStyle}>
         <div className="lyrics-ambient-breath" aria-hidden="true" />

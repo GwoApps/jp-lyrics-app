@@ -7,6 +7,7 @@ import { fmtTime } from '@/lib/lrc';
 import type { SpotifyState } from '@/hooks/useSpotifySync';
 
 interface Props {
+  active: boolean;
   playback: SpotifyState | null;
   playbackMsRef: React.RefObject<number | null>;
   matching: boolean;
@@ -19,7 +20,7 @@ interface Props {
 }
 
 /** Display ticks are local to this small card; the lyric page never renders per frame. */
-export default function SongPlayer({ playback, playbackMsRef, matching, simulated, estimated, loading, unavailable, onToggle, onSeek }: Props) {
+export default function SongPlayer({ active, playback, playbackMsRef, matching, simulated, estimated, loading, unavailable, onToggle, onSeek }: Props) {
   const { t } = useI18n();
   const [position, setPosition] = useState(0);
   const [draft, setDraft] = useState<number | null>(null);
@@ -29,6 +30,7 @@ export default function SongPlayer({ playback, playbackMsRef, matching, simulate
   const playing = playback?.is_playing === true;
   const identity = playback?.track?.id || playback?.track?.uri || playback?.track?.name || '';
   useEffect(() => {
+    if (!active) return; // Keep exit content mounted without ticking a hidden card.
     const start = performance.now();
     const update = () => {
       const smooth = matching && playing ? playbackMsRef.current : null;
@@ -38,13 +40,13 @@ export default function SongPlayer({ playback, playbackMsRef, matching, simulate
     if (!playing) return;
     const interval = setInterval(update, 200);
     return () => clearInterval(interval);
-  }, [playback, playing, duration, matching, playbackMsRef]);
+  }, [active, playback, playing, duration, matching, playbackMsRef]);
   useEffect(() => {
     // Source changes invalidate an unfinished scrub instead of seeking the next track.
     draftRef.current = null;
     queueMicrotask(() => setDraft(null));
   }, [identity, simulated]);
-  const disabled = loading || unavailable || !playback?.track || duration <= 0 || pending;
+  const disabled = !active || loading || unavailable || !playback?.track || duration <= 0 || pending;
   const current = Math.min(duration, draft ?? position);
   const run = async (operation: () => Promise<void> | void) => {
     setPending(true);
