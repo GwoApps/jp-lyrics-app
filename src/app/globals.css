@@ -1078,7 +1078,8 @@ textarea {
   padding: 12px 16px;
   border: 1px solid color-mix(in srgb, var(--border) 65%, color-mix(in srgb, var(--song-accent) 24%, transparent));
   border-radius: 8px;
-  background: color-mix(in srgb, color-mix(in srgb, var(--card) 84%, var(--song-accent-secondary, var(--song-accent))) 72%, transparent);
+  /* Match the lyric panel's primary-color 90/10 mix; only this surface is translucent. */
+  background: color-mix(in srgb, color-mix(in srgb, var(--card) 90%, var(--song-accent-primary, var(--border))) 72%, transparent);
   color: var(--foreground);
 }
 .song-player__toggle {
