@@ -54,6 +54,22 @@ html {
   overflow-y: scroll;
   scrollbar-gutter: stable;
 }
+/* Native root gutters already reserve scrollbar width. Radix modal menus and
+   dialogs share RemoveScroll, whose additional body margin would reserve it a
+   second time and move every centered panel. Keep its scroll/focus locks; only
+   disable duplicate width compensation where native stable gutters are used.
+   The extra html specificity also beats RemoveScroll's later injected rule. */
+@supports (scrollbar-gutter: stable) {
+  /* html is the actual scroll container because it explicitly owns overflow-y.
+     Lock it natively as well; body overflow alone cannot stop viewport scroll. */
+  html:has(body[data-scroll-locked]) {
+    overflow-y: hidden;
+  }
+  html body[data-scroll-locked] {
+    margin-right: 0 !important;
+    --removed-body-scroll-bar-size: 0px;
+  }
+}
 /* Issue #274: every language we render gets its own CJK family, so glyph shapes
    match the text instead of everything falling back to Noto Sans JP (which draws
    Japanese variants of 直/骨/次/令/真 … for Chinese text).
