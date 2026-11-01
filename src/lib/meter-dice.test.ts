@@ -168,7 +168,7 @@ function loadDice(react: object = React): React.ComponentType<MeterDiceProps> {
   const localRequire = (id: string) => {
     if (id === 'react') return react;
     if (id === '@/lib/meter-dice') return engine;
-    if (id.endsWith('.module.css')) return { default: { dice: 'dice', face: 'face', pip: 'pip', outline: 'outline', meter: 'meter' } };
+    if (id.endsWith('.module.css')) return { default: { dice: 'dice', face: 'face', pip: 'pip', outline: 'outline', meter: 'meter', socket: 'socket', haloOuter: 'haloOuter', haloInner: 'haloInner', filament: 'filament', core: 'core' } };
     return require(id);
   };
   new Function('require', 'module', 'exports', componentJS)(localRequire, loaded, loaded.exports);
@@ -189,7 +189,17 @@ test('real React SSR is hydration-safe, localized and silent with no fabricated 
 });
 
 class FakeElement {
-  dataset: Record<string, string> = {};
+  readonly dataWrites: [string, string][] = [];
+  dataset: Record<string, string> = new Proxy({}, {
+    set: (target: Record<string, string>, key: string, value: string) => {
+      this.dataWrites.push([key, value]);
+      target[key] = value;
+      return true;
+    },
+  });
+  readonly tagName: string;
+  constructor(tagName = '') { this.tagName = tagName; }
+  get lastElementChild(): FakeElement | null { return this.children.at(-1) ?? null; }
   attributes: Record<string, string> = {};
   children: FakeElement[] = [];
   textContent = '';
@@ -217,6 +227,8 @@ function diceHarness(initial: MeterDiceProps) {
   let hidden = false;
   let reduced = false;
   let nextRaf = 1;
+  const styleReads: FakeElement[] = [];
+  const styleSnapshots: { node: FakeElement; motion: string; lit: string[] }[] = [];
   const frames = new Map<number, FrameRequestCallback>();
   const visibility = new Set<() => void>();
   const preference = new Set<() => void>();
@@ -227,11 +239,16 @@ function diceHarness(initial: MeterDiceProps) {
   };
   install('document', {
     get hidden() { return hidden; },
-    createElementNS: () => new FakeElement(),
+    createElementNS: (_: string, tag: string) => new FakeElement(tag),
     addEventListener: (_: string, fn: () => void) => visibility.add(fn),
     removeEventListener: (_: string, fn: () => void) => visibility.delete(fn),
   });
-  install('window', { matchMedia: () => ({
+  install('window', { getComputedStyle: (node: FakeElement) => {
+    styleReads.push(node);
+    styleSnapshots.push({ node, motion: nodes.get('div')!.dataset.motion,
+      lit: nodes.get('g')!.children.map((pip) => pip.dataset.lit) });
+    return { opacity: '0' }; // Style flush observation only; this adapter does not run CSS.
+  }, matchMedia: () => ({
     get matches() { return reduced; },
     addEventListener: (_: string, fn: () => void) => preference.add(fn),
     removeEventListener: (_: string, fn: () => void) => preference.delete(fn),
@@ -277,7 +294,7 @@ function diceHarness(initial: MeterDiceProps) {
   };
   render(initial);
   return {
-    nodes, frames, visibility, preference, render,
+    nodes, frames, visibility, preference, styleReads, styleSnapshots, render,
     step(ms: number, elapsed = 16) {
       initial.playbackMsRef.current = ms;
       now += elapsed;
@@ -317,6 +334,8 @@ test('component accumulates beats locally, changes signature once, freezes pause
     assert.equal(group.children.length, 4);
     assert.equal(group.children.filter((pip) => pip.dataset.lit === 'true').length, 1);
     assert.equal(face.animations.length, 1);
+    assert.equal(root.dataset.motion, 'continuous', 'new signature also warms from dark');
+    assert.ok(group.children.every((pip) => h.styleReads.includes(pip.lastElementChild!)));
     const animation = face.animations[0];
     const paused = { ...props, playback: { progress_ms: 2512, is_playing: false } };
     h.render(paused);
@@ -423,4 +442,141 @@ test('component handles paused null-ref snapshots, confirmed seeks, zero and no 
     h.step(2500);
     assert.equal(root.dataset.beat, '0');
   } finally { h.close(); }
+});
+
+
+test('lamp layers warm only newly lit pips, retain steady lights and reset the next same-meter bar', () => {
+  const repeated: MeterMap = { id: 'lamps', durationMs: 1398, bars: [0, 699].map((startMs) => ({
+    startMs, endMs: startMs + 699, numerator: 3, denominator: 4,
+    beatTimesMs: [startMs, startMs + 233, startMs + 466],
+  })) };
+  const props: MeterDiceProps = { map: repeated, playbackMsRef: { current: 0 },
+    playback: { progress_ms: 0, is_playing: true }, matching: true, label: 'Localized' };
+  const h = diceHarness(props);
+  try {
+    const root = h.nodes.get('div')!;
+    const group = h.nodes.get('g')!;
+    const pips = [...group.children];
+    assert.equal(root.dataset.motion, 'snap');
+    assert.deepEqual(pips.map((p) => p.dataset.lit), ['true', 'false', 'false']);
+    for (const pip of pips) {
+      assert.equal(pip.tagName, 'g');
+      assert.deepEqual(pip.children.map((c) => c.attributes.class),
+        ['socket', 'haloOuter', 'haloInner', 'filament', 'core']);
+      assert.ok(pip.children.every((c) => c.tagName === 'circle' && Number(c.attributes.r) > 0));
+      assert.equal(pip.children[4].attributes.cx, pip.children[0].attributes.cx);
+    }
+    const reads = h.styleReads.length;
+    const firstWrites = pips[0].dataWrites.length;
+    h.step(233, 233);
+    assert.equal(root.dataset.motion, 'continuous');
+    assert.deepEqual(pips.map((p) => p.dataset.lit), ['true', 'true', 'false']);
+    assert.equal(pips[0].dataWrites.length, firstWrites, 'already lit core/halo are untouched');
+    assert.deepEqual(pips[1].dataWrites, [['lit', 'false'], ['lit', 'true']]);
+    h.step(466, 233);
+    assert.equal(h.styleReads.length, reads, 'ordinary beats do not read style');
+    h.step(699, 233);
+    assert.deepEqual(group.children, pips, 'same-meter reset preserves lamp nodes');
+    assert.deepEqual(pips.map((p) => p.dataset.lit), ['true', 'false', 'false']);
+    assert.deepEqual(pips[0].dataWrites.slice(firstWrites), [['lit', 'false'], ['lit', 'true']]);
+    assert.deepEqual(h.styleSnapshots.slice(reads), [{ node: pips[0].lastElementChild,
+      motion: 'snap', lit: ['false', 'true', 'true'] }], 'only the first pip commits dark; old lights remain lit');
+    assert.equal(root.dataset.motion, 'continuous', 'first pip warms and other pips fade');
+    const writes = pips.map((pip) => pip.dataWrites.length);
+    h.step(715);
+    h.step(731);
+    assert.deepEqual(pips.map((pip) => pip.dataWrites.length), writes, 'same-bar rAF never replays');
+    assert.equal(h.styleReads.length, reads + 1, 'only one boundary style read');
+    assert.equal(h.nodes.get('svg')!.animations.length, 0);
+  } finally { h.close(); }
+});
+
+test('lamp transitions snap on seeks, pause, visibility, map changes and live motion preference', () => {
+  const props: MeterDiceProps = { map, playbackMsRef: { current: 1480 },
+    playback: { progress_ms: 1480, is_playing: true }, matching: true, label: 'Localized' };
+  const h = diceHarness(props);
+  try {
+    const root = h.nodes.get('div')!;
+    const group = h.nodes.get('g')!;
+    h.step(1500, 20);
+    assert.equal(root.dataset.motion, 'continuous');
+    h.render({ ...props, playback: { progress_ms: 1500, is_playing: false } });
+    assert.equal(root.dataset.motion, 'snap');
+    assert.equal(h.frames.size, 0);
+    h.render(props);
+    assert.equal(root.dataset.motion, 'snap');
+    h.step(1516);
+    assert.equal(root.dataset.motion, 'continuous');
+    h.step(1520, 500);
+    assert.equal(root.dataset.motion, 'snap', 'a stalled frame cannot replay a light');
+    h.step(1536);
+    assert.equal(root.dataset.motion, 'continuous');
+    h.step(1550, 500);
+    assert.equal(root.dataset.motion, 'snap', 'same-beat discontinuity also settles');
+    h.step(5500);
+    assert.equal(root.dataset.motion, 'snap');
+    assert.equal(group.children.filter((p) => p.dataset.lit === 'true').length, 5);
+    h.step(1480);
+    assert.equal(root.dataset.motion, 'snap');
+    h.step(1500, 20);
+    h.reduce(true);
+    assert.equal(root.dataset.motion, 'snap');
+    h.step(1516);
+    assert.equal(root.dataset.motion, 'snap');
+    h.reduce(false);
+    assert.equal(root.dataset.motion, 'snap');
+    h.step(1532);
+    assert.equal(root.dataset.motion, 'continuous');
+    h.hide(true);
+    assert.equal(root.dataset.motion, 'snap');
+    assert.equal(h.frames.size, 0);
+    props.playbackMsRef.current = 5000;
+    h.hide(false);
+    assert.equal(root.dataset.motion, 'snap');
+    assert.equal(group.children.filter((p) => p.dataset.lit === 'true').length, 3);
+    h.render({ ...props, map: { ...map, id: 'replacement' } });
+    assert.equal(root.dataset.motion, 'snap');
+    h.render({ ...props, matching: false });
+    assert.equal(root.dataset.motion, 'snap');
+    assert.equal(group.children.length, 0);
+    assert.ok(h.styleReads.length > 0, 'snap commits existing lamp styles');
+  } finally { h.close(); }
+  assert.equal(h.nodes.get('div')!.dataset.motion, 'snap');
+  assert.equal(h.frames.size, 0);
+});
+
+
+test('same-meter pause, seek and visibility restore snap without a dark first-pip replay', () => {
+  const repeated: MeterMap = { id: 'same-meter-snap', durationMs: 1200, bars: [0, 600].map((startMs) => ({
+    startMs, endMs: startMs + 600, numerator: 6, denominator: 4,
+    beatTimesMs: Array.from({ length: 6 }, (_, i) => startMs + i * 100),
+  })) };
+  for (const action of ['pause', 'seek', 'visibility'] as const) {
+    const props: MeterDiceProps = { map: repeated, playbackMsRef: { current: 580 },
+      playback: { progress_ms: 580, is_playing: true }, matching: true, label: 'Localized' };
+    const h = diceHarness(props);
+    try {
+      const root = h.nodes.get('div')!;
+      const group = h.nodes.get('g')!;
+      const pips = [...group.children];
+      h.step(596);
+      const firstWrites = pips[0].dataWrites.length;
+      const reads = h.styleSnapshots.length;
+      if (action === 'pause') {
+        props.playbackMsRef.current = 612;
+        h.render({ ...props, playback: { progress_ms: 612, is_playing: false } });
+      } else if (action === 'seek') {
+        h.step(800);
+      } else {
+        h.hide(true);
+        props.playbackMsRef.current = 612;
+        h.hide(false);
+      }
+      assert.equal(root.dataset.motion, 'snap', action);
+      assert.deepEqual(group.children, pips);
+      assert.equal(pips[0].dataWrites.length, firstWrites, 'no false/true first-pip replay');
+      assert.ok(h.styleSnapshots.slice(reads).every((s) => s.motion === 'snap' && s.lit[0] === 'true'));
+      assert.equal(pips.filter((pip) => pip.dataset.lit === 'true').length, action === 'seek' ? 3 : 1);
+    } finally { h.close(); }
+  }
 });

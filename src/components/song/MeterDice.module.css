@@ -25,21 +25,36 @@
   stroke-width: 2;
 }
 
-.pip {
+.socket {
   fill: var(--muted-foreground);
   opacity: 0.22;
 }
 
-.pip[data-lit='true'] {
+/* Static, small concentric washes; only their opacity changes. */
+.haloOuter, .haloInner, .filament {
   fill: var(--song-accent, var(--primary));
-  opacity: 0.65;
 }
 
-.pip[data-current='true'] {
-  opacity: 1;
-  stroke: var(--song-accent, var(--primary));
-  stroke-width: 3;
+.core {
+  fill: #fff3d6;
 }
+
+.haloOuter, .haloInner, .filament, .core {
+  opacity: 0;
+}
+
+.dice[data-motion='continuous'] .pip > :not(.socket) {
+  transition: opacity 110ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.dice[data-motion='continuous'] .pip[data-lit='true'] > :not(.socket) {
+  transition: opacity 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.pip[data-lit='true'] .haloOuter { opacity: 0.08; }
+.pip[data-lit='true'] .haloInner { opacity: 0.16; }
+.pip[data-lit='true'] .filament { opacity: 0.85; }
+.pip[data-lit='true'] .core { opacity: 0.9; }
 
 .meter {
   min-height: 12px;
@@ -51,6 +66,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .dice[data-motion] .pip > :not(.socket) {
+    transition: none;
+  }
+
   .face {
     /* Also guards an in-flight WAAPI turn when the OS preference changes. */
     transform: none !important;

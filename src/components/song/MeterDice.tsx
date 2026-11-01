@@ -30,7 +30,7 @@ interface DiceView {
   ms: number | null;
   sampledAt: number | null;
   wasPlaying: boolean;
-  pips: SVGCircleElement[];
+  pips: SVGGElement[];
   animation: Animation | null;
 }
 
@@ -69,6 +69,14 @@ function MeterDice({ map, playbackMsRef, playback, matching, label }: MeterDiceP
       view.animation?.cancel();
       view.animation = null;
     };
+    const settleLights = () => {
+      root.dataset.motion = 'snap';
+      // Commit the stable opacity before a later rAF can enable transitions.
+      // Only lifecycle/discontinuity paths read style, never the steady tick.
+      view.pips.forEach((pip) => {
+        if (pip.lastElementChild) void window.getComputedStyle(pip.lastElementChild).opacity;
+      });
+    };
     if (view.map !== map) {
       cancelTurn();
       view.map = map;
@@ -91,6 +99,12 @@ function MeterDice({ map, playbackMsRef, playback, matching, label }: MeterDiceP
         delta < 0 || (!playing && delta !== 0 && (!view.wasPlaying || Math.abs(delta - elapsed) > 50))
         || (playing && view.wasPlaying && (elapsed > 250 || Math.abs(delta - elapsed) > 50))
       );
+      const continuous = animate && playing && view.wasPlaying && !reducedMotion.matches
+        && !discontinuity && elapsed <= 250 && delta != null && delta >= 0
+        && Math.abs(delta - elapsed) <= 50;
+      const wasContinuous = root.dataset.motion === 'continuous';
+      const motion = continuous ? 'continuous' : 'snap';
+      if (root.dataset.motion !== motion) root.dataset.motion = motion;
       const rotate = animate && playing && !reducedMotion.matches && !discontinuity
         && shouldRotateMeterDice(previous, next, view.ms, ms, elapsed);
       const barChanged = previous?.barIndex !== next?.barIndex;
@@ -102,23 +116,43 @@ function MeterDice({ map, playbackMsRef, playback, matching, label }: MeterDiceP
         const positions = getDicePips(next.numerator);
         const radius = next.numerator <= 6 ? 7 : Math.min(7, 20 / Math.ceil(Math.sqrt(next.numerator)));
         view.pips = positions.map(({ x, y }) => {
-          const pip = document.createElementNS(SVG_NS, 'circle');
-          pip.setAttribute('cx', String(x));
-          pip.setAttribute('cy', String(y));
-          pip.setAttribute('r', String(radius));
+          const pip = document.createElementNS(SVG_NS, 'g');
           pip.setAttribute('class', styles.pip);
+          const layers = [
+            [styles.socket, radius], [styles.haloOuter, radius * 1.65],
+            [styles.haloInner, radius * 1.3], [styles.filament, radius],
+            [styles.core, radius * 0.55],
+          ] as const;
+          pip.replaceChildren(...layers.map(([className, r]) => {
+            const circle = document.createElementNS(SVG_NS, 'circle');
+            circle.setAttribute('cx', String(x));
+            circle.setAttribute('cy', String(y));
+            circle.setAttribute('r', String(r));
+            circle.setAttribute('class', className);
+            return circle;
+          }));
           return pip;
         });
         group.replaceChildren(...view.pips);
+        // A new signature needs a committed dark baseline before lighting.
+        settleLights();
+        root.dataset.motion = continuous ? 'continuous' : 'snap';
+      } else if (next && barChanged && continuous) {
+        // Reuse the face, but commit a dark first core before this downbeat.
+        // Keep the other pips lit until continuous motion resumes so they fade.
+        const first = view.pips[0];
+        root.dataset.motion = 'snap';
+        first.dataset.lit = 'false';
+        if (first.lastElementChild) void window.getComputedStyle(first.lastElementChild).opacity;
+        root.dataset.motion = 'continuous';
       }
       if (next && beatChanged) {
         view.pips.forEach((pip, index) => {
           const lit = String(index < next.litCount);
-          const current = String(index === next.beatIndex);
           if (pip.dataset.lit !== lit) pip.dataset.lit = lit;
-          if (pip.dataset.current !== current) pip.dataset.current = current;
         });
       }
+      if (!continuous && (wasContinuous || beatChanged || !animate)) settleLights();
       const bpm = ms == null || !next ? null : getMeterBpm(map, ms);
       const text = bpm == null ? '' : `${Math.round(bpm)} BPM`;
       if (meter.textContent !== text) meter.textContent = text;
@@ -165,7 +199,8 @@ function MeterDice({ map, playbackMsRef, playback, matching, label }: MeterDiceP
     const sync = () => {
       stop();
       if (document.hidden) {
-        view.animation?.pause();
+        cancelTurn();
+        settleLights();
         return;
       }
       // Snapshot updates and visibility restores snap directly, never replay.
@@ -178,12 +213,14 @@ function MeterDice({ map, playbackMsRef, playback, matching, label }: MeterDiceP
     };
     const onMotionPreference = () => {
       if (reducedMotion.matches) cancelTurn();
+      settleLights();
     };
     sync();
     document.addEventListener('visibilitychange', onVisibility);
     reducedMotion.addEventListener('change', onMotionPreference);
     return () => {
       stop();
+      settleLights();
       document.removeEventListener('visibilitychange', onVisibility);
       reducedMotion.removeEventListener('change', onMotionPreference);
     };
