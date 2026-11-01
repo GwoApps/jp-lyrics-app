@@ -15,6 +15,12 @@ export const ODD_DICE_GLOW_WINDOWS: readonly MeterGlowWindow[] = Object.freeze(
     endMs: endMs - (ODD_DICE_FULL_MAP.playbackToSourceOffsetMs ?? 0),
   })),
 );
+/** Current authored BPM, independent of either accelerando window's duration. */
+export function getOddDiceGlowIntensity(bpm: number | null): number {
+  if (bpm == null || !Number.isFinite(bpm) || bpm <= 0) return 0;
+  return 0.2 + 0.8 * Math.max(0, Math.min(1, (bpm - 165) / (230 - 165)));
+}
+
 const VERSION_TOLERANCE_MS = 1000;
 
 interface SongIdentity {

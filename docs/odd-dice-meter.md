@@ -111,3 +111,20 @@ SSR 输出 `data-glow="off"`、`data-glow-motion="paused"`。
 覆盖全部边界、播放自动进出、循环进度、暂停冻结、双向 seek、动态减效、桌面/移动/亮色及错曲/版本拒绝；
 原桌面工具栏回归脚本继续运行。浏览器使用合成 API 状态并拦截所有写请求，visibility 事件为显式测试注入，
 不等同真实 Spotify 设备或操作系统后台切换的听音验收。
+
+外光强度与 caption 共用当前 source-authored BPM（同一次读取，强度使用未四舍五入值），
+不按窗口经过时间计算。Odd Dice 使用
+`0.2 + 0.8 * clamp((bpm - 165) / (230 - 165), 0, 1)`：
+165 BPM 附近为 20%，230 BPM 附近为 100%；缺失、非有限或非正 BPM 为 0。
+两个窗口内相同 BPM 对应相同强度，窗口外仍为 0，230 平台仍按原半开区间淡出。
+通用组件未传 resolver 时保留原 100% 强度。只写独立 glow span 的内联 opacity，
+保留四位小数并规范化字符串，值未变不重复写入；不改变骰面、光点或 caption 亮度。
+原 180ms opacity transition 平滑 BPM 阶梯，reduced-motion 禁过渡但仍采用当前 BPM 强度。
+暂停保持当前强度，确认 seek 与可见性恢复直接读取目标 BPM，不补播旧阶梯；
+轨道和呼吸周期保持不变。真实 Chrome 的强度专项脚本为
+`/root/public-files/jplrc/odd-dice-glow-intensity/verify.cjs`：覆盖两段低/中/高 BPM、
+跨窗口同 BPM 同强度、连续播放单调增强、实际 opacity 中间帧、反向 seek、
+暂停和移动/浅色/reduced-motion。使用合成播放 API，加载真实构建产物；
+不等同真实 Spotify 设备的同步或听感验收。
+旧外光边界回归等待 computed opacity 到达当前 inline target 后再判断可见性，
+而不是把 `data-glow` 已更新或固定 250ms 等待误当作 CSS 过渡已结束。

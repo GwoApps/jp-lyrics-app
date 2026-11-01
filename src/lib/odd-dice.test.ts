@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getOddDiceMap, ODD_DICE_FULL_MAP } from './odd-dice.ts';
+import { getOddDiceMap, getOddDiceGlowIntensity, ODD_DICE_FULL_MAP } from './odd-dice.ts';
 import { getMeterBpm, getMeterFrame, isValidMeterMap } from './meter-dice.ts';
 
 const offset = 2043.875;
@@ -123,4 +123,37 @@ test('exclusive acceleration glow windows convert the current map offset exactly
   assert.equal(getOddDiceMap(song), ODD_DICE_FULL_MAP);
   assert.equal(getOddDiceMap({ ...song, spotify_duration_ms: 121000 }), null);
   assert.equal(getOddDiceMap({ ...song, artist: 'someone else' }), null);
+});
+
+test('glow intensity normalizes authored BPM monotonically, independent of window duration', () => {
+  for (const bpm of [null, NaN, Infinity, -Infinity, 0, -1]) {
+    assert.equal(getOddDiceGlowIntensity(bpm), 0);
+  }
+  const bpms = [120, 165, 175, 190, 197.5, 210, 230, 250];
+  const values = bpms.map(getOddDiceGlowIntensity);
+  assert.equal(values[0], 0.2);
+  assert.equal(values[1], 0.2);
+  assert.ok(Math.abs(getOddDiceGlowIntensity(197.5) - 0.6) < 1e-10);
+  assert.equal(values.at(-2), 1);
+  assert.equal(values.at(-1), 1);
+  assert.ok(values.every((value, i) => i === 0 || value >= values[i - 1]));
+  const windows = [[57866.667, 68000], [138966.667, 143833.333]];
+  const byBpm = windows.map(([start, end]) => new Map(
+    ODD_DICE_FULL_MAP.tempoChanges!.filter((event) => event.startMs >= start && event.startMs < end)
+      .map((event) => {
+        const bpm = getMeterBpm(ODD_DICE_FULL_MAP, player(event.startMs));
+        return [bpm, { intensity: getOddDiceGlowIntensity(bpm), fraction: (event.startMs - start) / (end - start) }];
+      }),
+  ));
+  let shared = 0;
+  let differentFraction = false;
+  for (const [bpm, first] of byBpm[0]) {
+    const second = byBpm[1].get(bpm);
+    if (!second) continue;
+    shared++;
+    assert.equal(first.intensity, second.intensity);
+    if (Math.abs(first.fraction - second.fraction) > 0.01) differentFraction = true;
+  }
+  assert.ok(shared > 1);
+  assert.ok(differentFraction, 'same BPM at different window fractions must still have equal intensity');
 });

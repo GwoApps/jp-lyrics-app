@@ -24,7 +24,7 @@ import LyricTimeAxis from '@/components/song/LyricTimeAxis';
 import SongPlayer from '@/components/song/SongPlayer';
 import SongPlaybackStatus from '@/components/song/SongPlaybackStatus';
 import MeterDice from '@/components/song/MeterDice';
-import { getOddDiceMap, ODD_DICE_GLOW_WINDOWS } from '@/lib/odd-dice';
+import { getOddDiceMap, getOddDiceGlowIntensity, ODD_DICE_GLOW_WINDOWS } from '@/lib/odd-dice';
 import { useSimulatedPlayback } from '@/hooks/useSimulatedPlayback';
 import { previewTimeline } from '@/lib/simulated-playback';
 import Dialog from '@/components/ui/dialog';
@@ -888,7 +888,7 @@ export default function SongViewPage() {
             </div>
           </div>
           {oddDiceMap && (
-            <MeterDice key={id} map={oddDiceMap} glowWindows={ODD_DICE_GLOW_WINDOWS} playbackMsRef={playbackMsRef}
+            <MeterDice key={id} map={oddDiceMap} glowWindows={ODD_DICE_GLOW_WINDOWS} getGlowIntensity={getOddDiceGlowIntensity} playbackMsRef={playbackMsRef}
               playback={playerPlayback} matching={isSameSong} label={t('meterDice.label')} />
           )}
         </div>

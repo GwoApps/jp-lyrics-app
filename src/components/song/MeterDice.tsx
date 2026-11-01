@@ -21,6 +21,8 @@ export interface MeterDiceProps {
   map: MeterMap;
   /** Already in playback coordinates; absent means no song-specific effect. */
   glowWindows?: readonly MeterGlowWindow[];
+  /** Optional song-specific BPM intensity; absent preserves full-strength glow. */
+  getGlowIntensity?: (bpm: number | null) => number;
   playbackMsRef: React.RefObject<number | null>;
   playback: MeterPlayback | null;
   matching: boolean;
@@ -44,10 +46,11 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * A header-sized, local DOM subscriber to useSpotifySync's authoritative ref.
  * No React frame state, independent timer, BPM inference or poll extrapolation.
  */
-function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows }: MeterDiceProps) {
+function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows, getGlowIntensity }: MeterDiceProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const faceRef = useRef<SVGSVGElement>(null);
   const pipsRef = useRef<SVGGElement>(null);
+  const glowRef = useRef<HTMLSpanElement>(null);
   const meterRef = useRef<HTMLSpanElement>(null);
   const viewRef = useRef<DiceView>({
     map: null, frame: null, ms: null, sampledAt: null,
@@ -61,7 +64,8 @@ function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows 
     const face = faceRef.current;
     const group = pipsRef.current;
     const meter = meterRef.current;
-    if (!root || !face || !group || !meter) return;
+    const glowElement = glowRef.current;
+    if (!root || !face || !group || !meter || !glowElement) return;
     const view = viewRef.current;
     if (validationRef.current?.map !== map) validationRef.current = { map, valid: isValidMeterMap(map) };
     const valid = validationRef.current.valid;
@@ -69,6 +73,10 @@ function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows 
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     let raf = 0;
 
+    const setGlowIntensity = (value: number) => {
+      const opacity = String(Number((Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0).toFixed(4)));
+      if (glowElement.style.opacity !== opacity) glowElement.style.opacity = opacity;
+    };
     const setGlowMotion = (active: boolean) => {
       const motion = reducedMotion.matches ? 'static'
         : active && playing && !document.hidden ? 'running' : 'paused';
@@ -101,8 +109,10 @@ function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows 
       const now = performance.now();
       const ms = valid ? meterPlaybackMs(matching, playback, playbackMsRef.current) : null;
       const next = ms == null ? null : getMeterFrame(map, ms);
+      const bpm = ms == null || !next ? null : getMeterBpm(map, ms);
       const glow = next && isInMeterGlowWindow(glowWindows, ms) ? 'active' : 'off';
       if (root.dataset.glow !== glow) root.dataset.glow = glow;
+      setGlowIntensity(glow === 'active' ? (getGlowIntensity ? getGlowIntensity(bpm) : 1) : 0);
       setGlowMotion(glow === 'active');
       const previous = view.frame;
       const elapsed = view.sampledAt == null ? Infinity : now - view.sampledAt;
@@ -165,7 +175,6 @@ function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows 
         });
       }
       if (!continuous && (wasContinuous || beatChanged || !animate)) settleLights();
-      const bpm = ms == null || !next ? null : getMeterBpm(map, ms);
       const text = bpm == null ? '' : `${Math.round(bpm)} BPM`;
       if (meter.textContent !== text) meter.textContent = text;
       if (!next && view.pips.length) {
@@ -214,6 +223,7 @@ function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows 
         setGlowMotion(root.dataset.glow === 'active');
         if (!valid || !matching || !playback || !view.frame || !isInMeterGlowWindow(glowWindows, view.ms)) {
           if (root.dataset.glow !== 'off') root.dataset.glow = 'off';
+          setGlowIntensity(0);
         }
         cancelTurn();
         settleLights();
@@ -242,7 +252,7 @@ function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows 
       document.removeEventListener('visibilitychange', onVisibility);
       reducedMotion.removeEventListener('change', onMotionPreference);
     };
-  }, [map, playbackMsRef, playback, matching, glowWindows]);
+  }, [map, playbackMsRef, playback, matching, glowWindows, getGlowIntensity]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -254,7 +264,7 @@ function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows 
 
   return (
     <div ref={rootRef} className={styles.dice} role="img" aria-label={label} data-glow="off" data-glow-motion="paused" data-state={playback == null ? 'loading' : 'unavailable'}>
-      <span className={styles.glow} aria-hidden="true"><span className={styles.glowBreath} /></span>
+      <span ref={glowRef} className={styles.glow} aria-hidden="true"><span className={styles.glowBreath} /></span>
       <svg ref={faceRef} className={styles.face} viewBox="0 0 100 100" aria-hidden="true" focusable="false">
         <rect className={styles.outline} x="2" y="2" width="96" height="96" rx="22" />
         <g ref={pipsRef} />

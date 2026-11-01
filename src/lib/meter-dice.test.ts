@@ -5,6 +5,7 @@ import test from 'node:test';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
+import { getOddDiceGlowIntensity } from './odd-dice.ts';
 import * as engine from './meter-dice.ts';
 import {
   getDicePips, getMeterFrame, getMeterBpm, isValidMeterMap, meterPlaybackMs, shouldRotateMeterDice,
@@ -199,6 +200,14 @@ class FakeElement {
       return true;
     },
   });
+  readonly opacityWrites: string[] = [];
+  style = new Proxy({ opacity: '' }, {
+    set: (target, key: 'opacity', value: string) => {
+      this.opacityWrites.push(value);
+      target[key] = String(Number(value));
+      return true;
+    },
+  });
   readonly tagName: string;
   constructor(tagName = '') { this.tagName = tagName; }
   get lastElementChild(): FakeElement | null { return this.children.at(-1) ?? null; }
@@ -280,10 +289,11 @@ function diceHarness(initial: MeterDiceProps) {
   const Dice = loadDice(hooks) as (props: MeterDiceProps) => React.ReactNode;
   const nodes = new Map<string, FakeElement>();
   const attach = (node: React.ReactNode) => {
-    if (!React.isValidElement<{ ref?: { current: unknown }; children?: React.ReactNode }>(node)) return;
+    if (!React.isValidElement<{ ref?: { current: unknown }; className?: string; children?: React.ReactNode }>(node)) return;
     if (node.props.ref && typeof node.type === 'string') {
-      const element = nodes.get(node.type) ?? new FakeElement();
-      nodes.set(node.type, element);
+      const key = node.props.className === 'glow' ? 'glow' : node.type;
+      const element = nodes.get(key) ?? new FakeElement();
+      nodes.set(key, element);
       node.props.ref.current = element;
     }
     React.Children.forEach(node.props.children, attach);
@@ -649,6 +659,7 @@ test('component glow follows the single clock, freezes lifecycle changes and nev
   };
   try {
     state('active', 'running');
+    assert.equal(h.nodes.get('glow')!.style.opacity, '1');
     const writes = () => root.dataWrites.filter(([key]) => key.startsWith('glow')).length;
     const before = writes();
     h.step(1216); h.step(1232);
@@ -694,4 +705,89 @@ test('component glow follows the single clock, freezes lifecycle changes and nev
   assert.equal(h.frames.size, 0);
   assert.equal(h.visibility.size, 0);
   assert.equal(h.preference.size, 0);
+});
+
+test('BPM intensity shares caption tempo, writes only changes and preserves other layers across lifecycle', () => {
+  const tempoMap: MeterMap = { ...map, tempoChanges: [
+    { startMs: 1000, bpm: 165 }, { startMs: 1750, bpm: 197.5 },
+    { startMs: 4500, bpm: 230 },
+  ] };
+  const props: MeterDiceProps = { map: tempoMap,
+    glowWindows: [{ startMs: 1200, endMs: 5500 }],
+    getGlowIntensity: getOddDiceGlowIntensity,
+    playbackMsRef: { current: 1200 }, playback: { progress_ms: 1200, is_playing: true },
+    matching: true, label: 'Localized' };
+  const h = diceHarness(props);
+  try {
+    const glow = h.nodes.get('glow')!;
+    const caption = h.nodes.get('span')!;
+    const originalPips = h.nodes.get('g')!.children.flatMap((pip) => [pip, ...pip.children]);
+    assert.notEqual(glow, caption);
+    assert.equal(glow.style.opacity, '0.2');
+    assert.equal(caption.textContent, '165 BPM');
+    h.step(1216); h.step(1232);
+    assert.deepEqual(glow.opacityWrites, ['0.2'], 'normalized opacity never rewrites trailing zeroes');
+    h.step(1750);
+    assert.equal(glow.style.opacity, '0.6');
+    assert.equal(caption.textContent, '198 BPM');
+    h.step(4500);
+    assert.equal(glow.style.opacity, '1');
+    h.step(1200);
+    assert.equal(glow.style.opacity, '0.2');
+    const paused = { ...props, playback: { progress_ms: 1200, is_playing: false } };
+    h.render(paused);
+    assert.equal(glow.style.opacity, '0.2');
+    assert.equal(h.frames.size, 0);
+    props.playbackMsRef.current = 4500;
+    h.render({ ...paused, playback: { ...paused.playback } });
+    assert.equal(glow.style.opacity, '1', 'confirmed paused seek overrides old snapshot');
+    props.playbackMsRef.current = 1750;
+    h.render(paused);
+    assert.equal(glow.style.opacity, '0.6');
+    h.reduce(true);
+    assert.equal(glow.style.opacity, '0.6');
+    assert.equal(h.nodes.get('div')!.dataset.glowMotion, 'static');
+    h.render(props);
+    h.step(1200);
+    assert.equal(glow.style.opacity, '0.2', 'reduced motion still follows BPM');
+    h.reduce(false);
+    h.hide(true);
+    assert.equal(glow.style.opacity, '0.2');
+    props.playbackMsRef.current = 4500;
+    h.hide(false);
+    assert.equal(glow.style.opacity, '1');
+    h.step(5500);
+    assert.equal(glow.style.opacity, '0');
+    for (const changed of [{ matching: false }, { playback: null },
+      { map: { ...tempoMap, bars: [] } }, { map: { ...tempoMap, tempoChanges: undefined } }]) {
+      h.step(4500);
+      h.render({ ...props, ...changed });
+      assert.equal(glow.style.opacity, '0');
+      h.render(props);
+    }
+    props.playbackMsRef.current = null;
+    h.render({ ...props, playback: { ...props.playback! } });
+    assert.equal(glow.style.opacity, '0', 'missing playing clock');
+    h.step(4500);
+    h.hide(true);
+    h.render({ ...props, matching: false });
+    assert.equal(glow.style.opacity, '0', 'hidden mismatch clears inline intensity');
+    for (const node of [...h.nodes.values(), ...originalPips]) {
+      if (node !== glow) assert.deepEqual(node.opacityWrites, [], 'only glow wrapper receives opacity');
+    }
+  } finally { h.close(); }
+});
+
+test('component clamps nonfinite and out-of-range intensity resolvers', () => {
+  const props: MeterDiceProps = { map, glowWindows: [{ startMs: 1200, endMs: 5500 }],
+    playbackMsRef: { current: 1500 }, playback: { progress_ms: 1500, is_playing: true },
+    matching: true, label: 'Localized' };
+  const h = diceHarness(props);
+  try {
+    for (const [value, expected] of [[NaN, '0'], [Infinity, '0'], [-Infinity, '0'],
+      [-0.5, '0'], [1.5, '1'], [0.123456, '0.1235']] as const) {
+      h.render({ ...props, getGlowIntensity: () => value });
+      assert.equal(h.nodes.get('glow')!.style.opacity, expected);
+    }
+  } finally { h.close(); }
 });
