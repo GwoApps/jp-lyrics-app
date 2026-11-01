@@ -1,44 +1,72 @@
-# Odd Dice 分段估算节拍
+# Odd Dice 拍表与上传音频对齐
 
-仅为 Odd Dice / millsage 的 248828 ms 录音启用，时长门控仍为 ±1000 ms；未知时长、错误歌曲、121 秒游戏版及 253 秒视频时长都不能启用。运行时已替换为最新 CSV 确定性生成的估算拍点，不再使用旧逐帧拍点或旧 BPM 读数。
+当前运行图为 `odd-dice-audio-aligned-v3`，由 **138 个编号小节、733 个逐帧观测拍点、63 个视频 BPM 读数事件**组成。所有小节拍数严格等于分子，推测拍点为 0；不再把整张图标为 estimated/partial。来源是社区视频转写，不是官方乐谱。
 
-## 来源与精度
+## 数字来源与坐标
 
-来源为鹤翔万里的同人视频 [BV1YhJq6LE4Q](https://www.bilibili.com/video/BV1YhJq6LE4Q/)。作者说明完整版新增部分为耳听转录，不是官方乐谱。输入来自公开交付物 `odd_dice_full_sections.csv`，边界依据该交付物 README、index.html 第 3/4 节及 `full_version_metre_map.md`；导出器把 bpm_min/bpm_max 写入 bpmFrom/bpmTo，不能把它们当成有向端点。
+- `src/lib/meter-maps/odd-dice.observed-source.json`：原始数字快照，SHA256 `ca653cb011ee49778cff02b5dc92e10a52ab3aa2efa75f6c1afad2e8828d4ae8`。
+- `odd-dice.tempo-readouts.json`：原视频可读 BPM 变化，SHA256 `4c0bb0dfbe03f2441ed562e523463fa8152c2b7773625aaf567965c9bcaec0a9`。200ms 读数采样；数字变形时保持最后可靠读数，不用约 33ms 量化拍间距反算 BPM，不使用旧 170/188 阶梯估计或 139→124 线性 ramp。
+- `odd-dice.full.sections.csv`：保留原 32 段粗尺度对照，SHA256 `6c61f6f4b9543d55a4f43e9569b105489352bb882f655ede483a69afa837ea23`。它不再生成拍点或 BPM；粗边界可能与观测首拍相差数百毫秒（例如 7500 与 7300），不能吸附为下拍锚点。
+- `odd-dice.alignment-summary.json`：14,836 字节的数字证据摘要，含 9 高能窗、50 密集窗、拟合与验证结果、被剔除的尾音歧义和光点交叉检查。无私有路径、波形或音视频。
 
-原 CSV（包括 UTF-8 BOM）快照位于 `src/lib/meter-maps/odd-dice.full.sections.csv`。JSON 保存原字节 SHA-256、全部 32 行的字段、每行运行时裁剪区间、`sourceResolutionMs=500`、`estimated=true` 和生成假设。2 fps 的源段边界精度为 ±0.5 秒，源小节积分推算约 ±10%；生成时间的小数位只是数值序列化精度，不代表测量精度。所有运行时拍点都是估算，接受精度下降；旧 138 小节/733 个观测拍点不再是运行数据。
+运行 bar/beat/BPM 数值原样保留源视频坐标，不积分、不插值、不强造播放零点首拍。统一 lookup 使用：
 
-## 确定性算法与假设
+```text
+sourceVideoMs = uploadedAudioMs + 2043.875
+playbackToSourceOffsetMs = +2043.875
+scale = 1
+```
 
-- 相等 BPM 按常速处理，170、188 也是阶梯近似。第 18/28 段的 228–230 近似为 230 平台，不在整个 29/75.5 秒缓慢爬升。
-- 第 31 段依据来源的 ritardando，按 232000–249500 ms 内 139→124 做线性时间渐慢；保持完整源端点，不因播放坐标映射缩短或重定时。
-- 常速积分为 BPM × dt / 60000；线性速度积分为 (BPM × dt + slope × dt² / 2) / 60000。整数累计相位对应拍点，解二次式使用有理化正根，避免相消。仅离线生成，播放时二分查表；BPM 可在同一拍内线性读取。
-- 同拍号跨速度段连续累计拍/小节相位。拍号变化和自由段后才以 CSV 边界重置，使用 7.5、9、11.5、96.5、121.5、125、229.5 秒等源边界，不吸附旧实测时间。
-- 源视频 0–0.5 秒未知，500ms 起点不是实测下拍；保留播放零点之前的源拍点和小节。源 219–229.5 秒自由段映射为 Spotify 216090.909091–226590.909091ms，随后重入 3/4。
-- 用户明确校准“Spotify 到 0:00 时，视频已到约 0:02.91”：两个 4/4 小节、8 个四分音符、开头 165 BPM。固定 `playbackToSourceOffsetMs = 8 * 60000 / 165 = 2909.090909090909ms`，`sourceVideoMs = spotifyPlaybackMs + offset`，不伸缩。此为手动锚点，不是全曲音频指纹验证。
-- lookup 先校验 Spotify [0,248828)，再映射源时间；节拍与 BPM 共用映射，播放器、歌词、单时钟和 DOM 不变。源表保留从 500ms 开始的相位，生成上限为 251737.090909ms；源 249500ms 开始的自由尾段映射为 Spotify 246590.909091ms，此后直到录音末尾无拍/BPM。源推算小节数不参与凑整或压缩速度。
-- JSON v2 的 `runtimeStartMs/runtimeEndMs` 为 Spotify 裁剪坐标；`sourceGenerationStartMs/sourceGenerationEndMs` 为源积分区间。`clipping` 分别记录播放窗口、源查询窗口、源生成窗口和原始源终点。校准依据与原 CSV hash、500ms 精度、estimated 标记一并保存。
-- 每个同拍号连续区间尾部保留不足整小节的部分：`partial=true` 且小节和 map 都标记 `estimated=true`。保留真实分子，拍数组只有边界前实际生成的 1..N 拍；最后一拍被截短时即使拍数齐全也标记 partial。普通 map 仍必须拍数等于分子。尾部不留空白、不越界补拍。粗边界重置可能截短上一拍，因此跨拍号边界的间距不代表 BPM；同一连续相位内不会为凑拍制造密集点。
+上传音频时长 248828.639ms，应用仍用 `durationMs = 248828`；不因 0.639ms 差值拉伸时间轴。歌曲身份和 ±1000ms 时长门控保持不变。这是运行时版本筛选，不意味着任意同长度录音均已验证。
 
-源 7500/9000/96500/121500ms 分别映射到 Spotify 4590.909091/6090.909091/93590.909091/118590.909091ms。源 240750ms（播放 237840.909091ms）仍为 131.5 BPM。Spotify 零点继承已有小节第 3 个亮点，不补假首拍。固定校准不消除粗分段估算误差，也未验证两音频全曲一致。
+| 源坐标 ms | 播放坐标 ms | 含义 |
+| --- | --- | --- |
+| 2933.333 | 889.458 | 首个观测 4/4 小节；此前未知 |
+| 7300 | 5256.125 | 首个 5/4 |
+| 96566.667 | 94522.792 | 4/4 重入 |
+| 121366.667 | 119322.792 | 3/4 |
+| 219200 | 217156.125 | 无拍区开始 |
+| 230933.333 | 228889.458 | 3/4 重入 |
+| 248800 | 246756.125 | 转写观测覆盖终点 |
 
-当前结果：**157 小节、766 个估算拍点、30 个速度段、24 个 partial 小节**。这些数量不是源视频的小节编号。
+源 219200–230933.333（含未收入拍表的 count-in）不造拍。源 248800 是原转写人工设定的观察边界，不是音频真实结束或官方小节终点；播放 246756.125 至 248828 始终未知/无拍。未补入未经确认的 intro/click 拍点。
 
-## 重建与验证
+## 实测范围与精度
 
-仅需仓库现有 Node 环境，无需私人素材、新依赖或网络：
+源音频 SHA256：`c5821ed7f1e10e318911d7469c7d9650e7c7ae226603ca156ec2d07d8813e31d`；上传 OGG SHA256：`113cce1a5599ad4a48d31eb98c8ff684683ea5aed60fa8f50b68674a8c303dad`。
+
+校准类型是 `waveform-multi-anchor`。16kHz 解码下偏移为 32702 个采样点。9 个前中后高能 8 秒窗，以及 50 个密集窗中的 49 个无歧义窗，均定位同一偏移；不是凭时长猜测同版本。密集窗从上传 0ms 覆盖至末个 240828.625ms 起始的 8 秒窗。240000ms 衰减尾音存在多峰，原峰保留并从拟合剔除，不能解读为漂移或剪辑。
+
+接受窗常数偏移 RMS 残差为 0ms，线性拟合最大绝对残差约 8.73e-11ms、漂移约 −2.22e-10 ppm（数值浮点误差尺度），未测到变速漂移或内部剪辑。独立 verification 为 PASS，并校验输入哈希、直接相关与 FFT 结果；父进程另已复核 12/99/189.5 秒三个窗。这些是既有音频分析证据，本轮没有重新听完全曲或验证 Spotify 实机。
+
+源视频混入额外节拍 click。独立残差交叉检查显示 733 个视觉拍点全部在残差峰 ±60ms 内，中位“残差峰减视觉拍点”为 −12.792ms。视觉观测来源为 30fps（约 33.333ms 帧网格），并非每拍音频拍号独立验证。0.0625ms 仅是解码波形匹配采样网格，不承诺视觉拍表、歌词或 Spotify 设备达到该精度。历史手动 +2909.091ms 已被共享波形证据推翻，不作 fallback。
+
+## 可重复生成与更新
+
+默认只读取仓库数字文件，无私有路径、音频、网络或新增依赖：
 
 ```sh
 node scripts/import-odd-dice-map.mjs
-# 可选：显式 CSV 输入及输出路径
-node scripts/import-odd-dice-map.mjs path/to/sections.csv path/to/map.json
-node --experimental-strip-types --experimental-loader ./scripts/test-loader.mjs --test scripts/import-odd-dice-map.test.mjs src/lib/odd-dice.test.ts src/lib/meter-dice.test.ts
-npx tsc --noEmit
 ```
 
-脚本严格逐行检查列、数字、时间标签、编号、连续顺序、拍号、速度范围及源边界；全部生成成功才原子替换输出。相同输入生成 byte-identical JSON。专项测试核对全部源行、全部拍点积分及查询边界、裁剪、版本门控、partial 限定和无效合成 CSV 不覆盖有效输出。合成异常 fixture 不是实测谱。组件回归继续覆盖暂停、seek、visibility、reduced-motion 和灯泡行为。
+显式输入/输出（五个参数必须全部提供）：
 
-本轮不启动浏览器/服务，不进行真实 Spotify 设备听感验证；宿主父进程负责串行 `npm run check`、`npm run build` 和最终发布。未复制音视频、notes 或游戏版数据。
+```sh
+node scripts/import-odd-dice-map.mjs observed.json tempo.json alignment.json sections.csv output.json
+```
+
+同一输入生成 byte-identical JSON。生成器校验严格计数、有限数值、单调性、拍数、零推测拍、对齐符号与验证结果，并固定已审核输入 SHA256。独立路径可以放置相同快照；更新内容时必须独立复核新证据，再同步修改脚本中的哈希/计数/校准约束和测试，不能直接接受未经审核的新谱。所有输入先完成解析与验证，再用同目录 pending 文件原子替换输出；无效输入不会覆盖现有图。
+
+专项检查：
+
+```sh
+node --experimental-strip-types --experimental-loader ./scripts/test-loader.mjs --test scripts/import-odd-dice-map.test.mjs src/lib/odd-dice.test.ts src/lib/meter-dice.test.ts
+npx tsc --noEmit
+npx eslint scripts/import-odd-dice-map.mjs scripts/import-odd-dice-map.test.mjs src/lib/odd-dice.ts src/lib/odd-dice.test.ts --max-warnings 0
+git diff --check
+```
+
+测试覆盖原始 138/733/63 全值、全部边界的源/播放 lookup 等价、未知区、输入异常不覆盖、可重复生成、哈希与 offset 符号；保留默认零偏移、无穷偏移和 partial 合同回归。宿主父进程负责完整 check/build、独立审查与发布。
 
 ## Presentation
 

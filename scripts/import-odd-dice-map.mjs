@@ -3,126 +3,96 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 
-const snapshot = new URL('../src/lib/meter-maps/odd-dice.full.sections.csv', import.meta.url);
-const target = new URL('../src/lib/meter-maps/odd-dice.full.json', import.meta.url);
-const header = '段,start_s,start,end_s,end,拍子,bpmFrom,bpmTo,推算小节数';
-const durationMs = 248828;
-const playbackToSourceOffsetMs = 8 * 60000 / 165;
-const sourceGenerationEndMs = durationMs + playbackToSourceOffsetMs;
-const round = (n) => Math.round(n * 1e6) / 1e6;
+const root = new URL('../src/lib/meter-maps/', import.meta.url);
+const defaults = ['odd-dice.observed-source.json', 'odd-dice.tempo-readouts.json',
+  'odd-dice.alignment-summary.json', 'odd-dice.full.sections.csv', 'odd-dice.full.json'].map(n => new URL(n, root));
+const hash = raw => createHash('sha256').update(raw).digest('hex');
+const finite = n => assert.ok(typeof n === 'number' && Number.isFinite(n), 'Finite numeric value required');
+const observedHash = 'ca653cb011ee49778cff02b5dc92e10a52ab3aa2efa75f6c1afad2e8828d4ae8';
+const tempoHash = '4c0bb0dfbe03f2441ed562e523463fa8152c2b7773625aaf567965c9bcaec0a9';
 
-// Strict source-specific CSV dialect: no quoted fields, missing cells or extra columns.
-export function parseSections(raw) {
-  const lines = raw.replace(/^\uFEFF/u, '').trimEnd().split(/\r?\n/u);
-  assert.equal(lines.shift(), header, 'CSV columns');
-  assert.equal(lines.length, 32, 'Expected all 32 source sections');
-  let previousEnd = 500;
-  const number = (s) => {
-    assert.match(s, /^\d+(?:\.\d+)?$/u, 'Invalid numeric cell');
-    const n = Number(s);
-    assert.ok(Number.isFinite(n));
-    return n;
-  };
-  const clock = (s) => {
-    assert.match(s, /^\d+:[0-5]\d\.\d{3}$/u);
-    const [m, sec] = s.split(':').map(Number);
-    return (m * 60 + sec) * 1000;
-  };
-  const sections = lines.map((line, i) => {
-    const cells = line.split(',');
-    assert.equal(cells.length, 9, `Row ${i + 1}`);
-    const [id, start, startLabel, end, endLabel, meter, from, to, count] = cells;
-    assert.equal(number(id), i + 1);
-    const startMs = number(start) * 1000, endMs = number(end) * 1000;
-    assert.equal(startMs, previousEnd, 'Ordered contiguous source sections');
-    assert.ok(endMs > startMs && endMs <= 253000);
-    assert.equal(startMs, clock(startLabel));
-    assert.equal(endMs, clock(endLabel));
-    assert.ok(['3/4', '4/4', '5/4', '6/4', 'senza tempo'].includes(meter));
-    const bpmMin = number(from), bpmMax = number(to), estimatedBars = number(count);
-    assert.ok(bpmMin > 0 && bpmMin <= bpmMax && bpmMax <= 300);
-    if (meter === 'senza tempo') assert.equal(estimatedBars, 0);
-    else assert.ok(estimatedBars > 0);
-    let strategy = 'constant';
-    if (bpmMin !== bpmMax) {
-      if ([18, 28].includes(i + 1) && bpmMin === 228 && bpmMax === 230) strategy = '230-platform';
-      else if (i === 30 && bpmMin === 124 && bpmMax === 139 && startMs === 232000 && endMs === 249500) strategy = 'linear-ritardando';
-      else assert.fail('Unsupported BPM range');
+export function generateMap(observedRaw, tempoRaw, alignmentRaw, csvRaw) {
+  const observed = JSON.parse(observedRaw), tempo = JSON.parse(tempoRaw), alignment = JSON.parse(alignmentRaw);
+  assert.equal(observed.barCount, 138);
+  assert.equal(observed.bars.length, 138);
+  let end = 0, count = 0;
+  const bars = observed.bars.map((b, i) => {
+    assert.equal(b.bar, i + 1);
+    finite(b.startMs); finite(b.endMs);
+    assert.ok(b.startMs >= end && b.endMs > b.startMs && b.endMs <= 248800);
+    assert.ok(Number.isSafeInteger(b.numerator) && b.numerator > 0);
+    assert.equal(b.denominator, 4);
+    assert.equal(b.beatTimesMs.length, b.numerator);
+    assert.deepEqual(b.inferredBeatTimesMs, [], 'Inferred beats are not accepted');
+    assert.equal(b.beatTimesMs[0], b.startMs);
+    let previous = -Infinity;
+    for (const beat of b.beatTimesMs) {
+      finite(beat); assert.ok(beat > previous && beat >= b.startMs && beat < b.endMs);
+      previous = beat; count++;
     }
-    if (meter === 'senza tempo') strategy = 'unmetered';
-    previousEnd = endMs;
-    return { section: i + 1, startMs, endMs, meter, bpmMin, bpmMax, estimatedBars, strategy,
-      runtimeStartMs: startMs < sourceGenerationEndMs ? Math.max(0, startMs - playbackToSourceOffsetMs) : null,
-      runtimeEndMs: startMs < sourceGenerationEndMs ? Math.min(endMs - playbackToSourceOffsetMs, durationMs) : null,
-      sourceGenerationStartMs: startMs < sourceGenerationEndMs ? startMs : null,
-      sourceGenerationEndMs: startMs < sourceGenerationEndMs ? Math.min(endMs, sourceGenerationEndMs) : null };
+    end = b.endMs;
+    return { startMs: b.startMs, endMs: b.endMs, numerator: b.numerator, denominator: b.denominator, beatTimesMs: b.beatTimesMs };
   });
-  assert.equal(previousEnd, 253000);
-  return sections;
-}
-
-export function generateMap(raw) {
-  const sourceSections = parseSections(raw);
-  const bars = [], tempoChanges = [];
-  let group = null;
-  const finish = () => {
-    if (!group) return;
-    for (let i = 0; i < group.beats.length; i += group.numerator) {
-      const beatTimesMs = group.beats.slice(i, i + group.numerator);
-      const endMs = group.beats[i + group.numerator] ?? group.endMs;
-      // A truncated final beat also makes a full-count bar partial.
-      const partial = i + group.numerator > group.phase + 1e-9;
-      bars.push({ startMs: beatTimesMs[0], endMs, numerator: group.numerator, denominator: 4,
-        beatTimesMs, ...(partial ? { estimated: true, partial: true } : {}) });
-    }
-    group = null;
-  };
-  for (const s of sourceSections) {
-    if (s.sourceGenerationStartMs === null) continue;
-    if (s.strategy === 'unmetered') { finish(); continue; }
-    const numerator = Number(s.meter[0]);
-    if (group && group.numerator !== numerator) finish();
-    if (!group) group = { numerator, beats: [], phase: 0, endMs: s.startMs };
-    const bpm = s.strategy === 'linear-ritardando' ? 139 : s.bpmMax;
-    const slope = s.strategy === 'linear-ritardando' ? (124 - 139) / (s.endMs - s.startMs) : 0;
-    tempoChanges.push({ startMs: s.startMs, bpm,
-      ...(slope ? { endMs: s.endMs, endBpm: 124 } : {}) });
-    const dt = s.sourceGenerationEndMs - s.startMs;
-    const phaseEnd = group.phase + (bpm * dt + slope * dt * dt / 2) / 60000;
-    for (let beat = Math.ceil(group.phase - 1e-9); beat < phaseEnd - 1e-9; beat++) {
-      const area = Math.max(0, beat - group.phase) * 60000;
-      // Rationalized quadratic root avoids cancellation for shallow ramps.
-      const offset = slope ? 2 * area / (bpm + Math.sqrt(bpm * bpm + 2 * slope * area)) : area / bpm;
-      group.beats.push(round(s.startMs + offset));
-    }
-    group.phase = phaseEnd;
-    group.endMs = s.sourceGenerationEndMs;
+  assert.equal(count, 733);
+  assert.equal(end, 248800);
+  assert.equal(tempo.changes.length, 63);
+  let previous = -Infinity;
+  for (const t of tempo.changes) {
+    finite(t.startMs); finite(t.bpm);
+    assert.ok(t.startMs > previous && t.startMs >= 0 && t.startMs < end && t.bpm > 0);
+    assert.deepEqual(Object.keys(t).sort(), ['bpm', 'startMs']);
+    previous = t.startMs;
   }
-  finish();
+  // Pinned evidence prevents silently changing the verified transcription or calibration.
+  assert.equal(hash(observedRaw), observedHash, 'Unreviewed observed snapshot');
+  assert.equal(hash(tempoRaw), tempoHash, 'Unreviewed tempo snapshot');
+  assert.equal(alignment.kind, 'waveform-multi-anchor');
+  assert.equal(alignment.signConvention, 'sourceVideoMs = uploadedAudioMs + offsetMs');
+  assert.equal(alignment.sourceHash, 'c5821ed7f1e10e318911d7469c7d9650e7c7ae226603ca156ec2d07d8813e31d');
+  assert.equal(alignment.targetHash, '113cce1a5599ad4a48d31eb98c8ff684683ea5aed60fa8f50b68674a8c303dad');
+  assert.equal(alignment.offsetSamples, 32702); assert.equal(alignment.sampleRate, 16000);
+  assert.equal(alignment.offsetMs, alignment.offsetSamples * 1000 / alignment.sampleRate);
+  assert.equal(alignment.scale, 1);
+  assert.equal(alignment.verification.status, 'PASS');
+  assert.equal(alignment.verification.inputHashesVerified, true);
+  assert.equal(alignment.verification.offsetMs, alignment.offsetMs);
+  assert.equal(alignment.anchors.length, 9); assert.equal(alignment.denseAnchors.length, 50);
+  const accepted = alignment.denseAnchors.filter(a => a.acceptedForFit === true);
+  assert.equal(accepted.length, 49);
+  for (const a of [...alignment.anchors, ...accepted]) {
+    finite(a.uploadedAudioMs); finite(a.sourceVideoMs); finite(a.correlation);
+    finite(a.offsetMs); assert.ok(Math.abs(a.offsetMs - alignment.offsetMs) < 1e-7);
+    assert.ok(Math.abs(a.sourceVideoMs - a.uploadedAudioMs - alignment.offsetMs) < 1e-7);
+  }
+  assert.equal(alignment.opticalBeatCrossCheck.sha256, observedHash);
+  assert.equal(alignment.opticalBeatCrossCheck.observedBeatCount, count);
+  assert.equal(csvRaw.trimEnd().split(/\r?\n/u).length, 33);
+  assert.equal(hash(csvRaw), '6c61f6f4b9543d55a4f43e9569b105489352bb882f655ede483a69afa837ea23', 'Unreviewed coarse snapshot');
+  assert.equal(hash(alignmentRaw), '083e7c5d67c2cd97071f1aaa0c8b2babec0149af57c5307436f493608bb881a2', 'Unreviewed alignment evidence');
   return {
-    id: 'odd-dice-full-sections-estimated-v2', durationMs, playbackToSourceOffsetMs, estimated: true,
-    calibration: { kind: 'user-confirmed-manual-anchor', beats: 8, meter: '4/4', bars: 2, bpm: 165,
-      mapping: 'sourceVideoMs = spotifyPlaybackMs + playbackToSourceOffsetMs',
-      playbackAnchorMs: 0, sourceAnchorMs: playbackToSourceOffsetMs, fullTrackAudioVerified: false },
-    source: 'https://www.bilibili.com/video/BV1YhJq6LE4Q/', sourceKind: 'community-transcription-estimate',
-    sourceSha256: createHash('sha256').update(raw).digest('hex'), sourceResolutionMs: 500,
-    method: 'Piecewise tempo integral; integer phase beats; meter/free-time resets; timestamps rounded to 0.000001 ms for serialization only.',
-    assumptions: ['BPM columns are min/max, not directed endpoints.', 'Equal BPM values use constant staircase tempo, including 170 and 188.',
-      'Sections 18/28 approximate entry range 228–230 as a 230 platform.',
-      'Section 31 is linear in time from 139 to 124 over 232000–249500 ms.',
-      'Same-meter tempo boundaries retain beat/bar phase; source estimated bar counts are metadata only.',
-      'Source boundaries ±500 ms; source integrated bar estimates ±10%; all runtime beats estimated.'],
-    clipping: { playbackStartMs: 0, playbackEndMs: durationMs,
-      sourceLookupStartMs: playbackToSourceOffsetMs, sourceLookupEndMs: sourceGenerationEndMs,
-      sourceGenerationStartMs: 500, sourceGenerationEndMs, originalSourceEndMs: 253000,
-      sectionRuntimeCoordinates: 'spotify-playback', tableCoordinates: 'source-video', scale: 1 },
-    sourceSections, tempoChanges, bars,
+    id: 'odd-dice-audio-aligned-v3', durationMs: 248828, playbackToSourceOffsetMs: alignment.offsetMs,
+    source: 'https://www.bilibili.com/video/BV1YhJq6LE4Q/', sourceKind: 'video-frame-observed+waveform-aligned',
+    sourceSha256: observedHash, tempoSourceSha256: tempoHash, sourceFrameRate: 30,
+    sourceResolutionMs: 1000 / 30, inferredBeatCount: 0,
+    method: 'Unmodified observed source bars/beats and displayed BPM events; no integration, interpolation or boundary snapping.',
+    coverage: { coordinates: 'source-video', startMs: bars[0].startMs, endMs: end,
+      endMeaning: 'Transcription observation boundary, not audio end or official bar endpoint',
+      gaps: observed.unmetered, outsideCoverage: 'unknown; no beats' },
+    calibration: { kind: alignment.kind, mapping: alignment.signConvention, sourceHash: alignment.sourceHash,
+      targetHash: alignment.targetHash, offsetSamples: alignment.offsetSamples, sampleRate: alignment.sampleRate,
+      scale: alignment.scale, summarySha256: hash(alignmentRaw), highEnergyWindows: 9, acceptedDenseWindows: 49,
+      totalDenseWindows: 50, denseLinearFit: alignment.denseLinearFit,
+      opticalBeatCrossCheck: alignment.opticalBeatCrossCheck,
+      caveat: 'Decoded waveform alignment; 240s ambiguous tail excluded. Not official score, per-beat audio verification or Spotify device validation.' },
+    coarseAudit: { file: 'odd-dice.full.sections.csv', sha256: hash(csvRaw), sections: 32,
+      role: 'Coarse source comparison only; not runtime beat or tempo anchors' },
+    tempoChanges: tempo.changes, bars,
   };
 }
 
-export async function writeMap(input = snapshot, output = target) {
-  const payload = generateMap(await readFile(input, 'utf8'));
-  // Validate/generate completely before touching the destination; atomic replacement.
+export async function writeMap(observed = defaults[0], tempo = defaults[1], alignment = defaults[2], csv = defaults[3], output = defaults[4]) {
+  const raws = await Promise.all([observed, tempo, alignment, csv].map(p => readFile(p, 'utf8')));
+  const payload = generateMap(...raws);
   const destination = output instanceof URL ? fileURLToPath(output) : output;
   const temporary = `${destination}.pending`;
   await writeFile(temporary, `${JSON.stringify(payload, null, 2)}\n`);
@@ -130,7 +100,8 @@ export async function writeMap(input = snapshot, output = target) {
   return payload;
 }
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
-  const map = await writeMap(process.argv[2], process.argv[3]);
-  console.log(JSON.stringify({ bars: map.bars.length, beats: map.bars.reduce((n, b) => n + b.beatTimesMs.length, 0),
-    tempo: map.tempoChanges.length, partial: map.bars.filter((b) => b.partial).length }));
+  assert.ok(process.argv.length === 2 || process.argv.length === 7,
+    'Usage: node scripts/import-odd-dice-map.mjs [observed.json tempo.json alignment.json sections.csv output.json]');
+  const map = await writeMap(...process.argv.slice(2));
+  console.log(JSON.stringify({ bars: map.bars.length, beats: map.bars.reduce((n, b) => n + b.beatTimesMs.length, 0), tempo: map.tempoChanges.length }));
 }

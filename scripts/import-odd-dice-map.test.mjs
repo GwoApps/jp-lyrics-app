@@ -1,87 +1,72 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { generateMap, parseSections, writeMap } from './import-odd-dice-map.mjs';
+import { generateMap, writeMap } from './import-odd-dice-map.mjs';
 
-const raw = await readFile(new URL('../src/lib/meter-maps/odd-dice.full.sections.csv', import.meta.url), 'utf8');
-const stored = await readFile(new URL('../src/lib/meter-maps/odd-dice.full.json', import.meta.url), 'utf8');
-const offset = 8 * 60000 / 165;
-const rows = raw.replace(/^\uFEFF/u, '').trimEnd().split(/\r?\n/u).map((s) => s.split(','));
-// Mutated fixtures are synthetic validation cases, not measured scores.
-const mutate = (row, col, value) => rows.map((r, i) => r.map((v, j) => i === row && j === col ? value : v).join(',')).join('\n');
+const root = new URL('../src/lib/meter-maps/', import.meta.url);
+const names = ['odd-dice.observed-source.json', 'odd-dice.tempo-readouts.json', 'odd-dice.alignment-summary.json', 'odd-dice.full.sections.csv'];
+const raws = await Promise.all(names.map(n => readFile(new URL(n, root), 'utf8')));
+const stored = await readFile(new URL('odd-dice.full.json', root), 'utf8');
+const hash = raw => createHash('sha256').update(raw).digest('hex');
 
-test('all 32 rows retain every source field and exact clipping', () => {
-  const sections = parseSections(raw);
-  for (const [i, s] of sections.entries()) {
-    const r = rows[i + 1];
-    assert.deepEqual([s.section, s.startMs, s.endMs, s.meter, s.bpmMin, s.bpmMax, s.estimatedBars],
-      [Number(r[0]), Number(r[1]) * 1000, Number(r[3]) * 1000, r[5], Number(r[6]), Number(r[7]), Number(r[8])]);
-    assert.equal(s.runtimeStartMs, Math.max(0, s.startMs - offset));
-    assert.equal(s.runtimeEndMs, Math.min(s.endMs - offset, 248828));
-    assert.equal(s.sourceGenerationStartMs, s.startMs);
-    assert.equal(s.sourceGenerationEndMs, Math.min(s.endMs, 248828 + offset));
-  }
-  assert.equal(generateMap(raw).sourceSha256, createHash('sha256').update(raw).digest('hex'));
+test('verified inputs rebuild byte-identical output and preserve evidence', () => {
+  const map = generateMap(...raws), summary = JSON.parse(raws[2]);
+  assert.equal(`${JSON.stringify(map, null, 2)}\n`, stored);
+  assert.equal(map.sourceSha256, hash(raws[0]));
+  assert.equal(map.tempoSourceSha256, hash(raws[1]));
+  assert.equal(map.coarseAudit.sha256, hash(raws[3]));
+  assert.equal(map.calibration.sourceHash, 'c5821ed7f1e10e318911d7469c7d9650e7c7ae226603ca156ec2d07d8813e31d');
+  assert.equal(map.calibration.targetHash, '113cce1a5599ad4a48d31eb98c8ff684683ea5aed60fa8f50b68674a8c303dad');
+  assert.equal(map.playbackToSourceOffsetMs, 2043.875);
+  assert.equal(summary.offsetSamples, 32702);
+  assert.equal(summary.scale, 1);
+  assert.equal(summary.denseAnchors.filter(a => !a.acceptedForFit).length, 1);
+  assert.equal(summary.ambiguousWindowChecks[0].uploadedAudioMs, 240000);
+  assert.equal(summary.opticalBeatCrossCheck.fractionWithResidualPeakWithin60ms, 1);
+  assert.ok(Buffer.byteLength(raws[2]) < 15000);
+  assert.doesNotMatch(raws[2] + stored, /\/root\/|\/tmp\//u);
 });
 
-test('all generated beats solve the continuous phase integral within each meter run', () => {
-  const map = generateMap(raw);
-  let phase = 0, priorMeter = null;
-  for (const s of map.sourceSections) {
-    if (s.runtimeStartMs === null) continue;
-    if (s.meter === 'senza tempo') { priorMeter = null; continue; }
-    if (s.meter !== priorMeter) phase = 0;
-    const p = map.tempoChanges.find((t) => t.startMs === s.startMs);
-    const slope = p.endMs ? (p.endBpm - p.bpm) / (p.endMs - p.startMs) : 0;
-    const integral = (dt) => (p.bpm * dt + slope * dt * dt / 2) / 60000;
-    const beats = map.bars.flatMap((b) => b.beatTimesMs).filter((t) => t >= s.startMs && t < s.sourceGenerationEndMs);
-    const endPhase = phase + integral(s.sourceGenerationEndMs - s.startMs);
-    assert.equal(beats.length, Math.ceil(endPhase - 1e-9) - Math.ceil(phase - 1e-9));
-    for (const t of beats) {
-      const at = phase + integral(t - s.startMs);
-      assert.ok(Math.abs(at - Math.round(at)) < 1e-8);
-    }
-    phase = endPhase;
-    priorMeter = s.meter;
-  }
-});
-
-test('byte-identical rebuild; malformed synthetic CSV never overwrites a valid target', async () => {
-  const dir = await mkdtemp(`${process.env.TMPDIR || '/root/.hermes/cache/scratch'}/odd-dice-test-`);
+test('independent paths repeat deterministically; invalid inputs never overwrite output', async () => {
+  const dir = await mkdtemp(join(process.env.TMPDIR || '/root/.hermes/cache/scratch', 'odd-dice-import-'));
   try {
-    const input = `${dir}/input.csv`, output = `${dir}/map.json`;
-    await writeFile(input, raw);
-    await writeMap(input, output);
+    const paths = names.map(n => join(dir, n)), output = join(dir, 'runtime.json');
+    for (const [i, p] of paths.entries()) await writeFile(p, raws[i]);
+    await writeMap(...paths, output);
     assert.equal(await readFile(output, 'utf8'), stored);
-    await writeMap(input, output);
+    await writeMap(...paths, output);
     assert.equal(await readFile(output, 'utf8'), stored);
-    const invalid = [raw.replace('bpmFrom,', ''), mutate(1, 6, 'NaN'), mutate(1, 6, '-1'),
-      mutate(1, 6, '0'), mutate(2, 0, '1'), mutate(2, 1, '0.00'), mutate(2, 3, '1.00'),
-      mutate(1, 5, '7/8'), mutate(32, 3, '254.00'), mutate(1, 6, ''),
-      mutate(18, 6, '227'), mutate(1, 2, '0:00.000'), raw + rows[32].join(',') + '\n'];
-    for (const csv of invalid) {
-      await writeFile(input, csv);
-      await assert.rejects(writeMap(input, output));
+    const cases = [
+      [0, () => '{'],
+      [0, d => { d.bars.pop(); }],
+      [0, d => { d.bars[0].startMs = null; }],
+      [0, d => { d.bars[1].startMs = 0; }],
+      [0, d => { d.bars[0].beatTimesMs[1] = d.bars[0].beatTimesMs[0]; }],
+      [0, d => { d.bars[0].beatTimesMs.pop(); }],
+      [0, d => { d.bars[0].inferredBeatTimesMs = [3300]; }],
+      [1, d => { d.changes.pop(); }],
+      [1, d => { d.changes[1].startMs = 0; }],
+      [1, d => { d.changes[0].bpm = 'NaN'; }],
+      [2, d => { d.offsetMs *= -1; }],
+      [2, d => { d.sourceHash = d.targetHash; }],
+      [2, d => { d.scale = 1.001; }],
+      [2, d => { d.verification.status = 'FAIL'; }],
+    ];
+    for (const [i, mutate] of cases) {
+      const data = JSON.parse(raws[i]);
+      const replacement = mutate(data) ?? JSON.stringify(data);
+      await writeFile(paths[i], replacement);
+      await assert.rejects(writeMap(...paths, output));
       assert.equal(await readFile(output, 'utf8'), stored);
+      await writeFile(paths[i], raws[i]);
     }
+    await writeFile(paths[0], raws[0].replace('2933.333', 'NaN'));
+    await assert.rejects(writeMap(...paths, output));
+    assert.equal(await readFile(output, 'utf8'), stored);
+    await rm(paths[0]);
+    await assert.rejects(writeMap(...paths, output));
+    assert.equal(await readFile(output, 'utf8'), stored);
   } finally { await rm(dir, { recursive: true, force: true }); }
-});
-
-
-test('manual calibration metadata distinguishes playback clipping from source generation', () => {
-  const map = generateMap(raw);
-  assert.equal(map.id, 'odd-dice-full-sections-estimated-v2');
-  assert.equal(map.playbackToSourceOffsetMs, offset);
-  assert.deepEqual(map.calibration, {
-    kind: 'user-confirmed-manual-anchor', beats: 8, meter: '4/4', bars: 2, bpm: 165,
-    mapping: 'sourceVideoMs = spotifyPlaybackMs + playbackToSourceOffsetMs',
-    playbackAnchorMs: 0, sourceAnchorMs: offset, fullTrackAudioVerified: false,
-  });
-  assert.equal(map.clipping.sourceGenerationEndMs, 248828 + offset);
-  assert.equal(map.sourceSections[31].runtimeStartMs, 249500 - offset);
-  assert.equal(map.sourceSections[31].runtimeEndMs, 248828);
-  assert.equal(map.bars.at(-1).endMs, 249500);
-  assert.equal(map.tempoChanges.at(-1).endMs, 249500);
-  assert.equal(map.sourceResolutionMs, 500);
 });

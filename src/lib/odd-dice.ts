@@ -1,7 +1,7 @@
 import fullVersion from './meter-maps/odd-dice.full.json' with { type: 'json' };
 import type { MeterMap } from './meter-dice.ts';
 
-/** CSV-derived estimated full-version meter map; see docs/odd-dice-meter.md. */
+/** Video-frame-observed, waveform-aligned full-version meter map; see docs/odd-dice-meter.md. */
 export const ODD_DICE_FULL_MAP: MeterMap = fullVersion;
 const VERSION_TOLERANCE_MS = 1000;
 
