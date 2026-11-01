@@ -949,7 +949,7 @@ test('actual paint drives reduced-motion audio; poll, seek, hide and mouseleave 
 test('interactive zoom keeps visible hit targets and bounds rotating ambient boxes', () => {
   const css = readFileSync(new URL('../components/song/MeterDice.module.css', import.meta.url), 'utf8');
   const visual = css.match(/\.visual \{([^}]+)\}/)![1];
-  assert.match(visual, /transform-origin: center top/);
+  assert.match(visual, /transform-origin: 99% top/);
   assert.match(visual, /pointer-events: auto/);
   assert.match(visual, /transition: transform 200ms/);
   assert.match(css, /data-active='true'\] \.visual \{ transform: scale\(1\.5\)/);
@@ -989,4 +989,48 @@ test('independent edge lights share existing glow lifecycle selectors and static
   // The existing lifecycle harness covers pause, hide, seek, reduce, mismatch and cleanup;
   // both fields inherit those root selectors without adding any JS animation owner.
   assert.doesNotMatch(componentSource, /setTimeout|setInterval/);
+});
+
+
+test('zoom reserves real inline space with the same timing and immediate reduced-motion sizing', () => {
+  const css = readFileSync(new URL('../components/song/MeterDice.module.css', import.meta.url), 'utf8');
+  const trigger = css.match(/\.trigger \{([^}]+)\}/)![1];
+  const visual = css.match(/\.visual \{([^}]+)\}/)![1];
+  const timing = '200ms cubic-bezier(0.23, 1, 0.32, 1)';
+  assert.ok(trigger.includes(`transition: padding-inline-start ${timing};`));
+  assert.ok(visual.includes(`transition: transform ${timing};`));
+  assert.match(trigger, /padding-inline-start: 0;/);
+  assert.match(trigger, /flex: 0 0 auto;/);
+  assert.match(trigger, /margin-inline-start: auto;/);
+  assert.doesNotMatch(trigger, /(?:^|[;\n])\s*(?:width|max-width|inline-size|max-inline-size):/);
+  assert.match(css, /\.trigger\[data-active='true'\] \{\s*padding-inline-start: calc\(var\(--dice-face-size\) \* 0\.5\);\s*\}/);
+  assert.match(visual, /transform-origin: 99% top;/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.trigger, \.visual \{ transition: none; \}/);
+  assert.match(css, /\.trigger\[data-active='true'\] \.meter \{ transform: translateY\(calc\(var\(--dice-face-size\) \* 0\.5\)\); \}/);
+  assert.match(css, /font-size: 10px;/);
+  assert.doesNotMatch(componentSource, /ResizeObserver/);
+});
+
+test('painted stroke right edge stays anchored while the real layout reserve grows', () => {
+  const css = readFileSync(new URL('../components/song/MeterDice.module.css', import.meta.url), 'utf8');
+  const originFraction = Number(css.match(/transform-origin: (\d+)% top/)![1]) / 100;
+  assert.equal(originFraction, (2 + 96 + 2 / 2) / 100, 'rect x + width + half stroke');
+  for (const [face, slot] of [[48, 52], [72, 78]]) {
+    const initialStart = 1000 - slot + (slot - face) / 2;
+    const initialRight = initialStart + face * originFraction;
+    const initialNeighbor = 1000 - slot - 12;
+    for (const progress of [0, 0.125, 0.25, 0.5, 0.75, 1, 0.75, 0.25, 0]) {
+      const reserve = face * 0.5 * progress;
+      const contentStart = 1000 - (slot + reserve) + reserve;
+      const visualStart = contentStart + (slot - face) / 2;
+      const origin = face * originFraction;
+      const scale = 1 + 0.5 * progress;
+      const paintedRight = visualStart + origin + (face * 0.99 - origin) * scale;
+      const paintedLeft = visualStart + origin + (face * 0.01 - origin) * scale;
+      const neighborRight = 1000 - (slot + reserve) - 12;
+      assert.ok(Math.abs(paintedRight - initialRight) < 1e-9);
+      assert.ok(Math.abs(initialNeighbor - neighborRight - reserve) < 1e-9);
+      assert.ok(neighborRight < paintedLeft, 'the new space pushes, rather than covers, its neighbor');
+    }
+  }
 });

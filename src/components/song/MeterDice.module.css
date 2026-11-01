@@ -170,6 +170,8 @@
   margin-inline-start: auto;
   flex: 0 0 auto;
   padding: 0;
+  padding-inline-start: 0;
+  transition: padding-inline-start 200ms cubic-bezier(0.23, 1, 0.32, 1);
   border: 0;
   background: transparent;
   color: inherit;
@@ -184,12 +186,17 @@
   display: block;
   width: var(--dice-face-size);
   height: var(--dice-face-size);
-  transform-origin: center top;
+  /* Anchor the painted SVG stroke at x=99, not its transparent viewBox edge. */
+  transform-origin: 99% top;
   transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1);
   pointer-events: auto;
 }
 .trigger[data-active='true'] .visual { transform: scale(1.5); }
-/* The layout slot stays fixed, while the enlarged visual remains a hit target. */
+/* Grow the flex item leftward; its content and right edge stay in place.
+   Match the visual transition so the reserved space follows every zoom frame. */
+.trigger[data-active='true'] {
+  padding-inline-start: calc(var(--dice-face-size) * 0.5);
+}
 @media (min-width: 640px) {
   .trigger { --dice-face-size: 72px; }
 }
@@ -209,5 +216,5 @@
 .hint:not(:empty) { padding: 4px 8px; }
 .trigger[data-active='true'] .meter { transform: translateY(calc(var(--dice-face-size) * 0.5)); }
 @media (prefers-reduced-motion: reduce) {
-  .visual { transition: none; }
+  .trigger, .visual { transition: none; }
 }

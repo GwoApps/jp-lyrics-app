@@ -70,7 +70,7 @@ git diff --check
 
 ## Presentation
 
-The die is 48 px on mobile and 72 px at the existing desktop breakpoint (min-width: 640 px), with a 78 px desktop layout slot; it sits at the right end of the song information header, with a **current BPM** caption below (not a redundant time-signature label). The original desktop toolbar controls individually fade from 0.5 to 1 opacity over 160 ms on fine-pointer hover, keyboard focus or menu-open state; menus and touch controls remain fully opaque, and reduced motion disables the new transition. The caption reads the source tempo timeline from the same playback clock and may change within a beat without rebuilding or rotating the face. Standard 1–6 die faces light cumulatively through a bar and reset on its next downbeat. A continuous signature change rotates the face for 200 ms with WAAPI `transform` only; seeks snap directly, and reduced-motion disables the rotation. No React per-frame state or whole-page render is added. A stable localized image label is supplied in zh-CN, zh-TW, ja and en; beat changes are not a screen-reader live region.
+The die is 48 px on mobile and 72 px at the existing desktop breakpoint (min-width: 640 px), with a 78 px desktop baseline layout slot; it sits at the right end of the song information header, with a **current BPM** caption below (not a redundant time-signature label). The original desktop toolbar controls individually fade from 0.5 to 1 opacity over 160 ms on fine-pointer hover, keyboard focus or menu-open state; menus and touch controls remain fully opaque, and reduced motion disables the new transition. The caption reads the source tempo timeline from the same playback clock and may change within a beat without rebuilding or rotating the face. Standard 1–6 die faces light cumulatively through a bar and reset on its next downbeat. A continuous signature change rotates the face for 200 ms with WAAPI `transform` only; seeks snap directly, and reduced-motion disables the rotation. No React per-frame state or whole-page render is added. A stable localized image label is supplied in zh-CN, zh-TW, ja and en; beat changes are not a screen-reader live region.
 
 
 Each lamp retains its existing halo/filament/core geometry. Only a newly lit current beat during continuous playback starts a one-shot WAAPI opacity ignition: 0 → peak at 40 ms → steady at 140 ms. Outer/inner halo peaks are 0.32/0.48 (steady 0.08/0.16), filament/core peaks are 1 (steady 0.85/0.9). Existing lit lamps do not restart on ordinary frames or polls. Animation handles identify the new ignitions and are removed on completion; snap, pause, seek, visibility changes, preference changes and cleanup cancel them. Same-meter downbeats reuse the first pip with a committed dark baseline, allowing repeated ignition while old high pips retain the 110 ms fade. Snapshot positioning never replays historical beats. No timer, extra RAF, per-frame React state, or animated filter/shadow/geometry is added.
@@ -157,10 +157,17 @@ RAF、BPM 推算或历史补播。连续采样的相邻新拍最多发声一次�
 衰减、40ms 停止。MeterMetronome 持有 oscillator/gain/context，停用立即 stop 和
 断开声源，卸载 close；过期 resume 不能在关闭后重新发声。无网络资源或新增依赖。
 
-布局槽仍为 52/78px，基础骰面仍为 48/72px。data-meter-visual 包住 face 与 glow，
-激活只用 transform scale(1.5) 放大至 72/108px，200ms 原缓动，减效即时缩放。
-以顶部中心为缩放原点，caption 保持字号并向下移出放大骰面。布局槽不变，但放大后的
-visual 保留 pointer hit test，因此鼠标移到扩大的可见边缘仍保持 hover，真正离开才关闭。
+未激活 trigger 基线为 52/78px，基础骰面仍为 48/72px。data-meter-visual 包住 face 与 glow，
+以 `99% top`（可见描边右缘）为原点 scale(1.5) 放大至 72/108px；trigger 的 padding-inline-start
+同步从 0 增至半个骰面（24/36px），实际外宽增至 76/114px，为向左扩展预留空间，
+参与父级 flex 布局并推动左邻居，窄屏沿用现有换行。内部 52/78px 内容宽度不变。
+两项均使用 200ms cubic-bezier(0.23, 1, 0.32, 1)，缩回和快速反向交由 CSS transition
+从当前进度续接；减效同时禁用两项 transition，仍即时应用缩放及预留槽。
+描边外缘是 viewBox 的 99%，故以该点而非透明 SVG 盒子的 100% 锚定，
+使骰面可见右缘在放大、缩小及反向进度中保持不动；1% 透明留白不当作可见边缘。
+描边与外光的归一化几何不变。
+caption 保持字号并沿用原下移逻辑。放大后的 visual 保留 pointer hit test，
+因此鼠标移到扩大的可见边缘仍保持 hover，真正离开才关闭。
 提示放在放大后的 caption 下方。两个独立静态 blur wrapper 使用 1% inset，内部固定
 圆角 viewport 以 overflow: clip 截住 full-size 光场旋转的几何溢出，外层再以静态
 7px/6px blur 将边缘光投到不透明骰面外。光场中心在 50% 2%，分别以 3.2s 正向、
@@ -190,3 +197,10 @@ MediaRecorder 录制到私有 `native-metronome.webm`，同目录 `analyze_audio
 FFT 与强弱拍幅度；解码保留 Opus 的时间戳空洞（aresample async），不把稀疏包当作
 连续 PCM。不是 mock AudioContext，也不是生成的假录音。API 播放状态为合成 fixture，
 不代表真实 Spotify 设备的端到端音频延迟或真机扬声器听感验收。
+
+本次右上锚点回归为 CSS/源码合同测试：检查真实 padding 预留、flex 可增长、
+两项过渡时长和缓动一致、减效同步禁动画，以及原 caption 位移与字号。
+按用户要求，本次改动不运行浏览器/E2E。单元测试用现有 48/72px 骰面和 52/78px
+基线槽建立增长/回退几何模型，并核对可见描边锚点、预留槽、相邻空间和相同过渡合同；
+类型检查、完整构建及发布后 HTTP/产物检查另行执行。以上不等于真实渲染坐标验收，
+历史浏览器结果也不作为这次布局改动的浏览器验证证据。
