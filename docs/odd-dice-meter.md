@@ -1,39 +1,40 @@
-# Odd Dice meter-dice Easter egg
+# Odd Dice 分段估算节拍
 
-This is enabled only for **Odd Dice / millsage**, with the 248,828 ms full-version recording (duration tolerance 1,000 ms). Game cuts, covers, extended edits and unknown durations do not inherit this map. The header die uses the same interpolated playback ref as the lyrics, including silent preview, rather than a second BPM timer.
+仅为 Odd Dice / millsage 的 248828 ms 录音启用，时长门控仍为 ±1000 ms；未知时长、错误歌曲、121 秒游戏版及 253 秒视频时长都不能启用。运行时已替换为最新 CSV 确定性生成的估算拍点，不再使用旧逐帧拍点或旧 BPM 读数。
 
-## Data provenance and limits
+## 来源与精度
 
-- Community transcription: [【数拍子】Odd Dice (Full Ver.)](https://www.bilibili.com/video/BV1YhJq6LE4Q/) by 鹤翔万里. The author states that game-version portions use the game's bar lines and full-version additions were transcribed by ear. **This is not an official score.**
-- Extracted the video's current-bar numerals and meter displays, then aligned those changes with the die's actual beat flashes. Result: **138 source-numbered bars, 733 observed beats, no interpolated beat timestamps**. Each bar has exactly its numerator's number of beats.
-- The 30 fps source quantizes timestamps to approximately **33.3 ms**. This is measurement resolution relative to the video, not proof of sample-accurate musical transcription or Spotify device synchronization.
-- Waveform correlation against the downloaded game-version audio supports **zero offset at the beginning**: the first three five-second windows have lag 0, correlation 0.394 / 0.684 / 0.729. Correlation drops after 15 s because the game recording is a cut. We do not assume the entire game/full tracks share a timeline.
-- The source uses 4/4, 5/4, 6/4 and 3/4. The different 6/8 notation reported for a piano arrangement is not substituted into this transcription. Likewise, a commercial bass score's 155-bar count is not conflated with this video's 138-bar count.
-- The first numbered bar starts at **2,933.333 ms**. The source's intro/count-in is left without a fabricated lit face. **219,200–230,933.333 ms** is free time followed by a re-entry count-in, not a repeating six-beat bar; the die clears there. The last 3/4 bar retains the final chord until the source's musical ending at **248,800 ms**, then clears.
-- Accelerando and ritardando use the observed **individual beat timestamps**. A sampled screen BPM must never be used as a constant BPM for that whole bar.
+来源为鹤翔万里的同人视频 [BV1YhJq6LE4Q](https://www.bilibili.com/video/BV1YhJq6LE4Q/)。作者说明完整版新增部分为耳听转录，不是官方乐谱。输入来自公开交付物 `odd_dice_full_sections.csv`，边界依据该交付物 README、index.html 第 3/4 节及 `full_version_metre_map.md`；导出器把 bpm_min/bpm_max 写入 bpmFrom/bpmTo，不能把它们当成有向端点。
 
-## Reproduction
+原 CSV（包括 UTF-8 BOM）快照位于 `src/lib/meter-maps/odd-dice.full.sections.csv`。JSON 保存原字节 SHA-256、全部 32 行的字段、每行运行时裁剪区间、`sourceResolutionMs=500`、`estimated=true` 和生成假设。2 fps 的源段边界精度为 ±0.5 秒，源小节积分推算约 ±10%；生成时间的小数位只是数值序列化精度，不代表测量精度。所有运行时拍点都是估算，接受精度下降；旧 138 小节/733 个观测拍点不再是运行数据。
 
-Original public-source downloads, extraction scripts and audits are retained under `/root/public-files/odd-dice-full/` on the development host, separately from application code. No song audio/video is committed or added to the app bundle.
+## 确定性算法与假设
 
-Extraction order (requires Python with OpenCV, NumPy, SciPy, Pillow; FFmpeg and Tesseract; and the `bilibili-cli` Python environment for the public fetch):
+- 相等 BPM 按常速处理，170、188 也是阶梯近似。第 18/28 段的 228–230 近似为 230 平台，不在整个 29/75.5 秒缓慢爬升。
+- 第 31 段依据来源的 ritardando，按 232000–249500 ms 内 139→124 做线性时间渐慢；裁剪至 248828 ms 后，末端仍约 124.576 BPM，不提前达到 124。
+- 常速积分为 BPM × dt / 60000；线性速度积分为 (BPM × dt + slope × dt² / 2) / 60000。整数累计相位对应拍点，解二次式使用有理化正根，避免相消。仅离线生成，播放时二分查表；BPM 可在同一拍内线性读取。
+- 同拍号跨速度段连续累计拍/小节相位。拍号变化和自由段后才以 CSV 边界重置，使用 7.5、9、11.5、96.5、121.5、125、229.5 秒等源边界，不吸附旧实测时间。
+- 0–0.5 秒未知；219–229.5 秒不生成小节、拍点或速度事件，查询 BPM 为空。229.5 秒重入 3/4。
+- 仅裁剪到 [0,248828)，不伸缩、不偏移，249.5–253 秒封面段仅留元数据。源推算小节数不参与凑整或压缩速度。
+- 每个同拍号连续区间尾部保留不足整小节的部分：`partial=true` 且小节和 map 都标记 `estimated=true`。保留真实分子，拍数组只有边界前实际生成的 1..N 拍；最后一拍被截短时即使拍数齐全也标记 partial。普通 map 仍必须拍数等于分子。尾部不留空白、不越界补拍。粗边界重置可能截短上一拍，因此跨拍号边界的间距不代表 BPM；同一连续相位内不会为凑拍制造密集点。
 
-1. `fetch_video.py`: public video/audio API download. Expiring signed URLs are not persisted.
-2. Decode the video to a 30 fps, 852×480 AVI at `/root/.hermes/cache/scratch/odd-dice-full-video.avi`.
-3. `ocr_bars.py`: sample source bar numerals.
-4. `extract_beat_flashes.py`: measure and identify actual beat flashes.
-5. `refine_bars.py`: chronological numeral/template changes, source meters and observed beat grid produce `refined_meter_map.json`. The source-number morphs at bars 13 and 43 need beat-grid alignment rather than a naive numeral-cut timestamp.
-6. `verify_audio_offset.py`: decode and cross-correlate opening waveforms.
-7. `extract_bpm_readouts.py`: read the source's integer BPM display at bar boundaries and every 200 ms during ramps/ritardando, retaining only reliable readable integers. Hold the last reliable reading through numeral morphs; do not derive BPM from quantized beat gaps. This produces `bpm_readouts.json` with 63 tempo changes.
-8. Import into the application, failing closed on gaps inside a bar, invalid/missing beats or interpolation:
+当前结果：**157 小节、764 个估算拍点、30 个速度段、24 个 partial 小节**。这些数量不是源视频的小节编号。
 
-   ```sh
-   node scripts/import-odd-dice-map.mjs /root/public-files/odd-dice-full/refined_meter_map.json /root/public-files/odd-dice-full/bpm_readouts.json
-   npm run check
-   npm run build
-   ```
+## 重建与验证
 
-The importer records the input SHA-256 in `src/lib/meter-maps/odd-dice.full.json`. Tests exercise all **733 exact beat boundaries**, signature changes, free-time gaps and song end, plus song/version gating. Component tests cover pause, forward/backward seek, tab visibility, mismatched tracks, reduced motion and hydration-safe SSR. They do not claim a real Spotify-device listening test.
+仅需仓库现有 Node 环境，无需私人素材、新依赖或网络：
+
+```sh
+node scripts/import-odd-dice-map.mjs
+# 可选：显式 CSV 输入及输出路径
+node scripts/import-odd-dice-map.mjs path/to/sections.csv path/to/map.json
+node --experimental-strip-types --experimental-loader ./scripts/test-loader.mjs --test scripts/import-odd-dice-map.test.mjs src/lib/odd-dice.test.ts src/lib/meter-dice.test.ts
+npx tsc --noEmit
+```
+
+脚本严格逐行检查列、数字、时间标签、编号、连续顺序、拍号、速度范围及源边界；全部生成成功才原子替换输出。相同输入生成 byte-identical JSON。专项测试核对全部源行、全部拍点积分及查询边界、裁剪、版本门控、partial 限定和无效合成 CSV 不覆盖有效输出。合成异常 fixture 不是实测谱。组件回归继续覆盖暂停、seek、visibility、reduced-motion 和灯泡行为。
+
+本轮不启动浏览器/服务，不进行真实 Spotify 设备听感验证；宿主父进程负责串行 `npm run check`、`npm run build` 和最终发布。未复制音视频、notes 或游戏版数据。
 
 ## Presentation
 

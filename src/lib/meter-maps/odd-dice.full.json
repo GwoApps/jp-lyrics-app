@@ -1,2103 +1,2605 @@
 {
-  "id": "odd-dice-full-bv1yhjq6le4q",
+  "id": "odd-dice-full-sections-estimated-v1",
   "durationMs": 248828,
+  "estimated": true,
   "source": "https://www.bilibili.com/video/BV1YhJq6LE4Q/",
-  "sourceKind": "community-transcription",
-  "sourceSha256": "ca653cb011ee49778cff02b5dc92e10a52ab3aa2efa75f6c1afad2e8828d4ae8",
-  "frameResolutionMs": 33.333333333333336,
-  "tempoSourceSha256": "4c0bb0dfbe03f2441ed562e523463fa8152c2b7773625aaf567965c9bcaec0a9",
-  "tempoSampleIntervalMs": 200,
+  "sourceKind": "community-transcription-estimate",
+  "sourceSha256": "6c61f6f4b9543d55a4f43e9569b105489352bb882f655ede483a69afa837ea23",
+  "sourceResolutionMs": 500,
+  "method": "Piecewise tempo integral; integer phase beats; meter/free-time resets; timestamps rounded to 0.000001 ms for serialization only.",
+  "assumptions": [
+    "BPM columns are min/max, not directed endpoints.",
+    "Equal BPM values use constant staircase tempo, including 170 and 188.",
+    "Sections 18/28 approximate entry range 228–230 as a 230 platform.",
+    "Section 31 is linear in time from 139 to 124 over 232000–249500 ms.",
+    "Same-meter tempo boundaries retain beat/bar phase; source estimated bar counts are metadata only.",
+    "Source boundaries ±500 ms; source integrated bar estimates ±10%; all runtime beats estimated."
+  ],
+  "clipping": {
+    "startMs": 0,
+    "endMs": 248828,
+    "sourceEndMs": 253000,
+    "offsetMs": 0,
+    "scale": 1
+  },
+  "sourceSections": [
+    {
+      "section": 1,
+      "startMs": 500,
+      "endMs": 7500,
+      "meter": "4/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 4.81,
+      "strategy": "constant",
+      "runtimeStartMs": 500,
+      "runtimeEndMs": 7500
+    },
+    {
+      "section": 2,
+      "startMs": 7500,
+      "endMs": 9000,
+      "meter": "5/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 0.82,
+      "strategy": "constant",
+      "runtimeStartMs": 7500,
+      "runtimeEndMs": 9000
+    },
+    {
+      "section": 3,
+      "startMs": 9000,
+      "endMs": 11500,
+      "meter": "6/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 1.15,
+      "strategy": "constant",
+      "runtimeStartMs": 9000,
+      "runtimeEndMs": 11500
+    },
+    {
+      "section": 4,
+      "startMs": 11500,
+      "endMs": 17000,
+      "meter": "5/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 3.02,
+      "strategy": "constant",
+      "runtimeStartMs": 11500,
+      "runtimeEndMs": 17000
+    },
+    {
+      "section": 5,
+      "startMs": 17000,
+      "endMs": 19000,
+      "meter": "6/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 0.92,
+      "strategy": "constant",
+      "runtimeStartMs": 17000,
+      "runtimeEndMs": 19000
+    },
+    {
+      "section": 6,
+      "startMs": 19000,
+      "endMs": 24500,
+      "meter": "5/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 3.02,
+      "strategy": "constant",
+      "runtimeStartMs": 19000,
+      "runtimeEndMs": 24500
+    },
+    {
+      "section": 7,
+      "startMs": 24500,
+      "endMs": 26500,
+      "meter": "6/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 0.92,
+      "strategy": "constant",
+      "runtimeStartMs": 24500,
+      "runtimeEndMs": 26500
+    },
+    {
+      "section": 8,
+      "startMs": 26500,
+      "endMs": 32000,
+      "meter": "5/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 3.02,
+      "strategy": "constant",
+      "runtimeStartMs": 26500,
+      "runtimeEndMs": 32000
+    },
+    {
+      "section": 9,
+      "startMs": 32000,
+      "endMs": 34500,
+      "meter": "6/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 0.92,
+      "strategy": "constant",
+      "runtimeStartMs": 32000,
+      "runtimeEndMs": 34500
+    },
+    {
+      "section": 10,
+      "startMs": 34500,
+      "endMs": 39500,
+      "meter": "5/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 2.75,
+      "strategy": "constant",
+      "runtimeStartMs": 34500,
+      "runtimeEndMs": 39500
+    },
+    {
+      "section": 11,
+      "startMs": 39500,
+      "endMs": 42000,
+      "meter": "6/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 1.15,
+      "strategy": "constant",
+      "runtimeStartMs": 39500,
+      "runtimeEndMs": 42000
+    },
+    {
+      "section": 12,
+      "startMs": 42000,
+      "endMs": 47500,
+      "meter": "5/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 3.02,
+      "strategy": "constant",
+      "runtimeStartMs": 42000,
+      "runtimeEndMs": 47500
+    },
+    {
+      "section": 13,
+      "startMs": 47500,
+      "endMs": 49500,
+      "meter": "6/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 0.92,
+      "strategy": "constant",
+      "runtimeStartMs": 47500,
+      "runtimeEndMs": 49500
+    },
+    {
+      "section": 14,
+      "startMs": 49500,
+      "endMs": 53000,
+      "meter": "5/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 1.93,
+      "strategy": "constant",
+      "runtimeStartMs": 49500,
+      "runtimeEndMs": 53000
+    },
+    {
+      "section": 15,
+      "startMs": 53000,
+      "endMs": 58500,
+      "meter": "6/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 2.52,
+      "strategy": "constant",
+      "runtimeStartMs": 53000,
+      "runtimeEndMs": 58500
+    },
+    {
+      "section": 16,
+      "startMs": 58500,
+      "endMs": 61500,
+      "meter": "6/4",
+      "bpmMin": 170,
+      "bpmMax": 170,
+      "estimatedBars": 1.42,
+      "strategy": "constant",
+      "runtimeStartMs": 58500,
+      "runtimeEndMs": 61500
+    },
+    {
+      "section": 17,
+      "startMs": 61500,
+      "endMs": 67500,
+      "meter": "6/4",
+      "bpmMin": 188,
+      "bpmMax": 188,
+      "estimatedBars": 3.13,
+      "strategy": "constant",
+      "runtimeStartMs": 61500,
+      "runtimeEndMs": 67500
+    },
+    {
+      "section": 18,
+      "startMs": 67500,
+      "endMs": 96500,
+      "meter": "6/4",
+      "bpmMin": 228,
+      "bpmMax": 230,
+      "estimatedBars": 18.53,
+      "strategy": "230-platform",
+      "runtimeStartMs": 67500,
+      "runtimeEndMs": 96500
+    },
+    {
+      "section": 19,
+      "startMs": 96500,
+      "endMs": 121500,
+      "meter": "4/4",
+      "bpmMin": 145,
+      "bpmMax": 145,
+      "estimatedBars": 15.1,
+      "strategy": "constant",
+      "runtimeStartMs": 96500,
+      "runtimeEndMs": 121500
+    },
+    {
+      "section": 20,
+      "startMs": 121500,
+      "endMs": 125000,
+      "meter": "3/4",
+      "bpmMin": 145,
+      "bpmMax": 145,
+      "estimatedBars": 2.82,
+      "strategy": "constant",
+      "runtimeStartMs": 121500,
+      "runtimeEndMs": 125000
+    },
+    {
+      "section": 21,
+      "startMs": 125000,
+      "endMs": 127000,
+      "meter": "5/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 1.1,
+      "strategy": "constant",
+      "runtimeStartMs": 125000,
+      "runtimeEndMs": 127000
+    },
+    {
+      "section": 22,
+      "startMs": 127000,
+      "endMs": 129000,
+      "meter": "6/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 0.92,
+      "strategy": "constant",
+      "runtimeStartMs": 127000,
+      "runtimeEndMs": 129000
+    },
+    {
+      "section": 23,
+      "startMs": 129000,
+      "endMs": 134500,
+      "meter": "5/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 3.02,
+      "strategy": "constant",
+      "runtimeStartMs": 129000,
+      "runtimeEndMs": 134500
+    },
+    {
+      "section": 24,
+      "startMs": 134500,
+      "endMs": 137000,
+      "meter": "6/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 1.15,
+      "strategy": "constant",
+      "runtimeStartMs": 134500,
+      "runtimeEndMs": 137000
+    },
+    {
+      "section": 25,
+      "startMs": 137000,
+      "endMs": 138500,
+      "meter": "5/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 0.82,
+      "strategy": "constant",
+      "runtimeStartMs": 137000,
+      "runtimeEndMs": 138500
+    },
+    {
+      "section": 26,
+      "startMs": 138500,
+      "endMs": 140500,
+      "meter": "6/4",
+      "bpmMin": 165,
+      "bpmMax": 165,
+      "estimatedBars": 0.92,
+      "strategy": "constant",
+      "runtimeStartMs": 138500,
+      "runtimeEndMs": 140500
+    },
+    {
+      "section": 27,
+      "startMs": 140500,
+      "endMs": 143500,
+      "meter": "6/4",
+      "bpmMin": 188,
+      "bpmMax": 188,
+      "estimatedBars": 1.57,
+      "strategy": "constant",
+      "runtimeStartMs": 140500,
+      "runtimeEndMs": 143500
+    },
+    {
+      "section": 28,
+      "startMs": 143500,
+      "endMs": 219000,
+      "meter": "6/4",
+      "bpmMin": 228,
+      "bpmMax": 230,
+      "estimatedBars": 48.23,
+      "strategy": "230-platform",
+      "runtimeStartMs": 143500,
+      "runtimeEndMs": 219000
+    },
+    {
+      "section": 29,
+      "startMs": 219000,
+      "endMs": 229500,
+      "meter": "senza tempo",
+      "bpmMin": 230,
+      "bpmMax": 230,
+      "estimatedBars": 0,
+      "strategy": "unmetered",
+      "runtimeStartMs": 219000,
+      "runtimeEndMs": 229500
+    },
+    {
+      "section": 30,
+      "startMs": 229500,
+      "endMs": 232000,
+      "meter": "3/4",
+      "bpmMin": 141,
+      "bpmMax": 141,
+      "estimatedBars": 1.96,
+      "strategy": "constant",
+      "runtimeStartMs": 229500,
+      "runtimeEndMs": 232000
+    },
+    {
+      "section": 31,
+      "startMs": 232000,
+      "endMs": 249500,
+      "meter": "3/4",
+      "bpmMin": 124,
+      "bpmMax": 139,
+      "estimatedBars": 12.35,
+      "strategy": "linear-ritardando",
+      "runtimeStartMs": 232000,
+      "runtimeEndMs": 248828
+    },
+    {
+      "section": 32,
+      "startMs": 249500,
+      "endMs": 253000,
+      "meter": "senza tempo",
+      "bpmMin": 130,
+      "bpmMax": 130,
+      "estimatedBars": 0,
+      "strategy": "unmetered",
+      "runtimeStartMs": null,
+      "runtimeEndMs": null
+    }
+  ],
   "tempoChanges": [
     {
-      "startMs": 2933.333,
+      "startMs": 500,
       "bpm": 165
     },
     {
-      "startMs": 57866.667,
-      "bpm": 166
+      "startMs": 7500,
+      "bpm": 165
     },
     {
-      "startMs": 58266.667,
-      "bpm": 168
+      "startMs": 9000,
+      "bpm": 165
     },
     {
-      "startMs": 58666.667,
+      "startMs": 11500,
+      "bpm": 165
+    },
+    {
+      "startMs": 17000,
+      "bpm": 165
+    },
+    {
+      "startMs": 19000,
+      "bpm": 165
+    },
+    {
+      "startMs": 24500,
+      "bpm": 165
+    },
+    {
+      "startMs": 26500,
+      "bpm": 165
+    },
+    {
+      "startMs": 32000,
+      "bpm": 165
+    },
+    {
+      "startMs": 34500,
+      "bpm": 165
+    },
+    {
+      "startMs": 39500,
+      "bpm": 165
+    },
+    {
+      "startMs": 42000,
+      "bpm": 165
+    },
+    {
+      "startMs": 47500,
+      "bpm": 165
+    },
+    {
+      "startMs": 49500,
+      "bpm": 165
+    },
+    {
+      "startMs": 53000,
+      "bpm": 165
+    },
+    {
+      "startMs": 58500,
       "bpm": 170
     },
     {
-      "startMs": 58866.667,
-      "bpm": 172
-    },
-    {
-      "startMs": 59566.667,
-      "bpm": 176
-    },
-    {
-      "startMs": 59966.667,
-      "bpm": 178
-    },
-    {
-      "startMs": 60366.667,
-      "bpm": 180
-    },
-    {
-      "startMs": 60566.667,
-      "bpm": 182
-    },
-    {
-      "startMs": 60966.667,
-      "bpm": 184
-    },
-    {
-      "startMs": 61366.667,
-      "bpm": 186
-    },
-    {
-      "startMs": 61566.667,
+      "startMs": 61500,
       "bpm": 188
     },
     {
-      "startMs": 61966.667,
-      "bpm": 190
-    },
-    {
-      "startMs": 62166.667,
-      "bpm": 192
-    },
-    {
-      "startMs": 62566.667,
-      "bpm": 194
-    },
-    {
-      "startMs": 62766.667,
-      "bpm": 196
-    },
-    {
-      "startMs": 63166.667,
-      "bpm": 198
-    },
-    {
-      "startMs": 63366.667,
-      "bpm": 200
-    },
-    {
-      "startMs": 63800,
-      "bpm": 202
-    },
-    {
-      "startMs": 64000,
-      "bpm": 203
-    },
-    {
-      "startMs": 64400,
-      "bpm": 205
-    },
-    {
-      "startMs": 64600,
-      "bpm": 207
-    },
-    {
-      "startMs": 65000,
-      "bpm": 209
-    },
-    {
-      "startMs": 65133.333,
-      "bpm": 211
-    },
-    {
-      "startMs": 65533.333,
-      "bpm": 213
-    },
-    {
-      "startMs": 65733.333,
-      "bpm": 215
-    },
-    {
-      "startMs": 66133.333,
-      "bpm": 217
-    },
-    {
-      "startMs": 66333.333,
-      "bpm": 219
-    },
-    {
-      "startMs": 66533.333,
-      "bpm": 221
-    },
-    {
-      "startMs": 66800,
-      "bpm": 223
-    },
-    {
-      "startMs": 67200,
-      "bpm": 225
-    },
-    {
-      "startMs": 67400,
-      "bpm": 228
-    },
-    {
-      "startMs": 68000,
+      "startMs": 67500,
       "bpm": 230
     },
     {
-      "startMs": 96566.667,
+      "startMs": 96500,
       "bpm": 145
     },
     {
-      "startMs": 125100,
+      "startMs": 121500,
+      "bpm": 145
+    },
+    {
+      "startMs": 125000,
       "bpm": 165
     },
     {
-      "startMs": 138966.667,
-      "bpm": 169
+      "startMs": 127000,
+      "bpm": 165
     },
     {
-      "startMs": 139366.667,
-      "bpm": 173
+      "startMs": 129000,
+      "bpm": 165
     },
     {
-      "startMs": 140366.667,
-      "bpm": 185
+      "startMs": 134500,
+      "bpm": 165
     },
     {
-      "startMs": 140633.333,
+      "startMs": 137000,
+      "bpm": 165
+    },
+    {
+      "startMs": 138500,
+      "bpm": 165
+    },
+    {
+      "startMs": 140500,
       "bpm": 188
     },
     {
-      "startMs": 141033.333,
-      "bpm": 192
-    },
-    {
-      "startMs": 141233.333,
-      "bpm": 196
-    },
-    {
-      "startMs": 141633.333,
-      "bpm": 200
-    },
-    {
-      "startMs": 141833.333,
-      "bpm": 204
-    },
-    {
-      "startMs": 142233.333,
-      "bpm": 208
-    },
-    {
-      "startMs": 142433.333,
-      "bpm": 212
-    },
-    {
-      "startMs": 142833.333,
-      "bpm": 216
-    },
-    {
-      "startMs": 143033.333,
-      "bpm": 220
-    },
-    {
-      "startMs": 143233.333,
-      "bpm": 224
-    },
-    {
-      "startMs": 143633.333,
-      "bpm": 228
-    },
-    {
-      "startMs": 143833.333,
+      "startMs": 143500,
       "bpm": 230
     },
     {
-      "startMs": 230933.333,
+      "startMs": 229500,
       "bpm": 141
     },
     {
-      "startMs": 231533.333,
-      "bpm": 140
-    },
-    {
-      "startMs": 232233.333,
-      "bpm": 139
-    },
-    {
-      "startMs": 233566.667,
-      "bpm": 138
-    },
-    {
-      "startMs": 234366.667,
-      "bpm": 137
-    },
-    {
-      "startMs": 235266.667,
-      "bpm": 136
-    },
-    {
-      "startMs": 236166.667,
-      "bpm": 135
-    },
-    {
-      "startMs": 237166.667,
-      "bpm": 134
-    },
-    {
-      "startMs": 238533.333,
-      "bpm": 133
-    },
-    {
-      "startMs": 239233.333,
-      "bpm": 132
-    },
-    {
-      "startMs": 241000,
-      "bpm": 131
-    },
-    {
-      "startMs": 241633.333,
-      "bpm": 130
-    },
-    {
-      "startMs": 242633.333,
-      "bpm": 124
+      "startMs": 232000,
+      "bpm": 139,
+      "endMs": 249500,
+      "endBpm": 124
     }
   ],
   "bars": [
     {
-      "startMs": 2933.333,
-      "endMs": 4366.667,
+      "startMs": 500,
+      "endMs": 1954.545455,
       "numerator": 4,
       "denominator": 4,
       "beatTimesMs": [
-        2933.333,
-        3300,
-        3666.667,
-        4000
+        500,
+        863.636364,
+        1227.272727,
+        1590.909091
       ]
     },
     {
-      "startMs": 4366.667,
-      "endMs": 5833.333,
+      "startMs": 1954.545455,
+      "endMs": 3409.090909,
       "numerator": 4,
       "denominator": 4,
       "beatTimesMs": [
-        4366.667,
-        4733.333,
-        5100,
-        5466.667
+        1954.545455,
+        2318.181818,
+        2681.818182,
+        3045.454545
       ]
     },
     {
-      "startMs": 5833.333,
-      "endMs": 7300,
+      "startMs": 3409.090909,
+      "endMs": 4863.636364,
       "numerator": 4,
       "denominator": 4,
       "beatTimesMs": [
-        5833.333,
-        6200,
-        6566.667,
-        6933.333
+        3409.090909,
+        3772.727273,
+        4136.363636,
+        4500
       ]
     },
     {
-      "startMs": 7300,
-      "endMs": 9100,
+      "startMs": 4863.636364,
+      "endMs": 6318.181818,
+      "numerator": 4,
+      "denominator": 4,
+      "beatTimesMs": [
+        4863.636364,
+        5227.272727,
+        5590.909091,
+        5954.545455
+      ]
+    },
+    {
+      "startMs": 6318.181818,
+      "endMs": 7500,
+      "numerator": 4,
+      "denominator": 4,
+      "beatTimesMs": [
+        6318.181818,
+        6681.818182,
+        7045.454545,
+        7409.090909
+      ],
+      "estimated": true,
+      "partial": true
+    },
+    {
+      "startMs": 7500,
+      "endMs": 9000,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        7300,
-        7666.667,
-        8000,
-        8366.667,
-        8733.333
-      ]
+        7500,
+        7863.636364,
+        8227.272727,
+        8590.909091,
+        8954.545455
+      ],
+      "estimated": true,
+      "partial": true
     },
     {
-      "startMs": 9100,
-      "endMs": 11300,
+      "startMs": 9000,
+      "endMs": 11181.818182,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        9100,
-        9466.667,
-        9833.333,
-        10200,
-        10566.667,
-        10933.333
+        9000,
+        9363.636364,
+        9727.272727,
+        10090.909091,
+        10454.545455,
+        10818.181818
       ]
     },
     {
-      "startMs": 11300,
-      "endMs": 13100,
-      "numerator": 5,
-      "denominator": 4,
-      "beatTimesMs": [
-        11300,
-        11666.667,
-        12000,
-        12366.667,
-        12733.333
-      ]
-    },
-    {
-      "startMs": 13100,
-      "endMs": 14933.333,
-      "numerator": 5,
-      "denominator": 4,
-      "beatTimesMs": [
-        13100,
-        13466.667,
-        13833.333,
-        14200,
-        14566.667
-      ]
-    },
-    {
-      "startMs": 14933.333,
-      "endMs": 16733.333,
-      "numerator": 5,
-      "denominator": 4,
-      "beatTimesMs": [
-        14933.333,
-        15300,
-        15666.667,
-        16000,
-        16366.667
-      ]
-    },
-    {
-      "startMs": 16733.333,
-      "endMs": 18933.333,
+      "startMs": 11181.818182,
+      "endMs": 11500,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        16733.333,
-        17100,
-        17466.667,
-        17833.333,
-        18200,
-        18566.667
-      ]
+        11181.818182
+      ],
+      "estimated": true,
+      "partial": true
     },
     {
-      "startMs": 18933.333,
-      "endMs": 20733.333,
+      "startMs": 11500,
+      "endMs": 13318.181818,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        18933.333,
-        19300,
-        19666.667,
-        20000,
-        20366.667
+        11500,
+        11863.636364,
+        12227.272727,
+        12590.909091,
+        12954.545455
       ]
     },
     {
-      "startMs": 20733.333,
-      "endMs": 22566.667,
+      "startMs": 13318.181818,
+      "endMs": 15136.363636,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        20733.333,
-        21100,
-        21466.667,
-        21833.333,
-        22200
+        13318.181818,
+        13681.818182,
+        14045.454545,
+        14409.090909,
+        14772.727273
       ]
     },
     {
-      "startMs": 22566.667,
-      "endMs": 24366.667,
+      "startMs": 15136.363636,
+      "endMs": 16954.545455,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        22566.667,
-        22933.333,
-        23300,
-        23666.667,
-        24000
+        15136.363636,
+        15500,
+        15863.636364,
+        16227.272727,
+        16590.909091
       ]
     },
     {
-      "startMs": 24366.667,
-      "endMs": 26566.667,
+      "startMs": 16954.545455,
+      "endMs": 17000,
+      "numerator": 5,
+      "denominator": 4,
+      "beatTimesMs": [
+        16954.545455
+      ],
+      "estimated": true,
+      "partial": true
+    },
+    {
+      "startMs": 17000,
+      "endMs": 19000,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        24366.667,
-        24733.333,
-        25100,
-        25466.667,
-        25833.333,
-        26200
-      ]
+        17000,
+        17363.636364,
+        17727.272727,
+        18090.909091,
+        18454.545455,
+        18818.181818
+      ],
+      "estimated": true,
+      "partial": true
     },
     {
-      "startMs": 26566.667,
-      "endMs": 28366.667,
+      "startMs": 19000,
+      "endMs": 20818.181818,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        26566.667,
-        26933.333,
-        27300,
-        27666.667,
-        28000
+        19000,
+        19363.636364,
+        19727.272727,
+        20090.909091,
+        20454.545455
       ]
     },
     {
-      "startMs": 28366.667,
-      "endMs": 30200,
+      "startMs": 20818.181818,
+      "endMs": 22636.363636,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        28366.667,
-        28733.333,
-        29100,
-        29466.667,
-        29833.333
+        20818.181818,
+        21181.818182,
+        21545.454545,
+        21909.090909,
+        22272.727273
       ]
     },
     {
-      "startMs": 30200,
+      "startMs": 22636.363636,
+      "endMs": 24454.545455,
+      "numerator": 5,
+      "denominator": 4,
+      "beatTimesMs": [
+        22636.363636,
+        23000,
+        23363.636364,
+        23727.272727,
+        24090.909091
+      ]
+    },
+    {
+      "startMs": 24454.545455,
+      "endMs": 24500,
+      "numerator": 5,
+      "denominator": 4,
+      "beatTimesMs": [
+        24454.545455
+      ],
+      "estimated": true,
+      "partial": true
+    },
+    {
+      "startMs": 24500,
+      "endMs": 26500,
+      "numerator": 6,
+      "denominator": 4,
+      "beatTimesMs": [
+        24500,
+        24863.636364,
+        25227.272727,
+        25590.909091,
+        25954.545455,
+        26318.181818
+      ],
+      "estimated": true,
+      "partial": true
+    },
+    {
+      "startMs": 26500,
+      "endMs": 28318.181818,
+      "numerator": 5,
+      "denominator": 4,
+      "beatTimesMs": [
+        26500,
+        26863.636364,
+        27227.272727,
+        27590.909091,
+        27954.545455
+      ]
+    },
+    {
+      "startMs": 28318.181818,
+      "endMs": 30136.363636,
+      "numerator": 5,
+      "denominator": 4,
+      "beatTimesMs": [
+        28318.181818,
+        28681.818182,
+        29045.454545,
+        29409.090909,
+        29772.727273
+      ]
+    },
+    {
+      "startMs": 30136.363636,
+      "endMs": 31954.545455,
+      "numerator": 5,
+      "denominator": 4,
+      "beatTimesMs": [
+        30136.363636,
+        30500,
+        30863.636364,
+        31227.272727,
+        31590.909091
+      ]
+    },
+    {
+      "startMs": 31954.545455,
       "endMs": 32000,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        30200,
-        30566.667,
-        30933.333,
-        31300,
-        31666.667
-      ]
+        31954.545455
+      ],
+      "estimated": true,
+      "partial": true
     },
     {
       "startMs": 32000,
-      "endMs": 34200,
+      "endMs": 34181.818182,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
         32000,
-        32366.667,
-        32733.333,
-        33100,
-        33466.667,
-        33833.333
+        32363.636364,
+        32727.272727,
+        33090.909091,
+        33454.545455,
+        33818.181818
       ]
     },
     {
-      "startMs": 34200,
-      "endMs": 36000,
+      "startMs": 34181.818182,
+      "endMs": 34500,
+      "numerator": 6,
+      "denominator": 4,
+      "beatTimesMs": [
+        34181.818182
+      ],
+      "estimated": true,
+      "partial": true
+    },
+    {
+      "startMs": 34500,
+      "endMs": 36318.181818,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        34200,
-        34566.667,
-        34933.333,
-        35300,
-        35666.667
+        34500,
+        34863.636364,
+        35227.272727,
+        35590.909091,
+        35954.545455
       ]
     },
     {
-      "startMs": 36000,
-      "endMs": 37833.333,
+      "startMs": 36318.181818,
+      "endMs": 38136.363636,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        36000,
-        36366.667,
-        36733.333,
-        37100,
-        37466.667
+        36318.181818,
+        36681.818182,
+        37045.454545,
+        37409.090909,
+        37772.727273
       ]
     },
     {
-      "startMs": 37833.333,
-      "endMs": 39666.667,
+      "startMs": 38136.363636,
+      "endMs": 39500,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        37833.333,
-        38200,
-        38566.667,
-        38933.333,
-        39300
-      ]
+        38136.363636,
+        38500,
+        38863.636364,
+        39227.272727
+      ],
+      "estimated": true,
+      "partial": true
     },
     {
-      "startMs": 39666.667,
-      "endMs": 41833.333,
+      "startMs": 39500,
+      "endMs": 41681.818182,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        39666.667,
-        40000,
-        40366.667,
-        40733.333,
-        41100,
-        41466.667
+        39500,
+        39863.636364,
+        40227.272727,
+        40590.909091,
+        40954.545455,
+        41318.181818
       ]
     },
     {
-      "startMs": 41833.333,
-      "endMs": 43666.667,
+      "startMs": 41681.818182,
+      "endMs": 42000,
+      "numerator": 6,
+      "denominator": 4,
+      "beatTimesMs": [
+        41681.818182
+      ],
+      "estimated": true,
+      "partial": true
+    },
+    {
+      "startMs": 42000,
+      "endMs": 43818.181818,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        41833.333,
-        42200,
-        42566.667,
-        42933.333,
-        43300
+        42000,
+        42363.636364,
+        42727.272727,
+        43090.909091,
+        43454.545455
       ]
     },
     {
-      "startMs": 43666.667,
-      "endMs": 45466.667,
+      "startMs": 43818.181818,
+      "endMs": 45636.363636,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        43666.667,
-        44000,
-        44366.667,
-        44733.333,
-        45100
+        43818.181818,
+        44181.818182,
+        44545.454545,
+        44909.090909,
+        45272.727273
       ]
     },
     {
-      "startMs": 45466.667,
-      "endMs": 47300,
+      "startMs": 45636.363636,
+      "endMs": 47454.545455,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        45466.667,
-        45833.333,
-        46200,
-        46566.667,
-        46933.333
+        45636.363636,
+        46000,
+        46363.636364,
+        46727.272727,
+        47090.909091
       ]
     },
     {
-      "startMs": 47300,
-      "endMs": 49466.667,
-      "numerator": 6,
-      "denominator": 4,
-      "beatTimesMs": [
-        47300,
-        47666.667,
-        48000,
-        48366.667,
-        48733.333,
-        49100
-      ]
-    },
-    {
-      "startMs": 49466.667,
-      "endMs": 51300,
+      "startMs": 47454.545455,
+      "endMs": 47500,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        49466.667,
-        49833.333,
-        50200,
-        50566.667,
-        50933.333
-      ]
+        47454.545455
+      ],
+      "estimated": true,
+      "partial": true
     },
     {
-      "startMs": 51300,
-      "endMs": 53100,
+      "startMs": 47500,
+      "endMs": 49500,
+      "numerator": 6,
+      "denominator": 4,
+      "beatTimesMs": [
+        47500,
+        47863.636364,
+        48227.272727,
+        48590.909091,
+        48954.545455,
+        49318.181818
+      ],
+      "estimated": true,
+      "partial": true
+    },
+    {
+      "startMs": 49500,
+      "endMs": 51318.181818,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        51300,
-        51666.667,
-        52000,
-        52366.667,
-        52733.333
+        49500,
+        49863.636364,
+        50227.272727,
+        50590.909091,
+        50954.545455
       ]
     },
     {
-      "startMs": 53100,
-      "endMs": 55300,
+      "startMs": 51318.181818,
+      "endMs": 53000,
+      "numerator": 5,
+      "denominator": 4,
+      "beatTimesMs": [
+        51318.181818,
+        51681.818182,
+        52045.454545,
+        52409.090909,
+        52772.727273
+      ],
+      "estimated": true,
+      "partial": true
+    },
+    {
+      "startMs": 53000,
+      "endMs": 55181.818182,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        53100,
-        53466.667,
-        53833.333,
-        54200,
-        54566.667,
-        54933.333
+        53000,
+        53363.636364,
+        53727.272727,
+        54090.909091,
+        54454.545455,
+        54818.181818
       ]
     },
     {
-      "startMs": 55300,
-      "endMs": 57466.667,
+      "startMs": 55181.818182,
+      "endMs": 57363.636364,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        55300,
-        55666.667,
-        56000,
-        56366.667,
-        56733.333,
-        57100
+        55181.818182,
+        55545.454545,
+        55909.090909,
+        56272.727273,
+        56636.363636,
+        57000
       ]
     },
     {
-      "startMs": 57466.667,
-      "endMs": 59566.667,
+      "startMs": 57363.636364,
+      "endMs": 59514.705882,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        57466.667,
-        57833.333,
-        58200,
-        58533.333,
-        58900,
-        59233.333
+        57363.636364,
+        57727.272727,
+        58090.909091,
+        58454.545455,
+        58808.823529,
+        59161.764706
       ]
     },
     {
-      "startMs": 59566.667,
-      "endMs": 61566.667,
+      "startMs": 59514.705882,
+      "endMs": 61619.680851,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        59566.667,
-        59900,
-        60233.333,
-        60566.667,
-        60900,
-        61233.333
+        59514.705882,
+        59867.647059,
+        60220.588235,
+        60573.529412,
+        60926.470588,
+        61279.411765
       ]
     },
     {
-      "startMs": 61566.667,
-      "endMs": 63400,
+      "startMs": 61619.680851,
+      "endMs": 63534.574468,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        61566.667,
-        61866.667,
-        62166.667,
-        62500,
-        62800,
-        63100
+        61619.680851,
+        61938.829787,
+        62257.978723,
+        62577.12766,
+        62896.276596,
+        63215.425532
       ]
     },
     {
-      "startMs": 63400,
-      "endMs": 65133.333,
+      "startMs": 63534.574468,
+      "endMs": 65449.468085,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        63400,
-        63700,
-        64000,
-        64300,
-        64566.667,
-        64866.667
+        63534.574468,
+        63853.723404,
+        64172.87234,
+        64492.021277,
+        64811.170213,
+        65130.319149
       ]
     },
     {
-      "startMs": 65133.333,
-      "endMs": 66800,
+      "startMs": 65449.468085,
+      "endMs": 67364.361702,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        65133.333,
-        65433.333,
-        65700,
-        66000,
-        66266.667,
-        66533.333
+        65449.468085,
+        65768.617021,
+        66087.765957,
+        66406.914894,
+        66726.06383,
+        67045.212766
       ]
     },
     {
-      "startMs": 66800,
-      "endMs": 68366.667,
+      "startMs": 67364.361702,
+      "endMs": 68954.347826,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        66800,
-        67066.667,
-        67333.333,
-        67600,
-        67866.667,
-        68100
+        67364.361702,
+        67650,
+        67910.869565,
+        68171.73913,
+        68432.608696,
+        68693.478261
       ]
     },
     {
-      "startMs": 68366.667,
-      "endMs": 69933.333,
+      "startMs": 68954.347826,
+      "endMs": 70519.565217,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        68366.667,
-        68633.333,
-        68900,
-        69166.667,
-        69433.333,
-        69666.667
+        68954.347826,
+        69215.217391,
+        69476.086957,
+        69736.956522,
+        69997.826087,
+        70258.695652
       ]
     },
     {
-      "startMs": 69933.333,
-      "endMs": 71500,
+      "startMs": 70519.565217,
+      "endMs": 72084.782609,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        69933.333,
-        70200,
-        70466.667,
-        70733.333,
-        71000,
-        71233.333
+        70519.565217,
+        70780.434783,
+        71041.304348,
+        71302.173913,
+        71563.043478,
+        71823.913043
       ]
     },
     {
-      "startMs": 71500,
-      "endMs": 73066.667,
+      "startMs": 72084.782609,
+      "endMs": 73650,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        71500,
-        71766.667,
-        72033.333,
-        72300,
-        72566.667,
-        72800
+        72084.782609,
+        72345.652174,
+        72606.521739,
+        72867.391304,
+        73128.26087,
+        73389.130435
       ]
     },
     {
-      "startMs": 73066.667,
-      "endMs": 74633.333,
+      "startMs": 73650,
+      "endMs": 75215.217391,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        73066.667,
-        73333.333,
-        73600,
-        73866.667,
-        74100,
-        74366.667
+        73650,
+        73910.869565,
+        74171.73913,
+        74432.608696,
+        74693.478261,
+        74954.347826
       ]
     },
     {
-      "startMs": 74633.333,
-      "endMs": 76200,
+      "startMs": 75215.217391,
+      "endMs": 76780.434783,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        74633.333,
-        74900,
-        75166.667,
-        75433.333,
-        75666.667,
-        75933.333
+        75215.217391,
+        75476.086957,
+        75736.956522,
+        75997.826087,
+        76258.695652,
+        76519.565217
       ]
     },
     {
-      "startMs": 76200,
-      "endMs": 77766.667,
+      "startMs": 76780.434783,
+      "endMs": 78345.652174,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        76200,
-        76466.667,
-        76733.333,
-        77000,
-        77233.333,
-        77500
+        76780.434783,
+        77041.304348,
+        77302.173913,
+        77563.043478,
+        77823.913043,
+        78084.782609
       ]
     },
     {
-      "startMs": 77766.667,
-      "endMs": 79333.333,
+      "startMs": 78345.652174,
+      "endMs": 79910.869565,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        77766.667,
-        78033.333,
-        78300,
-        78566.667,
-        78800,
-        79066.667
+        78345.652174,
+        78606.521739,
+        78867.391304,
+        79128.26087,
+        79389.130435,
+        79650
       ]
     },
     {
-      "startMs": 79333.333,
-      "endMs": 80900,
+      "startMs": 79910.869565,
+      "endMs": 81476.086957,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        79333.333,
-        79600,
-        79866.667,
-        80100,
-        80366.667,
-        80633.333
+        79910.869565,
+        80171.73913,
+        80432.608696,
+        80693.478261,
+        80954.347826,
+        81215.217391
       ]
     },
     {
-      "startMs": 80900,
-      "endMs": 82466.667,
+      "startMs": 81476.086957,
+      "endMs": 83041.304348,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        80900,
-        81166.667,
-        81433.333,
-        81666.667,
-        81933.333,
-        82200
+        81476.086957,
+        81736.956522,
+        81997.826087,
+        82258.695652,
+        82519.565217,
+        82780.434783
       ]
     },
     {
-      "startMs": 82466.667,
-      "endMs": 84033.333,
+      "startMs": 83041.304348,
+      "endMs": 84606.521739,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        82466.667,
-        82733.333,
-        83000,
-        83233.333,
-        83500,
-        83766.667
+        83041.304348,
+        83302.173913,
+        83563.043478,
+        83823.913043,
+        84084.782609,
+        84345.652174
       ]
     },
     {
-      "startMs": 84033.333,
-      "endMs": 85600,
+      "startMs": 84606.521739,
+      "endMs": 86171.73913,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        84033.333,
-        84300,
-        84566.667,
-        84800,
-        85066.667,
-        85333.333
+        84606.521739,
+        84867.391304,
+        85128.26087,
+        85389.130435,
+        85650,
+        85910.869565
       ]
     },
     {
-      "startMs": 85600,
-      "endMs": 87166.667,
+      "startMs": 86171.73913,
+      "endMs": 87736.956522,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        85600,
-        85866.667,
-        86100,
-        86366.667,
-        86633.333,
-        86900
+        86171.73913,
+        86432.608696,
+        86693.478261,
+        86954.347826,
+        87215.217391,
+        87476.086957
       ]
     },
     {
-      "startMs": 87166.667,
-      "endMs": 88733.333,
+      "startMs": 87736.956522,
+      "endMs": 89302.173913,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        87166.667,
-        87433.333,
-        87666.667,
-        87933.333,
-        88200,
-        88466.667
+        87736.956522,
+        87997.826087,
+        88258.695652,
+        88519.565217,
+        88780.434783,
+        89041.304348
       ]
     },
     {
-      "startMs": 88733.333,
-      "endMs": 90300,
+      "startMs": 89302.173913,
+      "endMs": 90867.391304,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        88733.333,
-        89000,
-        89233.333,
-        89500,
-        89766.667,
-        90033.333
+        89302.173913,
+        89563.043478,
+        89823.913043,
+        90084.782609,
+        90345.652174,
+        90606.521739
       ]
     },
     {
-      "startMs": 90300,
-      "endMs": 91866.667,
+      "startMs": 90867.391304,
+      "endMs": 92432.608696,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        90300,
-        90566.667,
-        90800,
-        91066.667,
-        91333.333,
-        91600
+        90867.391304,
+        91128.26087,
+        91389.130435,
+        91650,
+        91910.869565,
+        92171.73913
       ]
     },
     {
-      "startMs": 91866.667,
-      "endMs": 93433.333,
+      "startMs": 92432.608696,
+      "endMs": 93997.826087,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        91866.667,
-        92100,
-        92366.667,
-        92633.333,
-        92900,
-        93166.667
+        92432.608696,
+        92693.478261,
+        92954.347826,
+        93215.217391,
+        93476.086957,
+        93736.956522
       ]
     },
     {
-      "startMs": 93433.333,
-      "endMs": 95000,
+      "startMs": 93997.826087,
+      "endMs": 95563.043478,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        93433.333,
-        93666.667,
-        93933.333,
-        94200,
-        94466.667,
-        94733.333
+        93997.826087,
+        94258.695652,
+        94519.565217,
+        94780.434783,
+        95041.304348,
+        95302.173913
       ]
     },
     {
-      "startMs": 95000,
-      "endMs": 96566.667,
+      "startMs": 95563.043478,
+      "endMs": 96500,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        95000,
-        95233.333,
-        95500,
-        95766.667,
-        96033.333,
-        96300
-      ]
+        95563.043478,
+        95823.913043,
+        96084.782609,
+        96345.652174
+      ],
+      "estimated": true,
+      "partial": true
     },
     {
-      "startMs": 96566.667,
-      "endMs": 98200,
+      "startMs": 96500,
+      "endMs": 98155.172414,
       "numerator": 4,
       "denominator": 4,
       "beatTimesMs": [
-        96566.667,
-        96966.667,
-        97366.667,
-        97800
+        96500,
+        96913.793103,
+        97327.586207,
+        97741.37931
       ]
     },
     {
-      "startMs": 98200,
-      "endMs": 99866.667,
+      "startMs": 98155.172414,
+      "endMs": 99810.344828,
       "numerator": 4,
       "denominator": 4,
       "beatTimesMs": [
-        98200,
-        98633.333,
-        99033.333,
-        99433.333
+        98155.172414,
+        98568.965517,
+        98982.758621,
+        99396.551724
       ]
     },
     {
-      "startMs": 99866.667,
-      "endMs": 101500,
+      "startMs": 99810.344828,
+      "endMs": 101465.517241,
       "numerator": 4,
       "denominator": 4,
       "beatTimesMs": [
-        99866.667,
-        100266.667,
-        100700,
-        101100
+        99810.344828,
+        100224.137931,
+        100637.931034,
+        101051.724138
       ]
     },
     {
-      "startMs": 101500,
-      "endMs": 103166.667,
+      "startMs": 101465.517241,
+      "endMs": 103120.689655,
       "numerator": 4,
       "denominator": 4,
       "beatTimesMs": [
-        101500,
-        101933.333,
-        102333.333,
-        102766.667
+        101465.517241,
+        101879.310345,
+        102293.103448,
+        102706.896552
       ]
     },
     {
-      "startMs": 103166.667,
-      "endMs": 104833.333,
+      "startMs": 103120.689655,
+      "endMs": 104775.862069,
       "numerator": 4,
       "denominator": 4,
       "beatTimesMs": [
-        103166.667,
-        103600,
-        104000,
-        104400
+        103120.689655,
+        103534.482759,
+        103948.275862,
+        104362.068966
       ]
     },
     {
-      "startMs": 104833.333,
-      "endMs": 106466.667,
+      "startMs": 104775.862069,
+      "endMs": 106431.034483,
       "numerator": 4,
       "denominator": 4,
       "beatTimesMs": [
-        104833.333,
-        105233.333,
-        105666.667,
-        106066.667
+        104775.862069,
+        105189.655172,
+        105603.448276,
+        106017.241379
       ]
     },
     {
-      "startMs": 106466.667,
-      "endMs": 108133.333,
+      "startMs": 106431.034483,
+      "endMs": 108086.206897,
       "numerator": 4,
       "denominator": 4,
       "beatTimesMs": [
-        106466.667,
-        106900,
-        107300,
-        107733.333
+        106431.034483,
+        106844.827586,
+        107258.62069,
+        107672.413793
       ]
     },
     {
-      "startMs": 108133.333,
-      "endMs": 109800,
+      "startMs": 108086.206897,
+      "endMs": 109741.37931,
       "numerator": 4,
       "denominator": 4,
       "beatTimesMs": [
-        108133.333,
-        108566.667,
-        108966.667,
-        109366.667
+        108086.206897,
+        108500,
+        108913.793103,
+        109327.586207
       ]
     },
     {
-      "startMs": 109800,
-      "endMs": 111433.333,
+      "startMs": 109741.37931,
+      "endMs": 111396.551724,
       "numerator": 4,
       "denominator": 4,
       "beatTimesMs": [
-        109800,
-        110200,
-        110633.333,
-        111033.333
+        109741.37931,
+        110155.172414,
+        110568.965517,
+        110982.758621
       ]
     },
     {
-      "startMs": 111433.333,
-      "endMs": 113100,
+      "startMs": 111396.551724,
+      "endMs": 113051.724138,
       "numerator": 4,
       "denominator": 4,
       "beatTimesMs": [
-        111433.333,
-        111866.667,
-        112266.667,
-        112700
+        111396.551724,
+        111810.344828,
+        112224.137931,
+        112637.931034
       ]
     },
     {
-      "startMs": 113100,
-      "endMs": 114766.667,
+      "startMs": 113051.724138,
+      "endMs": 114706.896552,
       "numerator": 4,
       "denominator": 4,
       "beatTimesMs": [
-        113100,
-        113500,
-        113933.333,
-        114333.333
+        113051.724138,
+        113465.517241,
+        113879.310345,
+        114293.103448
       ]
     },
     {
-      "startMs": 114766.667,
-      "endMs": 116400,
+      "startMs": 114706.896552,
+      "endMs": 116362.068966,
       "numerator": 4,
       "denominator": 4,
       "beatTimesMs": [
-        114766.667,
-        115166.667,
-        115600,
-        116000
+        114706.896552,
+        115120.689655,
+        115534.482759,
+        115948.275862
       ]
     },
     {
-      "startMs": 116400,
-      "endMs": 118066.667,
+      "startMs": 116362.068966,
+      "endMs": 118017.241379,
       "numerator": 4,
       "denominator": 4,
       "beatTimesMs": [
-        116400,
-        116833.333,
-        117233.333,
-        117666.667
+        116362.068966,
+        116775.862069,
+        117189.655172,
+        117603.448276
       ]
     },
     {
-      "startMs": 118066.667,
-      "endMs": 119733.333,
+      "startMs": 118017.241379,
+      "endMs": 119672.413793,
       "numerator": 4,
       "denominator": 4,
       "beatTimesMs": [
-        118066.667,
-        118466.667,
-        118900,
-        119300
+        118017.241379,
+        118431.034483,
+        118844.827586,
+        119258.62069
       ]
     },
     {
-      "startMs": 119733.333,
-      "endMs": 121366.667,
+      "startMs": 119672.413793,
+      "endMs": 121327.586207,
       "numerator": 4,
       "denominator": 4,
       "beatTimesMs": [
-        119733.333,
-        120133.333,
-        120566.667,
-        120966.667
+        119672.413793,
+        120086.206897,
+        120500,
+        120913.793103
       ]
     },
     {
-      "startMs": 121366.667,
-      "endMs": 122633.333,
+      "startMs": 121327.586207,
+      "endMs": 121500,
+      "numerator": 4,
+      "denominator": 4,
+      "beatTimesMs": [
+        121327.586207
+      ],
+      "estimated": true,
+      "partial": true
+    },
+    {
+      "startMs": 121500,
+      "endMs": 122741.37931,
       "numerator": 3,
       "denominator": 4,
       "beatTimesMs": [
-        121366.667,
-        121800,
-        122200
+        121500,
+        121913.793103,
+        122327.586207
       ]
     },
     {
-      "startMs": 122633.333,
-      "endMs": 123866.667,
+      "startMs": 122741.37931,
+      "endMs": 123982.758621,
       "numerator": 3,
       "denominator": 4,
       "beatTimesMs": [
-        122633.333,
-        123033.333,
-        123433.333
+        122741.37931,
+        123155.172414,
+        123568.965517
       ]
     },
     {
-      "startMs": 123866.667,
-      "endMs": 125100,
+      "startMs": 123982.758621,
+      "endMs": 125000,
       "numerator": 3,
       "denominator": 4,
       "beatTimesMs": [
-        123866.667,
-        124266.667,
-        124700
-      ]
+        123982.758621,
+        124396.551724,
+        124810.344828
+      ],
+      "estimated": true,
+      "partial": true
     },
     {
-      "startMs": 125100,
-      "endMs": 126933.333,
+      "startMs": 125000,
+      "endMs": 126818.181818,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        125100,
-        125466.667,
-        125833.333,
-        126200,
-        126566.667
+        125000,
+        125363.636364,
+        125727.272727,
+        126090.909091,
+        126454.545455
       ]
     },
     {
-      "startMs": 126933.333,
-      "endMs": 129100,
-      "numerator": 6,
-      "denominator": 4,
-      "beatTimesMs": [
-        126933.333,
-        127300,
-        127633.333,
-        128000,
-        128366.667,
-        128733.333
-      ]
-    },
-    {
-      "startMs": 129100,
-      "endMs": 130933.333,
+      "startMs": 126818.181818,
+      "endMs": 127000,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        129100,
-        129466.667,
-        129833.333,
-        130200,
-        130566.667
-      ]
+        126818.181818
+      ],
+      "estimated": true,
+      "partial": true
     },
     {
-      "startMs": 130933.333,
-      "endMs": 132733.333,
+      "startMs": 127000,
+      "endMs": 129000,
+      "numerator": 6,
+      "denominator": 4,
+      "beatTimesMs": [
+        127000,
+        127363.636364,
+        127727.272727,
+        128090.909091,
+        128454.545455,
+        128818.181818
+      ],
+      "estimated": true,
+      "partial": true
+    },
+    {
+      "startMs": 129000,
+      "endMs": 130818.181818,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        130933.333,
-        131300,
-        131633.333,
-        132000,
-        132366.667
+        129000,
+        129363.636364,
+        129727.272727,
+        130090.909091,
+        130454.545455
       ]
     },
     {
-      "startMs": 132733.333,
-      "endMs": 134566.667,
+      "startMs": 130818.181818,
+      "endMs": 132636.363636,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        132733.333,
-        133100,
-        133466.667,
-        133833.333,
-        134200
+        130818.181818,
+        131181.818182,
+        131545.454545,
+        131909.090909,
+        132272.727273
       ]
     },
     {
-      "startMs": 134566.667,
-      "endMs": 136733.333,
-      "numerator": 6,
-      "denominator": 4,
-      "beatTimesMs": [
-        134566.667,
-        134933.333,
-        135300,
-        135633.333,
-        136000,
-        136366.667
-      ]
-    },
-    {
-      "startMs": 136733.333,
-      "endMs": 138566.667,
+      "startMs": 132636.363636,
+      "endMs": 134454.545455,
       "numerator": 5,
       "denominator": 4,
       "beatTimesMs": [
-        136733.333,
-        137100,
-        137466.667,
-        137833.333,
-        138200
+        132636.363636,
+        133000,
+        133363.636364,
+        133727.272727,
+        134090.909091
       ]
     },
     {
-      "startMs": 138566.667,
-      "endMs": 140633.333,
+      "startMs": 134454.545455,
+      "endMs": 134500,
+      "numerator": 5,
+      "denominator": 4,
+      "beatTimesMs": [
+        134454.545455
+      ],
+      "estimated": true,
+      "partial": true
+    },
+    {
+      "startMs": 134500,
+      "endMs": 136681.818182,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        138566.667,
-        138933.333,
-        139266.667,
-        139633.333,
-        139966.667,
-        140300
+        134500,
+        134863.636364,
+        135227.272727,
+        135590.909091,
+        135954.545455,
+        136318.181818
       ]
     },
     {
-      "startMs": 140633.333,
-      "endMs": 142433.333,
+      "startMs": 136681.818182,
+      "endMs": 137000,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        140633.333,
-        140933.333,
-        141233.333,
-        141566.667,
-        141866.667,
-        142133.333
+        136681.818182
+      ],
+      "estimated": true,
+      "partial": true
+    },
+    {
+      "startMs": 137000,
+      "endMs": 138500,
+      "numerator": 5,
+      "denominator": 4,
+      "beatTimesMs": [
+        137000,
+        137363.636364,
+        137727.272727,
+        138090.909091,
+        138454.545455
+      ],
+      "estimated": true,
+      "partial": true
+    },
+    {
+      "startMs": 138500,
+      "endMs": 140659.574468,
+      "numerator": 6,
+      "denominator": 4,
+      "beatTimesMs": [
+        138500,
+        138863.636364,
+        139227.272727,
+        139590.909091,
+        139954.545455,
+        140318.181818
       ]
     },
     {
-      "startMs": 142433.333,
-      "endMs": 144066.667,
+      "startMs": 140659.574468,
+      "endMs": 142574.468085,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        142433.333,
-        142733.333,
-        143000,
-        143266.667,
-        143533.333,
-        143800
+        140659.574468,
+        140978.723404,
+        141297.87234,
+        141617.021277,
+        141936.170213,
+        142255.319149
       ]
     },
     {
-      "startMs": 144066.667,
-      "endMs": 145633.333,
+      "startMs": 142574.468085,
+      "endMs": 144308.695652,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        144066.667,
-        144333.333,
-        144600,
-        144833.333,
-        145100,
-        145366.667
+        142574.468085,
+        142893.617021,
+        143212.765957,
+        143526.086957,
+        143786.956522,
+        144047.826087
       ]
     },
     {
-      "startMs": 145633.333,
-      "endMs": 147200,
+      "startMs": 144308.695652,
+      "endMs": 145873.913043,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        145633.333,
-        145900,
-        146166.667,
-        146400,
-        146666.667,
-        146933.333
+        144308.695652,
+        144569.565217,
+        144830.434783,
+        145091.304348,
+        145352.173913,
+        145613.043478
       ]
     },
     {
-      "startMs": 147200,
-      "endMs": 148766.667,
+      "startMs": 145873.913043,
+      "endMs": 147439.130435,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        147200,
-        147466.667,
+        145873.913043,
+        146134.782609,
+        146395.652174,
+        146656.521739,
+        146917.391304,
+        147178.26087
+      ]
+    },
+    {
+      "startMs": 147439.130435,
+      "endMs": 149004.347826,
+      "numerator": 6,
+      "denominator": 4,
+      "beatTimesMs": [
+        147439.130435,
         147700,
-        147966.667,
-        148233.333,
-        148500
+        147960.869565,
+        148221.73913,
+        148482.608696,
+        148743.478261
       ]
     },
     {
-      "startMs": 148766.667,
-      "endMs": 150333.333,
+      "startMs": 149004.347826,
+      "endMs": 150569.565217,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        148766.667,
-        149033.333,
-        149300,
-        149566.667,
-        149800,
-        150066.667
+        149004.347826,
+        149265.217391,
+        149526.086957,
+        149786.956522,
+        150047.826087,
+        150308.695652
       ]
     },
     {
-      "startMs": 150333.333,
-      "endMs": 151900,
+      "startMs": 150569.565217,
+      "endMs": 152134.782609,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        150333.333,
-        150600,
-        150866.667,
-        151133.333,
-        151366.667,
-        151633.333
+        150569.565217,
+        150830.434783,
+        151091.304348,
+        151352.173913,
+        151613.043478,
+        151873.913043
       ]
     },
     {
-      "startMs": 151900,
-      "endMs": 153466.667,
+      "startMs": 152134.782609,
+      "endMs": 153700,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        151900,
-        152166.667,
-        152433.333,
-        152700,
-        152933.333,
-        153200
+        152134.782609,
+        152395.652174,
+        152656.521739,
+        152917.391304,
+        153178.26087,
+        153439.130435
       ]
     },
     {
-      "startMs": 153466.667,
-      "endMs": 155033.333,
+      "startMs": 153700,
+      "endMs": 155265.217391,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        153466.667,
-        153733.333,
-        154000,
-        154233.333,
-        154500,
-        154766.667
+        153700,
+        153960.869565,
+        154221.73913,
+        154482.608696,
+        154743.478261,
+        155004.347826
       ]
     },
     {
-      "startMs": 155033.333,
-      "endMs": 156600,
+      "startMs": 155265.217391,
+      "endMs": 156830.434783,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        155033.333,
-        155300,
-        155566.667,
-        155800,
-        156066.667,
-        156333.333
+        155265.217391,
+        155526.086957,
+        155786.956522,
+        156047.826087,
+        156308.695652,
+        156569.565217
       ]
     },
     {
-      "startMs": 156600,
-      "endMs": 158166.667,
+      "startMs": 156830.434783,
+      "endMs": 158395.652174,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        156600,
-        156866.667,
-        157133.333,
-        157366.667,
-        157633.333,
-        157900
+        156830.434783,
+        157091.304348,
+        157352.173913,
+        157613.043478,
+        157873.913043,
+        158134.782609
       ]
     },
     {
-      "startMs": 158166.667,
-      "endMs": 159733.333,
+      "startMs": 158395.652174,
+      "endMs": 159960.869565,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        158166.667,
-        158433.333,
-        158700,
-        158933.333,
-        159200,
-        159466.667
+        158395.652174,
+        158656.521739,
+        158917.391304,
+        159178.26087,
+        159439.130435,
+        159700
       ]
     },
     {
-      "startMs": 159733.333,
-      "endMs": 161300,
+      "startMs": 159960.869565,
+      "endMs": 161526.086957,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        159733.333,
-        160000,
-        160233.333,
-        160500,
-        160766.667,
-        161033.333
+        159960.869565,
+        160221.73913,
+        160482.608696,
+        160743.478261,
+        161004.347826,
+        161265.217391
       ]
     },
     {
-      "startMs": 161300,
-      "endMs": 162866.667,
+      "startMs": 161526.086957,
+      "endMs": 163091.304348,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        161300,
-        161566.667,
-        161800,
-        162066.667,
-        162333.333,
-        162600
+        161526.086957,
+        161786.956522,
+        162047.826087,
+        162308.695652,
+        162569.565217,
+        162830.434783
       ]
     },
     {
-      "startMs": 162866.667,
-      "endMs": 164433.333,
+      "startMs": 163091.304348,
+      "endMs": 164656.521739,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        162866.667,
-        163133.333,
-        163366.667,
-        163633.333,
-        163900,
-        164166.667
+        163091.304348,
+        163352.173913,
+        163613.043478,
+        163873.913043,
+        164134.782609,
+        164395.652174
       ]
     },
     {
-      "startMs": 164433.333,
-      "endMs": 166000,
+      "startMs": 164656.521739,
+      "endMs": 166221.73913,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        164433.333,
-        164700,
-        164933.333,
-        165200,
-        165466.667,
-        165733.333
+        164656.521739,
+        164917.391304,
+        165178.26087,
+        165439.130435,
+        165700,
+        165960.869565
       ]
     },
     {
-      "startMs": 166000,
-      "endMs": 167566.667,
+      "startMs": 166221.73913,
+      "endMs": 167786.956522,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        166000,
-        166233.333,
-        166500,
-        166766.667,
-        167033.333,
-        167300
+        166221.73913,
+        166482.608696,
+        166743.478261,
+        167004.347826,
+        167265.217391,
+        167526.086957
       ]
     },
     {
-      "startMs": 167566.667,
-      "endMs": 169133.333,
+      "startMs": 167786.956522,
+      "endMs": 169352.173913,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        167566.667,
-        167800,
-        168066.667,
-        168333.333,
-        168600,
-        168866.667
+        167786.956522,
+        168047.826087,
+        168308.695652,
+        168569.565217,
+        168830.434783,
+        169091.304348
       ]
     },
     {
-      "startMs": 169133.333,
-      "endMs": 170700,
+      "startMs": 169352.173913,
+      "endMs": 170917.391304,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        169133.333,
-        169366.667,
-        169633.333,
-        169900,
-        170166.667,
-        170433.333
+        169352.173913,
+        169613.043478,
+        169873.913043,
+        170134.782609,
+        170395.652174,
+        170656.521739
       ]
     },
     {
-      "startMs": 170700,
-      "endMs": 172233.333,
+      "startMs": 170917.391304,
+      "endMs": 172482.608696,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        170700,
-        170933.333,
-        171200,
-        171466.667,
-        171733.333,
-        172000
+        170917.391304,
+        171178.26087,
+        171439.130435,
+        171700,
+        171960.869565,
+        172221.73913
       ]
     },
     {
-      "startMs": 172233.333,
-      "endMs": 173800,
+      "startMs": 172482.608696,
+      "endMs": 174047.826087,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        172233.333,
-        172500,
-        172766.667,
-        173033.333,
-        173300,
-        173566.667
+        172482.608696,
+        172743.478261,
+        173004.347826,
+        173265.217391,
+        173526.086957,
+        173786.956522
       ]
     },
     {
-      "startMs": 173800,
-      "endMs": 175366.667,
+      "startMs": 174047.826087,
+      "endMs": 175613.043478,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        173800,
-        174066.667,
-        174333.333,
-        174600,
-        174866.667,
-        175133.333
+        174047.826087,
+        174308.695652,
+        174569.565217,
+        174830.434783,
+        175091.304348,
+        175352.173913
       ]
     },
     {
-      "startMs": 175366.667,
-      "endMs": 176933.333,
+      "startMs": 175613.043478,
+      "endMs": 177178.26087,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        175366.667,
-        175633.333,
-        175900,
-        176166.667,
-        176433.333,
-        176700
+        175613.043478,
+        175873.913043,
+        176134.782609,
+        176395.652174,
+        176656.521739,
+        176917.391304
       ]
     },
     {
-      "startMs": 176933.333,
-      "endMs": 178500,
+      "startMs": 177178.26087,
+      "endMs": 178743.478261,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        176933.333,
-        177200,
-        177466.667,
-        177733.333,
-        178000,
-        178233.333
+        177178.26087,
+        177439.130435,
+        177700,
+        177960.869565,
+        178221.73913,
+        178482.608696
       ]
     },
     {
-      "startMs": 178500,
-      "endMs": 180066.667,
+      "startMs": 178743.478261,
+      "endMs": 180308.695652,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        178500,
-        178766.667,
-        179033.333,
-        179300,
-        179566.667,
-        179800
+        178743.478261,
+        179004.347826,
+        179265.217391,
+        179526.086957,
+        179786.956522,
+        180047.826087
       ]
     },
     {
-      "startMs": 180066.667,
-      "endMs": 181633.333,
+      "startMs": 180308.695652,
+      "endMs": 181873.913043,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        180066.667,
-        180333.333,
-        180600,
-        180866.667,
-        181133.333,
-        181366.667
+        180308.695652,
+        180569.565217,
+        180830.434783,
+        181091.304348,
+        181352.173913,
+        181613.043478
       ]
     },
     {
-      "startMs": 181633.333,
-      "endMs": 183200,
+      "startMs": 181873.913043,
+      "endMs": 183439.130435,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        181633.333,
-        181900,
-        182166.667,
-        182433.333,
-        182700,
-        182933.333
+        181873.913043,
+        182134.782609,
+        182395.652174,
+        182656.521739,
+        182917.391304,
+        183178.26087
       ]
     },
     {
-      "startMs": 183200,
-      "endMs": 184766.667,
+      "startMs": 183439.130435,
+      "endMs": 185004.347826,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        183200,
-        183466.667,
-        183733.333,
-        184000,
-        184233.333,
-        184500
+        183439.130435,
+        183700,
+        183960.869565,
+        184221.73913,
+        184482.608696,
+        184743.478261
       ]
     },
     {
-      "startMs": 184766.667,
-      "endMs": 186333.333,
+      "startMs": 185004.347826,
+      "endMs": 186569.565217,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        184766.667,
-        185033.333,
-        185300,
-        185566.667,
-        185800,
-        186066.667
+        185004.347826,
+        185265.217391,
+        185526.086957,
+        185786.956522,
+        186047.826087,
+        186308.695652
       ]
     },
     {
-      "startMs": 186333.333,
-      "endMs": 187900,
+      "startMs": 186569.565217,
+      "endMs": 188134.782609,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        186333.333,
-        186600,
-        186866.667,
-        187133.333,
-        187366.667,
-        187633.333
+        186569.565217,
+        186830.434783,
+        187091.304348,
+        187352.173913,
+        187613.043478,
+        187873.913043
       ]
     },
     {
-      "startMs": 187900,
-      "endMs": 189466.667,
+      "startMs": 188134.782609,
+      "endMs": 189700,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        187900,
-        188166.667,
-        188433.333,
-        188700,
-        188933.333,
-        189200
+        188134.782609,
+        188395.652174,
+        188656.521739,
+        188917.391304,
+        189178.26087,
+        189439.130435
       ]
     },
     {
-      "startMs": 189466.667,
-      "endMs": 191033.333,
+      "startMs": 189700,
+      "endMs": 191265.217391,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        189466.667,
-        189733.333,
-        190000,
-        190233.333,
-        190500,
-        190766.667
+        189700,
+        189960.869565,
+        190221.73913,
+        190482.608696,
+        190743.478261,
+        191004.347826
       ]
     },
     {
-      "startMs": 191033.333,
-      "endMs": 192600,
+      "startMs": 191265.217391,
+      "endMs": 192830.434783,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        191033.333,
-        191300,
-        191566.667,
-        191800,
-        192066.667,
-        192333.333
+        191265.217391,
+        191526.086957,
+        191786.956522,
+        192047.826087,
+        192308.695652,
+        192569.565217
       ]
     },
     {
-      "startMs": 192600,
-      "endMs": 194166.667,
+      "startMs": 192830.434783,
+      "endMs": 194395.652174,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        192600,
-        192866.667,
-        193133.333,
-        193366.667,
-        193633.333,
-        193900
+        192830.434783,
+        193091.304348,
+        193352.173913,
+        193613.043478,
+        193873.913043,
+        194134.782609
       ]
     },
     {
-      "startMs": 194166.667,
-      "endMs": 195733.333,
+      "startMs": 194395.652174,
+      "endMs": 195960.869565,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        194166.667,
-        194433.333,
-        194700,
-        194933.333,
-        195200,
-        195466.667
+        194395.652174,
+        194656.521739,
+        194917.391304,
+        195178.26087,
+        195439.130435,
+        195700
       ]
     },
     {
-      "startMs": 195733.333,
-      "endMs": 197300,
+      "startMs": 195960.869565,
+      "endMs": 197526.086957,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        195733.333,
-        196000,
-        196233.333,
-        196500,
-        196766.667,
-        197033.333
+        195960.869565,
+        196221.73913,
+        196482.608696,
+        196743.478261,
+        197004.347826,
+        197265.217391
       ]
     },
     {
-      "startMs": 197300,
-      "endMs": 198866.667,
+      "startMs": 197526.086957,
+      "endMs": 199091.304348,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        197300,
-        197566.667,
-        197800,
-        198066.667,
-        198333.333,
-        198600
+        197526.086957,
+        197786.956522,
+        198047.826087,
+        198308.695652,
+        198569.565217,
+        198830.434783
       ]
     },
     {
-      "startMs": 198866.667,
-      "endMs": 200433.333,
+      "startMs": 199091.304348,
+      "endMs": 200656.521739,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        198866.667,
-        199133.333,
-        199366.667,
-        199633.333,
-        199900,
-        200166.667
+        199091.304348,
+        199352.173913,
+        199613.043478,
+        199873.913043,
+        200134.782609,
+        200395.652174
       ]
     },
     {
-      "startMs": 200433.333,
-      "endMs": 202000,
+      "startMs": 200656.521739,
+      "endMs": 202221.73913,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        200433.333,
-        200700,
-        200933.333,
-        201200,
-        201466.667,
-        201733.333
+        200656.521739,
+        200917.391304,
+        201178.26087,
+        201439.130435,
+        201700,
+        201960.869565
       ]
     },
     {
-      "startMs": 202000,
-      "endMs": 203566.667,
+      "startMs": 202221.73913,
+      "endMs": 203786.956522,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        202000,
-        202233.333,
-        202500,
-        202766.667,
-        203033.333,
-        203300
+        202221.73913,
+        202482.608696,
+        202743.478261,
+        203004.347826,
+        203265.217391,
+        203526.086957
       ]
     },
     {
-      "startMs": 203566.667,
-      "endMs": 205133.333,
+      "startMs": 203786.956522,
+      "endMs": 205352.173913,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        203566.667,
-        203800,
-        204066.667,
-        204333.333,
-        204600,
-        204866.667
+        203786.956522,
+        204047.826087,
+        204308.695652,
+        204569.565217,
+        204830.434783,
+        205091.304348
       ]
     },
     {
-      "startMs": 205133.333,
-      "endMs": 206700,
+      "startMs": 205352.173913,
+      "endMs": 206917.391304,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        205133.333,
-        205366.667,
-        205633.333,
-        205900,
-        206166.667,
-        206433.333
+        205352.173913,
+        205613.043478,
+        205873.913043,
+        206134.782609,
+        206395.652174,
+        206656.521739
       ]
     },
     {
-      "startMs": 206700,
-      "endMs": 208233.333,
+      "startMs": 206917.391304,
+      "endMs": 208482.608696,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        206700,
-        206933.333,
-        207200,
-        207466.667,
-        207733.333,
-        208000
+        206917.391304,
+        207178.26087,
+        207439.130435,
+        207700,
+        207960.869565,
+        208221.73913
       ]
     },
     {
-      "startMs": 208233.333,
-      "endMs": 209800,
+      "startMs": 208482.608696,
+      "endMs": 210047.826087,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        208233.333,
-        208500,
-        208766.667,
-        209033.333,
-        209300,
-        209566.667
+        208482.608696,
+        208743.478261,
+        209004.347826,
+        209265.217391,
+        209526.086957,
+        209786.956522
       ]
     },
     {
-      "startMs": 209800,
-      "endMs": 211366.667,
+      "startMs": 210047.826087,
+      "endMs": 211613.043478,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        209800,
-        210066.667,
-        210333.333,
-        210600,
-        210866.667,
-        211133.333
+        210047.826087,
+        210308.695652,
+        210569.565217,
+        210830.434783,
+        211091.304348,
+        211352.173913
       ]
     },
     {
-      "startMs": 211366.667,
-      "endMs": 212933.333,
+      "startMs": 211613.043478,
+      "endMs": 213178.26087,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        211366.667,
-        211633.333,
-        211900,
-        212166.667,
-        212433.333,
-        212700
+        211613.043478,
+        211873.913043,
+        212134.782609,
+        212395.652174,
+        212656.521739,
+        212917.391304
       ]
     },
     {
-      "startMs": 212933.333,
-      "endMs": 214500,
+      "startMs": 213178.26087,
+      "endMs": 214743.478261,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        212933.333,
-        213200,
-        213466.667,
-        213733.333,
-        214000,
-        214233.333
+        213178.26087,
+        213439.130435,
+        213700,
+        213960.869565,
+        214221.73913,
+        214482.608696
       ]
     },
     {
-      "startMs": 214500,
-      "endMs": 216066.667,
+      "startMs": 214743.478261,
+      "endMs": 216308.695652,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        214500,
-        214766.667,
-        215033.333,
-        215300,
-        215566.667,
-        215800
+        214743.478261,
+        215004.347826,
+        215265.217391,
+        215526.086957,
+        215786.956522,
+        216047.826087
       ]
     },
     {
-      "startMs": 216066.667,
-      "endMs": 217633.333,
+      "startMs": 216308.695652,
+      "endMs": 217873.913043,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        216066.667,
-        216333.333,
-        216600,
-        216866.667,
-        217133.333,
-        217366.667
+        216308.695652,
+        216569.565217,
+        216830.434783,
+        217091.304348,
+        217352.173913,
+        217613.043478
       ]
     },
     {
-      "startMs": 217633.333,
-      "endMs": 219200,
+      "startMs": 217873.913043,
+      "endMs": 219000,
       "numerator": 6,
       "denominator": 4,
       "beatTimesMs": [
-        217633.333,
-        217900,
-        218166.667,
-        218433.333,
-        218700,
-        218933.333
-      ]
+        217873.913043,
+        218134.782609,
+        218395.652174,
+        218656.521739,
+        218917.391304
+      ],
+      "estimated": true,
+      "partial": true
     },
     {
-      "startMs": 230933.333,
-      "endMs": 232233.333,
+      "startMs": 229500,
+      "endMs": 230776.595745,
       "numerator": 3,
       "denominator": 4,
       "beatTimesMs": [
-        230933.333,
-        231400,
-        231833.333
+        229500,
+        229925.531915,
+        230351.06383
       ]
     },
     {
-      "startMs": 232233.333,
-      "endMs": 233566.667,
+      "startMs": 230776.595745,
+      "endMs": 232053.965814,
       "numerator": 3,
       "denominator": 4,
       "beatTimesMs": [
-        232233.333,
-        232700,
-        233133.333
+        230776.595745,
+        231202.12766,
+        231627.659574
       ]
     },
     {
-      "startMs": 233566.667,
-      "endMs": 234866.667,
+      "startMs": 232053.965814,
+      "endMs": 233354.57826,
       "numerator": 3,
       "denominator": 4,
       "beatTimesMs": [
-        233566.667,
-        233966.667,
-        234366.667
+        232053.965814,
+        232486.340783,
+        232919.87514
       ]
     },
     {
-      "startMs": 234866.667,
-      "endMs": 236166.667,
+      "startMs": 233354.57826,
+      "endMs": 234665.795892,
       "numerator": 3,
       "denominator": 4,
       "beatTimesMs": [
-        234866.667,
-        235266.667,
-        235700
+        233354.57826,
+        233790.459648,
+        234227.528937
       ]
     },
     {
-      "startMs": 236166.667,
-      "endMs": 237533.333,
+      "startMs": 234665.795892,
+      "endMs": 235987.882445,
       "numerator": 3,
       "denominator": 4,
       "beatTimesMs": [
-        236166.667,
-        236633.333,
-        237066.667
+        234665.795892,
+        235105.270414,
+        235545.96254
       ]
     },
     {
-      "startMs": 237533.333,
-      "endMs": 238833.333,
+      "startMs": 235987.882445,
+      "endMs": 237321.112768,
       "numerator": 3,
       "denominator": 4,
       "beatTimesMs": [
-        237533.333,
-        237966.667,
-        238433.333
+        235987.882445,
+        236431.040451,
+        236875.447021
       ]
     },
     {
-      "startMs": 238833.333,
-      "endMs": 240166.667,
+      "startMs": 237321.112768,
+      "endMs": 238665.773493,
       "numerator": 3,
       "denominator": 4,
       "beatTimesMs": [
-        238833.333,
-        239266.667,
-        239700
+        237321.112768,
+        237768.048457,
+        238216.265007
       ]
     },
     {
-      "startMs": 240166.667,
-      "endMs": 241633.333,
+      "startMs": 238665.773493,
+      "endMs": 240022.163755,
       "numerator": 3,
       "denominator": 4,
       "beatTimesMs": [
-        240166.667,
-        240700,
-        241200
+        238665.773493,
+        239116.585152,
+        239568.711383
       ]
     },
     {
-      "startMs": 241633.333,
-      "endMs": 248800,
+      "startMs": 240022.163755,
+      "endMs": 241390.595969,
       "numerator": 3,
       "denominator": 4,
       "beatTimesMs": [
-        241633.333,
-        242100,
-        242566.667
+        240022.163755,
+        240476.954006,
+        240933.094047
       ]
+    },
+    {
+      "startMs": 241390.595969,
+      "endMs": 242771.396669,
+      "numerator": 3,
+      "denominator": 4,
+      "beatTimesMs": [
+        241390.595969,
+        241849.472044,
+        242309.734728
+      ]
+    },
+    {
+      "startMs": 242771.396669,
+      "endMs": 244164.907418,
+      "numerator": 3,
+      "denominator": 4,
+      "beatTimesMs": [
+        242771.396669,
+        243234.470705,
+        243698.969875
+      ]
+    },
+    {
+      "startMs": 244164.907418,
+      "endMs": 245571.485797,
+      "numerator": 3,
+      "denominator": 4,
+      "beatTimesMs": [
+        244164.907418,
+        244632.296779,
+        245101.151614
+      ]
+    },
+    {
+      "startMs": 245571.485797,
+      "endMs": 246991.506474,
+      "numerator": 3,
+      "denominator": 4,
+      "beatTimesMs": [
+        245571.485797,
+        246043.313417,
+        246516.648794
+      ]
+    },
+    {
+      "startMs": 246991.506474,
+      "endMs": 248425.362371,
+      "numerator": 3,
+      "denominator": 4,
+      "beatTimesMs": [
+        246991.506474,
+        247467.90124,
+        247945.848115
+      ]
+    },
+    {
+      "startMs": 248425.362371,
+      "endMs": 248828,
+      "numerator": 3,
+      "denominator": 4,
+      "beatTimesMs": [
+        248425.362371
+      ],
+      "estimated": true,
+      "partial": true
     }
   ]
 }

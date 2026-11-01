@@ -1,0 +1,2 @@
+# Preserve the source CSV's BOM/CRLF bytes for reproducible provenance hashes.
+src/lib/meter-maps/odd-dice.full.sections.csv -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

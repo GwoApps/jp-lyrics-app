@@ -19,48 +19,57 @@ test('only the named artist, song and verified full recording enable the egg', (
   assert.equal(getOddDiceMap(song, 248800), ODD_DICE_FULL_MAP);
 });
 
-test('the observed full map contains 138 valid bars, 733 ordered beats and all four observed faces', () => {
-  assert.equal(isValidMeterMap(ODD_DICE_FULL_MAP), true);
-  assert.equal(ODD_DICE_FULL_MAP.bars.length, 138);
-  assert.equal(ODD_DICE_FULL_MAP.bars.reduce((count, bar) => count + bar.beatTimesMs.length, 0), 733);
-  assert.deepEqual([...new Set(ODD_DICE_FULL_MAP.bars.map((bar) => bar.numerator))].sort(), [3, 4, 5, 6]);
-  for (const [index, bar] of ODD_DICE_FULL_MAP.bars.entries()) {
+test('estimated map validates every generated bar and beat boundary', () => {
+  const map = ODD_DICE_FULL_MAP;
+  assert.equal(map.estimated, true);
+  assert.equal(isValidMeterMap(map), true);
+  assert.equal(map.bars.length, 157);
+  assert.equal(map.bars.reduce((n, b) => n + b.beatTimesMs.length, 0), 764);
+  assert.equal(map.bars.filter((b) => b.partial).length, 24);
+  assert.equal(map.tempoChanges?.length, 30);
+  for (const [index, bar] of map.bars.entries()) {
+    assert.equal(getMeterFrame(map, bar.endMs - 0.00001)?.barIndex, index);
+    assert.notEqual(getMeterFrame(map, bar.endMs)?.barIndex, index);
     for (const [beat, ms] of bar.beatTimesMs.entries()) {
-      const frame = getMeterFrame(ODD_DICE_FULL_MAP, ms);
-      assert.deepEqual(frame, { barIndex: index, beatIndex: beat, litCount: beat + 1, numerator: bar.numerator, denominator: 4 });
-      if (beat > 0) assert.equal(getMeterFrame(ODD_DICE_FULL_MAP, ms - 0.001)?.beatIndex, beat - 1);
+      assert.deepEqual(getMeterFrame(map, ms), { barIndex: index, beatIndex: beat, litCount: beat + 1,
+        numerator: bar.numerator, denominator: 4 });
+      if (beat) {
+        assert.equal(getMeterFrame(map, ms - 0.00001)?.beatIndex, beat - 1);
+        assert.ok(ms - bar.beatTimesMs[beat - 1] > 260);
+      }
     }
   }
 });
 
-test('real signature changes and unmetered rests use authored full-song timestamps', () => {
-  assert.equal(getMeterFrame(ODD_DICE_FULL_MAP, 0), null); // source count-in, not a fabricated bar
-  assert.equal(getMeterFrame(ODD_DICE_FULL_MAP, 7300)?.numerator, 5);
-  assert.equal(getMeterFrame(ODD_DICE_FULL_MAP, 9100)?.numerator, 6);
-  assert.equal(getMeterFrame(ODD_DICE_FULL_MAP, 96566.667)?.numerator, 4);
-  assert.equal(getMeterFrame(ODD_DICE_FULL_MAP, 121366.667)?.numerator, 3);
-  assert.equal(getMeterFrame(ODD_DICE_FULL_MAP, 125100)?.numerator, 5);
-  assert.equal(getMeterFrame(ODD_DICE_FULL_MAP, 219199)?.numerator, 6);
-  for (const ms of [219200, 225000, 229700, 230933.332]) assert.equal(getMeterFrame(ODD_DICE_FULL_MAP, ms), null);
-  assert.equal(getMeterFrame(ODD_DICE_FULL_MAP, 230933.333)?.numerator, 3);
-  assert.equal(getMeterFrame(ODD_DICE_FULL_MAP, 242566.667)?.litCount, 3);
-  assert.equal(getMeterFrame(ODD_DICE_FULL_MAP, 248799)?.litCount, 3); // sustained final chord
-  assert.equal(getMeterFrame(ODD_DICE_FULL_MAP, 248800), null);
-  assert.equal(getMeterFrame(ODD_DICE_FULL_MAP, 248828), null);
+test('CSV meter boundaries, unknown intro, free time and recording clipping', () => {
+  const map = ODD_DICE_FULL_MAP;
+  for (const [ms, before, after] of [[7500, 4, 5], [9000, 5, 6], [11500, 6, 5],
+    [96500, 6, 4], [121500, 4, 3], [125000, 3, 5]]) {
+    assert.equal(getMeterFrame(map, ms - 0.001)?.numerator, before);
+    assert.equal(getMeterFrame(map, ms)?.numerator, after);
+    assert.equal(getMeterFrame(map, ms)?.beatIndex, 0);
+  }
+  for (const ms of [0, 499.999, 219000, 225000, 229499.999, 248828, 249500, 253000]) {
+    assert.equal(getMeterFrame(map, ms), null);
+    assert.equal(getMeterBpm(map, ms), null);
+  }
+  assert.equal(getMeterFrame(map, 500)?.numerator, 4);
+  assert.equal(getMeterFrame(map, 218999.999)?.numerator, 6);
+  assert.equal(getMeterFrame(map, 229500)?.numerator, 3);
+  assert.equal(getMeterFrame(map, 229500)?.beatIndex, 0);
+  assert.equal(getMeterFrame(map, 248827.999)?.numerator, 3);
+  for (const duration of [247828, 249828]) assert.equal(getOddDiceMap(song, duration), map);
+  for (const duration of [247827, 249829, 253000]) assert.equal(getOddDiceMap(song, duration), null);
 });
 
-test('accelerando and ritardando retain measured nonuniform beats instead of one BPM', () => {
-  assert.equal(getMeterBpm(ODD_DICE_FULL_MAP, 3000), 165);
-  assert.equal(getMeterBpm(ODD_DICE_FULL_MAP, 70000), 230);
-  assert.equal(getMeterBpm(ODD_DICE_FULL_MAP, 100000), 145);
-  assert.equal(getMeterBpm(ODD_DICE_FULL_MAP, 225000), null);
-  assert.equal(getMeterBpm(ODD_DICE_FULL_MAP, 230933.333), 141);
-  assert.equal(getMeterBpm(ODD_DICE_FULL_MAP, 241000), 131);
-  assert.equal(getMeterBpm(ODD_DICE_FULL_MAP, 248000), 124);
-  assert.equal(getMeterBpm(ODD_DICE_FULL_MAP, 248800), null);
-  for (const index of [29, 79, 136]) {
-    const beats = ODD_DICE_FULL_MAP.bars[index].beatTimesMs;
-    const intervals = beats.slice(1).map((ms, i) => Math.round(ms - beats[i]));
-    assert.ok(new Set(intervals).size > 1);
+test('staircase/platform estimates and source-endpoint ritardando', () => {
+  const map = ODD_DICE_FULL_MAP;
+  for (const [ms, bpm] of [[500, 165], [58500, 170], [61500, 188], [67500, 230],
+    [96500, 145], [143500, 230], [229500, 141], [232000, 139]]) assert.equal(getMeterBpm(map, ms), bpm);
+  assert.equal(getMeterBpm(map, 240750), 131.5);
+  assert.ok(getMeterBpm(map, 248827)! > 124);
+  assert.ok(getMeterBpm(map, 248000)! < getMeterBpm(map, 240000)!);
+  for (const boundary of [58500, 61500, 67500, 140500, 143500, 232000]) {
+    assert.deepEqual(getMeterFrame(map, boundary - 0.001), getMeterFrame(map, boundary));
   }
 });

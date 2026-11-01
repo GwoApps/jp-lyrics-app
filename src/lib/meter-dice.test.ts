@@ -580,3 +580,24 @@ test('same-meter pause, seek and visibility restore snap without a dark first-pi
     } finally { h.close(); }
   }
 });
+
+test('synthetic partial bars require explicit estimated map AND bar markers', () => {
+  const bar = { startMs: 0, endMs: 750, numerator: 3, denominator: 4,
+    beatTimesMs: [0, 500], partial: true, estimated: true };
+  const estimate: MeterMap = { id: 'synthetic-partial', durationMs: 750, estimated: true, bars: [bar] };
+  assert.equal(isValidMeterMap(estimate), true);
+  assert.equal(getMeterFrame(estimate, 749)?.numerator, 3);
+  assert.equal(getMeterFrame(estimate, 749)?.litCount, 2);
+  for (const invalid of [{ ...estimate, estimated: false },
+    { ...estimate, bars: [{ ...bar, estimated: false }] },
+    { ...estimate, bars: [{ ...bar, partial: false }] },
+    { ...estimate, bars: [{ ...bar, beatTimesMs: [] }] },
+    { ...estimate, bars: [{ ...bar, beatTimesMs: [0, 100, 200, 300] }] }]) {
+    assert.equal(isValidMeterMap(invalid), false);
+  }
+  for (const change of [{ startMs: 0, bpm: 140, endMs: 0, endBpm: 124 },
+    { startMs: 0, bpm: 140, endMs: 1000, endBpm: NaN },
+    { startMs: 0, bpm: 140, endMs: 1000 }]) {
+    assert.equal(isValidMeterMap({ ...estimate, tempoChanges: [change] }), false);
+  }
+});

@@ -1,5 +1,7 @@
-/** Authored absolute beat times, not a BPM approximation or a generated chart. */
+/** Absolute beat times; estimates must be explicitly marked. */
 export interface MeterBar {
+  readonly estimated?: boolean;
+  readonly partial?: boolean;
   readonly startMs: number;
   readonly endMs: number;
   readonly numerator: number;
@@ -10,11 +12,15 @@ export interface MeterBar {
 
 export interface MeterTempoChange {
   readonly startMs: number;
-  /** Source-authored/displayed quarter-note BPM, not rounded video-frame beat spacing. */
+  /** Authored/displayed or explicitly estimated quarter-note BPM, not rounded video-frame beat spacing. */
   readonly bpm: number;
+  /** Optional linear-in-time estimate, using the unclipped source endpoint. */
+  readonly endMs?: number;
+  readonly endBpm?: number;
 }
 
 export interface MeterMap {
+  readonly estimated?: boolean;
   readonly id: string;
   readonly durationMs: number;
   readonly bars: readonly MeterBar[];
@@ -50,7 +56,10 @@ export function isValidMeterMap(map: MeterMap): boolean {
       || bar.startMs < previousEnd || bar.endMs <= bar.startMs || bar.endMs > map.durationMs
       || !Number.isSafeInteger(bar.numerator) || bar.numerator < 1
       || !Number.isSafeInteger(bar.denominator) || bar.denominator < 1
-      || bar.beatTimesMs.length !== bar.numerator || bar.beatTimesMs[0] !== bar.startMs) return false;
+      || (bar.partial === true && !(map.estimated === true && bar.estimated === true))
+      || (bar.partial === true ? bar.beatTimesMs.length < 1 || bar.beatTimesMs.length > bar.numerator
+        : bar.beatTimesMs.length !== bar.numerator)
+      || bar.beatTimesMs[0] !== bar.startMs) return false;
     let previousBeat = -Infinity;
     for (const beat of bar.beatTimesMs) {
       if (!Number.isFinite(beat) || beat < bar.startMs || beat >= bar.endMs || beat <= previousBeat) return false;
@@ -62,6 +71,10 @@ export function isValidMeterMap(map: MeterMap): boolean {
   for (const tempo of map.tempoChanges ?? []) {
     if (!Number.isFinite(tempo.startMs) || tempo.startMs < 0 || tempo.startMs >= map.durationMs
       || tempo.startMs <= previousTempo || !Number.isFinite(tempo.bpm) || tempo.bpm <= 0) return false;
+    if (tempo.endMs !== undefined || tempo.endBpm !== undefined) {
+      if (map.estimated !== true || !Number.isFinite(tempo.endMs) || tempo.endMs! <= tempo.startMs
+        || !Number.isFinite(tempo.endBpm) || tempo.endBpm! <= 0) return false;
+    }
     previousTempo = tempo.startMs;
   }
   return true;
@@ -95,12 +108,18 @@ export function getMeterFrame(map: MeterMap, playbackMs: number | null): MeterFr
   return { barIndex, beatIndex, litCount: beatIndex + 1, numerator: bar.numerator, denominator: bar.denominator };
 }
 
-/** Look up the last reliable source BPM; free time and unknown tempos stay empty. */
+/** Look up authored or explicitly estimated BPM; free time and unknown tempos stay empty. */
 export function getMeterBpm(map: MeterMap, playbackMs: number | null): number | null {
   if (playbackMs == null || !getMeterFrame(map, playbackMs)) return null;
   const changes = map.tempoChanges ?? [];
   const index = upperBound(changes.length, (i) => changes[i].startMs, playbackMs) - 1;
-  return changes[index]?.bpm ?? null;
+  const tempo = changes[index];
+  if (!tempo) return null;
+  if (tempo.endMs !== undefined && tempo.endBpm !== undefined) {
+    return tempo.bpm + (tempo.endBpm - tempo.bpm)
+      * Math.min(1, (playbackMs - tempo.startMs) / (tempo.endMs - tempo.startMs));
+  }
+  return tempo.bpm;
 }
 
 /**
