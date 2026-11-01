@@ -51,6 +51,7 @@ function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows,
   const faceRef = useRef<SVGSVGElement>(null);
   const pipsRef = useRef<SVGGElement>(null);
   const glowRef = useRef<HTMLSpanElement>(null);
+  const glowInitializedRef = useRef(false);
   const meterRef = useRef<HTMLSpanElement>(null);
   const viewRef = useRef<DiceView>({
     map: null, frame: null, ms: null, sampledAt: null,
@@ -72,6 +73,38 @@ function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows,
     const playing = !!playback?.is_playing;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     let raf = 0;
+    // These handles mark only real new lamp ignitions, never all lit pips.
+    const ignitions = new Map<SVGGElement, Animation[]>();
+    const cancelIgnition = (pip: SVGGElement) => {
+      ignitions.get(pip)?.forEach((animation) => {
+        animation.onfinish = null;
+        animation.cancel();
+      });
+      ignitions.delete(pip);
+    };
+    const ignite = (pip: SVGGElement) => {
+      cancelIgnition(pip);
+      const levels = [[0.32, 0.08], [0.48, 0.16], [1, 0.85], [1, 0.9]];
+      const animations = Array.from(pip.children).slice(1).flatMap((layer, index) => {
+        if (typeof layer.animate !== 'function') return [];
+        const [peak, steady] = levels[index];
+        return [layer.animate([
+          { opacity: 0, offset: 0 },
+          { opacity: peak, offset: 40 / 140 },
+          { opacity: steady, offset: 1 },
+        ], { duration: 140, easing: 'linear' })];
+      });
+      if (animations.length) {
+        ignitions.set(pip, animations);
+        animations[animations.length - 1].onfinish = () => cancelIgnition(pip);
+      }
+    };
+    if (!glowInitializedRef.current) {
+      glowElement.style.opacity = '0';
+      // Commit the first 0 before paint sets the BPM target. Never reset on re-entry.
+      if (!reducedMotion.matches) void window.getComputedStyle(glowElement).opacity;
+      glowInitializedRef.current = true;
+    }
 
     const setGlowIntensity = (value: number) => {
       const opacity = String(Number((Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0).toFixed(4)));
@@ -87,6 +120,7 @@ function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows,
       view.animation = null;
     };
     const settleLights = () => {
+      ignitions.forEach((_, pip) => cancelIgnition(pip));
       root.dataset.motion = 'snap';
       // Commit the stable opacity before a later rAF can enable transitions.
       // Only lifecycle/discontinuity paths read style, never the steady tick.
@@ -164,6 +198,7 @@ function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows,
         // Keep the other pips lit until continuous motion resumes so they fade.
         const first = view.pips[0];
         root.dataset.motion = 'snap';
+        cancelIgnition(first);
         first.dataset.lit = 'false';
         if (first.lastElementChild) void window.getComputedStyle(first.lastElementChild).opacity;
         root.dataset.motion = 'continuous';
@@ -171,7 +206,11 @@ function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows,
       if (next && beatChanged) {
         view.pips.forEach((pip, index) => {
           const lit = String(index < next.litCount);
-          if (pip.dataset.lit !== lit) pip.dataset.lit = lit;
+          if (pip.dataset.lit !== lit) {
+            pip.dataset.lit = lit;
+            if (lit === 'true' && continuous && index === next.beatIndex) ignite(pip);
+            else cancelIgnition(pip);
+          }
         });
       }
       if (!continuous && (wasContinuous || beatChanged || !animate)) settleLights();
@@ -240,7 +279,7 @@ function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows,
     const onMotionPreference = () => {
       setGlowMotion(root.dataset.glow === 'active');
       if (reducedMotion.matches) cancelTurn();
-      settleLights();
+      sync();
     };
     sync();
     document.addEventListener('visibilitychange', onVisibility);

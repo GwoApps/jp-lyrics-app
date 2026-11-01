@@ -215,11 +215,12 @@ class FakeElement {
   children: FakeElement[] = [];
   textContent = '';
   writes = 0;
-  animations: { playState: string; cancelled: boolean; pause: () => void; play: () => void; cancel: () => void }[] = [];
+  animations: { keyframes: Keyframe[]; options: KeyframeAnimationOptions; onfinish: (() => void) | null; playState: string; cancelled: boolean; pause: () => void; play: () => void; cancel: () => void }[] = [];
   setAttribute(name: string, value: string) { this.attributes[name] = value; this.writes++; }
   replaceChildren(...children: FakeElement[]) { this.children = children; this.writes++; }
-  animate() {
+  animate(keyframes: Keyframe[], options: KeyframeAnimationOptions) {
     const animation = {
+      keyframes, options, onfinish: null as (() => void) | null,
       playState: 'running', cancelled: false,
       pause() { this.playState = 'paused'; },
       play() { this.playState = 'running'; },
@@ -233,13 +234,13 @@ class FakeElement {
 type Effect = () => void | (() => void);
 
 /** Deterministic hook/DOM adapter exercises the actual component effect body. */
-function diceHarness(initial: MeterDiceProps) {
+function diceHarness(initial: MeterDiceProps, initiallyReduced = false) {
   let now = 0;
   let hidden = false;
-  let reduced = false;
+  let reduced = initiallyReduced;
   let nextRaf = 1;
   const styleReads: FakeElement[] = [];
-  const styleSnapshots: { node: FakeElement; motion: string; lit: string[] }[] = [];
+  const styleSnapshots: { node: FakeElement; motion: string; lit: string[]; opacity: string; opacityWrites: string[] }[] = [];
   const frames = new Map<number, FrameRequestCallback>();
   const visibility = new Set<() => void>();
   const preference = new Set<() => void>();
@@ -257,7 +258,8 @@ function diceHarness(initial: MeterDiceProps) {
   install('window', { getComputedStyle: (node: FakeElement) => {
     styleReads.push(node);
     styleSnapshots.push({ node, motion: nodes.get('div')!.dataset.motion,
-      lit: nodes.get('g')!.children.map((pip) => pip.dataset.lit) });
+      lit: nodes.get('g')!.children.map((pip) => pip.dataset.lit),
+      opacity: node.style.opacity, opacityWrites: [...node.opacityWrites] });
     return { opacity: '0' }; // Style flush observation only; this adapter does not run CSS.
   }, matchMedia: () => ({
     get matches() { return reduced; },
@@ -492,7 +494,7 @@ test('lamp layers warm only newly lit pips, retain steady lights and reset the n
     assert.deepEqual(pips.map((p) => p.dataset.lit), ['true', 'false', 'false']);
     assert.deepEqual(pips[0].dataWrites.slice(firstWrites), [['lit', 'false'], ['lit', 'true']]);
     assert.deepEqual(h.styleSnapshots.slice(reads), [{ node: pips[0].lastElementChild,
-      motion: 'snap', lit: ['false', 'true', 'true'] }], 'only the first pip commits dark; old lights remain lit');
+      motion: 'snap', lit: ['false', 'true', 'true'], opacity: '', opacityWrites: [] }], 'only the first pip commits dark; old lights remain lit');
     assert.equal(root.dataset.motion, 'continuous', 'first pip warms and other pips fade');
     const writes = pips.map((pip) => pip.dataWrites.length);
     h.step(715);
@@ -725,8 +727,10 @@ test('BPM intensity shares caption tempo, writes only changes and preserves othe
     assert.notEqual(glow, caption);
     assert.equal(glow.style.opacity, '0.2');
     assert.equal(caption.textContent, '165 BPM');
+    assert.deepEqual(h.styleSnapshots.filter((s) => s.node === glow).map((s) =>
+      [s.opacity, s.opacityWrites]), [['0', ['0']]], '0 is committed before any target write');
     h.step(1216); h.step(1232);
-    assert.deepEqual(glow.opacityWrites, ['0.2'], 'normalized opacity never rewrites trailing zeroes');
+    assert.deepEqual(glow.opacityWrites, ['0', '0.2'], 'normalized opacity never rewrites trailing zeroes');
     h.step(1750);
     assert.equal(glow.style.opacity, '0.6');
     assert.equal(caption.textContent, '198 BPM');
@@ -772,6 +776,7 @@ test('BPM intensity shares caption tempo, writes only changes and preserves othe
     h.hide(true);
     h.render({ ...props, matching: false });
     assert.equal(glow.style.opacity, '0', 'hidden mismatch clears inline intensity');
+    assert.equal(h.styleReads.filter((node) => node === glow).length, 1, 'no re-entry reset or per-frame glow read');
     for (const node of [...h.nodes.values(), ...originalPips]) {
       if (node !== glow) assert.deepEqual(node.opacityWrites, [], 'only glow wrapper receives opacity');
     }
@@ -790,4 +795,88 @@ test('component clamps nonfinite and out-of-range intensity resolvers', () => {
       assert.equal(h.nodes.get('glow')!.style.opacity, expected);
     }
   } finally { h.close(); }
+});
+
+
+test('ignitions are one-shot new-beat events, repeat downbeats, and cancel without replay', () => {
+  const repeated: MeterMap = { id: 'ignitions', durationMs: 1800, bars: [0, 600, 1200].map((startMs) => ({
+    startMs, endMs: startMs + 600, numerator: 3, denominator: 4,
+    beatTimesMs: [startMs, startMs + 200, startMs + 400],
+  })) };
+  const props: MeterDiceProps = { map: repeated, playbackMsRef: { current: 0 },
+    playback: { progress_ms: 0, is_playing: true }, matching: true, label: 'Localized' };
+  const h = diceHarness(props);
+  const pips = h.nodes.get('g')!.children;
+  const layers = pips.flatMap((pip) => pip.children.slice(1));
+  const count = () => layers.reduce((sum, layer) => sum + layer.animations.length, 0);
+  const cancelled = () => assert.ok(layers.every((layer) => layer.animations.every((a) => a.cancelled)));
+  try {
+    assert.equal(count(), 0, 'initial positioning does not ignite history');
+    h.step(200, 200);
+    assert.equal(count(), 4);
+    for (const [index, layer] of pips[1].children.slice(1).entries()) {
+      const animation = layer.animations[0];
+      assert.deepEqual(animation.options, { duration: 140, easing: 'linear' });
+      assert.deepEqual(animation.keyframes.map((k) => k.offset), [0, 40 / 140, 1]);
+      const values = animation.keyframes.map((k) => Number(k.opacity));
+      assert.equal(values[0], 0);
+      assert.ok(values[1] > values[2] && values[1] <= 1);
+      assert.equal(values[2], [0.08, 0.16, 0.85, 0.9][index]);
+    }
+    h.step(216); assert.equal(count(), 4);
+    pips[1].children[4].animations[0].onfinish?.();
+    cancelled();
+    h.step(400, 184); h.step(600, 200);
+    assert.equal(pips[0].children[4].animations.length, 1);
+    h.step(800, 200); h.step(1000, 200); h.step(1200, 200);
+    assert.equal(pips[0].children[4].animations.length, 2, 'same-meter first lamp retriggers on retained node');
+    assert.equal(h.nodes.get('g')!.children, pips);
+    const total = count();
+    h.render({ ...props, playback: { ...props.playback! } }); cancelled();
+    h.step(1216); assert.equal(count(), total, 'poll does not replay');
+    h.reduce(true); h.reduce(false); h.step(1232); assert.equal(count(), total);
+    h.render({ ...props, playback: { progress_ms: 1232, is_playing: false } });
+    h.render(props); h.step(1248); assert.equal(count(), total, 'resume does not flash row');
+    h.hide(true); props.playbackMsRef.current = 1600; h.hide(false);
+    assert.equal(count(), total, 'restore does not replay skipped beats');
+    h.step(0); assert.equal(count(), total, 'seek does not ignite');
+    h.step(200, 200); assert.equal(count(), total + 4);
+    h.reduce(true); cancelled();
+    h.step(400, 200); assert.equal(count(), total + 4);
+    h.reduce(false); h.step(600, 200);
+  } finally { h.close(); }
+  cancelled();
+  assert.equal(h.frames.size + h.visibility.size + h.preference.size, 0);
+});
+
+
+test('initial reduced motion sets a static glow target without style flush or ignition', () => {
+  const h = diceHarness({ map, glowWindows: [{ startMs: 1200, endMs: 5500 }],
+    getGlowIntensity: () => 0.2, playbackMsRef: { current: 1500 },
+    playback: { progress_ms: 1500, is_playing: true }, matching: true, label: 'Localized' }, true);
+  try {
+    const glow = h.nodes.get('glow')!;
+    assert.equal(glow.style.opacity, '0.2');
+    assert.equal(h.nodes.get('div')!.dataset.glowMotion, 'static');
+    assert.ok(!h.styleReads.includes(glow));
+    h.step(1516); h.reduce(false); h.step(1532);
+    assert.ok(h.nodes.get('g')!.children.every((pip) => pip.children.every((layer) => !layer.animations.length)));
+    assert.deepEqual(glow.opacityWrites, ['0', '0.2']);
+  } finally { h.close(); }
+});
+
+test('glow shares face dimensions and keeps the SVG outer contour stationary', () => {
+  const css = readFileSync(new URL('../components/song/MeterDice.module.css', import.meta.url), 'utf8');
+  assert.match(css, /--dice-face-size: 48px/);
+  assert.match(css, /--dice-face-size: 72px/);
+  for (const name of ['face', 'glow']) {
+    const rule = css.match(new RegExp('\\.' + name + ' \\{([^}]+)'))![1];
+    assert.match(rule, /width: var\(--dice-face-size\)/);
+    assert.match(rule, /height: var\(--dice-face-size\)/);
+  }
+  assert.match(css, /inset: 1%;/);
+  assert.match(css, /border-radius: calc\(var\(--dice-face-size\) \* 0\.23\)/);
+  assert.match(css, /border: calc\(var\(--dice-face-size\) \* 0\.02\) solid/);
+  assert.doesNotMatch(css.match(/@keyframes diceGlowBreath \{[\s\S]*?\n\}/)![0], /transform/);
+  assert.doesNotMatch(css, /data-glow='active'\] \.glow \{ opacity/);
 });
