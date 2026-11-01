@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getOddDiceMap, ODD_DICE_FULL_MAP } from './odd-dice.ts';
-import { getMeterFrame, isValidMeterMap } from './meter-dice.ts';
+import { getMeterBpm, getMeterFrame, isValidMeterMap } from './meter-dice.ts';
 
 const song = { title: 'Odd Dice', artist: 'millsage', spotify_duration_ms: 248828 };
 
@@ -50,6 +50,14 @@ test('real signature changes and unmetered rests use authored full-song timestam
 });
 
 test('accelerando and ritardando retain measured nonuniform beats instead of one BPM', () => {
+  assert.equal(getMeterBpm(ODD_DICE_FULL_MAP, 3000), 165);
+  assert.equal(getMeterBpm(ODD_DICE_FULL_MAP, 70000), 230);
+  assert.equal(getMeterBpm(ODD_DICE_FULL_MAP, 100000), 145);
+  assert.equal(getMeterBpm(ODD_DICE_FULL_MAP, 225000), null);
+  assert.equal(getMeterBpm(ODD_DICE_FULL_MAP, 230933.333), 141);
+  assert.equal(getMeterBpm(ODD_DICE_FULL_MAP, 241000), 131);
+  assert.equal(getMeterBpm(ODD_DICE_FULL_MAP, 248000), 124);
+  assert.equal(getMeterBpm(ODD_DICE_FULL_MAP, 248800), null);
   for (const index of [29, 79, 136]) {
     const beats = ODD_DICE_FULL_MAP.bars[index].beatTimesMs;
     const intervals = beats.slice(1).map((ms, i) => Math.round(ms - beats[i]));

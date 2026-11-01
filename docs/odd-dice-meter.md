@@ -24,10 +24,11 @@ Extraction order (requires Python with OpenCV, NumPy, SciPy, Pillow; FFmpeg and 
 4. `extract_beat_flashes.py`: measure and identify actual beat flashes.
 5. `refine_bars.py`: chronological numeral/template changes, source meters and observed beat grid produce `refined_meter_map.json`. The source-number morphs at bars 13 and 43 need beat-grid alignment rather than a naive numeral-cut timestamp.
 6. `verify_audio_offset.py`: decode and cross-correlate opening waveforms.
-7. Import into the application, failing closed on gaps inside a bar, invalid/missing beats or interpolation:
+7. `extract_bpm_readouts.py`: read the source's integer BPM display at bar boundaries and every 200 ms during ramps/ritardando, retaining only reliable readable integers. Hold the last reliable reading through numeral morphs; do not derive BPM from quantized beat gaps. This produces `bpm_readouts.json` with 63 tempo changes.
+8. Import into the application, failing closed on gaps inside a bar, invalid/missing beats or interpolation:
 
    ```sh
-   node scripts/import-odd-dice-map.mjs /root/public-files/odd-dice-full/refined_meter_map.json
+   node scripts/import-odd-dice-map.mjs /root/public-files/odd-dice-full/refined_meter_map.json /root/public-files/odd-dice-full/bpm_readouts.json
    npm run check
    npm run build
    ```
@@ -36,4 +37,4 @@ The importer records the input SHA-256 in `src/lib/meter-maps/odd-dice.full.json
 
 ## Presentation
 
-The 48 px die sits at the right end of the song information header. Standard 1–6 die faces light cumulatively through a bar and reset on its next downbeat. A continuous signature change rotates the face for 200 ms with WAAPI `transform` only; seeks snap directly, and reduced-motion disables the rotation. No React per-frame state or whole-page render is added. A stable localized image label is supplied in zh-CN, zh-TW, ja and en; beat changes are not a screen-reader live region.
+The 48 px die sits at the right end of the song information header, with a **current BPM** caption below (not a redundant time-signature label). The caption reads the source tempo timeline from the same playback clock and may change within a beat without rebuilding or rotating the face. Standard 1–6 die faces light cumulatively through a bar and reset on its next downbeat. A continuous signature change rotates the face for 200 ms with WAAPI `transform` only; seeks snap directly, and reduced-motion disables the rotation. No React per-frame state or whole-page render is added. A stable localized image label is supplied in zh-CN, zh-TW, ja and en; beat changes are not a screen-reader live region.

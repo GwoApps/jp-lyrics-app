@@ -8,10 +8,17 @@ export interface MeterBar {
   readonly beatTimesMs: readonly number[];
 }
 
+export interface MeterTempoChange {
+  readonly startMs: number;
+  /** Source-authored/displayed quarter-note BPM, not rounded video-frame beat spacing. */
+  readonly bpm: number;
+}
+
 export interface MeterMap {
   readonly id: string;
   readonly durationMs: number;
   readonly bars: readonly MeterBar[];
+  readonly tempoChanges?: readonly MeterTempoChange[];
 }
 
 export interface MeterFrame {
@@ -51,6 +58,12 @@ export function isValidMeterMap(map: MeterMap): boolean {
     }
     previousEnd = bar.endMs;
   }
+  let previousTempo = -Infinity;
+  for (const tempo of map.tempoChanges ?? []) {
+    if (!Number.isFinite(tempo.startMs) || tempo.startMs < 0 || tempo.startMs >= map.durationMs
+      || tempo.startMs <= previousTempo || !Number.isFinite(tempo.bpm) || tempo.bpm <= 0) return false;
+    previousTempo = tempo.startMs;
+  }
   return true;
 }
 
@@ -80,6 +93,14 @@ export function getMeterFrame(map: MeterMap, playbackMs: number | null): MeterFr
   const beatIndex = upperBound(bar.beatTimesMs.length, (index) => bar.beatTimesMs[index], playbackMs) - 1;
   if (beatIndex < 0 || beatIndex >= bar.numerator) return null;
   return { barIndex, beatIndex, litCount: beatIndex + 1, numerator: bar.numerator, denominator: bar.denominator };
+}
+
+/** Look up the last reliable source BPM; free time and unknown tempos stay empty. */
+export function getMeterBpm(map: MeterMap, playbackMs: number | null): number | null {
+  if (playbackMs == null || !getMeterFrame(map, playbackMs)) return null;
+  const changes = map.tempoChanges ?? [];
+  const index = upperBound(changes.length, (i) => changes[i].startMs, playbackMs) - 1;
+  return changes[index]?.bpm ?? null;
 }
 
 /**

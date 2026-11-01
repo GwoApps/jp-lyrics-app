@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import * as engine from './meter-dice.ts';
 import {
-  getDicePips, getMeterFrame, isValidMeterMap, meterPlaybackMs, shouldRotateMeterDice,
+  getDicePips, getMeterFrame, getMeterBpm, isValidMeterMap, meterPlaybackMs, shouldRotateMeterDice,
   type MeterBar, type MeterMap,
 } from './meter-dice.ts';
 import type { MeterDiceProps } from '../components/song/MeterDice.tsx';
@@ -15,6 +15,8 @@ import type { MeterDiceProps } from '../components/song/MeterDice.tsx';
 // Synthetic fixtures exercise the generic engine; none purports to chart a song.
 const map: MeterMap = {
   id: 'test-only', durationMs: 7000,
+  tempoChanges: [{ startMs: 1000, bpm: 120 }, { startMs: 1750, bpm: 130 }, { startMs: 2500, bpm: 140 },
+    { startMs: 4500, bpm: 240 }, { startMs: 6250, bpm: 200 }],
   bars: [
     { startMs: 1000, endMs: 2500, numerator: 3, denominator: 4, beatTimesMs: [1000, 1500, 2000] },
     { startMs: 2500, endMs: 4500, numerator: 4, denominator: 4, beatTimesMs: [2500, 3000, 3500, 4000] },
@@ -58,6 +60,24 @@ test('a real zero timestamp is not loading, and late first bars do not invent an
   assert.equal(getMeterFrame(zero, 0)?.litCount, 1);
   assert.equal(getMeterFrame(zero, null), null);
   assert.equal(getMeterFrame(map, 0), null);
+});
+
+test('BPM uses authored tempo changes, including within a beat, and never frame-gap estimates', () => {
+  for (const ms of [null, NaN, 0, 999, 6000, 6249, 7000]) assert.equal(getMeterBpm(map, ms), null);
+  assert.equal(getMeterBpm(map, 1000), 120);
+  assert.equal(getMeterBpm(map, 1749.999), 120);
+  assert.equal(getMeterBpm(map, 1750), 130);
+  assert.equal(getMeterBpm(map, 2499), 130);
+  assert.equal(getMeterBpm(map, 2500), 140);
+  assert.equal(getMeterBpm(map, 4500), 240);
+  assert.equal(getMeterBpm(map, 6999), 200);
+  assert.equal(getMeterBpm({ ...map, tempoChanges: undefined }, 1500), null);
+  for (const tempoChanges of [[{ startMs: -1, bpm: 120 }], [{ startMs: 0, bpm: 0 }],
+    [{ startMs: 7000, bpm: 120 }], [{ startMs: NaN, bpm: 120 }], [{ startMs: 0, bpm: Infinity }],
+    [{ startMs: 1000, bpm: 120 }, { startMs: 1000, bpm: 140 }],
+    [{ startMs: 2000, bpm: 120 }, { startMs: 1000, bpm: 140 }]]) {
+    assert.equal(isValidMeterMap({ ...map, tempoChanges }), false);
+  }
 });
 
 test('all 1–6 faces are standard, distinct pips; larger meters have centered extensible grids', () => {
@@ -293,7 +313,7 @@ test('component accumulates beats locally, changes signature once, freezes pause
     h.step(2496);
     assert.equal(group.writes, writes, 'unchanged face is not rebuilt each frame');
     h.step(2512);
-    assert.equal(meter.textContent, '4/4');
+    assert.equal(meter.textContent, '140 BPM');
     assert.equal(group.children.length, 4);
     assert.equal(group.children.filter((pip) => pip.dataset.lit === 'true').length, 1);
     assert.equal(face.animations.length, 1);
@@ -311,7 +331,7 @@ test('component accumulates beats locally, changes signature once, freezes pause
     assert.equal(face.animations.length, 1, 'forward seek does not roll intermediate meters');
     assert.equal(animation.cancelled, true);
     h.step(1200);
-    assert.equal(meter.textContent, '3/4');
+    assert.equal(meter.textContent, '120 BPM');
     assert.equal(root.dataset.beat, '0');
     assert.equal(face.animations.length, 1, 'backwards seek does not animate');
     h.step(7000);
@@ -322,6 +342,28 @@ test('component accumulates beats locally, changes signature once, freezes pause
   assert.equal(h.frames.size, 0);
   assert.equal(h.visibility.size, 0);
   assert.equal(h.preference.size, 0);
+});
+
+test('BPM caption updates mid-beat without rebuilding or rotating the dice, and clears on mismatch', () => {
+  const props: MeterDiceProps = {
+    map, playbackMsRef: { current: 1700 }, playback: { progress_ms: 1700, is_playing: true }, matching: true, label: 'Localized',
+  };
+  const h = diceHarness(props);
+  try {
+    const caption = h.nodes.get('span')!;
+    const group = h.nodes.get('g')!;
+    const face = h.nodes.get('svg')!;
+    assert.equal(caption.textContent, '120 BPM');
+    const writes = group.writes;
+    h.step(1760, 60);
+    assert.equal(caption.textContent, '130 BPM');
+    assert.equal(group.writes, writes);
+    assert.equal(face.animations.length, 0);
+    h.step(1200);
+    assert.equal(caption.textContent, '120 BPM');
+    h.render({ ...props, matching: false });
+    assert.equal(caption.textContent, '');
+  } finally { h.close(); }
 });
 
 test('component stops hidden loops, resyncs on restore, honors reduced motion and clears mismatches', () => {

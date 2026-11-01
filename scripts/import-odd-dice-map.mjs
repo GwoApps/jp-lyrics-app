@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 // Import the observed full-version chart, never the 121-second game cut.
 // See docs/odd-dice-meter.md for extraction, provenance and accuracy limits.
 const input = process.argv[2];
-if (!input) throw new Error('Usage: node scripts/import-odd-dice-map.mjs <refined_meter_map.json>');
+const tempoInput = process.argv[3];
+if (!input || !tempoInput) throw new Error('Usage: node scripts/import-odd-dice-map.mjs <refined_meter_map.json> <bpm_readouts.json>');
 const raw = await readFile(input, 'utf8');
 const source = JSON.parse(raw);
 assert.equal(source.barCount, 138);
@@ -29,6 +30,16 @@ const bars = source.bars.map((bar, index) => {
   end = bar.endMs;
   return { startMs: bar.startMs, endMs: bar.endMs, numerator: bar.numerator, denominator: bar.denominator, beatTimesMs: bar.beatTimesMs };
 });
+const tempoRaw = await readFile(tempoInput, 'utf8');
+const tempoSource = JSON.parse(tempoRaw);
+assert.ok(Array.isArray(tempoSource.changes) && tempoSource.changes.length > 0);
+let previousTempo = -Infinity;
+const tempoChanges = tempoSource.changes.map(({ startMs, bpm }) => {
+  assert.ok(Number.isFinite(startMs) && startMs >= 0 && startMs < 248828 && startMs > previousTempo);
+  assert.ok(Number.isFinite(bpm) && bpm > 0);
+  previousTempo = startMs;
+  return { startMs, bpm };
+});
 const payload = {
   id: 'odd-dice-full-bv1yhjq6le4q',
   durationMs: 248828,
@@ -36,9 +47,12 @@ const payload = {
   sourceKind: 'community-transcription',
   sourceSha256: createHash('sha256').update(raw).digest('hex'),
   frameResolutionMs: 1000 / 30,
+  tempoSourceSha256: createHash('sha256').update(tempoRaw).digest('hex'),
+  tempoSampleIntervalMs: tempoSource.sampleIntervalMs,
+  tempoChanges,
   bars,
 };
 const target = new URL('../src/lib/meter-maps/odd-dice.full.json', import.meta.url);
 await mkdir(new URL('.', target), { recursive: true });
 await writeFile(target, `${JSON.stringify(payload, null, 2)}\n`);
-console.log(JSON.stringify({ target: fileURLToPath(target), bars: bars.length, beats: bars.reduce((total, bar) => total + bar.numerator, 0), inferred: 0 }));
+console.log(JSON.stringify({ target: fileURLToPath(target), bars: bars.length, beats: bars.reduce((total, bar) => total + bar.numerator, 0), inferred: 0, tempoChanges: tempoChanges.length }));

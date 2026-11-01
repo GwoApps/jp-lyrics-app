@@ -4,6 +4,7 @@ import { memo, useEffect, useRef } from 'react';
 import {
   getDicePips,
   getMeterFrame,
+  getMeterBpm,
   isValidMeterMap,
   meterPlaybackMs,
   shouldRotateMeterDice,
@@ -118,13 +119,12 @@ function MeterDice({ map, playbackMsRef, playback, matching, label }: MeterDiceP
           if (pip.dataset.current !== current) pip.dataset.current = current;
         });
       }
-      if (barChanged || (!next && view.pips.length)) {
-        const text = next ? `${next.numerator}/${next.denominator}` : '';
-        if (meter.textContent !== text) meter.textContent = text;
-        if (!next) {
-          group.replaceChildren();
-          view.pips = [];
-        }
+      const bpm = ms == null || !next ? null : getMeterBpm(map, ms);
+      const text = bpm == null ? '' : `${Math.round(bpm)} BPM`;
+      if (meter.textContent !== text) meter.textContent = text;
+      if (!next && view.pips.length) {
+        group.replaceChildren();
+        view.pips = [];
       }
       const state = playback == null ? 'loading' : !matching ? 'inactive'
         : !valid ? 'invalid' : ms == null ? 'unavailable' : !next ? 'outside'
