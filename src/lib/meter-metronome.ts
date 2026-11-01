@@ -58,7 +58,7 @@ export class MeterMetronome {
       const now = ctx.currentTime;
       osc.frequency.setValueAtTime(next.beatIndex === 0 ? 1320 : 880, now);
       gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(next.beatIndex === 0 ? 0.12 : 0.07, now + 0.002);
+      gain.gain.linearRampToValueAtTime(next.beatIndex === 0 ? 0.24 : 0.14, now + 0.002);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.035);
       osc.connect(gain);
       gain.connect(ctx.destination);

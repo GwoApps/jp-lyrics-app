@@ -171,7 +171,7 @@ function loadDice(react: object = React): React.ComponentType<MeterDiceProps> {
     if (id === 'react') return react;
     if (id === '@/lib/meter-dice') return engine;
     if (id === '@/lib/meter-metronome') return metronome;
-    if (id.endsWith('.module.css')) return { default: { dice: 'dice', glow: 'glow', glowBreath: 'glowBreath', face: 'face', pip: 'pip', outline: 'outline', meter: 'meter', socket: 'socket', haloOuter: 'haloOuter', haloInner: 'haloInner', filament: 'filament', core: 'core' } };
+    if (id.endsWith('.module.css')) return { default: { dice: 'dice', glow: 'glow', glowBreath: 'glowBreath', light: 'light', lightViewport: 'lightViewport', lightField: 'lightField', face: 'face', pip: 'pip', outline: 'outline', meter: 'meter', socket: 'socket', haloOuter: 'haloOuter', haloInner: 'haloInner', filament: 'filament', core: 'core' } };
     return require(id);
   };
   new Function('require', 'module', 'exports', componentJS)(localRequire, loaded, loaded.exports);
@@ -953,9 +953,40 @@ test('interactive zoom keeps visible hit targets and bounds rotating ambient box
   assert.match(visual, /pointer-events: auto/);
   assert.match(visual, /transition: transform 200ms/);
   assert.match(css, /data-active='true'\] \.visual \{ transform: scale\(1\.5\)/);
-  for (const name of ['before', 'after']) {
-    const ambient = css.match(new RegExp('\\.glow::' + name + ' \\{([^}]+)\\}'))![1];
-    assert.match(ambient, /inset: 15%/, 'transparent rotated corners must not widen the mobile viewport');
-  }
+  const viewport = css.match(/\.lightViewport \{([^}]+)\}/)![1];
+  assert.match(viewport, /position: absolute/);
+  assert.match(viewport, /inset: 0/);
+  assert.match(viewport, /border-radius: inherit/);
+  assert.match(viewport, /overflow: clip/);
+  assert.doesNotMatch(viewport, /transform|animation|filter/);
+  const field = css.match(/\.lightField \{([^}]+)\}/)![1];
+  assert.match(field, /inset: 0/);
+  assert.match(field, /ellipse at 50% 2%/);
+  assert.match(field, /3\.2s linear infinite paused/);
+  assert.match(css, /4\.4s linear infinite reverse paused/);
+  assert.match(css, /\.light \{ filter: blur\(7px\); \}/);
+  assert.match(css, /\.light\[data-meter-light='secondary'\] \{ filter: blur\(6px\); \}/);
+  assert.doesNotMatch(css, /inset: 15%|overflow-x:/);
+  assert.doesNotMatch(css.match(/@keyframes diceGlowOrbit \{[\s\S]*?\n\}/)![0], /filter|opacity|translate/);
   assert.match(css, /inset: 1%/, 'the emitting contour remains aligned with the painted SVG outline');
+});
+
+
+test('independent edge lights share existing glow lifecycle selectors and static clipping wrappers', () => {
+  const Dice = loadDice();
+  const html = renderToStaticMarkup(React.createElement(Dice, {
+    map, playback: null, matching: true, playbackMsRef: { current: null }, label: 'Dice',
+    soundLabels: { start: 'Start', stop: 'Stop', unlock: 'Unlock', unavailable: 'Unavailable' },
+  }));
+  for (const source of ['primary', 'secondary']) {
+    assert.equal(html.split(`data-meter-light="${source}"`).length - 1, 1);
+    assert.ok(html.includes(`data-meter-light="${source}" class="light"><span class="lightViewport"><span class="lightField"></span></span></span>`));
+  }
+  const css = readFileSync(new URL('../components/song/MeterDice.module.css', import.meta.url), 'utf8');
+  assert.match(css, /\.dice\[data-glow='active'\]\[data-glow-motion='running'\] \.lightField,[\s\S]*?animation-play-state: running/);
+  assert.match(css, /\.dice\[data-glow-motion='static'\] \.lightField,[\s\S]*?animation: none/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.glow \{ transition: none; \}\s*\.dice \.lightField,.*animation: none/);
+  // The existing lifecycle harness covers pause, hide, seek, reduce, mismatch and cleanup;
+  // both fields inherit those root selectors without adding any JS animation owner.
+  assert.doesNotMatch(componentSource, /setTimeout|setInterval/);
 });

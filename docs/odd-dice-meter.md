@@ -153,7 +153,7 @@ hover 不保证浏览器授权：suspended 时提示点击启用，桌面点击�
 声音只由既有 paint、playbackMsRef 和 authored getMeterFrame 驱动，没有新时钟、
 RAF、BPM 推算或历史补播。连续采样的相邻新拍最多发声一次；减效仅禁视觉动画，
 不禁声音。首次启用、快进/seek、轮询、暂停/恢复、隐藏恢复、无 frame 与错曲不补拍。
-强拍 beatIndex=0 使用 1320Hz / 0.12，其他拍 880Hz / 0.07；2ms 起音、35ms
+强拍 beatIndex=0 使用 1320Hz / 0.24，其他拍 880Hz / 0.14（峰值 amplitude 翻倍，非响度翻倍）；2ms 起音、35ms
 衰减、40ms 停止。MeterMetronome 持有 oscillator/gain/context，停用立即 stop 和
 断开声源，卸载 close；过期 resume 不能在关闭后重新发声。无网络资源或新增依赖。
 
@@ -161,8 +161,20 @@ RAF、BPM 推算或历史补播。连续采样的相邻新拍最多发声一次�
 激活只用 transform scale(1.5) 放大至 72/108px，200ms 原缓动，减效即时缩放。
 以顶部中心为缩放原点，caption 保持字号并向下移出放大骰面。布局槽不变，但放大后的
 visual 保留 pointer hit test，因此鼠标移到扩大的可见边缘仍保持 hover，真正离开才关闭。
-提示放在放大后的 caption 下方。旋转的彩色环境层单独内收至 15%，避免透明旋转方框
-在手机放大时把 scrollWidth 撑出 3–5px；发光描边仍为 1% inset，实际轮廓不变。
+提示放在放大后的 caption 下方。两个独立静态 blur wrapper 使用 1% inset，内部固定
+圆角 viewport 以 overflow: clip 截住 full-size 光场旋转的几何溢出，外层再以静态
+7px/6px blur 将边缘光投到不透明骰面外。光场中心在 50% 2%，分别以 3.2s 正向、
+4.4s 反向旋转；禁止再内收光源至 15%（这会把可见光源藏进骰面）。固定轮廓仍为
+1% inset / radius 23%，呼吸仅改变 opacity。每个 wrapper 有稳定的
+`data-meter-light="primary"/"secondary"`，可逐层隔离进行实际像素运动验收。
+局部 viewport 负责旋转几何裁切，不对整页裁切，也不改变 SVG card 透明度。
+真实像素验收脚本在 `/root/odd-dice-work/light-orbits-volume/`：`capture_lights.cjs`
+以实际 CSS 动画相位分别隔离主/次光源，`analyze_light_pixels.py` 只统计不透明 SVG
+描边外框以外的截图像素。比较修复前后，并覆盖基础、桌面放大和手机放大，断言
+外侧光斑有足够可见对比度和显著重心位移；不能再把 CSSAnimation 时间推进当作
+可见光源运动。隔离时只隐藏无关光源/呼吸/文字，不生成或增强光晕像素。
+同目录 `compare_volume.py` 将 NativeAudio 录音与修复前的实际录音比对，检查强/弱
+拍峰值增益约两倍且无削波；不声称主观响度翻倍，也不等同 Spotify 真机延迟验收。
 Chrome 脚本应使用 data-meter-trigger / visual / face / glow / caption 标记，
 不再依赖 root.firstElementChild 或直系 SVG。地图字节、校准、平台窗口、灯泡和
 外光周期及 toolbar 规则均未修改。

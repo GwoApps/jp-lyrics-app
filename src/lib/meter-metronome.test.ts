@@ -4,7 +4,7 @@ import { MeterMetronome } from './meter-metronome.ts';
 
 const frame = (beatIndex: number, barIndex = 0) => ({ beatIndex, barIndex, numerator: 4, denominator: 4, litCount: beatIndex + 1 });
 function audio() {
-  const voices: { frequency: number; peak: number; stopped: boolean; disconnected: boolean; onended: (() => void) | null }[] = [];
+  const voices: { frequency: number; peak: number; envelope: [string, number, number][]; stopAt?: number; stopped: boolean; disconnected: boolean; onended: (() => void) | null }[] = [];
   let state = 'running';
   let resolve: (() => void) | null = null;
   let deferred = false;
@@ -15,13 +15,13 @@ function audio() {
     suspend() { state = 'suspended'; return Promise.resolve(); },
     close() { state = 'closed'; closed++; return Promise.resolve(); },
     createOscillator() {
-      const voice = { frequency: 0, peak: 0, stopped: false, disconnected: false, onended: null as (() => void) | null };
+      const voice = { frequency: 0, peak: 0, envelope: [] as [string, number, number][], stopAt: undefined as number | undefined, stopped: false, disconnected: false, onended: null as (() => void) | null };
       voices.push(voice);
       return { frequency: { setValueAtTime: (v: number) => { voice.frequency = v; } },
-        connect() {}, disconnect() { voice.disconnected = true; }, start() {}, stop(at?: number) { if (at == null) voice.stopped = true; },
+        connect() {}, disconnect() { voice.disconnected = true; }, start() {}, stop(at?: number) { if (at == null) voice.stopped = true; else voice.stopAt = at; },
         set onended(fn: (() => void) | null) { voice.onended = fn; } };
     },
-    createGain() { const voice = voices.at(-1)!; return { gain: { setValueAtTime() {}, linearRampToValueAtTime(v: number) { voice.peak = v; }, exponentialRampToValueAtTime() {} }, connect() {}, disconnect() {} }; },
+    createGain() { const voice = voices.at(-1)!; return { gain: { setValueAtTime(v: number, t: number) { voice.envelope.push(['set', v, t]); }, linearRampToValueAtTime(v: number, t: number) { voice.peak = v; voice.envelope.push(['linear', v, t]); }, exponentialRampToValueAtTime(v: number, t: number) { voice.envelope.push(['exponential', v, t]); } }, connect() {}, disconnect() {} }; },
   };
   const statuses: string[] = [];
   let created = 0;
@@ -39,7 +39,13 @@ test('lazy audio, one click per adjacent beat, distinct downbeat pitch and gain'
   a.owner.sample(frame(3), true);
   a.owner.sample(frame(3), true);
   a.owner.sample(frame(0, 1), true);
-  assert.deepEqual(a.voices.map((v) => [v.frequency, v.peak]), [[880, 0.07], [1320, 0.12]]);
+  assert.deepEqual(a.voices.map((v) => [v.frequency, v.peak]), [[880, 0.14], [1320, 0.24]]);
+  assert.equal(a.voices[1].peak / a.voices[0].peak, 0.12 / 0.07);
+  for (const voice of a.voices) {
+    assert.ok(voice.peak > 0 && voice.peak < 1);
+    assert.deepEqual(voice.envelope, [['set', 0, 1], ['linear', voice.peak, 1.002], ['exponential', 0.0001, 1.035]]);
+    assert.equal(voice.stopAt, 1.04);
+  }
   a.owner.dispose();
   assert.ok(a.voices.every((v) => v.stopped && v.disconnected));
   assert.equal(a.closed(), 1);

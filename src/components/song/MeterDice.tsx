@@ -359,7 +359,11 @@ function MeterDice({ map, playbackMsRef, playback, matching, label, soundLabels,
       onBlur={() => { if (modeRef.current === 'keyboard') deactivate(); }}>
     <div ref={rootRef} className={styles.dice} role="img" aria-label={label} data-glow="off" data-glow-motion="paused" data-state={playback == null ? 'loading' : 'unavailable'}>
       <span className={styles.visual} data-meter-visual="">
-      <span data-meter-glow="" ref={glowRef} className={styles.glow} aria-hidden="true"><span className={styles.glowBreath} /></span>
+      <span data-meter-glow="" ref={glowRef} className={styles.glow} aria-hidden="true">
+        <span data-meter-light="primary" className={styles.light}><span className={styles.lightViewport}><span className={styles.lightField} /></span></span>
+        <span data-meter-light="secondary" className={styles.light}><span className={styles.lightViewport}><span className={styles.lightField} /></span></span>
+        <span className={styles.glowBreath} />
+      </span>
       <svg data-meter-face="" ref={faceRef} className={styles.face} viewBox="0 0 100 100" aria-hidden="true" focusable="false">
         <rect className={styles.outline} x="2" y="2" width="96" height="96" rx="22" />
         <g ref={pipsRef} />
