@@ -1032,6 +1032,32 @@ textarea {
   background: color-mix(in srgb, var(--accent) 82%, var(--song-accent));
   border-color: color-mix(in srgb, var(--border) 72%, var(--song-accent));
 }
+/* Fade individual desktop controls, leaving portaled menus and touch UI unaffected. */
+@media (min-width: 640px) and (hover: hover) and (pointer: fine) {
+  .song-detail-toolbar .song-accent-button,
+  .song-detail-toolbar .song-detail-font-size {
+    opacity: 0.5;
+    transition:
+      color 160ms ease,
+      background-color 160ms ease,
+      border-color 160ms ease,
+      opacity 160ms ease,
+      transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .song-detail-toolbar .song-accent-button:not(:disabled):not([aria-disabled="true"]):is(:hover, :focus-visible, [data-state="open"]),
+  .song-detail-toolbar .song-detail-font-size:is(:hover, :focus-within) {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .song-detail-toolbar .song-accent-button,
+    .song-detail-toolbar .song-detail-font-size {
+      transition: none;
+    }
+  }
+}
+
 .song-accent-button--active {
   color: var(--primary-foreground);
   background: color-mix(in srgb, var(--primary) 88%, var(--song-accent));

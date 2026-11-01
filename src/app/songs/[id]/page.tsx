@@ -680,7 +680,7 @@ export default function SongViewPage() {
                 <Info className="h-6 w-6 scale-90 drop-shadow-sm transition-transform duration-[320ms] ease-in-out motion-reduce:transition-none group-hover:scale-100 group-focus-visible:scale-100 group-active:scale-100" />
               </span>
             </button>
-            <div className="flex-1 w-fit max-w-full min-w-0 space-y-0.5 sm:space-y-1">
+            <div className="flex-1 w-fit max-w-full min-w-0 sm:min-w-24 space-y-0.5 sm:space-y-1">
               <h1 className="text-base sm:text-xl font-semibold tracking-tight break-words">{song.title}</h1>
               {song.artist && <p className="text-xs sm:text-sm text-[var(--muted-foreground)]">{song.artist}</p>}
               {/* Visibility badge + request/cancel public actions */}
@@ -746,13 +746,13 @@ export default function SongViewPage() {
           </div>
           {furiganaLines.length > 0 && (
             <button type="button" onClick={enterImmersive}
-              className="sm:hidden ml-auto inline-flex h-11 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--card)] px-3 text-sm font-medium text-[var(--foreground)]"
+              className="sm:hidden ml-auto inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--card)] px-3 text-sm font-medium text-[var(--foreground)]"
               aria-label={t('song.immersiveEnter')}>
               <Maximize2 className="h-4 w-4" /><span className={oddDiceMap ? 'sr-only' : undefined}>{t('song.immersiveEnter')}</span>
             </button>
           )}
           {/* Desktop toolbar */}
-          <div className="hidden self-end sm:flex flex-col items-end gap-3">
+          <div className="song-detail-toolbar hidden self-end sm:flex flex-col items-end gap-3">
             <div className="flex flex-wrap items-center justify-end gap-2 [&>*]:shrink-0">
             <ToolbarMenu
               label={<span className="inline-flex items-center">{data.copied ? <Check className="h-4 w-4 text-[var(--success)]" /> : <Copy className="h-4 w-4" />}</span>}
@@ -881,7 +881,7 @@ export default function SongViewPage() {
               ]}
             />
             </div>
-            <div className="song-accent-surface inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2" title={t('song.fontSize')}>
+            <div className="song-detail-font-size song-accent-surface inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2" title={t('song.fontSize')}>
               <button onClick={() => data.setFontSize(s => Math.max(14, s - 2))} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Minus className="h-3.5 w-3.5" /></button>
               <span className="w-5 text-center text-xs font-medium tabular-nums" style={{ color: 'color-mix(in srgb, var(--foreground) 90%, var(--song-accent))' }}>{data.fontSize}</span>
               <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Plus className="h-3.5 w-3.5" /></button>
