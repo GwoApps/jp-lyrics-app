@@ -1,6 +1,10 @@
 {
   "meterDice": {
-    "label": "Meter dice: pips show beats per bar and light up in time with playback."
+    "label": "Meter dice: pips show beats per bar and light up in time with playback.",
+    "start": "Enable metronome",
+    "stop": "Stop metronome",
+    "unlock": "Click to enable sound",
+    "unavailable": "Sound is unavailable"
   },
   "player": {
     "label": "Player",

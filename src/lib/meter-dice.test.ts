@@ -1,3 +1,4 @@
+import * as metronome from './meter-metronome.ts';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -169,6 +170,7 @@ function loadDice(react: object = React): React.ComponentType<MeterDiceProps> {
   const localRequire = (id: string) => {
     if (id === 'react') return react;
     if (id === '@/lib/meter-dice') return engine;
+    if (id === '@/lib/meter-metronome') return metronome;
     if (id.endsWith('.module.css')) return { default: { dice: 'dice', glow: 'glow', glowBreath: 'glowBreath', face: 'face', pip: 'pip', outline: 'outline', meter: 'meter', socket: 'socket', haloOuter: 'haloOuter', haloInner: 'haloInner', filament: 'filament', core: 'core' } };
     return require(id);
   };
@@ -180,7 +182,7 @@ test('real React SSR is hydration-safe, localized and silent with no fabricated 
   const Dice = loadDice();
   for (const playback of [null, { progress_ms: 2500, is_playing: true }, { progress_ms: 0, is_playing: false }]) {
     const html = renderToStaticMarkup(React.createElement(Dice, {
-      map, playback, matching: true, playbackMsRef: { current: 2500 }, label: 'Localized dice label',
+      map, playback, matching: true, playbackMsRef: { current: 2500 }, soundLabels: { start: 'Start', stop: 'Stop', unlock: 'Unlock', unavailable: 'Unavailable' }, label: 'Localized dice label',
       glowWindows: [{ startMs: 1200, endMs: 4500 }],
     }));
     assert.match(html, /role="img" aria-label="Localized dice label"/);
@@ -291,24 +293,27 @@ function diceHarness(initial: MeterDiceProps, initiallyReduced = false) {
   const Dice = loadDice(hooks) as (props: MeterDiceProps) => React.ReactNode;
   const nodes = new Map<string, FakeElement>();
   const attach = (node: React.ReactNode) => {
-    if (!React.isValidElement<{ ref?: { current: unknown }; className?: string; children?: React.ReactNode }>(node)) return;
+    if (!React.isValidElement<{ ref?: { current: unknown }; className?: string; 'data-meter-hint'?: string; children?: React.ReactNode }>(node)) return;
     if (node.props.ref && typeof node.type === 'string') {
-      const key = node.props.className === 'glow' ? 'glow' : node.type;
+      const key = node.props['data-meter-hint'] !== undefined ? 'hint' : node.props.className === 'glow' ? 'glow' : node.type;
       const element = nodes.get(key) ?? new FakeElement();
       nodes.set(key, element);
       node.props.ref.current = element;
     }
     React.Children.forEach(node.props.children, attach);
   };
+  let tree: React.ReactElement;
   const render = (props: MeterDiceProps) => {
     refIndex = 0;
     effectIndex = 0;
-    attach(Dice(props));
+    tree = Dice(props) as React.ReactElement;
+    attach(tree);
     pending.splice(0).forEach((effect) => effect());
   };
   render(initial);
   return {
     nodes, frames, visibility, preference, styleReads, styleSnapshots, render,
+    trigger: () => tree.props as Record<string, (event: unknown) => void>,
     step(ms: number, elapsed = 16) {
       initial.playbackMsRef.current = ms;
       now += elapsed;
@@ -330,7 +335,7 @@ function diceHarness(initial: MeterDiceProps, initiallyReduced = false) {
 
 test('component accumulates beats locally, changes signature once, freezes pause and snaps seeks', () => {
   const props: MeterDiceProps = {
-    map, playbackMsRef: { current: 2480 }, playback: { progress_ms: 2480, is_playing: true }, matching: true, label: 'Localized',
+    map, playbackMsRef: { current: 2480 }, playback: { progress_ms: 2480, is_playing: true }, matching: true, soundLabels: { start: 'Start', stop: 'Stop', unlock: 'Unlock', unavailable: 'Unavailable' }, label: 'Localized',
   };
   const h = diceHarness(props);
   try {
@@ -379,7 +384,7 @@ test('component accumulates beats locally, changes signature once, freezes pause
 
 test('BPM caption updates mid-beat without rebuilding or rotating the dice, and clears on mismatch', () => {
   const props: MeterDiceProps = {
-    map, playbackMsRef: { current: 1700 }, playback: { progress_ms: 1700, is_playing: true }, matching: true, label: 'Localized',
+    map, playbackMsRef: { current: 1700 }, playback: { progress_ms: 1700, is_playing: true }, matching: true, soundLabels: { start: 'Start', stop: 'Stop', unlock: 'Unlock', unavailable: 'Unavailable' }, label: 'Localized',
   };
   const h = diceHarness(props);
   try {
@@ -401,7 +406,7 @@ test('BPM caption updates mid-beat without rebuilding or rotating the dice, and 
 
 test('component stops hidden loops, resyncs on restore, honors reduced motion and clears mismatches', () => {
   const props: MeterDiceProps = {
-    map, playbackMsRef: { current: 2480 }, playback: { progress_ms: 2480, is_playing: true }, matching: true, label: 'Localized',
+    map, playbackMsRef: { current: 2480 }, playback: { progress_ms: 2480, is_playing: true }, matching: true, soundLabels: { start: 'Start', stop: 'Stop', unlock: 'Unlock', unavailable: 'Unavailable' }, label: 'Localized',
   };
   const h = diceHarness(props);
   try {
@@ -435,7 +440,7 @@ test('component stops hidden loops, resyncs on restore, honors reduced motion an
 
 test('component handles paused null-ref snapshots, confirmed seeks, zero and no playing ref without a clock', () => {
   const props: MeterDiceProps = {
-    map, playbackMsRef: { current: null }, playback: { progress_ms: 1500, is_playing: false }, matching: true, label: 'Localized',
+    map, playbackMsRef: { current: null }, playback: { progress_ms: 1500, is_playing: false }, matching: true, soundLabels: { start: 'Start', stop: 'Stop', unlock: 'Unlock', unavailable: 'Unavailable' }, label: 'Localized',
   };
   const h = diceHarness(props);
   try {
@@ -465,7 +470,7 @@ test('lamp layers warm only newly lit pips, retain steady lights and reset the n
     beatTimesMs: [startMs, startMs + 233, startMs + 466],
   })) };
   const props: MeterDiceProps = { map: repeated, playbackMsRef: { current: 0 },
-    playback: { progress_ms: 0, is_playing: true }, matching: true, label: 'Localized' };
+    playback: { progress_ms: 0, is_playing: true }, matching: true, soundLabels: { start: 'Start', stop: 'Stop', unlock: 'Unlock', unavailable: 'Unavailable' }, label: 'Localized' };
   const h = diceHarness(props);
   try {
     const root = h.nodes.get('div')!;
@@ -507,7 +512,7 @@ test('lamp layers warm only newly lit pips, retain steady lights and reset the n
 
 test('lamp transitions snap on seeks, pause, visibility, map changes and live motion preference', () => {
   const props: MeterDiceProps = { map, playbackMsRef: { current: 1480 },
-    playback: { progress_ms: 1480, is_playing: true }, matching: true, label: 'Localized' };
+    playback: { progress_ms: 1480, is_playing: true }, matching: true, soundLabels: { start: 'Start', stop: 'Stop', unlock: 'Unlock', unavailable: 'Unavailable' }, label: 'Localized' };
   const h = diceHarness(props);
   try {
     const root = h.nodes.get('div')!;
@@ -567,7 +572,7 @@ test('same-meter pause, seek and visibility restore snap without a dark first-pi
   })) };
   for (const action of ['pause', 'seek', 'visibility'] as const) {
     const props: MeterDiceProps = { map: repeated, playbackMsRef: { current: 580 },
-      playback: { progress_ms: 580, is_playing: true }, matching: true, label: 'Localized' };
+      playback: { progress_ms: 580, is_playing: true }, matching: true, soundLabels: { start: 'Start', stop: 'Stop', unlock: 'Unlock', unavailable: 'Unavailable' }, label: 'Localized' };
     const h = diceHarness(props);
     try {
       const root = h.nodes.get('div')!;
@@ -652,7 +657,7 @@ test('glow helper uses playback half-open windows and rejects missing or invalid
 test('component glow follows the single clock, freezes lifecycle changes and never replays seeks', () => {
   const props: MeterDiceProps = { map, glowWindows: [{ startMs: 1200, endMs: 1800 }, { startMs: 4500, endMs: 5500 }],
     playbackMsRef: { current: 1200 }, playback: { progress_ms: 1200, is_playing: true },
-    matching: true, label: 'Localized' };
+    matching: true, soundLabels: { start: 'Start', stop: 'Stop', unlock: 'Unlock', unavailable: 'Unavailable' }, label: 'Localized' };
   const h = diceHarness(props);
   const root = h.nodes.get('div')!;
   const state = (glow: string, motion: string) => {
@@ -718,7 +723,7 @@ test('BPM intensity shares caption tempo, writes only changes and preserves othe
     glowWindows: [{ startMs: 1200, endMs: 5500 }],
     getGlowIntensity: getOddDiceGlowIntensity,
     playbackMsRef: { current: 1200 }, playback: { progress_ms: 1200, is_playing: true },
-    matching: true, label: 'Localized' };
+    matching: true, soundLabels: { start: 'Start', stop: 'Stop', unlock: 'Unlock', unavailable: 'Unavailable' }, label: 'Localized' };
   const h = diceHarness(props);
   try {
     const glow = h.nodes.get('glow')!;
@@ -786,7 +791,7 @@ test('BPM intensity shares caption tempo, writes only changes and preserves othe
 test('component clamps nonfinite and out-of-range intensity resolvers', () => {
   const props: MeterDiceProps = { map, glowWindows: [{ startMs: 1200, endMs: 5500 }],
     playbackMsRef: { current: 1500 }, playback: { progress_ms: 1500, is_playing: true },
-    matching: true, label: 'Localized' };
+    matching: true, soundLabels: { start: 'Start', stop: 'Stop', unlock: 'Unlock', unavailable: 'Unavailable' }, label: 'Localized' };
   const h = diceHarness(props);
   try {
     for (const [value, expected] of [[NaN, '0'], [Infinity, '0'], [-Infinity, '0'],
@@ -804,7 +809,7 @@ test('ignitions are one-shot new-beat events, repeat downbeats, and cancel witho
     beatTimesMs: [startMs, startMs + 200, startMs + 400],
   })) };
   const props: MeterDiceProps = { map: repeated, playbackMsRef: { current: 0 },
-    playback: { progress_ms: 0, is_playing: true }, matching: true, label: 'Localized' };
+    playback: { progress_ms: 0, is_playing: true }, matching: true, soundLabels: { start: 'Start', stop: 'Stop', unlock: 'Unlock', unavailable: 'Unavailable' }, label: 'Localized' };
   const h = diceHarness(props);
   const pips = h.nodes.get('g')!.children;
   const layers = pips.flatMap((pip) => pip.children.slice(1));
@@ -853,7 +858,7 @@ test('ignitions are one-shot new-beat events, repeat downbeats, and cancel witho
 test('initial reduced motion sets a static glow target without style flush or ignition', () => {
   const h = diceHarness({ map, glowWindows: [{ startMs: 1200, endMs: 5500 }],
     getGlowIntensity: () => 0.2, playbackMsRef: { current: 1500 },
-    playback: { progress_ms: 1500, is_playing: true }, matching: true, label: 'Localized' }, true);
+    playback: { progress_ms: 1500, is_playing: true }, matching: true, soundLabels: { start: 'Start', stop: 'Stop', unlock: 'Unlock', unavailable: 'Unavailable' }, label: 'Localized' }, true);
   try {
     const glow = h.nodes.get('glow')!;
     assert.equal(glow.style.opacity, '0.2');
@@ -879,4 +884,78 @@ test('glow shares face dimensions and keeps the SVG outer contour stationary', (
   assert.match(css, /border: calc\(var\(--dice-face-size\) \* 0\.02\) solid/);
   assert.doesNotMatch(css.match(/@keyframes diceGlowBreath \{[\s\S]*?\n\}/)![0], /transform/);
   assert.doesNotMatch(css, /data-glow='active'\] \.glow \{ opacity/);
+});
+
+
+test('native trigger keeps image label; touch ignores hover/leave, keyboard blur/Escape stop', () => {
+  const h = diceHarness({ map, playbackMsRef: { current: 1200 }, playback: { progress_ms: 1200, is_playing: true }, matching: true,
+    label: 'Localized', soundLabels: { start: 'Start', stop: 'Stop', unlock: 'Unlock', unavailable: 'Unavailable' } });
+  try {
+    const button = h.nodes.get('button')!;
+    const events = h.trigger();
+    events.onPointerEnter({ pointerType: 'touch' });
+    assert.equal(button.attributes['aria-pressed'], 'false');
+    events.onPointerDown({ pointerType: 'touch' }); events.onClick({ detail: 1 });
+    assert.equal(button.attributes['aria-pressed'], 'true');
+    assert.equal(h.nodes.get('hint')!.textContent, 'Unavailable');
+    events.onPointerLeave({}); assert.equal(button.attributes['aria-pressed'], 'true');
+    events.onClick({ detail: 1 }); assert.equal(button.attributes['aria-pressed'], 'false');
+    events.onClick({ detail: 0 }); assert.equal(button.attributes['aria-pressed'], 'true');
+    events.onBlur({}); assert.equal(button.attributes['aria-pressed'], 'false');
+    events.onClick({ detail: 0 }); events.onKeyDown({ key: 'Escape' });
+    assert.equal(button.attributes['aria-pressed'], 'false');
+    events.onPointerDown({ pointerType: 'mouse' }); events.onClick({ detail: 1 });
+    events.onPointerLeave({}); assert.equal(button.attributes['aria-pressed'], 'false');
+  } finally { h.close(); }
+});
+
+test('actual paint drives reduced-motion audio; poll, seek, hide and mouseleave silence it', () => {
+  const saved = Object.getOwnPropertyDescriptor(globalThis, 'AudioContext');
+  let clicks = 0;
+  let stopped = 0;
+  let closed = 0;
+  class Audio {
+    state = 'running'; currentTime = 0; destination = {};
+    resume() { this.state = 'running'; return Promise.resolve(); }
+    suspend() { this.state = 'suspended'; return Promise.resolve(); }
+    close() { closed++; this.state = 'closed'; return Promise.resolve(); }
+    createOscillator() { return { frequency: { setValueAtTime() {} }, connect() {}, disconnect() {}, start() { clicks++; }, stop(at?: number) { if (at == null) stopped++; }, onended: null }; }
+    createGain() { return { gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {}, disconnect() {} }; }
+  }
+  Object.defineProperty(globalThis, 'AudioContext', { configurable: true, value: Audio });
+  const props: MeterDiceProps = { map, playbackMsRef: { current: 2480 }, playback: { progress_ms: 2480, is_playing: true }, matching: true,
+    label: 'Localized', soundLabels: { start: 'Start', stop: 'Stop', unlock: 'Unlock', unavailable: 'Unavailable' } };
+  const h = diceHarness(props, true);
+  try {
+    h.trigger().onPointerEnter({ pointerType: 'mouse' });
+    assert.equal(clicks, 0);
+    h.step(2496); h.step(2512);
+    assert.equal(clicks, 1, 'reduced motion still sounds authored downbeat');
+    h.step(2528); assert.equal(clicks, 1);
+    h.render({ ...props, playback: { ...props.playback! } });
+    assert.ok(stopped > 0, 'snapshot stops active click');
+    h.step(4000); assert.equal(clicks, 1, 'seek cannot catch up');
+    h.hide(true); props.playbackMsRef.current = 4500; h.hide(false);
+    assert.equal(clicks, 1);
+    h.trigger().onPointerLeave({});
+    h.step(4750, 250); assert.equal(clicks, 1, 'leave revokes subsequent beats');
+  } finally {
+    h.close();
+    if (saved) Object.defineProperty(globalThis, 'AudioContext', saved); else Reflect.deleteProperty(globalThis, 'AudioContext');
+  }
+  assert.equal(closed, 1);
+});
+
+test('interactive zoom keeps visible hit targets and bounds rotating ambient boxes', () => {
+  const css = readFileSync(new URL('../components/song/MeterDice.module.css', import.meta.url), 'utf8');
+  const visual = css.match(/\.visual \{([^}]+)\}/)![1];
+  assert.match(visual, /transform-origin: center top/);
+  assert.match(visual, /pointer-events: auto/);
+  assert.match(visual, /transition: transform 200ms/);
+  assert.match(css, /data-active='true'\] \.visual \{ transform: scale\(1\.5\)/);
+  for (const name of ['before', 'after']) {
+    const ambient = css.match(new RegExp('\\.glow::' + name + ' \\{([^}]+)\\}'))![1];
+    assert.match(ambient, /inset: 15%/, 'transparent rotated corners must not widen the mobile viewport');
+  }
+  assert.match(css, /inset: 1%/, 'the emitting contour remains aligned with the painted SVG outline');
 });

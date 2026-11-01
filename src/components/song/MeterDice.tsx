@@ -14,6 +14,7 @@ import {
   type MeterMap,
   type MeterPlayback,
 } from '@/lib/meter-dice';
+import { MeterMetronome, type MeterSoundStatus } from '@/lib/meter-metronome';
 import styles from './MeterDice.module.css';
 
 export interface MeterDiceProps {
@@ -28,6 +29,7 @@ export interface MeterDiceProps {
   matching: boolean;
   /** A localized, stable description supplied by the parent (not a live region). */
   label: string;
+  soundLabels: { start: string; stop: string; unlock: string; unavailable: string };
 }
 
 interface DiceView {
@@ -46,7 +48,35 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * A header-sized, local DOM subscriber to useSpotifySync's authoritative ref.
  * No React frame state, independent timer, BPM inference or poll extrapolation.
  */
-function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows, getGlowIntensity }: MeterDiceProps) {
+function MeterDice({ map, playbackMsRef, playback, matching, label, soundLabels, glowWindows, getGlowIntensity }: MeterDiceProps) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const hintRef = useRef<HTMLSpanElement>(null);
+  const soundRef = useRef<MeterMetronome | null>(null);
+  const modeRef = useRef<'off' | 'hover' | 'touch' | 'keyboard'>('off');
+  const pointerRef = useRef('');
+  const statusRef = useRef<MeterSoundStatus>('off');
+  const labelsRef = useRef(soundLabels);
+  const updateStatus = (status: MeterSoundStatus) => {
+    statusRef.current = status;
+    const active = modeRef.current !== 'off';
+    const labels = labelsRef.current;
+    const hint = status === 'blocked' ? labels.unlock : status === 'unavailable' ? labels.unavailable : '';
+    buttonRef.current?.setAttribute('aria-pressed', String(active));
+    buttonRef.current?.setAttribute('aria-label', hint || (active ? labels.stop : labels.start));
+    if (buttonRef.current) buttonRef.current.dataset.active = String(active);
+    if (hintRef.current) hintRef.current.textContent = hint;
+  };
+  const deactivate = () => {
+    modeRef.current = 'off';
+    soundRef.current?.disable();
+    updateStatus('off');
+  };
+  const activate = (mode: 'hover' | 'touch' | 'keyboard') => {
+    modeRef.current = mode;
+    soundRef.current ??= new MeterMetronome(() => new AudioContext(), updateStatus);
+    const ms = meterPlaybackMs(matching, playback, playbackMsRef.current);
+    soundRef.current.enable(ms == null || !isValidMeterMap(map) ? null : getMeterFrame(map, ms));
+  };
   const rootRef = useRef<HTMLDivElement>(null);
   const faceRef = useRef<SVGSVGElement>(null);
   const pipsRef = useRef<SVGGElement>(null);
@@ -155,9 +185,11 @@ function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows,
         delta < 0 || (!playing && delta !== 0 && (!view.wasPlaying || Math.abs(delta - elapsed) > 50))
         || (playing && view.wasPlaying && (elapsed > 250 || Math.abs(delta - elapsed) > 50))
       );
-      const continuous = animate && playing && view.wasPlaying && !reducedMotion.matches
+      const audioContinuous = animate && playing && view.wasPlaying && !document.hidden
         && !discontinuity && elapsed <= 250 && delta != null && delta >= 0
         && Math.abs(delta - elapsed) <= 50;
+      soundRef.current?.sample(next, audioContinuous);
+      const continuous = audioContinuous && !reducedMotion.matches;
       const wasContinuous = root.dataset.motion === 'continuous';
       const motion = continuous ? 'continuous' : 'snap';
       if (root.dataset.motion !== motion) root.dataset.motion = motion;
@@ -259,6 +291,7 @@ function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows,
     const sync = () => {
       stop();
       if (document.hidden) {
+        soundRef.current?.sample(null, false);
         setGlowMotion(root.dataset.glow === 'active');
         if (!valid || !matching || !playback || !view.frame || !isInMeterGlowWindow(glowWindows, view.ms)) {
           if (root.dataset.glow !== 'off') root.dataset.glow = 'off';
@@ -285,6 +318,7 @@ function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows,
     document.addEventListener('visibilitychange', onVisibility);
     reducedMotion.addEventListener('change', onMotionPreference);
     return () => {
+      soundRef.current?.sample(null, false);
       stop();
       if (root.dataset.glowMotion !== 'paused') root.dataset.glowMotion = 'paused';
       settleLights();
@@ -298,18 +332,43 @@ function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows,
     return () => {
       view.animation?.cancel();
       view.animation = null;
+      soundRef.current?.dispose();
+      soundRef.current = null;
     };
   }, []);
 
+  useEffect(() => { labelsRef.current = soundLabels; updateStatus(statusRef.current); }, [soundLabels]);
+
   return (
+    <button ref={buttonRef} type="button" className={styles.trigger} data-meter-trigger="" data-active="false"
+      aria-pressed={false} aria-label={soundLabels.start}
+      onPointerEnter={(event) => {
+        if (event.pointerType === 'mouse' && window.matchMedia('(hover: hover) and (pointer: fine)').matches
+          && modeRef.current === 'off') activate('hover');
+      }}
+      onPointerLeave={() => { if (modeRef.current === 'hover') deactivate(); }}
+      onPointerDown={(event) => { pointerRef.current = event.pointerType; }}
+      onClick={(event) => {
+        if (event.detail === 0) {
+          if (modeRef.current === 'keyboard') deactivate(); else activate('keyboard');
+        } else if (pointerRef.current === 'touch' || pointerRef.current === 'pen') {
+          if (modeRef.current === 'touch') deactivate(); else activate('touch');
+        } else activate('hover');
+      }}
+      onKeyDown={(event) => { if (event.key === 'Escape') deactivate(); }}
+      onBlur={() => { if (modeRef.current === 'keyboard') deactivate(); }}>
     <div ref={rootRef} className={styles.dice} role="img" aria-label={label} data-glow="off" data-glow-motion="paused" data-state={playback == null ? 'loading' : 'unavailable'}>
-      <span ref={glowRef} className={styles.glow} aria-hidden="true"><span className={styles.glowBreath} /></span>
-      <svg ref={faceRef} className={styles.face} viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+      <span className={styles.visual} data-meter-visual="">
+      <span data-meter-glow="" ref={glowRef} className={styles.glow} aria-hidden="true"><span className={styles.glowBreath} /></span>
+      <svg data-meter-face="" ref={faceRef} className={styles.face} viewBox="0 0 100 100" aria-hidden="true" focusable="false">
         <rect className={styles.outline} x="2" y="2" width="96" height="96" rx="22" />
         <g ref={pipsRef} />
       </svg>
-      <span ref={meterRef} className={styles.meter} aria-hidden="true" />
+      </span>
+      <span data-meter-caption="" ref={meterRef} className={styles.meter} aria-hidden="true" />
     </div>
+    <span ref={hintRef} className={styles.hint} data-meter-hint="" />
+    </button>
   );
 }
 

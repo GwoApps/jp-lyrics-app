@@ -140,3 +140,41 @@ SSR 输出 `data-glow="off"`、`data-glow-motion="paused"`。
 不等同真实 Spotify 设备的同步或听感验收。
 旧外光边界回归等待 computed opacity 到达当前 inline target 后再判断可见性，
 而不是把 `data-glow` 已更新或固定 250ms 等待误当作 CSS 过渡已结束。
+
+### 本地节拍器与交互放大
+
+默认关闭，未交互不创建 AudioContext。fine mouse hover 开启、离开立即停音；
+触屏/笔点击切换，不响应合成 hover，leave 不撤销触屏开关。原生 button 支持
+Enter/Space，键盘模式 blur/Escape 关闭；内层 role=img 的稳定本地化 label 保留。
+按钮启停、点击解锁与音频不可用提示覆盖 zh-CN/zh-TW/ja/en。
+hover 不保证浏览器授权：suspended 时提示点击启用，桌面点击仅解锁 hover 模式；
+触屏 click 同步创建/resume。失败 promise 已捕获，不保存设置。
+
+声音只由既有 paint、playbackMsRef 和 authored getMeterFrame 驱动，没有新时钟、
+RAF、BPM 推算或历史补播。连续采样的相邻新拍最多发声一次；减效仅禁视觉动画，
+不禁声音。首次启用、快进/seek、轮询、暂停/恢复、隐藏恢复、无 frame 与错曲不补拍。
+强拍 beatIndex=0 使用 1320Hz / 0.12，其他拍 880Hz / 0.07；2ms 起音、35ms
+衰减、40ms 停止。MeterMetronome 持有 oscillator/gain/context，停用立即 stop 和
+断开声源，卸载 close；过期 resume 不能在关闭后重新发声。无网络资源或新增依赖。
+
+布局槽仍为 52/78px，基础骰面仍为 48/72px。data-meter-visual 包住 face 与 glow，
+激活只用 transform scale(1.5) 放大至 72/108px，200ms 原缓动，减效即时缩放。
+以顶部中心为缩放原点，caption 保持字号并向下移出放大骰面。布局槽不变，但放大后的
+visual 保留 pointer hit test，因此鼠标移到扩大的可见边缘仍保持 hover，真正离开才关闭。
+提示放在放大后的 caption 下方。旋转的彩色环境层单独内收至 15%，避免透明旋转方框
+在手机放大时把 scrollWidth 撑出 3–5px；发光描边仍为 1% inset，实际轮廓不变。
+Chrome 脚本应使用 data-meter-trigger / visual / face / glow / caption 标记，
+不再依赖 root.firstElementChild 或直系 SVG。地图字节、校准、平台窗口、灯泡和
+外光周期及 toolbar 规则均未修改。
+
+本轮增加 fake audio 的强弱拍、去重、非连续事件、清理、resume race 与错误测试，
+以及实际组件事件/paint 的触屏、键盘、mouseleave 和 reduced-motion 发声测试。
+真实 Chrome 脚本位于 `/root/odd-dice-work/interactive-metronome/verify.cjs`，覆盖原生
+鼠标/触屏/键盘启停、放大中间帧与 hit test、320/390/640/768px 无溢出及相邻控件不遮挡、
+暂停/恢复和 reduced-motion。autoplay 用全新 document 的 CDP `Runtime.evaluate`
+显式 `userGesture:false` 与 mouseMoved 测试；不能用默认 Playwright evaluate，后者会
+授予用户激活从而把“hover 被阻止”测成假通过。真实 AudioContext 的输出通过原生
+MediaRecorder 录制到私有 `native-metronome.webm`，同目录 `analyze_audio.py` 解码并实测
+FFT 与强弱拍幅度；解码保留 Opus 的时间戳空洞（aresample async），不把稀疏包当作
+连续 PCM。不是 mock AudioContext，也不是生成的假录音。API 播放状态为合成 fixture，
+不代表真实 Spotify 设备的端到端音频延迟或真机扬声器听感验收。

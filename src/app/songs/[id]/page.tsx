@@ -889,7 +889,7 @@ export default function SongViewPage() {
           </div>
           {oddDiceMap && (
             <MeterDice key={id} map={oddDiceMap} glowWindows={ODD_DICE_GLOW_WINDOWS} getGlowIntensity={getOddDiceGlowIntensity} playbackMsRef={playbackMsRef}
-              playback={playerPlayback} matching={isSameSong} label={t('meterDice.label')} />
+              playback={playerPlayback} matching={isSameSong} label={t('meterDice.label')} soundLabels={{ start: t('meterDice.start'), stop: t('meterDice.stop'), unlock: t('meterDice.unlock'), unavailable: t('meterDice.unavailable') }} />
           )}
         </div>
       </div>
