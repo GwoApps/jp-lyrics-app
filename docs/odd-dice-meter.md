@@ -74,3 +74,40 @@ The die is 48 px on mobile and 72 px at the existing desktop breakpoint (min-wid
 
 
 Each lamp has a warm filament and pale hot core, surrounded by two subtle static halo layers. Only opacity transitions: 140 ms to light and 110 ms of afterglow to fade, both using `cubic-bezier(0.23, 1, 0.32, 1)`. Transitions run only during continuous playback. On a same-meter downbeat the existing first pip commits a dark baseline, then warms again; the remaining old pips fade out without rebuilding the face. New faces also commit a dark baseline before lighting. Pause, seek, visibility restoration and other discontinuities snap directly to the current position; reduced motion also disables lamp transitions. There is no pulse or additional timer. DOM regressions observe the committed dark baseline and retained old lights. Real Chrome acceptance covers responsive sizing, toolbar opacity intermediate frames, keyboard focus, portaled menus, reduced motion and touch controls; audio-synchronized lamp feel has not been verified on a real Spotify device.
+
+### 快速升 BPM 专属外发光
+
+仅在现有 `getOddDiceMap` 歌曲、艺术家及完整版本校验通过后，页面向
+`MeterDice` 注入稳定的模块级 `ODD_DICE_GLOW_WINDOWS`。通用组件的可选
+`glowWindows` 默认不启用任何外光，不识别歌曲 ID 或艺术家。
+
+| 段落 | 源视频区间（ms） | 播放区间（ms） |
+| --- | --- | --- |
+| 第一次 165 → 230 BPM | [57866.667, 68000) | [55822.792, 65956.125) |
+| 第二次 165 → 230 BPM | [138966.667, 143833.333) | [136922.792, 141789.458) |
+
+区间从首个上升读数起，到首次 230 BPM 读数止（不包含终点），230 BPM
+恒速平台不继续发光。源区间固定，播放区间统一减去当前 map 的
+`playbackToSourceOffsetMs` 一次；当前仍为 2043.875 ms。
+
+装饰层仅围绕骰面，位于骰面背后，与 BPM 文字及骰面 WAAPI 旋转分离。
+使用 header 已有封面 primary/secondary/tertiary 配色及低透明度柔光；
+两层轨道分别为 3.2 秒和反向 4.4 秒，边缘呼吸为 2.4 秒，进出透明度
+过渡为 180 ms。仅动画 transform/opacity，渐变、模糊、阴影均为静态。
+独立外层控制显隐，避免呼吸关键帧覆盖 off 的透明度。无布局或命中区域变化。
+
+SSR 输出 `data-glow="off"`、`data-glow-motion="paused"`。
+客户端在既有 `paint()` 中使用同一个 `meterPlaybackMs`，仅有效 map、匹配歌曲、
+有效 meter frame 且处于窗口内时标记 `active`，其他情况为 `off`；
+状态不变时不重复写 glow dataset。播放时为 `running`，暂停按确认的 seek ref
+或暂停快照判断窗口并标为 `paused`；隐藏时暂停循环、停止既有 rAF，恢复时
+直接按当前时钟重算，不补播跳过的区间。减少动态偏好（包括运行时切换）为
+`static`，CSS 禁用循环并保留静态柔光。卸载取消 rAF、清理监听并暂停外光。
+
+本变更不修改音频、拍点 JSON、生成器、2043.875 ms 校准、138 小节、733 观测拍、
+63 个 BPM 读数、桌面 72/移动 48 骰面尺寸或工具栏透明度规则。
+纯区间测试及实际组件 effect 的 fake DOM harness 验证时钟和生命周期合同，但不执行 CSS。
+真实 Chrome 专项脚本为 `/root/public-files/jplrc/odd-dice-accelerando-glow/verify.cjs`，
+覆盖全部边界、播放自动进出、循环进度、暂停冻结、双向 seek、动态减效、桌面/移动/亮色及错曲/版本拒绝；
+原桌面工具栏回归脚本继续运行。浏览器使用合成 API 状态并拦截所有写请求，visibility 事件为显式测试注入，
+不等同真实 Spotify 设备或操作系统后台切换的听音验收。

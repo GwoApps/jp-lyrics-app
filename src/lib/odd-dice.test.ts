@@ -99,3 +99,28 @@ test('every beat, bar, tempo and coarse CSV boundary has equivalent source/playb
   assert.equal(getMeterFrame(map, player(7300))?.numerator, 5);
   assert.equal(getMeterFrame(map, player(7500))?.beatIndex, 0);
 });
+
+test('exclusive acceleration glow windows convert the current map offset exactly once', async () => {
+  const { ODD_DICE_GLOW_SOURCE_WINDOWS: source, ODD_DICE_GLOW_WINDOWS: playback } = await import('./odd-dice.ts');
+  const { isInMeterGlowWindow } = await import('./meter-dice.ts');
+  assert.deepEqual(source, [{ startMs: 57866.667, endMs: 68000 }, { startMs: 138966.667, endMs: 143833.333 }]);
+  assert.equal(ODD_DICE_FULL_MAP.id, 'odd-dice-audio-aligned-v3');
+  assert.equal(ODD_DICE_FULL_MAP.playbackToSourceOffsetMs, offset);
+  const expected = [[55822.792, 65956.125], [136922.792, 141789.458]];
+  playback.forEach((window, i) => {
+    assert.equal(window.startMs, source[i].startMs - offset);
+    assert.equal(window.endMs, source[i].endMs - offset);
+    assert.ok(Math.abs(window.startMs - expected[i][0]) < 1e-8);
+    assert.ok(Math.abs(window.endMs - expected[i][1]) < 1e-8);
+    for (const [ms, active] of [[window.startMs - 0.001, false], [window.startMs, true],
+      [window.endMs - 0.001, true], [window.endMs, false], [(window.startMs + window.endMs) / 2, true]] as const) {
+      assert.equal(isInMeterGlowWindow(playback, ms), active);
+      assert.ok(getMeterFrame(ODD_DICE_FULL_MAP, ms));
+    }
+    assert.equal(isInMeterGlowWindow(playback, window.endMs + 100), false, '230 BPM plateau stays off');
+  });
+  for (const ms of [null, NaN, -1, 100000]) assert.equal(isInMeterGlowWindow(playback, ms), false);
+  assert.equal(getOddDiceMap(song), ODD_DICE_FULL_MAP);
+  assert.equal(getOddDiceMap({ ...song, spotify_duration_ms: 121000 }), null);
+  assert.equal(getOddDiceMap({ ...song, artist: 'someone else' }), null);
+});

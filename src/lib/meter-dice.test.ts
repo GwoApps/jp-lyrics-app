@@ -168,7 +168,7 @@ function loadDice(react: object = React): React.ComponentType<MeterDiceProps> {
   const localRequire = (id: string) => {
     if (id === 'react') return react;
     if (id === '@/lib/meter-dice') return engine;
-    if (id.endsWith('.module.css')) return { default: { dice: 'dice', face: 'face', pip: 'pip', outline: 'outline', meter: 'meter', socket: 'socket', haloOuter: 'haloOuter', haloInner: 'haloInner', filament: 'filament', core: 'core' } };
+    if (id.endsWith('.module.css')) return { default: { dice: 'dice', glow: 'glow', glowBreath: 'glowBreath', face: 'face', pip: 'pip', outline: 'outline', meter: 'meter', socket: 'socket', haloOuter: 'haloOuter', haloInner: 'haloInner', filament: 'filament', core: 'core' } };
     return require(id);
   };
   new Function('require', 'module', 'exports', componentJS)(localRequire, loaded, loaded.exports);
@@ -179,10 +179,12 @@ test('real React SSR is hydration-safe, localized and silent with no fabricated 
   const Dice = loadDice();
   for (const playback of [null, { progress_ms: 2500, is_playing: true }, { progress_ms: 0, is_playing: false }]) {
     const html = renderToStaticMarkup(React.createElement(Dice, {
-      map, playback, matching: true, playbackMsRef: { current: null }, label: 'Localized dice label',
+      map, playback, matching: true, playbackMsRef: { current: 2500 }, label: 'Localized dice label',
+      glowWindows: [{ startMs: 1200, endMs: 4500 }],
     }));
     assert.match(html, /role="img" aria-label="Localized dice label"/);
     assert.match(html, /viewBox="0 0 100 100" aria-hidden="true" focusable="false"/);
+    assert.match(html, /data-glow="off" data-glow-motion="paused"/);
     assert.doesNotMatch(html, /aria-live|<circle|3\/4|4\/4/);
     assert.match(html, playback ? /data-state="unavailable"/ : /data-state="loading"/);
   }
@@ -614,4 +616,82 @@ test('explicit source offsets preserve default behavior and fail closed when non
     assert.equal(getMeterFrame(invalid, 1500), null);
     assert.equal(getMeterBpm(invalid, 1500), null);
   }
+});
+
+test('glow helper uses playback half-open windows and rejects missing or invalid positions', () => {
+  const windows = [{ startMs: 1200, endMs: 1800 }, { startMs: 4500, endMs: 5500 }];
+  for (const { startMs, endMs } of windows) {
+    for (const [ms, expected] of [[startMs - 0.001, false], [startMs, true],
+      [endMs - 0.001, true], [endMs, false], [(startMs + endMs) / 2, true]] as const) {
+      assert.equal(engine.isInMeterGlowWindow(windows, ms), expected);
+    }
+  }
+  for (const ms of [null, NaN, Infinity, -1, 0, 2000, 6000]) {
+    assert.equal(engine.isInMeterGlowWindow(windows, ms), false);
+  }
+  assert.equal(engine.isInMeterGlowWindow(undefined, 1500), false);
+  assert.equal(engine.isInMeterGlowWindow([], 1500), false);
+  for (const window of [{ startMs: NaN, endMs: 1800 }, { startMs: 1200, endMs: Infinity },
+    { startMs: -1, endMs: 1800 }, { startMs: 1800, endMs: 1200 }]) {
+    assert.equal(engine.isInMeterGlowWindow([window], 1500), false);
+  }
+});
+
+test('component glow follows the single clock, freezes lifecycle changes and never replays seeks', () => {
+  const props: MeterDiceProps = { map, glowWindows: [{ startMs: 1200, endMs: 1800 }, { startMs: 4500, endMs: 5500 }],
+    playbackMsRef: { current: 1200 }, playback: { progress_ms: 1200, is_playing: true },
+    matching: true, label: 'Localized' };
+  const h = diceHarness(props);
+  const root = h.nodes.get('div')!;
+  const state = (glow: string, motion: string) => {
+    assert.equal(root.dataset.glow, glow);
+    assert.equal(root.dataset.glowMotion, motion);
+  };
+  try {
+    state('active', 'running');
+    const writes = () => root.dataWrites.filter(([key]) => key.startsWith('glow')).length;
+    const before = writes();
+    h.step(1216); h.step(1232);
+    assert.equal(writes(), before, 'no repeated glow dataset writes within a window');
+    props.playbackMsRef.current = null;
+    const paused = { ...props, playback: { progress_ms: 1500, is_playing: false } };
+    h.render(paused);
+    state('active', 'paused');
+    assert.equal(h.frames.size, 0);
+    h.reduce(true); state('active', 'static');
+    h.reduce(false); state('active', 'paused');
+    props.playbackMsRef.current = 5000;
+    h.render({ ...paused, playback: { progress_ms: 1500, is_playing: false } });
+    state('active', 'paused');
+    props.playbackMsRef.current = 1800;
+    h.render({ ...paused, playback: { progress_ms: 1500, is_playing: false } });
+    state('off', 'paused');
+    h.render(props);
+    h.step(4500); state('active', 'running');
+    h.hide(true); state('active', 'paused');
+    assert.equal(h.frames.size, 0);
+    h.reduce(true); state('active', 'static');
+    h.reduce(false); state('active', 'paused');
+    props.playbackMsRef.current = 5500;
+    h.hide(false); state('off', 'paused');
+    assert.equal(h.frames.size, 1);
+    h.step(1500); state('active', 'running');
+    h.reduce(true); state('active', 'static');
+    h.reduce(false); state('active', 'running');
+    h.step(6000); state('off', 'paused');
+    h.step(5000); state('active', 'running');
+    h.render({ ...props, matching: false }); state('off', 'paused');
+    h.render({ ...props, playback: null }); state('off', 'paused');
+    h.render({ ...props, map: { ...map, bars: [] } }); state('off', 'paused');
+    h.render({ ...props, glowWindows: undefined }); state('off', 'paused');
+    h.render(props); state('active', 'running');
+    h.hide(true);
+    h.render({ ...props, matching: false }); state('off', 'paused');
+    h.hide(false);
+    h.render(props); state('active', 'running');
+  } finally { h.close(); }
+  assert.equal(root.dataset.glowMotion, 'paused');
+  assert.equal(h.frames.size, 0);
+  assert.equal(h.visibility.size, 0);
+  assert.equal(h.preference.size, 0);
 });

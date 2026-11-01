@@ -3,6 +3,8 @@
 import { memo, useEffect, useRef } from 'react';
 import {
   getDicePips,
+  isInMeterGlowWindow,
+  type MeterGlowWindow,
   getMeterFrame,
   getMeterBpm,
   isValidMeterMap,
@@ -17,6 +19,8 @@ import styles from './MeterDice.module.css';
 export interface MeterDiceProps {
   /** The parent must select the exact song/version; this component never guesses. */
   map: MeterMap;
+  /** Already in playback coordinates; absent means no song-specific effect. */
+  glowWindows?: readonly MeterGlowWindow[];
   playbackMsRef: React.RefObject<number | null>;
   playback: MeterPlayback | null;
   matching: boolean;
@@ -40,7 +44,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
  * A header-sized, local DOM subscriber to useSpotifySync's authoritative ref.
  * No React frame state, independent timer, BPM inference or poll extrapolation.
  */
-function MeterDice({ map, playbackMsRef, playback, matching, label }: MeterDiceProps) {
+function MeterDice({ map, playbackMsRef, playback, matching, label, glowWindows }: MeterDiceProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const faceRef = useRef<SVGSVGElement>(null);
   const pipsRef = useRef<SVGGElement>(null);
@@ -65,6 +69,11 @@ function MeterDice({ map, playbackMsRef, playback, matching, label }: MeterDiceP
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     let raf = 0;
 
+    const setGlowMotion = (active: boolean) => {
+      const motion = reducedMotion.matches ? 'static'
+        : active && playing && !document.hidden ? 'running' : 'paused';
+      if (root.dataset.glowMotion !== motion) root.dataset.glowMotion = motion;
+    };
     const cancelTurn = () => {
       view.animation?.cancel();
       view.animation = null;
@@ -92,6 +101,9 @@ function MeterDice({ map, playbackMsRef, playback, matching, label }: MeterDiceP
       const now = performance.now();
       const ms = valid ? meterPlaybackMs(matching, playback, playbackMsRef.current) : null;
       const next = ms == null ? null : getMeterFrame(map, ms);
+      const glow = next && isInMeterGlowWindow(glowWindows, ms) ? 'active' : 'off';
+      if (root.dataset.glow !== glow) root.dataset.glow = glow;
+      setGlowMotion(glow === 'active');
       const previous = view.frame;
       const elapsed = view.sampledAt == null ? Infinity : now - view.sampledAt;
       const delta = ms == null || view.ms == null ? null : ms - view.ms;
@@ -199,6 +211,10 @@ function MeterDice({ map, playbackMsRef, playback, matching, label }: MeterDiceP
     const sync = () => {
       stop();
       if (document.hidden) {
+        setGlowMotion(root.dataset.glow === 'active');
+        if (!valid || !matching || !playback || !view.frame || !isInMeterGlowWindow(glowWindows, view.ms)) {
+          if (root.dataset.glow !== 'off') root.dataset.glow = 'off';
+        }
         cancelTurn();
         settleLights();
         return;
@@ -212,6 +228,7 @@ function MeterDice({ map, playbackMsRef, playback, matching, label }: MeterDiceP
       sync();
     };
     const onMotionPreference = () => {
+      setGlowMotion(root.dataset.glow === 'active');
       if (reducedMotion.matches) cancelTurn();
       settleLights();
     };
@@ -220,11 +237,12 @@ function MeterDice({ map, playbackMsRef, playback, matching, label }: MeterDiceP
     reducedMotion.addEventListener('change', onMotionPreference);
     return () => {
       stop();
+      if (root.dataset.glowMotion !== 'paused') root.dataset.glowMotion = 'paused';
       settleLights();
       document.removeEventListener('visibilitychange', onVisibility);
       reducedMotion.removeEventListener('change', onMotionPreference);
     };
-  }, [map, playbackMsRef, playback, matching]);
+  }, [map, playbackMsRef, playback, matching, glowWindows]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -235,7 +253,8 @@ function MeterDice({ map, playbackMsRef, playback, matching, label }: MeterDiceP
   }, []);
 
   return (
-    <div ref={rootRef} className={styles.dice} role="img" aria-label={label} data-state={playback == null ? 'loading' : 'unavailable'}>
+    <div ref={rootRef} className={styles.dice} role="img" aria-label={label} data-glow="off" data-glow-motion="paused" data-state={playback == null ? 'loading' : 'unavailable'}>
+      <span className={styles.glow} aria-hidden="true"><span className={styles.glowBreath} /></span>
       <svg ref={faceRef} className={styles.face} viewBox="0 0 100 100" aria-hidden="true" focusable="false">
         <rect className={styles.outline} x="2" y="2" width="96" height="96" rx="22" />
         <g ref={pipsRef} />

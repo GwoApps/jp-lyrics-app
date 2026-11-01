@@ -1,3 +1,15 @@
+/** Half-open effect window in playback milliseconds (already offset-adjusted). */
+export interface MeterGlowWindow {
+  readonly startMs: number;
+  readonly endMs: number;
+}
+
+export function isInMeterGlowWindow(windows: readonly MeterGlowWindow[] | undefined, ms: number | null): boolean {
+  return ms != null && Number.isFinite(ms) && ms >= 0
+    && !!windows?.some(({ startMs, endMs }) => Number.isFinite(startMs) && Number.isFinite(endMs)
+      && startMs >= 0 && endMs > startMs && ms >= startMs && ms < endMs);
+}
+
 /** Absolute beat times; estimates must be explicitly marked. */
 export interface MeterBar {
   readonly estimated?: boolean;

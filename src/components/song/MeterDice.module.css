@@ -86,3 +86,82 @@
     transform: none !important;
   }
 }
+
+/* Face-sized decoration: independent of the caption and WAAPI face rotation. */
+.dice {
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+}
+
+.glow {
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  left: 50%;
+  width: 48px;
+  height: 48px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@media (min-width: 640px) {
+  .glow { width: 72px; height: 72px; }
+}
+
+.dice[data-glow='active'] .glow { opacity: 1; }
+
+.glow::before, .glow::after, .glowBreath {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 24%;
+  pointer-events: none;
+  animation-play-state: paused;
+}
+
+.glow::before {
+  background: radial-gradient(ellipse at 25% 35%, color-mix(in srgb, var(--song-accent-primary, var(--primary)) 48%, transparent), transparent 72%);
+  filter: blur(7px);
+  animation: diceGlowOrbit 3.2s linear infinite paused;
+}
+
+.glow::after {
+  background: radial-gradient(ellipse at 75% 65%, color-mix(in srgb, var(--song-accent-secondary, var(--primary)) 40%, transparent), transparent 72%);
+  filter: blur(6px);
+  animation: diceGlowOrbit 4.4s linear infinite reverse paused;
+}
+
+.glowBreath {
+  border: 1px solid color-mix(in srgb, var(--song-accent-tertiary, var(--primary)) 35%, transparent);
+  box-shadow: 0 0 12px 3px color-mix(in srgb, var(--song-accent-primary, var(--primary)) 28%, transparent);
+  opacity: 0.65;
+  animation: diceGlowBreath 2.4s ease-in-out infinite paused;
+}
+
+.dice[data-glow='active'][data-glow-motion='running'] .glow::before,
+.dice[data-glow='active'][data-glow-motion='running'] .glow::after,
+.dice[data-glow='active'][data-glow-motion='running'] .glowBreath {
+  animation-play-state: running;
+}
+
+.dice[data-glow-motion='static'] .glow::before,
+.dice[data-glow-motion='static'] .glow::after,
+.dice[data-glow-motion='static'] .glowBreath { animation: none; }
+
+@keyframes diceGlowOrbit {
+  from { transform: rotate(0deg) translateX(3px); }
+  to { transform: rotate(360deg) translateX(3px); }
+}
+
+@keyframes diceGlowBreath {
+  0%, 100% { transform: scale(1); opacity: 0.55; }
+  50% { transform: scale(1.06); opacity: 0.85; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glow { transition: none; }
+  .dice .glow::before, .dice .glow::after, .dice .glowBreath { animation: none; }
+}
