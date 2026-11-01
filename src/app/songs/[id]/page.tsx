@@ -23,6 +23,8 @@ import ImmersiveLyricsControls from '@/components/song/ImmersiveLyricsControls';
 import LyricTimeAxis from '@/components/song/LyricTimeAxis';
 import SongPlayer from '@/components/song/SongPlayer';
 import SongPlaybackStatus from '@/components/song/SongPlaybackStatus';
+import MeterDice from '@/components/song/MeterDice';
+import { getOddDiceMap } from '@/lib/odd-dice';
 import { useSimulatedPlayback } from '@/hooks/useSimulatedPlayback';
 import { previewTimeline } from '@/lib/simulated-playback';
 import Dialog from '@/components/ui/dialog';
@@ -526,6 +528,7 @@ export default function SongViewPage() {
   const lyricsSourceLabel = song ? (lyricsSourceKey ? t(lyricsSourceKey) : song.lyrics_source) : '';
   const { spotify, syncState, resumeSync, activeLine, isSameSong, followPlaying, setFollowPlaying, pipWindowRef, playbackMsRef } = sync;
   const playerPlayback = simulated ? simulation.playback : spotify;
+  const oddDiceMap = getOddDiceMap(song, isSameSong ? playerPlayback?.duration_ms : undefined);
   const handlePlaybackToggle = () => {
     if (simulated) { simulation.toggle(); return; }
     const clickedTrackKey = trackIdentity(spotify?.track ?? null);
@@ -745,7 +748,7 @@ export default function SongViewPage() {
             <button type="button" onClick={enterImmersive}
               className="sm:hidden ml-auto inline-flex h-11 items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--card)] px-3 text-sm font-medium text-[var(--foreground)]"
               aria-label={t('song.immersiveEnter')}>
-              <Maximize2 className="h-4 w-4" />{t('song.immersiveEnter')}
+              <Maximize2 className="h-4 w-4" /><span className={oddDiceMap ? 'sr-only' : undefined}>{t('song.immersiveEnter')}</span>
             </button>
           )}
           {/* Desktop toolbar */}
@@ -884,6 +887,10 @@ export default function SongViewPage() {
               <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Plus className="h-3.5 w-3.5" /></button>
             </div>
           </div>
+          {oddDiceMap && (
+            <MeterDice key={id} map={oddDiceMap} playbackMsRef={playbackMsRef}
+              playback={playerPlayback} matching={isSameSong} label={t('meterDice.label')} />
+          )}
         </div>
       </div>
 

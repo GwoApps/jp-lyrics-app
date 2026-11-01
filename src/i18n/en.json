@@ -1,4 +1,7 @@
 {
+  "meterDice": {
+    "label": "Meter dice: pips show beats per bar and light up in time with playback."
+  },
   "player": {
     "label": "Player",
     "play": "Play",

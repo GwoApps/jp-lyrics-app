@@ -1,0 +1,57 @@
+.dice {
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 52px;
+  margin-inline-start: auto;
+  color: var(--muted-foreground);
+  user-select: none;
+  pointer-events: none;
+}
+
+.face {
+  display: block;
+  width: 48px;
+  height: 48px;
+  overflow: visible;
+  transform-origin: center;
+}
+
+.outline {
+  fill: var(--card);
+  stroke: var(--border);
+  stroke-width: 2;
+}
+
+.pip {
+  fill: var(--muted-foreground);
+  opacity: 0.22;
+}
+
+.pip[data-lit='true'] {
+  fill: var(--song-accent, var(--primary));
+  opacity: 0.65;
+}
+
+.pip[data-current='true'] {
+  opacity: 1;
+  stroke: var(--song-accent, var(--primary));
+  stroke-width: 3;
+}
+
+.meter {
+  min-height: 12px;
+  font-size: 10px;
+  line-height: 12px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .face {
+    /* Also guards an in-flight WAAPI turn when the OS preference changes. */
+    transform: none !important;
+  }
+}
