@@ -75,7 +75,7 @@ The die is 48 px on mobile and 72 px at the existing desktop breakpoint (min-wid
 
 Each lamp has a warm filament and pale hot core, surrounded by two subtle static halo layers. Only opacity transitions: 140 ms to light and 110 ms of afterglow to fade, both using `cubic-bezier(0.23, 1, 0.32, 1)`. Transitions run only during continuous playback. On a same-meter downbeat the existing first pip commits a dark baseline, then warms again; the remaining old pips fade out without rebuilding the face. New faces also commit a dark baseline before lighting. Pause, seek, visibility restoration and other discontinuities snap directly to the current position; reduced motion also disables lamp transitions. There is no pulse or additional timer. DOM regressions observe the committed dark baseline and retained old lights. Real Chrome acceptance covers responsive sizing, toolbar opacity intermediate frames, keyboard focus, portaled menus, reduced motion and touch controls; audio-synchronized lamp feel has not been verified on a real Spotify device.
 
-### 快速升 BPM 专属外发光
+### 快速升 BPM 及 230 BPM 平台专属外发光
 
 仅在现有 `getOddDiceMap` 歌曲、艺术家及完整版本校验通过后，页面向
 `MeterDice` 注入稳定的模块级 `ODD_DICE_GLOW_WINDOWS`。通用组件的可选
@@ -83,11 +83,18 @@ Each lamp has a warm filament and pale hot core, surrounded by two subtle static
 
 | 段落 | 源视频区间（ms） | 播放区间（ms） |
 | --- | --- | --- |
-| 第一次 165 → 230 BPM | [57866.667, 68000) | [55822.792, 65956.125) |
-| 第二次 165 → 230 BPM | [138966.667, 143833.333) | [136922.792, 141789.458) |
+| 第一次加速及 230 BPM 平台 | [57866.667, 96566.667) | [55822.792, 94522.792) |
+| 第二次加速及 230 BPM 平台 | [138966.667, 230933.333) | [136922.792, 228889.458) |
 
-区间从首个上升读数起，到首次 230 BPM 读数止（不包含终点），230 BPM
-恒速平台不继续发光。源区间固定，播放区间统一减去当前 map 的
+区间从首个上升读数起，覆盖随后的 230 BPM 恒速平台，直到首个非 230 的
+authored tempoChanges 事件（终点不包含）：分别为 source 96566.667 / 145 BPM
+和 230933.333 / 141 BPM。旧加速终点 68000、143833.333 不再熄灭，
+有效 230 BPM frame 保持满强度；source [219200, 230933.333) 无拍区仍由
+既有 frame 门控保持 off，不补拍。测试将固定终点与真实 tempo 事件核对，
+覆盖平台前中后及全部有效拍点。真实 Chrome 平台专项脚本位于
+`/root/odd-dice-work/glow-plateau/verify.cjs`，覆盖抵达 230 不闪断、平台满强度及流动、
+首次非 230 淡出、无拍区、暂停/跨平台 seek 和移动/浅色/reduced-motion；
+使用合成 API 状态，不代表 Spotify 真机听感验收。源区间固定，播放区间统一减去当前 map 的
 `playbackToSourceOffsetMs` 一次；当前仍为 2043.875 ms。
 
 装饰层仅围绕骰面，位于骰面背后，与 BPM 文字及骰面 WAAPI 旋转分离。
@@ -116,7 +123,8 @@ SSR 输出 `data-glow="off"`、`data-glow-motion="paused"`。
 不按窗口经过时间计算。Odd Dice 使用
 `0.2 + 0.8 * clamp((bpm - 165) / (230 - 165), 0, 1)`：
 165 BPM 附近为 20%，230 BPM 附近为 100%；缺失、非有限或非正 BPM 为 0。
-两个窗口内相同 BPM 对应相同强度，窗口外仍为 0，230 平台仍按原半开区间淡出。
+两个窗口内相同 BPM 对应相同强度，230 平台有效拍点保持 100%；窗口外仍为 0。
+首个非 230 事件即时设置 off 目标，连续播放的视觉淡出仍使用原 180ms 过渡。
 通用组件未传 resolver 时保留原 100% 强度。只写独立 glow span 的内联 opacity，
 保留四位小数并规范化字符串，值未变不重复写入；不改变骰面、光点或 caption 亮度。
 原 180ms opacity transition 平滑 BPM 阶梯，reduced-motion 禁过渡但仍采用当前 BPM 强度。

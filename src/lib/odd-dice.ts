@@ -3,10 +3,10 @@ import type { MeterMap, MeterGlowWindow } from './meter-dice.ts';
 
 /** Video-frame-observed, waveform-aligned full-version meter map; see docs/odd-dice-meter.md. */
 export const ODD_DICE_FULL_MAP: MeterMap = fullVersion;
-/** First rising BPM readout through (excluding) the first 230 BPM readout. */
+/** First rising BPM readout through (excluding) the first non-230 BPM event after the plateau. */
 export const ODD_DICE_GLOW_SOURCE_WINDOWS: readonly MeterGlowWindow[] = Object.freeze([
-  Object.freeze({ startMs: 57866.667, endMs: 68000 }),
-  Object.freeze({ startMs: 138966.667, endMs: 143833.333 }),
+  Object.freeze({ startMs: 57866.667, endMs: 96566.667 }),
+  Object.freeze({ startMs: 138966.667, endMs: 230933.333 }),
 ]);
 /** Convert exactly once; consumers compare directly with the shared playback clock. */
 export const ODD_DICE_GLOW_WINDOWS: readonly MeterGlowWindow[] = Object.freeze(

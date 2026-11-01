@@ -100,13 +100,13 @@ test('every beat, bar, tempo and coarse CSV boundary has equivalent source/playb
   assert.equal(getMeterFrame(map, player(7500))?.beatIndex, 0);
 });
 
-test('exclusive acceleration glow windows convert the current map offset exactly once', async () => {
+test('half-open acceleration and plateau glow windows convert the current map offset exactly once', async () => {
   const { ODD_DICE_GLOW_SOURCE_WINDOWS: source, ODD_DICE_GLOW_WINDOWS: playback } = await import('./odd-dice.ts');
   const { isInMeterGlowWindow } = await import('./meter-dice.ts');
-  assert.deepEqual(source, [{ startMs: 57866.667, endMs: 68000 }, { startMs: 138966.667, endMs: 143833.333 }]);
+  assert.deepEqual(source, [{ startMs: 57866.667, endMs: 96566.667 }, { startMs: 138966.667, endMs: 230933.333 }]);
   assert.equal(ODD_DICE_FULL_MAP.id, 'odd-dice-audio-aligned-v3');
   assert.equal(ODD_DICE_FULL_MAP.playbackToSourceOffsetMs, offset);
-  const expected = [[55822.792, 65956.125], [136922.792, 141789.458]];
+  const expected = [[55822.792, 94522.792], [136922.792, 228889.458]];
   playback.forEach((window, i) => {
     assert.equal(window.startMs, source[i].startMs - offset);
     assert.equal(window.endMs, source[i].endMs - offset);
@@ -115,14 +115,55 @@ test('exclusive acceleration glow windows convert the current map offset exactly
     for (const [ms, active] of [[window.startMs - 0.001, false], [window.startMs, true],
       [window.endMs - 0.001, true], [window.endMs, false], [(window.startMs + window.endMs) / 2, true]] as const) {
       assert.equal(isInMeterGlowWindow(playback, ms), active);
-      assert.ok(getMeterFrame(ODD_DICE_FULL_MAP, ms));
     }
-    assert.equal(isInMeterGlowWindow(playback, window.endMs + 100), false, '230 BPM plateau stays off');
+    assert.equal(isInMeterGlowWindow(playback, window.endMs + 100), false, 'after the first non-230 event stays off');
   });
   for (const ms of [null, NaN, -1, 100000]) assert.equal(isInMeterGlowWindow(playback, ms), false);
   assert.equal(getOddDiceMap(song), ODD_DICE_FULL_MAP);
   assert.equal(getOddDiceMap({ ...song, spotify_duration_ms: 121000 }), null);
   assert.equal(getOddDiceMap({ ...song, artist: 'someone else' }), null);
+});
+
+test('authored 230 plateaus stay fully lit on every valid beat until the first non-230 event', async () => {
+  const { ODD_DICE_GLOW_SOURCE_WINDOWS: windows, ODD_DICE_GLOW_WINDOWS: playback } = await import('./odd-dice.ts');
+  const { isInMeterGlowWindow } = await import('./meter-dice.ts');
+  const map = ODD_DICE_FULL_MAP;
+  // Same frame/window gates and BPM resolver as MeterDice's target opacity.
+  const target = (sourceMs: number) => {
+    const ms = player(sourceMs);
+    return getMeterFrame(map, ms) && isInMeterGlowWindow(playback, ms)
+      ? getOddDiceGlowIntensity(getMeterBpm(map, ms)) : 0;
+  };
+  windows.forEach((window, i) => {
+    const plateauIndex = map.tempoChanges!.findIndex(t => t.startMs >= window.startMs && t.bpm === 230);
+    const plateau = map.tempoChanges![plateauIndex];
+    const exit = map.tempoChanges!.slice(plateauIndex + 1).find(t => t.bpm !== 230)!;
+    assert.equal(plateau.startMs, [68000, 143833.333][i], 'old acceleration endpoint');
+    assert.equal(window.endMs, exit.startMs, 'constant must match the first authored non-230 event');
+    assert.equal(exit.bpm, [145, 141][i]);
+    const lastValid = i === 0 ? exit.startMs : 219200;
+    for (const sourceMs of [plateau.startMs - 0.001, plateau.startMs,
+      plateau.startMs + 0.001, (plateau.startMs + lastValid) / 2, lastValid - 0.001,
+      ...map.bars.flatMap(b => b.beatTimesMs).filter(ms => ms >= plateau.startMs && ms < exit.startMs)]) {
+      assert.ok(getMeterFrame(map, player(sourceMs)), `valid frame at ${sourceMs}`);
+      assert.ok(isInMeterGlowWindow(playback, player(sourceMs)));
+      assert.equal(getMeterBpm(map, player(sourceMs)), sourceMs < plateau.startMs ? 228 : 230);
+      assert.equal(target(sourceMs), sourceMs < plateau.startMs ? getOddDiceGlowIntensity(228) : 1);
+    }
+    assert.equal(target(window.startMs - 0.001), 0);
+    assert.ok(target(window.startMs) > 0);
+    assert.ok(getMeterFrame(map, player(exit.startMs)));
+    assert.equal(getMeterBpm(map, player(exit.startMs)), exit.bpm);
+    assert.equal(target(exit.startMs), 0, 'first non-230 event immediately sets off target');
+    assert.equal(target(exit.startMs + 0.001), 0);
+  });
+  for (const sourceMs of [219200, (219200 + 230933.333) / 2, 230933.333 - 0.001]) {
+    assert.ok(isInMeterGlowWindow(playback, player(sourceMs)), 'window covers the whole authored plateau');
+    assert.equal(getMeterFrame(map, player(sourceMs)), null);
+    assert.equal(getMeterBpm(map, player(sourceMs)), null);
+    assert.equal(target(sourceMs), 0, 'uncovered free time retains the frame gate');
+  }
+  for (const sourceMs of [30000, 110000, 240000]) assert.equal(target(sourceMs), 0);
 });
 
 test('glow intensity normalizes authored BPM monotonically, independent of window duration', () => {
