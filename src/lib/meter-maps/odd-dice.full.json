@@ -1,7 +1,19 @@
 {
-  "id": "odd-dice-full-sections-estimated-v1",
+  "id": "odd-dice-full-sections-estimated-v2",
   "durationMs": 248828,
+  "playbackToSourceOffsetMs": 2909.090909090909,
   "estimated": true,
+  "calibration": {
+    "kind": "user-confirmed-manual-anchor",
+    "beats": 8,
+    "meter": "4/4",
+    "bars": 2,
+    "bpm": 165,
+    "mapping": "sourceVideoMs = spotifyPlaybackMs + playbackToSourceOffsetMs",
+    "playbackAnchorMs": 0,
+    "sourceAnchorMs": 2909.090909090909,
+    "fullTrackAudioVerified": false
+  },
   "source": "https://www.bilibili.com/video/BV1YhJq6LE4Q/",
   "sourceKind": "community-transcription-estimate",
   "sourceSha256": "6c61f6f4b9543d55a4f43e9569b105489352bb882f655ede483a69afa837ea23",
@@ -16,10 +28,15 @@
     "Source boundaries ±500 ms; source integrated bar estimates ±10%; all runtime beats estimated."
   ],
   "clipping": {
-    "startMs": 0,
-    "endMs": 248828,
-    "sourceEndMs": 253000,
-    "offsetMs": 0,
+    "playbackStartMs": 0,
+    "playbackEndMs": 248828,
+    "sourceLookupStartMs": 2909.090909090909,
+    "sourceLookupEndMs": 251737.0909090909,
+    "sourceGenerationStartMs": 500,
+    "sourceGenerationEndMs": 251737.0909090909,
+    "originalSourceEndMs": 253000,
+    "sectionRuntimeCoordinates": "spotify-playback",
+    "tableCoordinates": "source-video",
     "scale": 1
   },
   "sourceSections": [
@@ -32,8 +49,10 @@
       "bpmMax": 165,
       "estimatedBars": 4.81,
       "strategy": "constant",
-      "runtimeStartMs": 500,
-      "runtimeEndMs": 7500
+      "runtimeStartMs": 0,
+      "runtimeEndMs": 4590.909090909091,
+      "sourceGenerationStartMs": 500,
+      "sourceGenerationEndMs": 7500
     },
     {
       "section": 2,
@@ -44,8 +63,10 @@
       "bpmMax": 165,
       "estimatedBars": 0.82,
       "strategy": "constant",
-      "runtimeStartMs": 7500,
-      "runtimeEndMs": 9000
+      "runtimeStartMs": 4590.909090909091,
+      "runtimeEndMs": 6090.909090909091,
+      "sourceGenerationStartMs": 7500,
+      "sourceGenerationEndMs": 9000
     },
     {
       "section": 3,
@@ -56,8 +77,10 @@
       "bpmMax": 165,
       "estimatedBars": 1.15,
       "strategy": "constant",
-      "runtimeStartMs": 9000,
-      "runtimeEndMs": 11500
+      "runtimeStartMs": 6090.909090909091,
+      "runtimeEndMs": 8590.909090909092,
+      "sourceGenerationStartMs": 9000,
+      "sourceGenerationEndMs": 11500
     },
     {
       "section": 4,
@@ -68,8 +91,10 @@
       "bpmMax": 165,
       "estimatedBars": 3.02,
       "strategy": "constant",
-      "runtimeStartMs": 11500,
-      "runtimeEndMs": 17000
+      "runtimeStartMs": 8590.909090909092,
+      "runtimeEndMs": 14090.909090909092,
+      "sourceGenerationStartMs": 11500,
+      "sourceGenerationEndMs": 17000
     },
     {
       "section": 5,
@@ -80,8 +105,10 @@
       "bpmMax": 165,
       "estimatedBars": 0.92,
       "strategy": "constant",
-      "runtimeStartMs": 17000,
-      "runtimeEndMs": 19000
+      "runtimeStartMs": 14090.909090909092,
+      "runtimeEndMs": 16090.909090909092,
+      "sourceGenerationStartMs": 17000,
+      "sourceGenerationEndMs": 19000
     },
     {
       "section": 6,
@@ -92,8 +119,10 @@
       "bpmMax": 165,
       "estimatedBars": 3.02,
       "strategy": "constant",
-      "runtimeStartMs": 19000,
-      "runtimeEndMs": 24500
+      "runtimeStartMs": 16090.909090909092,
+      "runtimeEndMs": 21590.909090909092,
+      "sourceGenerationStartMs": 19000,
+      "sourceGenerationEndMs": 24500
     },
     {
       "section": 7,
@@ -104,8 +133,10 @@
       "bpmMax": 165,
       "estimatedBars": 0.92,
       "strategy": "constant",
-      "runtimeStartMs": 24500,
-      "runtimeEndMs": 26500
+      "runtimeStartMs": 21590.909090909092,
+      "runtimeEndMs": 23590.909090909092,
+      "sourceGenerationStartMs": 24500,
+      "sourceGenerationEndMs": 26500
     },
     {
       "section": 8,
@@ -116,8 +147,10 @@
       "bpmMax": 165,
       "estimatedBars": 3.02,
       "strategy": "constant",
-      "runtimeStartMs": 26500,
-      "runtimeEndMs": 32000
+      "runtimeStartMs": 23590.909090909092,
+      "runtimeEndMs": 29090.909090909092,
+      "sourceGenerationStartMs": 26500,
+      "sourceGenerationEndMs": 32000
     },
     {
       "section": 9,
@@ -128,8 +161,10 @@
       "bpmMax": 165,
       "estimatedBars": 0.92,
       "strategy": "constant",
-      "runtimeStartMs": 32000,
-      "runtimeEndMs": 34500
+      "runtimeStartMs": 29090.909090909092,
+      "runtimeEndMs": 31590.909090909092,
+      "sourceGenerationStartMs": 32000,
+      "sourceGenerationEndMs": 34500
     },
     {
       "section": 10,
@@ -140,8 +175,10 @@
       "bpmMax": 165,
       "estimatedBars": 2.75,
       "strategy": "constant",
-      "runtimeStartMs": 34500,
-      "runtimeEndMs": 39500
+      "runtimeStartMs": 31590.909090909092,
+      "runtimeEndMs": 36590.90909090909,
+      "sourceGenerationStartMs": 34500,
+      "sourceGenerationEndMs": 39500
     },
     {
       "section": 11,
@@ -152,8 +189,10 @@
       "bpmMax": 165,
       "estimatedBars": 1.15,
       "strategy": "constant",
-      "runtimeStartMs": 39500,
-      "runtimeEndMs": 42000
+      "runtimeStartMs": 36590.90909090909,
+      "runtimeEndMs": 39090.90909090909,
+      "sourceGenerationStartMs": 39500,
+      "sourceGenerationEndMs": 42000
     },
     {
       "section": 12,
@@ -164,8 +203,10 @@
       "bpmMax": 165,
       "estimatedBars": 3.02,
       "strategy": "constant",
-      "runtimeStartMs": 42000,
-      "runtimeEndMs": 47500
+      "runtimeStartMs": 39090.90909090909,
+      "runtimeEndMs": 44590.90909090909,
+      "sourceGenerationStartMs": 42000,
+      "sourceGenerationEndMs": 47500
     },
     {
       "section": 13,
@@ -176,8 +217,10 @@
       "bpmMax": 165,
       "estimatedBars": 0.92,
       "strategy": "constant",
-      "runtimeStartMs": 47500,
-      "runtimeEndMs": 49500
+      "runtimeStartMs": 44590.90909090909,
+      "runtimeEndMs": 46590.90909090909,
+      "sourceGenerationStartMs": 47500,
+      "sourceGenerationEndMs": 49500
     },
     {
       "section": 14,
@@ -188,8 +231,10 @@
       "bpmMax": 165,
       "estimatedBars": 1.93,
       "strategy": "constant",
-      "runtimeStartMs": 49500,
-      "runtimeEndMs": 53000
+      "runtimeStartMs": 46590.90909090909,
+      "runtimeEndMs": 50090.90909090909,
+      "sourceGenerationStartMs": 49500,
+      "sourceGenerationEndMs": 53000
     },
     {
       "section": 15,
@@ -200,8 +245,10 @@
       "bpmMax": 165,
       "estimatedBars": 2.52,
       "strategy": "constant",
-      "runtimeStartMs": 53000,
-      "runtimeEndMs": 58500
+      "runtimeStartMs": 50090.90909090909,
+      "runtimeEndMs": 55590.90909090909,
+      "sourceGenerationStartMs": 53000,
+      "sourceGenerationEndMs": 58500
     },
     {
       "section": 16,
@@ -212,8 +259,10 @@
       "bpmMax": 170,
       "estimatedBars": 1.42,
       "strategy": "constant",
-      "runtimeStartMs": 58500,
-      "runtimeEndMs": 61500
+      "runtimeStartMs": 55590.90909090909,
+      "runtimeEndMs": 58590.90909090909,
+      "sourceGenerationStartMs": 58500,
+      "sourceGenerationEndMs": 61500
     },
     {
       "section": 17,
@@ -224,8 +273,10 @@
       "bpmMax": 188,
       "estimatedBars": 3.13,
       "strategy": "constant",
-      "runtimeStartMs": 61500,
-      "runtimeEndMs": 67500
+      "runtimeStartMs": 58590.90909090909,
+      "runtimeEndMs": 64590.90909090909,
+      "sourceGenerationStartMs": 61500,
+      "sourceGenerationEndMs": 67500
     },
     {
       "section": 18,
@@ -236,8 +287,10 @@
       "bpmMax": 230,
       "estimatedBars": 18.53,
       "strategy": "230-platform",
-      "runtimeStartMs": 67500,
-      "runtimeEndMs": 96500
+      "runtimeStartMs": 64590.90909090909,
+      "runtimeEndMs": 93590.90909090909,
+      "sourceGenerationStartMs": 67500,
+      "sourceGenerationEndMs": 96500
     },
     {
       "section": 19,
@@ -248,8 +301,10 @@
       "bpmMax": 145,
       "estimatedBars": 15.1,
       "strategy": "constant",
-      "runtimeStartMs": 96500,
-      "runtimeEndMs": 121500
+      "runtimeStartMs": 93590.90909090909,
+      "runtimeEndMs": 118590.90909090909,
+      "sourceGenerationStartMs": 96500,
+      "sourceGenerationEndMs": 121500
     },
     {
       "section": 20,
@@ -260,8 +315,10 @@
       "bpmMax": 145,
       "estimatedBars": 2.82,
       "strategy": "constant",
-      "runtimeStartMs": 121500,
-      "runtimeEndMs": 125000
+      "runtimeStartMs": 118590.90909090909,
+      "runtimeEndMs": 122090.90909090909,
+      "sourceGenerationStartMs": 121500,
+      "sourceGenerationEndMs": 125000
     },
     {
       "section": 21,
@@ -272,8 +329,10 @@
       "bpmMax": 165,
       "estimatedBars": 1.1,
       "strategy": "constant",
-      "runtimeStartMs": 125000,
-      "runtimeEndMs": 127000
+      "runtimeStartMs": 122090.90909090909,
+      "runtimeEndMs": 124090.90909090909,
+      "sourceGenerationStartMs": 125000,
+      "sourceGenerationEndMs": 127000
     },
     {
       "section": 22,
@@ -284,8 +343,10 @@
       "bpmMax": 165,
       "estimatedBars": 0.92,
       "strategy": "constant",
-      "runtimeStartMs": 127000,
-      "runtimeEndMs": 129000
+      "runtimeStartMs": 124090.90909090909,
+      "runtimeEndMs": 126090.90909090909,
+      "sourceGenerationStartMs": 127000,
+      "sourceGenerationEndMs": 129000
     },
     {
       "section": 23,
@@ -296,8 +357,10 @@
       "bpmMax": 165,
       "estimatedBars": 3.02,
       "strategy": "constant",
-      "runtimeStartMs": 129000,
-      "runtimeEndMs": 134500
+      "runtimeStartMs": 126090.90909090909,
+      "runtimeEndMs": 131590.9090909091,
+      "sourceGenerationStartMs": 129000,
+      "sourceGenerationEndMs": 134500
     },
     {
       "section": 24,
@@ -308,8 +371,10 @@
       "bpmMax": 165,
       "estimatedBars": 1.15,
       "strategy": "constant",
-      "runtimeStartMs": 134500,
-      "runtimeEndMs": 137000
+      "runtimeStartMs": 131590.9090909091,
+      "runtimeEndMs": 134090.9090909091,
+      "sourceGenerationStartMs": 134500,
+      "sourceGenerationEndMs": 137000
     },
     {
       "section": 25,
@@ -320,8 +385,10 @@
       "bpmMax": 165,
       "estimatedBars": 0.82,
       "strategy": "constant",
-      "runtimeStartMs": 137000,
-      "runtimeEndMs": 138500
+      "runtimeStartMs": 134090.9090909091,
+      "runtimeEndMs": 135590.9090909091,
+      "sourceGenerationStartMs": 137000,
+      "sourceGenerationEndMs": 138500
     },
     {
       "section": 26,
@@ -332,8 +399,10 @@
       "bpmMax": 165,
       "estimatedBars": 0.92,
       "strategy": "constant",
-      "runtimeStartMs": 138500,
-      "runtimeEndMs": 140500
+      "runtimeStartMs": 135590.9090909091,
+      "runtimeEndMs": 137590.9090909091,
+      "sourceGenerationStartMs": 138500,
+      "sourceGenerationEndMs": 140500
     },
     {
       "section": 27,
@@ -344,8 +413,10 @@
       "bpmMax": 188,
       "estimatedBars": 1.57,
       "strategy": "constant",
-      "runtimeStartMs": 140500,
-      "runtimeEndMs": 143500
+      "runtimeStartMs": 137590.9090909091,
+      "runtimeEndMs": 140590.9090909091,
+      "sourceGenerationStartMs": 140500,
+      "sourceGenerationEndMs": 143500
     },
     {
       "section": 28,
@@ -356,8 +427,10 @@
       "bpmMax": 230,
       "estimatedBars": 48.23,
       "strategy": "230-platform",
-      "runtimeStartMs": 143500,
-      "runtimeEndMs": 219000
+      "runtimeStartMs": 140590.9090909091,
+      "runtimeEndMs": 216090.9090909091,
+      "sourceGenerationStartMs": 143500,
+      "sourceGenerationEndMs": 219000
     },
     {
       "section": 29,
@@ -368,8 +441,10 @@
       "bpmMax": 230,
       "estimatedBars": 0,
       "strategy": "unmetered",
-      "runtimeStartMs": 219000,
-      "runtimeEndMs": 229500
+      "runtimeStartMs": 216090.9090909091,
+      "runtimeEndMs": 226590.9090909091,
+      "sourceGenerationStartMs": 219000,
+      "sourceGenerationEndMs": 229500
     },
     {
       "section": 30,
@@ -380,8 +455,10 @@
       "bpmMax": 141,
       "estimatedBars": 1.96,
       "strategy": "constant",
-      "runtimeStartMs": 229500,
-      "runtimeEndMs": 232000
+      "runtimeStartMs": 226590.9090909091,
+      "runtimeEndMs": 229090.9090909091,
+      "sourceGenerationStartMs": 229500,
+      "sourceGenerationEndMs": 232000
     },
     {
       "section": 31,
@@ -392,8 +469,10 @@
       "bpmMax": 139,
       "estimatedBars": 12.35,
       "strategy": "linear-ritardando",
-      "runtimeStartMs": 232000,
-      "runtimeEndMs": 248828
+      "runtimeStartMs": 229090.9090909091,
+      "runtimeEndMs": 246590.9090909091,
+      "sourceGenerationStartMs": 232000,
+      "sourceGenerationEndMs": 249500
     },
     {
       "section": 32,
@@ -404,8 +483,10 @@
       "bpmMax": 130,
       "estimatedBars": 0,
       "strategy": "unmetered",
-      "runtimeStartMs": null,
-      "runtimeEndMs": null
+      "runtimeStartMs": 246590.9090909091,
+      "runtimeEndMs": 248828,
+      "sourceGenerationStartMs": 249500,
+      "sourceGenerationEndMs": 251737.0909090909
     }
   ],
   "tempoChanges": [
@@ -2592,11 +2673,13 @@
     },
     {
       "startMs": 248425.362371,
-      "endMs": 248828,
+      "endMs": 249500,
       "numerator": 3,
       "denominator": 4,
       "beatTimesMs": [
-        248425.362371
+        248425.362371,
+        248906.459529,
+        249389.155368
       ],
       "estimated": true,
       "partial": true

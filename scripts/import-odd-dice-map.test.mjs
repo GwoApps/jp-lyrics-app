@@ -6,6 +6,7 @@ import { generateMap, parseSections, writeMap } from './import-odd-dice-map.mjs'
 
 const raw = await readFile(new URL('../src/lib/meter-maps/odd-dice.full.sections.csv', import.meta.url), 'utf8');
 const stored = await readFile(new URL('../src/lib/meter-maps/odd-dice.full.json', import.meta.url), 'utf8');
+const offset = 8 * 60000 / 165;
 const rows = raw.replace(/^\uFEFF/u, '').trimEnd().split(/\r?\n/u).map((s) => s.split(','));
 // Mutated fixtures are synthetic validation cases, not measured scores.
 const mutate = (row, col, value) => rows.map((r, i) => r.map((v, j) => i === row && j === col ? value : v).join(',')).join('\n');
@@ -16,8 +17,10 @@ test('all 32 rows retain every source field and exact clipping', () => {
     const r = rows[i + 1];
     assert.deepEqual([s.section, s.startMs, s.endMs, s.meter, s.bpmMin, s.bpmMax, s.estimatedBars],
       [Number(r[0]), Number(r[1]) * 1000, Number(r[3]) * 1000, r[5], Number(r[6]), Number(r[7]), Number(r[8])]);
-    assert.equal(s.runtimeStartMs, i === 31 ? null : s.startMs);
-    assert.equal(s.runtimeEndMs, i === 31 ? null : Math.min(s.endMs, 248828));
+    assert.equal(s.runtimeStartMs, Math.max(0, s.startMs - offset));
+    assert.equal(s.runtimeEndMs, Math.min(s.endMs - offset, 248828));
+    assert.equal(s.sourceGenerationStartMs, s.startMs);
+    assert.equal(s.sourceGenerationEndMs, Math.min(s.endMs, 248828 + offset));
   }
   assert.equal(generateMap(raw).sourceSha256, createHash('sha256').update(raw).digest('hex'));
 });
@@ -32,8 +35,8 @@ test('all generated beats solve the continuous phase integral within each meter 
     const p = map.tempoChanges.find((t) => t.startMs === s.startMs);
     const slope = p.endMs ? (p.endBpm - p.bpm) / (p.endMs - p.startMs) : 0;
     const integral = (dt) => (p.bpm * dt + slope * dt * dt / 2) / 60000;
-    const beats = map.bars.flatMap((b) => b.beatTimesMs).filter((t) => t >= s.startMs && t < s.runtimeEndMs);
-    const endPhase = phase + integral(s.runtimeEndMs - s.startMs);
+    const beats = map.bars.flatMap((b) => b.beatTimesMs).filter((t) => t >= s.startMs && t < s.sourceGenerationEndMs);
+    const endPhase = phase + integral(s.sourceGenerationEndMs - s.startMs);
     assert.equal(beats.length, Math.ceil(endPhase - 1e-9) - Math.ceil(phase - 1e-9));
     for (const t of beats) {
       const at = phase + integral(t - s.startMs);
@@ -63,4 +66,22 @@ test('byte-identical rebuild; malformed synthetic CSV never overwrites a valid t
       assert.equal(await readFile(output, 'utf8'), stored);
     }
   } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+
+test('manual calibration metadata distinguishes playback clipping from source generation', () => {
+  const map = generateMap(raw);
+  assert.equal(map.id, 'odd-dice-full-sections-estimated-v2');
+  assert.equal(map.playbackToSourceOffsetMs, offset);
+  assert.deepEqual(map.calibration, {
+    kind: 'user-confirmed-manual-anchor', beats: 8, meter: '4/4', bars: 2, bpm: 165,
+    mapping: 'sourceVideoMs = spotifyPlaybackMs + playbackToSourceOffsetMs',
+    playbackAnchorMs: 0, sourceAnchorMs: offset, fullTrackAudioVerified: false,
+  });
+  assert.equal(map.clipping.sourceGenerationEndMs, 248828 + offset);
+  assert.equal(map.sourceSections[31].runtimeStartMs, 249500 - offset);
+  assert.equal(map.sourceSections[31].runtimeEndMs, 248828);
+  assert.equal(map.bars.at(-1).endMs, 249500);
+  assert.equal(map.tempoChanges.at(-1).endMs, 249500);
+  assert.equal(map.sourceResolutionMs, 500);
 });

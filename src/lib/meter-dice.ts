@@ -23,6 +23,8 @@ export interface MeterMap {
   readonly estimated?: boolean;
   readonly id: string;
   readonly durationMs: number;
+  /** Source time = playback time + offset; omitted means zero. Tables stay in source coordinates. */
+  readonly playbackToSourceOffsetMs?: number;
   readonly bars: readonly MeterBar[];
   readonly tempoChanges?: readonly MeterTempoChange[];
 }
@@ -50,10 +52,13 @@ export interface DicePip {
 /** Validate once at the data boundary, never scan the chart on every frame. */
 export function isValidMeterMap(map: MeterMap): boolean {
   if (!map.id || !Number.isFinite(map.durationMs) || map.durationMs <= 0 || !map.bars.length) return false;
+  const offset = map.playbackToSourceOffsetMs ?? 0;
+  const sourceEndMs = map.durationMs + offset;
+  if (!Number.isFinite(offset) || !Number.isFinite(sourceEndMs) || sourceEndMs <= 0) return false;
   let previousEnd = 0;
   for (const bar of map.bars) {
     if (!Number.isFinite(bar.startMs) || !Number.isFinite(bar.endMs)
-      || bar.startMs < previousEnd || bar.endMs <= bar.startMs || bar.endMs > map.durationMs
+      || bar.startMs < previousEnd || bar.endMs <= bar.startMs || bar.endMs > sourceEndMs
       || !Number.isSafeInteger(bar.numerator) || bar.numerator < 1
       || !Number.isSafeInteger(bar.denominator) || bar.denominator < 1
       || (bar.partial === true && !(map.estimated === true && bar.estimated === true))
@@ -69,7 +74,7 @@ export function isValidMeterMap(map: MeterMap): boolean {
   }
   let previousTempo = -Infinity;
   for (const tempo of map.tempoChanges ?? []) {
-    if (!Number.isFinite(tempo.startMs) || tempo.startMs < 0 || tempo.startMs >= map.durationMs
+    if (!Number.isFinite(tempo.startMs) || tempo.startMs < 0 || tempo.startMs >= sourceEndMs
       || tempo.startMs <= previousTempo || !Number.isFinite(tempo.bpm) || tempo.bpm <= 0) return false;
     if (tempo.endMs !== undefined || tempo.endBpm !== undefined) {
       if (map.estimated !== true || !Number.isFinite(tempo.endMs) || tempo.endMs! <= tempo.startMs
@@ -92,32 +97,43 @@ function upperBound(length: number, valueAt: (index: number) => number, time: nu
   return low;
 }
 
+/** Gate the raw playback window before translating either lookup into source time. */
+function playbackToSourceMs(map: MeterMap, playbackMs: number | null): number | null {
+  const offset = map.playbackToSourceOffsetMs ?? 0;
+  if (playbackMs == null || !Number.isFinite(playbackMs) || playbackMs < 0
+    || !Number.isFinite(map.durationMs) || playbackMs >= map.durationMs
+    || !Number.isFinite(offset)) return null;
+  const sourceMs = playbackMs + offset;
+  return Number.isFinite(sourceMs) ? sourceMs : null;
+}
+
 /**
  * Stateless lookup into a validated map: bar and beat intervals are [start, end).
  * Seeking in either direction is the same lookup, never a replay of missed beats.
  * Missing progress, an intro, chart gaps and the song's end all return null.
  */
 export function getMeterFrame(map: MeterMap, playbackMs: number | null): MeterFrame | null {
-  if (playbackMs == null || !Number.isFinite(playbackMs) || playbackMs < 0
-    || !Number.isFinite(map.durationMs) || playbackMs >= map.durationMs) return null;
-  const barIndex = upperBound(map.bars.length, (index) => map.bars[index].startMs, playbackMs) - 1;
+  const sourceMs = playbackToSourceMs(map, playbackMs);
+  if (sourceMs === null) return null;
+  const barIndex = upperBound(map.bars.length, (index) => map.bars[index].startMs, sourceMs) - 1;
   const bar = map.bars[barIndex];
-  if (!bar || playbackMs >= bar.endMs) return null;
-  const beatIndex = upperBound(bar.beatTimesMs.length, (index) => bar.beatTimesMs[index], playbackMs) - 1;
+  if (!bar || sourceMs >= bar.endMs) return null;
+  const beatIndex = upperBound(bar.beatTimesMs.length, (index) => bar.beatTimesMs[index], sourceMs) - 1;
   if (beatIndex < 0 || beatIndex >= bar.numerator) return null;
   return { barIndex, beatIndex, litCount: beatIndex + 1, numerator: bar.numerator, denominator: bar.denominator };
 }
 
 /** Look up authored or explicitly estimated BPM; free time and unknown tempos stay empty. */
 export function getMeterBpm(map: MeterMap, playbackMs: number | null): number | null {
-  if (playbackMs == null || !getMeterFrame(map, playbackMs)) return null;
+  const sourceMs = playbackToSourceMs(map, playbackMs);
+  if (sourceMs === null || !getMeterFrame(map, playbackMs)) return null;
   const changes = map.tempoChanges ?? [];
-  const index = upperBound(changes.length, (i) => changes[i].startMs, playbackMs) - 1;
+  const index = upperBound(changes.length, (i) => changes[i].startMs, sourceMs) - 1;
   const tempo = changes[index];
   if (!tempo) return null;
   if (tempo.endMs !== undefined && tempo.endBpm !== undefined) {
     return tempo.bpm + (tempo.endBpm - tempo.bpm)
-      * Math.min(1, (playbackMs - tempo.startMs) / (tempo.endMs - tempo.startMs));
+      * Math.min(1, (sourceMs - tempo.startMs) / (tempo.endMs - tempo.startMs));
   }
   return tempo.bpm;
 }

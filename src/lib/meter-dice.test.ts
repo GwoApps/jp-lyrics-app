@@ -601,3 +601,17 @@ test('synthetic partial bars require explicit estimated map AND bar markers', ()
     assert.equal(isValidMeterMap({ ...estimate, tempoChanges: [change] }), false);
   }
 });
+
+
+test('explicit source offsets preserve default behavior and fail closed when nonfinite', () => {
+  for (const ms of [-1, 0, 1000, 1750, 2500, 6999, 7000]) {
+    assert.deepEqual(getMeterFrame({ ...map, playbackToSourceOffsetMs: 0 }, ms), getMeterFrame(map, ms));
+    assert.equal(getMeterBpm({ ...map, playbackToSourceOffsetMs: 0 }, ms), getMeterBpm(map, ms));
+  }
+  for (const offset of [NaN, Infinity, -Infinity]) {
+    const invalid = { ...map, playbackToSourceOffsetMs: offset };
+    assert.equal(isValidMeterMap(invalid), false);
+    assert.equal(getMeterFrame(invalid, 1500), null);
+    assert.equal(getMeterBpm(invalid, 1500), null);
+  }
+});

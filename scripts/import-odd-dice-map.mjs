@@ -7,6 +7,8 @@ const snapshot = new URL('../src/lib/meter-maps/odd-dice.full.sections.csv', imp
 const target = new URL('../src/lib/meter-maps/odd-dice.full.json', import.meta.url);
 const header = '段,start_s,start,end_s,end,拍子,bpmFrom,bpmTo,推算小节数';
 const durationMs = 248828;
+const playbackToSourceOffsetMs = 8 * 60000 / 165;
+const sourceGenerationEndMs = durationMs + playbackToSourceOffsetMs;
 const round = (n) => Math.round(n * 1e6) / 1e6;
 
 // Strict source-specific CSV dialect: no quoted fields, missing cells or extra columns.
@@ -50,8 +52,10 @@ export function parseSections(raw) {
     if (meter === 'senza tempo') strategy = 'unmetered';
     previousEnd = endMs;
     return { section: i + 1, startMs, endMs, meter, bpmMin, bpmMax, estimatedBars, strategy,
-      runtimeStartMs: startMs < durationMs ? startMs : null,
-      runtimeEndMs: startMs < durationMs ? Math.min(endMs, durationMs) : null };
+      runtimeStartMs: startMs < sourceGenerationEndMs ? Math.max(0, startMs - playbackToSourceOffsetMs) : null,
+      runtimeEndMs: startMs < sourceGenerationEndMs ? Math.min(endMs - playbackToSourceOffsetMs, durationMs) : null,
+      sourceGenerationStartMs: startMs < sourceGenerationEndMs ? startMs : null,
+      sourceGenerationEndMs: startMs < sourceGenerationEndMs ? Math.min(endMs, sourceGenerationEndMs) : null };
   });
   assert.equal(previousEnd, 253000);
   return sections;
@@ -74,7 +78,7 @@ export function generateMap(raw) {
     group = null;
   };
   for (const s of sourceSections) {
-    if (s.runtimeStartMs === null) continue;
+    if (s.sourceGenerationStartMs === null) continue;
     if (s.strategy === 'unmetered') { finish(); continue; }
     const numerator = Number(s.meter[0]);
     if (group && group.numerator !== numerator) finish();
@@ -83,7 +87,7 @@ export function generateMap(raw) {
     const slope = s.strategy === 'linear-ritardando' ? (124 - 139) / (s.endMs - s.startMs) : 0;
     tempoChanges.push({ startMs: s.startMs, bpm,
       ...(slope ? { endMs: s.endMs, endBpm: 124 } : {}) });
-    const dt = s.runtimeEndMs - s.startMs;
+    const dt = s.sourceGenerationEndMs - s.startMs;
     const phaseEnd = group.phase + (bpm * dt + slope * dt * dt / 2) / 60000;
     for (let beat = Math.ceil(group.phase - 1e-9); beat < phaseEnd - 1e-9; beat++) {
       const area = Math.max(0, beat - group.phase) * 60000;
@@ -92,11 +96,14 @@ export function generateMap(raw) {
       group.beats.push(round(s.startMs + offset));
     }
     group.phase = phaseEnd;
-    group.endMs = s.runtimeEndMs;
+    group.endMs = s.sourceGenerationEndMs;
   }
   finish();
   return {
-    id: 'odd-dice-full-sections-estimated-v1', durationMs, estimated: true,
+    id: 'odd-dice-full-sections-estimated-v2', durationMs, playbackToSourceOffsetMs, estimated: true,
+    calibration: { kind: 'user-confirmed-manual-anchor', beats: 8, meter: '4/4', bars: 2, bpm: 165,
+      mapping: 'sourceVideoMs = spotifyPlaybackMs + playbackToSourceOffsetMs',
+      playbackAnchorMs: 0, sourceAnchorMs: playbackToSourceOffsetMs, fullTrackAudioVerified: false },
     source: 'https://www.bilibili.com/video/BV1YhJq6LE4Q/', sourceKind: 'community-transcription-estimate',
     sourceSha256: createHash('sha256').update(raw).digest('hex'), sourceResolutionMs: 500,
     method: 'Piecewise tempo integral; integer phase beats; meter/free-time resets; timestamps rounded to 0.000001 ms for serialization only.',
@@ -105,7 +112,10 @@ export function generateMap(raw) {
       'Section 31 is linear in time from 139 to 124 over 232000–249500 ms.',
       'Same-meter tempo boundaries retain beat/bar phase; source estimated bar counts are metadata only.',
       'Source boundaries ±500 ms; source integrated bar estimates ±10%; all runtime beats estimated.'],
-    clipping: { startMs: 0, endMs: durationMs, sourceEndMs: 253000, offsetMs: 0, scale: 1 },
+    clipping: { playbackStartMs: 0, playbackEndMs: durationMs,
+      sourceLookupStartMs: playbackToSourceOffsetMs, sourceLookupEndMs: sourceGenerationEndMs,
+      sourceGenerationStartMs: 500, sourceGenerationEndMs, originalSourceEndMs: 253000,
+      sectionRuntimeCoordinates: 'spotify-playback', tableCoordinates: 'source-video', scale: 1 },
     sourceSections, tempoChanges, bars,
   };
 }
