@@ -54,7 +54,7 @@
 .artist-song-title { display: inline-block; max-width: 100%; font-size: 14px; line-height: 1.5; font-weight: 500; overflow-wrap: anywhere; }
 .artist-song-title:hover { text-decoration: underline; text-underline-offset: 3px; }
 .artist-song-artist { margin-top: 3px; color: var(--muted-foreground); font-size: 12px; overflow-wrap: anywhere; }
-.artist-song-artist a:hover, .artist-album-artist a:hover { color: var(--foreground); text-decoration: underline; }
+.artist-song-artist a:hover { color: var(--foreground); text-decoration: underline; }
 .artist-song-album { display: block; margin-top: 2px; color: var(--muted-foreground); font-size: 11px; overflow-wrap: anywhere; }
 .artist-song-chevron { flex: none; color: var(--muted-foreground); }
 .artist-albums { display: grid; gap: 12px; }
@@ -64,10 +64,10 @@
 .artist-album summary:hover { background: var(--accent); }
 .artist-album-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 6px; }
 .artist-album-title { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
-.artist-album-chevron { flex: none; color: var(--muted-foreground); }
-.artist-album[open] .artist-album-chevron { transform: rotate(90deg); }
+.artist-album-chevron { flex: none; color: var(--muted-foreground); transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1); }
+.artist-album summary[aria-expanded="true"] .artist-album-chevron { transform: rotate(90deg); }
 .artist-album-content { padding: 0 12px 8px; }
-.artist-album-artist { margin: 0 4px 4px; font-size: 12px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .artist-album-chevron { transition: none; } }
 .artists-page :is(a, button, summary, [role='tabpanel']):focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 4px; }
 @media (min-width: 480px) { .artists-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px 12px; } }
 @media (min-width: 640px) { .artists-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 20px 16px; } .artist-avatar { width: min(100%, 104px); } .artist-avatar--large { width: 128px; } .artist-profile { gap: 24px; } .artists-page h1 { font-size: 24px; } }

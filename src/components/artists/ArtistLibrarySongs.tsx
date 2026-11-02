@@ -8,9 +8,10 @@ import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useI18n } from '@/lib/i18n';
 import { formatSongDate, formatSongDuration, formatTranslationLanguage, qualityFields, qualityKinds, qualityState, spotifyTrackHref, type ArtistLibrarySong } from './artist-library-model';
 
-export default function ArtistLibrarySongs({ songs, signedIn, favoriteOverrides, onFavorite }: {
+export default function ArtistLibrarySongs({ songs, signedIn, favoriteOverrides, onFavorite, showArtist = true }: {
   songs: ArtistLibrarySong[];
   signedIn: boolean;
+  showArtist?: boolean;
   favoriteOverrides: Record<string, boolean | null>;
   onFavorite: (song: ArtistLibrarySong) => void;
 }) {
@@ -26,7 +27,7 @@ export default function ArtistLibrarySongs({ songs, signedIn, favoriteOverrides,
       <Link className="artist-song-cover" href={`/songs/${encodeURIComponent(song.id)}`} tabIndex={-1} aria-hidden="true" prefetch={false}><CoverImage src={song.cover_url} size="sm" /></Link>
       <div className="artist-song-copy">
         <Link className="artist-song-title" href={`/songs/${encodeURIComponent(song.id)}`} prefetch={false}>{song.title}</Link>
-        <div className="artist-song-artist"><ArtistLinks artist={song.artist} fallback={t('common.unknownArtist')} /></div>
+        {showArtist && <div className="artist-song-artist"><ArtistLinks artist={song.artist} fallback={t('common.unknownArtist')} /></div>}
         {song.spotify_album && <span className="artist-song-album">{song.spotify_album}</span>}
         <div className="artist-library-song-meta">
           <span className="artist-library-duration" title={t('artistLibrary.duration')}><span className="sr-only">{duration ? t('artistLibrary.durationValue', { duration }) : t('artistLibrary.durationUnknown')}</span><span aria-hidden="true">{duration ?? '—'}</span></span>

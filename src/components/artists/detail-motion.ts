@@ -1,5 +1,6 @@
 export type LibraryTab = 'songs' | 'albums';
 const easing = 'cubic-bezier(0.22, 1, 0.36, 1)';
+export { easing as artistMotionEasing };
 
 /** Progressive enhancement: underlying rows are always opaque, including after cancellation. */
 export function animateArtistSongArrival(rows: Iterable<HTMLElement>, reducedMotion: boolean, routeFinished?: Promise<unknown>) {

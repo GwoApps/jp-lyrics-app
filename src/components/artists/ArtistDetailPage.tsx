@@ -1,10 +1,7 @@
 'use client';
 
-import { ChevronRight } from 'lucide-react';
 import { useId, useLayoutEffect, useState, type KeyboardEvent } from 'react';
-import ArtistLinks from '@/components/ArtistLinks';
 import ArtistBackButton from '@/components/artists/ArtistBackButton';
-import CoverImage from '@/components/CoverImage';
 import FavoriteCategoriesDialog from '@/components/home/FavoriteCategoriesDialog';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { refreshAuthSession, useAuthSession } from '@/lib/auth-session';
@@ -12,6 +9,7 @@ import { useI18n } from '@/lib/i18n';
 import ArtistProfileHeader from './ArtistProfileHeader';
 import ArtistLibraryControls from './ArtistLibraryControls';
 import ArtistLibrarySongs from './ArtistLibrarySongs';
+import ArtistAlbumPanel from './ArtistAlbumPanel';
 import { defaultLibraryView, filterArtistSongs, groupMatchingAlbums, readFavoriteStatus, type ArtistLibrarySong } from './artist-library-model';
 import { createFavoriteReadbackGate } from './favorite-readback';
 import { useArtistLibraryView } from './useArtistLibraryView';
@@ -83,7 +81,7 @@ function ArtistDetailContent({ name, signedIn }: { name: string; signedIn: boole
       if (loginRequired) void refreshAuthSession().catch(() => {});
     }
   };
-  const songList = (items: ArtistLibrarySong[]) => <ArtistLibrarySongs songs={items} signedIn={signedIn} favoriteOverrides={favoriteOverrides} onFavorite={(song) => { setFavoriteError(null); setFavoriteSong(song); }} />;
+  const songList = (items: ArtistLibrarySong[], showArtist = true) => <ArtistLibrarySongs songs={items} showArtist={showArtist} signedIn={signedIn} favoriteOverrides={favoriteOverrides} onFavorite={(song) => { setFavoriteError(null); setFavoriteSong(song); }} />;
   const emptyFiltered = <div className="artists-state"><p>{t('artistLibrary.noMatches')}</p><button type="button" className="artists-button" onClick={reset}>{t('artistLibrary.reset')}</button></div>;
 
   return (
@@ -106,14 +104,9 @@ function ArtistDetailContent({ name, signedIn }: { name: string; signedIn: boole
         </section>
         <section className="artist-tab-panel" data-artist-panel="albums" data-outgoing={outgoingTab === 'albums' || undefined} role="tabpanel" id={`${tabId}-albums-panel`} aria-labelledby={`${tabId}-albums`} hidden={tab !== 'albums' && outgoingTab !== 'albums'} aria-hidden={tab !== 'albums' || undefined} inert={tab !== 'albums'} tabIndex={tab === 'albums' ? 0 : -1}>
           {albums.length ? <div className="artist-albums">{albums.map((album) => (
-            <details className="artist-album" key={album.key} open={view.expandedAlbumKeys.includes(album.key)} onToggle={(event) => {
-              const open = event.currentTarget.open;
-              if (open === view.expandedAlbumKeys.includes(album.key)) return;
+            <ArtistAlbumPanel key={album.key} title={album.title} coverUrl={album.coverUrl} count={album.songs.length} expanded={view.expandedAlbumKeys.includes(album.key)} onExpandedChange={open => {
               updateView({ expandedAlbumKeys: open ? [...view.expandedAlbumKeys, album.key] : view.expandedAlbumKeys.filter((key) => key !== album.key) });
-            }}>
-              <summary><CoverImage src={album.coverUrl} size="md" /><span className="artist-album-copy"><span className="artist-album-title">{album.title}</span><span className="artists-meta">{t('home.songCount', { count: album.songs.length })}</span></span><ChevronRight className="artist-album-chevron" size={17} aria-hidden="true" /></summary>
-              <div className="artist-album-content"><p className="artist-album-artist"><ArtistLinks artist={album.artist} fallback={t('common.unknownArtist')} /></p>{songList(album.songs)}</div>
-            </details>
+            }}>{songList(album.songs, false)}</ArtistAlbumPanel>
           ))}</div> : data.albums.length ? emptyFiltered : <p className="artists-state">{t('artists.noAlbums')}</p>}
         </section>
         </div>

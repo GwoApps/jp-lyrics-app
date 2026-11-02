@@ -132,6 +132,15 @@ test('favorite actions open the shared category editor callback, never toggle/de
   assert.doesNotMatch(unknown, /aria-pressed=/);
 });
 
+test('album panels suppress repeated artist labels while the songs tab keeps credits', () => {
+  const html = harness().render('ArtistDetailPage.tsx', { name: 'Artist' });
+  const songPanel = html.split('data-artist-panel="songs"')[1].split('data-artist-panel="albums"')[0];
+  const albumPanel = html.split('data-artist-panel="albums"')[1];
+  assert.match(songPanel, /class="artist-song-artist"/);
+  assert.doesNotMatch(albumPanel, /class="artist-album-artist"|class="artist-song-artist"/);
+  assert.match(albumPanel, /artist-song-title/);
+});
+
 test('real page keeps full ACL-visible scope counts separate from filtered counts and filters album songs before grouping', () => {
   const h = harness({ view: { ...defaultLibraryView(), query: 'Blue' } });
   const html = h.render('ArtistDetailPage.tsx', { name: 'Artist' });
