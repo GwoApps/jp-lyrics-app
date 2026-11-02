@@ -8,6 +8,7 @@ import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
+import { groupArtistAlbums, splitArtists } from '@/lib/artists';
 
 const require = createRequire(import.meta.url);
 const directory = dirname(fileURLToPath(import.meta.url));
@@ -18,7 +19,7 @@ function render(resource: object) {
     const exports: Record<string, unknown> = {};
     cache.set(path, exports);
     runInNewContext(ts.transpileModule(readFileSync(path, 'utf8'), {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
     }).outputText, { exports, require(specifier: string) {
       if (specifier.endsWith('.css')) return {};
       if (specifier === 'next/link') return { __esModule: true, default: (props: Record<string, unknown>) => {
@@ -26,7 +27,12 @@ function render(resource: object) {
         delete attributes.prefetch;
         return React.createElement('a', attributes);
       } };
-      if (specifier === '@/lib/i18n') return { useI18n: () => ({ t: (key: string) => key }) };
+      if (specifier === '@/lib/i18n') return { useI18n: () => ({ t: (key: string) => key, locale: 'en' }) };
+      if (specifier === '@/lib/artists') return { groupArtistAlbums, splitArtists };
+      if (specifier === '@/lib/auth-session') return { useAuthSession: () => ({ session: { user: null } }), refreshAuthSession: () => Promise.resolve() };
+      if (specifier === '@/components/home/FavoriteCategoriesDialog') return { __esModule: true, default: () => null };
+      if (specifier === '@/components/SpotifyLoginButton') return { __esModule: true, default: (props: Record<string, unknown>) => React.createElement('button', props) };
+      if (specifier === './ArtistProfileHeader') return { __esModule: true, default: () => React.createElement('header', null, 'Artist') };
       if (specifier.includes('ArtistBackButton')) return { __esModule: true, default: () => React.createElement('a', { href: '/artists' }, 'artists.back') };
       if (specifier === './ArtistAvatar') return { ArtistAvatar: () => React.createElement('span', { className: 'artist-avatar' }) };
       if (specifier === './profile-queue') return { requestArtistProfile: () => Promise.resolve(null), profileSourceHref: () => undefined };
@@ -57,7 +63,7 @@ test('detail loading is a localized busy status with six noninteractive song-sha
 });
 
 test('success keeps all rows and both persistent panels, with only the active panel accessible', () => {
-  const songs = Array.from({ length: 237 }, (_, index) => ({ id: String(index), title: `Song ${index}`, artist: 'Artist' }));
+  const songs = Array.from({ length: 237 }, (_, index) => ({ id: String(index), title: `Song ${index}`, artist: 'Artist', spotify_album: 'Unknown album' }));
   const html = render({ status: 'ready', data: { artist: { name: 'Artist' }, songs, albums: [{ key: 'unknown', title: 'Unknown album', artist: 'Artist', songs }] } });
   assert.equal((html.match(/class="artist-song-title"/g) ?? []).length, 474);
   const panels = html.match(/<section[^>]*role="tabpanel"[^>]*>/g) ?? [];

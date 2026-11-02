@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
-import { artistHref, artistKey, splitArtists } from '@/lib/artists';
+import { artistHref, artistKey, groupArtistAlbums, splitArtists } from '@/lib/artists';
 import type { ArtistLibrary } from './types';
 
 const require = createRequire(import.meta.url);
@@ -27,7 +27,7 @@ function renderPage(file: string, resource: object, props: object = {}) {
   function load(path: string): Record<string, unknown> {
     if (cache.has(path)) return cache.get(path)!;
     const compiled = ts.transpileModule(readFileSync(path, 'utf8'), {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
     }).outputText;
     const exports: Record<string, unknown> = {};
     cache.set(path, exports);
@@ -41,8 +41,12 @@ function renderPage(file: string, resource: object, props: object = {}) {
       require: (specifier: string) => {
         if (specifier === 'next/link') return { __esModule: true, default: Link };
         if (specifier === 'next-view-transitions') return { Link, useTransitionRouter: () => ({ replace: () => {} }) };
-        if (specifier === '@/lib/i18n') return { useI18n: () => ({ t }) };
-        if (specifier === '@/lib/artists') return { artistHref, artistKey, splitArtists };
+        if (specifier === '@/lib/i18n') return { useI18n: () => ({ t, locale: 'en' }) };
+        if (specifier === '@/lib/auth-session') return { useAuthSession: () => ({ session: { user: null } }), refreshAuthSession: () => Promise.resolve() };
+        if (specifier === '@/components/home/FavoriteCategoriesDialog') return { __esModule: true, default: () => null };
+        if (specifier === '@/components/SpotifyLoginButton') return { __esModule: true, default: (props: Record<string, unknown>) => React.createElement('button', props) };
+        if (specifier === './ArtistProfileHeader') return { __esModule: true, default: ({ name }: { name: string }) => React.createElement('header', null, React.createElement('h1', null, name)) };
+        if (specifier === '@/lib/artists') return { artistHref, artistKey, groupArtistAlbums, splitArtists };
         if (specifier === './useArtistResource') return { useArtistResource: () => ({ state: resource, retry: () => {} }) };
         if (specifier.endsWith('.css')) return {};
         if (specifier === '@/components/ArtistLinks') return load(resolve(directory, '../ArtistLinks.tsx'));

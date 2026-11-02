@@ -13,6 +13,14 @@ export interface ArtistProfile {
   genres: string[];
   source: string | null;
   sourceUrl: string | null;
+  aliases?: string[];
+  kind?: import('./artist-profile-types').ArtistProfileKind;
+  country?: string | null;
+  descriptions?: Partial<Record<import('./artist-profile-types').ArtistProfileLocale, string>>;
+  links?: import('./artist-profile-types').ArtistProfileLinks;
+  sources?: import('./artist-profile-types').ArtistProfileSource[];
+  updatedAt?: string | null;
+  bindings?: import('./artist-profile-types').ArtistProfileBindings;
 }
 
 export interface ArtistAlbum<T = SongItem> {
