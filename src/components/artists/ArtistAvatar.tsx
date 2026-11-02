@@ -2,23 +2,36 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { UserRound } from 'lucide-react';
+import Image from 'next/image';
 import { requestArtistProfile } from './profile-queue';
 
 /** Artist portraits only. Never substitute a track/album cover for an artist. */
-export function ArtistAvatar({ name, imageUrl, large = false }: {
+export function ArtistAvatar(props: { name: string; imageUrl?: string | null; large?: boolean }) {
+  // URL identity owns loading/error state, including cached images and URL swaps.
+  return <ArtistPortrait key={props.imageUrl || ''} {...props} />;
+}
+
+function ArtistPortrait({ name, imageUrl, large = false }: {
   name: string;
   imageUrl?: string | null;
   large?: boolean;
 }) {
-  const [failedUrl, setFailedUrl] = useState<string | null>(null);
-  const source = imageUrl && failedUrl !== imageUrl ? imageUrl : null;
+  const [state, setState] = useState<'loading' | 'loaded' | 'error'>('loading');
   return (
-    <span className={`artist-avatar${large ? ' artist-avatar--large' : ''}`} aria-hidden="true" title={name}>
+    <span className={`artist-avatar${large ? ' artist-avatar--large' : ''}`} data-state={state} aria-hidden="true" title={name}>
       <UserRound className="artist-avatar-fallback" />
-      {source && (
-        // Profile URLs are optional remote images; Next's optimizer cannot assume a host.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={source} alt="" loading="lazy" decoding="async" onError={() => setFailedUrl(source)} />
+      {imageUrl && state !== 'error' && (
+        <Image
+          src={imageUrl}
+          alt=""
+          fill
+          sizes={large ? '(min-width: 640px) 128px, 96px' : '(min-width: 640px) 104px, 92px'}
+          unoptimized
+          loading="lazy"
+          className="artist-avatar-portrait"
+          onLoad={() => setState('loaded')}
+          onError={() => setState('error')}
+        />
       )}
     </span>
   );
