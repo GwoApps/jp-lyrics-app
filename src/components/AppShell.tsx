@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { Link as TransitionLink } from '@/components/navigation/ViewTransitions';
+import './navigation/library-navigation.css';
 import { I18nProvider, useI18n } from '@/lib/i18n';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useAuthSession } from '@/lib/auth-session';
@@ -59,12 +61,12 @@ function Nav() {
             { href: '/albums', label: t('home.navAlbums'), active: pathname === '/albums' },
             { href: '/artists', label: t('home.navArtists'), active: pathname.startsWith('/artists') },
           ] as const).map(({ href, label, active }) => (
-            <Link key={href} href={href} aria-current={active ? 'page' : undefined}
+            <TransitionLink key={href} href={href} aria-current={active ? 'page' : undefined}
               className={`whitespace-nowrap rounded-md px-2 py-1.5 text-xs font-medium transition-colors sm:px-2.5 ${active
                 ? 'bg-[var(--accent)] text-[var(--foreground)]'
                 : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]'}`}>
               {label}
-            </Link>
+            </TransitionLink>
           ))}
         </div>
         <div className="flex-1" />

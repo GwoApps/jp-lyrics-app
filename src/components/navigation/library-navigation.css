@@ -1,0 +1,43 @@
+/* Snapshot only the viewport, not a long scrolling list. The named navigation
+ * bar is excluded from the content fade and never moves. Detail routes remain
+ * untyped and keep their existing cover/avatar shared-element transitions. */
+@keyframes library-page-enter { from { opacity: 0; } to { opacity: 1; } }
+@keyframes library-page-exit { from { opacity: 1; } to { opacity: 0; } }
+@supports selector(:active-view-transition-type(library-navigation)) {
+  :root:active-view-transition-type(library-navigation) .cover-transition,
+  :root:active-view-transition-type(library-navigation) .artist-avatar {
+    view-transition-name: none;
+  }
+  :root:active-view-transition-type(library-navigation) .app-topbar {
+    view-transition-name: library-navigation-bar;
+  }
+  :root:active-view-transition-type(library-navigation)::view-transition {
+    pointer-events: none;
+  }
+  :root:active-view-transition-type(library-navigation)::view-transition-group(root),
+  :root:active-view-transition-type(library-navigation)::view-transition-group(library-navigation-bar),
+  :root:active-view-transition-type(library-navigation)::view-transition-old(library-navigation-bar),
+  :root:active-view-transition-type(library-navigation)::view-transition-new(library-navigation-bar) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
+  :root:active-view-transition-type(library-navigation)::view-transition-old(root),
+  :root:active-view-transition-type(library-navigation)::view-transition-new(root) {
+    animation-duration: 180ms;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    animation-fill-mode: both;
+    mix-blend-mode: plus-lighter;
+  }
+  :root:active-view-transition-type(library-navigation)::view-transition-old(root) {
+    animation-name: library-page-exit;
+  }
+  :root:active-view-transition-type(library-navigation)::view-transition-new(root) {
+    animation-name: library-page-enter;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :root:active-view-transition-type(library-navigation)::view-transition-old(root),
+    :root:active-view-transition-type(library-navigation)::view-transition-new(root) {
+      animation-duration: 100ms;
+    }
+  }
+}
