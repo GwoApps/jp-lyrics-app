@@ -16,6 +16,7 @@ export type QualityFilter = 'all' | 'available' | 'missing' | 'unknown';
 export type LibraryView = {
   tab: 'songs' | 'albums';
   query: string;
+  filtersOpen: boolean;
   sort: 'name' | 'created' | 'updated';
   credit: 'all' | 'solo' | 'collab';
   review: 'all' | 'needsReview';
@@ -30,7 +31,7 @@ export type QualityKind = keyof typeof qualityFields;
 export const qualityKinds = Object.keys(qualityFields) as QualityKind[];
 export const qualityState = (flag: unknown): Exclude<QualityFilter, 'all'> => flag === true ? 'available' : flag === false ? 'missing' : 'unknown';
 export function defaultLibraryView(): LibraryView {
-  return { tab: 'songs', query: '', sort: 'name', credit: 'all', review: 'all', lyrics: 'all', timeline: 'all', furigana: 'all', translation: 'all', expandedAlbumKeys: [] };
+  return { tab: 'songs', query: '', filtersOpen: false, sort: 'name', credit: 'all', review: 'all', lyrics: 'all', timeline: 'all', furigana: 'all', translation: 'all', expandedAlbumKeys: [] };
 }
 const normalize = (value: string) => value.normalize('NFKC').toLocaleLowerCase().trim();
 function parseSongTimestamp(value: string | null | undefined): { date: Date; wallClock: boolean } | null {

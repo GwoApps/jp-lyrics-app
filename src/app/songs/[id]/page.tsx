@@ -4,7 +4,7 @@ import ArtistLinks from '@/components/ArtistLinks';
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { useTransitionRouter } from 'next-view-transitions';
+import { useTransitionRouter } from '@/components/navigation/ViewTransitions';
 import Link from 'next/link';
 import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Download, Loader2, ExternalLink, PictureInPicture, Maximize2, Repeat, Copy, Check, Languages, ChevronDown, Share2, Info, X, Palette, SlidersHorizontal, FlaskConical } from 'lucide-react';
 import ConfirmDialog, { ARTIST_LINK_MARKER, artistLinkedDialogBody } from '@/components/ConfirmDialog';

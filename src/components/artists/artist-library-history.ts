@@ -14,6 +14,7 @@ export function normalizeLibraryView(value: unknown): LibraryView {
   const source = object(value);
   const view = defaultLibraryView();
   if (source.tab === 'albums') view.tab = 'albums';
+  if (typeof source.filtersOpen === 'boolean') view.filtersOpen = source.filtersOpen;
   if (typeof source.query === 'string') view.query = source.query;
   if (source.sort === 'created' || source.sort === 'updated') view.sort = source.sort;
   if (source.credit === 'solo' || source.credit === 'collab') view.credit = source.credit;

@@ -67,7 +67,7 @@ function ArtistDetailContent({ name, signedIn }: { name: string; signedIn: boole
       document.getElementById(`${tabId}-${next}`)?.focus();
     }
   };
-  const reset = () => updateView({ ...defaultLibraryView(), tab: view.tab, expandedAlbumKeys: view.expandedAlbumKeys });
+  const reset = () => updateView({ ...defaultLibraryView(), tab: view.tab, filtersOpen: view.filtersOpen, expandedAlbumKeys: view.expandedAlbumKeys });
   const verifyFavorite = async (songId: string) => {
     const revision = favoriteReadbacks.begin(songId);
     setFavoriteError(null);
@@ -94,7 +94,7 @@ function ArtistDetailContent({ name, signedIn }: { name: string; signedIn: boole
       {state.status === 'error' && <div className="artists-state" role="alert"><p>{t(state.notFound ? 'artists.notFound' : 'artists.detailLoadError')}</p><button type="button" className="artists-button" onClick={retry}>{t('common.reload')}</button></div>}
       {data && <>
         <p className="artist-library-scope">{t('artists.localLibrary')}<span>{t('home.songCount', { count: data.songs.length })}</span><span>{t('home.albumCount', { count: data.albums.length })}</span></p>
-        <ArtistLibraryControls view={view} onChange={updateView} />
+        <ArtistLibraryControls view={view} onChange={updateView} panelId={`${tabId}-filters`} />
         <p className="artist-library-results" role="status">{t('artistLibrary.matchingCounts', { songs: songs.length, albums: albums.length })}</p>
         {favoriteError && <div className="artist-library-favorite-error" role="alert"><span>{t(favoriteError.loginRequired ? 'artistLibrary.loginToFavorite' : 'artistLibrary.favoriteReadFailed')}</span>{favoriteError.loginRequired ? <SpotifyLoginButton className="artists-text-button">{t('artistLibrary.login')}</SpotifyLoginButton> : <button type="button" className="artists-text-button" onClick={() => void verifyFavorite(favoriteError.songId)}>{t('common.reload')}</button>}</div>}
         <div className="artist-tabs" role="tablist" aria-label={t('artists.localLibrary')}>

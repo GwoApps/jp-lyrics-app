@@ -5,8 +5,14 @@
 .artist-library-controls input, .artist-library-controls select { width: 100%; min-width: 0; min-height: 36px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 5px; background: var(--input); color: var(--foreground); font: inherit; }
 .artist-library-controls input::placeholder { color: var(--muted-foreground); }
 .artist-library-controls :is(input, select):focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-.artist-library-query { grid-column: 1; grid-row: 1; }
-.artist-library-reset { grid-column: 2; grid-row: 1; align-self: end; min-height: 36px; font-size: 12px; }
+.artist-library-query { grid-column: 1; grid-row: 1; align-self: center; }
+.artist-library-filter-toggle { grid-column: 2; grid-row: 1; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; white-space: nowrap; font-size: 12px; }
+.artist-library-filter-toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.artist-library-filter-count { padding: 0 4px; border-radius: 3px; background: var(--accent); color: var(--foreground); font-variant-numeric: tabular-nums; }
+.artist-library-filter-toggle[aria-expanded='true'] .artist-library-filter-chevron { transform: rotate(180deg); }
+.artist-library-filter-panel { grid-column: 1 / -1; display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--border); min-width: 0; }
+.artist-library-filter-panel[hidden] { display: none; }
+.artist-library-reset { justify-self: start; min-height: 30px; font-size: 12px; }
 .artist-library-selects { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); gap: 10px; min-width: 0; }
 .artist-library-results { margin-bottom: 10px; color: var(--muted-foreground); font-size: 12px; font-variant-numeric: tabular-nums; }
 .artist-library-song { align-items: flex-start; }

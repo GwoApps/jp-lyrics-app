@@ -16,7 +16,7 @@ const exports: { default?: (props: { artist?: string | null; fallback?: string; 
 runInNewContext(compiled, {
   exports,
   require: (specifier: string) => {
-    if (specifier === 'next-view-transitions') return { Link: 'a' };
+    if (specifier === '@/components/navigation/ViewTransitions') return { Link: 'a' };
     if (specifier === '@/lib/artists') return {
       // Parsing itself is covered by artists.test.ts. This test isolates rendering/navigation.
       splitArtists: (value?: string | null) => [...new Set((value ?? '').split(',').map((name) => name.trim()).filter(Boolean))],

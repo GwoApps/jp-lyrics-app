@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
-import { ViewTransitions } from 'next-view-transitions';
+import { ViewTransitions } from '@/components/navigation/ViewTransitions';
 import AppShell from '@/components/AppShell';
 import { APP_ICON_REVISION } from '@/lib/app-icon';
 

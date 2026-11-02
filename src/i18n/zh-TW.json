@@ -1051,6 +1051,8 @@
     "lookupRateLimited": "來源請求受到限流，請稍後再預覽。"
   },
   "artistLibrary": {
+    "filters": "篩選與排序",
+    "filtersActive": "篩選與排序，已啟用 {count} 項",
     "searchLabel": "搜尋此曲庫",
     "searchPlaceholder": "歌曲、專輯或參與藝人",
     "sort": "排序",

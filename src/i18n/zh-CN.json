@@ -1051,6 +1051,8 @@
     "lookupRateLimited": "来源请求受到限流，请稍后再预览。"
   },
   "artistLibrary": {
+    "filters": "筛选与排序",
+    "filtersActive": "筛选与排序，已启用 {count} 项",
     "searchLabel": "搜索此曲库",
     "searchPlaceholder": "歌曲、专辑或参与艺人",
     "sort": "排序",

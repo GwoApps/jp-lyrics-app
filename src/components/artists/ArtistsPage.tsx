@@ -1,6 +1,6 @@
 'use client';
 
-import { Link } from 'next-view-transitions';
+import { Link } from '@/components/navigation/ViewTransitions';
 import { Search, UsersRound, X } from 'lucide-react';
 import { useState } from 'react';
 import { artistHref } from '@/lib/artists';
@@ -18,7 +18,7 @@ export default function ArtistsPage() {
   const filtered = artists.filter((artist) => artist.name.normalize('NFKC').toLocaleLowerCase().includes(search));
 
   return (
-    <div className="artists-page">
+    <div className="artists-page" data-artist-directory-state={state.status}>
       <header className="artists-heading">
         <h1>{t('artists.title')}</h1>
         {state.status === 'ready' && <span className="artists-meta">{t('artists.artistCount', { count: filtered.length })}</span>}

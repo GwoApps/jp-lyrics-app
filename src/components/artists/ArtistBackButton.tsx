@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { ArrowLeft, UsersRound } from 'lucide-react';
-import { Link, useTransitionRouter } from 'next-view-transitions';
+import { Link, useTransitionRouter } from '@/components/navigation/ViewTransitions';
 import { useI18n } from '@/lib/i18n';
 import { canNavigateBack, navigateArtistBack } from './artist-back-navigation';
 

@@ -1051,6 +1051,8 @@
     "lookupRateLimited": "The source is rate-limiting requests. Try previewing again later."
   },
   "artistLibrary": {
+    "filters": "Filter & sort",
+    "filtersActive": "Filter & sort, {count} active",
     "searchLabel": "Search this library",
     "searchPlaceholder": "Title, album or artist credit",
     "sort": "Sort by",

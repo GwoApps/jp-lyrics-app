@@ -66,7 +66,7 @@ test('real controls use labeled native search/selects; every filter is independe
   const h = harness();
   const changes: Array<Partial<LibraryView>> = [];
   const view: LibraryView = { ...defaultLibraryView(), tab: 'albums', expandedAlbumKeys: ['album'], query: 'something', credit: 'solo', lyrics: 'missing' };
-  const props = { view, onChange: (change: Partial<LibraryView>) => changes.push(change) };
+  const props = { view, panelId: 'filters-test', onChange: (change: Partial<LibraryView>) => changes.push(change) };
   const tree = h.component('ArtistLibraryControls.tsx')(props);
   const elements = nodes(tree);
   const selects = elements.filter((node) => node.type === 'select');
@@ -74,12 +74,29 @@ test('real controls use labeled native search/selects; every filter is independe
   assert.equal(elements.filter((node) => node.type === 'input' && node.props.type === 'search').length, 1);
   (selects[1].props.onChange as (event: object) => void)({ target: { value: 'collab' } });
   assert.deepEqual(JSON.parse(JSON.stringify(changes[0])), { credit: 'collab' });
-  const reset = elements.find((node) => node.type === 'button')!;
+  const reset = elements.find((node) => node.type === 'button' && String(node.props.className).includes('artist-library-reset'))!;
   (reset.props.onClick as () => void)();
   assert.deepEqual(JSON.parse(JSON.stringify(changes[1])), { ...defaultLibraryView(), tab: 'albums', expandedAlbumKeys: ['album'] });
   const html = h.render('ArtistLibraryControls.tsx', props);
   assert.equal((html.match(/<label/g) ?? []).length, 8);
   assert.doesNotMatch(html, /aria-pressed|role="switch"/);
+});
+
+test('filters are initially collapsed; toggling preserves criteria and reset preserves the disclosure', () => {
+  const h = harness(); const changes: Array<Partial<LibraryView>> = [];
+  const view = { ...defaultLibraryView(), credit: 'collab' as const, sort: 'updated' as const, lyrics: 'unknown' as const };
+  const props = { view, panelId: 'compact-filters', onChange: (change: Partial<LibraryView>) => changes.push(change) };
+  const elements = nodes(h.component('ArtistLibraryControls.tsx')(props));
+  const toggle = elements.find(n => n.props['aria-controls'] === 'compact-filters')!;
+  assert.ok(toggle); assert.equal(toggle.props['aria-expanded'], false);
+  assert.equal(elements.find(n => n.props.id === 'compact-filters')!.props.hidden, true);
+  assert.equal(elements.find(n => n.props.className === 'artist-library-filter-count')!.props.children, 3);
+  (toggle.props.onClick as () => void)();
+  assert.deepEqual(JSON.parse(JSON.stringify(changes[0])), { filtersOpen: true });
+  const opened = nodes(h.component('ArtistLibraryControls.tsx')({ ...props, view: { ...view, filtersOpen: true } }));
+  assert.equal(opened.find(n => n.props.id === 'compact-filters')!.props.hidden, false);
+  (opened.find(n => String(n.props.className).includes('artist-library-reset'))!.props.onClick as () => void)();
+  assert.equal(changes[1].filtersOpen, true); assert.equal(changes[1].credit, 'all');
 });
 
 test('real song rows expose neutral known/unknown metadata, a review warning, and only valid Spotify links', () => {

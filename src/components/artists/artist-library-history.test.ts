@@ -50,6 +50,18 @@ test('route navigation and same-route different history entries cannot be overwr
   assert.equal(back.initialScroll, 100);
 });
 
+test('filter disclosure restores per entry, rejects non-booleans, and never clears active hidden filters', () => {
+  const view = normalizeLibraryView({ filtersOpen: true, lyrics: 'missing', sort: 'created' });
+  assert.equal(view.filtersOpen, true); assert.equal(view.lyrics, 'missing');
+  assert.equal(normalizeLibraryView({ filtersOpen: 'true' }).filtersOpen, false);
+  const browser = harness(), entry = createArtistLibraryHistory(browser.port, '/artists/Aimer', 'disclosure');
+  entry.attach(); entry.save(view, 100);
+  assert.equal(createArtistLibraryHistory(browser.port, '/artists/Aimer', 'new').initialView.filtersOpen, true);
+  entry.save({ ...view, filtersOpen: false }, 100);
+  const restored = createArtistLibraryHistory(browser.port, '/artists/Aimer', 'new').initialView;
+  assert.equal(restored.filtersOpen, false); assert.equal(restored.lyrics, 'missing'); assert.equal(restored.sort, 'created');
+});
+
 test('history restoration validates enum values and serializes only an explicit safe UI allowlist', () => {
   const view = normalizeLibraryView({ query: 'A', sort: 'bogus', credit: 'collab', lyrics: null, translation: 'unknown', expandedAlbumKeys: ['night', 8, 'night'], songs: [{ private: 'secret' }], tab: 'albums' });
   assert.equal(view.sort, 'name');

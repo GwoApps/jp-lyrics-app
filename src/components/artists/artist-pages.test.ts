@@ -40,7 +40,7 @@ function renderPage(file: string, resource: object, props: object = {}) {
       exports,
       require: (specifier: string) => {
         if (specifier === 'next/link') return { __esModule: true, default: Link };
-        if (specifier === 'next-view-transitions') return { Link, useTransitionRouter: () => ({ replace: () => {} }) };
+        if (specifier === '@/components/navigation/ViewTransitions') return { Link, useTransitionRouter: () => ({ replace: () => {} }) };
         if (specifier === '@/lib/i18n') return { useI18n: () => ({ t, locale: 'en' }) };
         if (specifier === '@/lib/auth-session') return { useAuthSession: () => ({ session: { user: null } }), refreshAuthSession: () => Promise.resolve() };
         if (specifier === '@/components/home/FavoriteCategoriesDialog') return { __esModule: true, default: () => null };

@@ -67,7 +67,7 @@ function load(file: string): Record<string, unknown> {
   runInNewContext(compiled, {
     exports,
     require: (specifier: string) => {
-      if (specifier === 'next-view-transitions') return { Link: 'a' };
+      if (specifier === '@/components/navigation/ViewTransitions') return { Link: 'a' };
       if (specifier === '@/components/ArtistLinks') return load('components/ArtistLinks.tsx');
       if (specifier === '@/components/CoverImage') return { __esModule: true, default: () => React.createElement('span', { 'data-cover': true }) };
       if (specifier === '@/components/ui/dialog') return { __esModule: true, default: ({ children }: { children: React.ReactNode }) => React.createElement('div', {}, children) };

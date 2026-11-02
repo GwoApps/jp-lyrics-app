@@ -1051,6 +1051,8 @@
     "lookupRateLimited": "出典へのリクエストが制限されています。しばらくしてから再試行してください。"
   },
   "artistLibrary": {
+    "filters": "絞り込み・並べ替え",
+    "filtersActive": "絞り込み・並べ替え、{count} 件を適用中",
     "searchLabel": "このライブラリを検索",
     "searchPlaceholder": "曲名・アルバム・アーティスト",
     "sort": "並び順",

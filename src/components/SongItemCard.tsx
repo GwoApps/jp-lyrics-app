@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 import { AlertTriangle, Share2, Star, Trash2 } from 'lucide-react';
-import { Link } from 'next-view-transitions';
+import { Link } from '@/components/navigation/ViewTransitions';
 import CoverImage from '@/components/CoverImage';
 import ArtistLinks from '@/components/ArtistLinks';
 import { useCoverPalette } from '@/hooks/useCoverPalette';
