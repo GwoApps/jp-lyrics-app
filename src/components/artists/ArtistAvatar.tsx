@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { UserRound } from 'lucide-react';
 import Image from 'next/image';
 import { requestArtistProfile } from './profile-queue';
+import { artistTransitionName, getCachedArtistProfile, isArtistPortraitLoaded, markArtistPortraitLoaded } from './artist-profile-cache';
 
 /** Artist portraits only. Never substitute a track/album cover for an artist. */
 export function ArtistAvatar(props: { name: string; imageUrl?: string | null; large?: boolean }) {
@@ -16,9 +17,10 @@ function ArtistPortrait({ name, imageUrl, large = false }: {
   imageUrl?: string | null;
   large?: boolean;
 }) {
-  const [state, setState] = useState<'loading' | 'loaded' | 'error'>('loading');
+  const [state, setState] = useState<'loading' | 'loaded' | 'error'>(() => isArtistPortraitLoaded(imageUrl) ? 'loaded' : 'loading');
   return (
-    <span className={`artist-avatar${large ? ' artist-avatar--large' : ''}`} data-state={state} aria-hidden="true" title={name}>
+    <span className={`artist-avatar${large ? ' artist-avatar--large' : ''}`} data-state={state}
+      style={{ ['--artist-vt-name' as string]: artistTransitionName(name) }} aria-hidden="true" title={name}>
       <UserRound className="artist-avatar-fallback" />
       {imageUrl && state !== 'error' && (
         <Image
@@ -29,7 +31,7 @@ function ArtistPortrait({ name, imageUrl, large = false }: {
           unoptimized
           loading="lazy"
           className="artist-avatar-portrait"
-          onLoad={() => setState('loaded')}
+          onLoad={() => { markArtistPortraitLoaded(imageUrl); setState('loaded'); }}
           onError={() => setState('error')}
         />
       )}
@@ -39,7 +41,10 @@ function ArtistPortrait({ name, imageUrl, large = false }: {
 
 export default function LazyArtistAvatar({ name }: { name: string }) {
   const target = useRef<HTMLSpanElement>(null);
-  const [portrait, setPortrait] = useState<{ name: string; imageUrl: string | null } | null>(null);
+  const [portrait, setPortrait] = useState<{ name: string; imageUrl: string | null } | null>(() => {
+    const cached = getCachedArtistProfile(name);
+    return cached ? { name, imageUrl: cached.imageUrl } : null;
+  });
 
   useEffect(() => {
     const controller = new AbortController();

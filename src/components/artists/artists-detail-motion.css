@@ -1,0 +1,22 @@
+/* Motion is progressive enhancement; no row depends on an animation to be visible. */
+.artist-detail-loading { color: var(--muted-foreground); }
+.artist-detail-loading-label { display: block; margin-bottom: 16px; font-size: 12px; }
+.artist-detail-loading .artist-songs { width: 100%; }
+.artist-song-skeleton { min-height: 82px; }
+.artist-song-skeleton-cover { flex: none; width: 36px; height: 36px; border-radius: 6px; background: var(--muted); }
+.artist-song-skeleton-copy { display: flex; flex: 1; flex-direction: column; gap: 8px; min-width: 0; }
+.artist-song-skeleton-copy > span { display: block; height: 12px; width: 55%; max-width: 240px; border-radius: 4px; background: var(--muted); }
+.artist-song-skeleton-copy > span:last-child { height: 10px; width: 32%; max-width: 140px; }
+.artist-song-skeleton { animation: artist-detail-pulse 1400ms ease-in-out infinite alternate; }
+@keyframes artist-detail-pulse { from { opacity: .45; } to { opacity: .85; } }
+
+/* Only the incoming pane contributes height. A long outgoing list cannot leave a blank tail. */
+.artist-tab-panels { position: relative; min-width: 0; overflow: clip; }
+.artist-tab-panel { min-width: 0; opacity: 1; transform: none; }
+.artist-tab-panel[data-outgoing='true'] { position: absolute; inset: 0 0 auto; width: 100%; pointer-events: none; }
+.artist-tab-panel[hidden] { display: none; }
+
+@media (min-width: 640px) { .artist-song-skeleton-cover { width: 40px; height: 40px; } }
+@media (prefers-reduced-motion: reduce) {
+  .artist-song-skeleton { animation: none; }
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { Link } from 'next-view-transitions';
 import { Search, UsersRound, X } from 'lucide-react';
 import { useState } from 'react';
 import { artistHref } from '@/lib/artists';

@@ -1,4 +1,5 @@
 import type { ArtistProfile } from './types';
+import { setCachedArtistProfile } from './artist-profile-cache';
 
 interface Job {
   run: () => void;
@@ -41,6 +42,7 @@ export function createProfileQueue(concurrency = 4) {
               const body = await response.json() as { profile?: ArtistProfile };
               if (!body.profile || !Array.isArray(body.profile.genres)) throw new Error('invalid_profile');
               if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+              setCachedArtistProfile(body.profile);
               return body.profile;
             })
             .then(resolve, reject)

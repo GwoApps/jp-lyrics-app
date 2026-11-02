@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
-import { artistHref, splitArtists } from '@/lib/artists';
+import { artistHref, artistKey, splitArtists } from '@/lib/artists';
 import type { ArtistLibrary } from './types';
 
 const require = createRequire(import.meta.url);
@@ -40,15 +40,23 @@ function renderPage(file: string, resource: object, props: object = {}) {
       exports,
       require: (specifier: string) => {
         if (specifier === 'next/link') return { __esModule: true, default: Link };
-        if (specifier === 'next-view-transitions') return { Link };
+        if (specifier === 'next-view-transitions') return { Link, useTransitionRouter: () => ({ replace: () => {} }) };
         if (specifier === '@/lib/i18n') return { useI18n: () => ({ t }) };
-        if (specifier === '@/lib/artists') return { artistHref, splitArtists };
+        if (specifier === '@/lib/artists') return { artistHref, artistKey, splitArtists };
         if (specifier === './useArtistResource') return { useArtistResource: () => ({ state: resource, retry: () => {} }) };
         if (specifier.endsWith('.css')) return {};
         if (specifier === '@/components/ArtistLinks') return load(resolve(directory, '../ArtistLinks.tsx'));
         if (specifier === '@/components/CoverImage') return load(resolve(directory, '../CoverImage.tsx'));
         if (specifier === './ArtistAvatar') return load(resolve(directory, 'ArtistAvatar.tsx'));
+        if (specifier === './ArtistBackButton' || specifier === '@/components/artists/ArtistBackButton') return load(resolve(directory, 'ArtistBackButton.tsx'));
+        if (specifier === './artist-profile-cache') return load(resolve(directory, 'artist-profile-cache.ts'));
+        if (specifier === './artist-back-navigation') return load(resolve(directory, 'artist-back-navigation.ts'));
         if (specifier === './profile-queue') return { profileSourceHref: () => undefined, requestArtistProfile: () => Promise.resolve(null) };
+        if (specifier.startsWith('./')) {
+          const base = resolve(dirname(path), specifier);
+          const target = [base, `${base}.ts`, `${base}.tsx`].find((candidate) => existsSync(candidate));
+          if (target) return load(target);
+        }
         return require(specifier);
       },
     });

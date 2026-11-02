@@ -22,6 +22,10 @@ function component() {
       if (specifier === 'react') return { ...React, useState: () => [state, (value: string) => { state = value; }] };
       if (specifier === 'next/image') return { __esModule: true, default: 'next-image' };
       if (specifier === './profile-queue') return {};
+      if (specifier === './artist-profile-cache') return {
+        isArtistPortraitLoaded: () => false, markArtistPortraitLoaded: () => {}, getCachedArtistProfile: () => null,
+        artistTransitionName: () => 'artist-avatar-test',
+      };
       return require(specifier);
     },
   });
@@ -71,7 +75,7 @@ test('changing the portrait URL remounts its load lifecycle instead of reusing l
 });
 
 test('portrait and fallback crossfade with opacity only and support reduced motion', () => {
-  assert.match(css, /\.artist-avatar-portrait\s*\{[^}]*opacity:\s*0[^}]*transition:\s*opacity\s+240ms/);
+  assert.match(css, /\.artist-avatar-portrait\s*\{[^}]*opacity:\s*0[^}]*transition:\s*opacity\s+360ms/);
   assert.match(css, /\.artist-avatar\[data-state=['"]loaded['"]\]\s+\.artist-avatar-portrait\s*\{\s*opacity:\s*1/);
   assert.match(css, /\.artist-avatar\[data-state=['"]loaded['"]\]\s+\.artist-avatar-fallback\s*\{\s*opacity:\s*0/);
   assert.match(css, /prefers-reduced-motion:\s*reduce[^]*artist-avatar-portrait[^}]*transition:\s*none/);

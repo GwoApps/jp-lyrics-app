@@ -12,9 +12,9 @@
 .artist-card { display: flex; height: 100%; min-width: 0; flex-direction: column; align-items: center; padding: 10px 4px; border-radius: 8px; text-align: center; transition: background-color 140ms; }
 .artist-card:hover { background: var(--accent); }
 .artist-avatar-target { display: flex; justify-content: center; width: 100%; }
-.artist-avatar { position: relative; display: inline-flex; flex: none; align-items: center; justify-content: center; width: min(100%, 92px); aspect-ratio: 1; border-radius: 50%; overflow: hidden; background: var(--muted); color: var(--muted-foreground); }
-.artist-avatar-portrait { object-fit: cover; border-radius: inherit; opacity: 0; transition: opacity 240ms cubic-bezier(0.22, 1, 0.36, 1); }
-.artist-avatar-fallback { width: 34%; height: 34%; opacity: 1; transition: opacity 240ms cubic-bezier(0.22, 1, 0.36, 1); }
+.artist-avatar { position: relative; display: inline-flex; flex: none; align-items: center; justify-content: center; width: min(100%, 92px); aspect-ratio: 1; border-radius: 50%; overflow: hidden; background: var(--muted); color: var(--muted-foreground); view-transition-name: var(--artist-vt-name, none); }
+.artist-avatar-portrait { object-fit: cover; border-radius: inherit; opacity: 0; transition: opacity 360ms cubic-bezier(0.22, 1, 0.36, 1); }
+.artist-avatar-fallback { width: 34%; height: 34%; opacity: 1; transition: opacity 360ms cubic-bezier(0.22, 1, 0.36, 1); }
 .artist-avatar[data-state='loaded'] .artist-avatar-portrait { opacity: 1; }
 .artist-avatar[data-state='loaded'] .artist-avatar-fallback { opacity: 0; }
 .artist-avatar--large { width: 96px; }
@@ -27,8 +27,9 @@
 .artists-button:hover { background: var(--accent); }
 .artist-skeleton { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 10px 4px; }
 .artist-skeleton > span:last-child { width: 64%; height: 12px; border-radius: 4px; background: var(--muted); }
-.artists-back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 24px; color: var(--muted-foreground); font-size: 12px; }
-.artists-back:hover { color: var(--foreground); }
+.artist-back-navigation { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin: -6px 0 18px -8px; }
+.artists-back { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 6px 8px; border-radius: 6px; color: var(--muted-foreground); font-size: 12px; cursor: pointer; }
+.artists-back:hover { color: var(--foreground); background: var(--accent); }
 .artist-profile { display: flex; align-items: flex-start; gap: 18px; margin-bottom: 24px; }
 .artist-profile-copy { min-width: 0; flex: 1; }
 .artist-profile h1 { margin-bottom: 8px; }
@@ -71,4 +72,4 @@
 @media (min-width: 480px) { .artists-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px 12px; } }
 @media (min-width: 640px) { .artists-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 20px 16px; } .artist-avatar { width: min(100%, 104px); } .artist-avatar--large { width: 128px; } .artist-profile { gap: 24px; } .artists-page h1 { font-size: 24px; } }
 @media (max-width: 380px) { .artist-profile { gap: 12px; } .artist-avatar--large { width: 72px; } }
-@media (prefers-reduced-motion: reduce) { .artist-card, .artist-avatar-portrait, .artist-avatar-fallback { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .artist-card, .artist-avatar-portrait, .artist-avatar-fallback { transition: none; } .artist-avatar { view-transition-name: none; } }

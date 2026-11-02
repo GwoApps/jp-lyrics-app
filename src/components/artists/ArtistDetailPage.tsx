@@ -1,22 +1,30 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import { ChevronRight, ExternalLink } from 'lucide-react';
 import { useEffect, useId, useState, type KeyboardEvent } from 'react';
 import ArtistLinks from '@/components/ArtistLinks';
+import ArtistBackButton from '@/components/artists/ArtistBackButton';
 import CoverImage from '@/components/CoverImage';
 import { useI18n } from '@/lib/i18n';
 import type { SongItem } from '@/lib/types';
 import { ArtistAvatar } from './ArtistAvatar';
+import { getCachedArtistProfile } from './artist-profile-cache';
+import { useArtistDetailMotion } from './useArtistDetailMotion';
+import type { LibraryTab } from './detail-motion';
 import { profileSourceHref, requestArtistProfile } from './profile-queue';
 import type { ArtistProfile } from './types';
 import { useArtistResource, validArtistLibrary } from './useArtistResource';
 import './artists.css';
+import './artists-detail-motion.css';
 
 function ArtistProfileHeader({ name }: { name: string }) {
   const { t } = useI18n();
   const [attempt, setAttempt] = useState(0);
-  const [result, setResult] = useState<{ name: string; profile: ArtistProfile | null; failed: boolean } | null>(null);
+  const [result, setResult] = useState<{ name: string; profile: ArtistProfile | null; failed: boolean } | null>(() => {
+    const profile = getCachedArtistProfile(name);
+    return profile ? { name, profile, failed: false } : null;
+  });
   useEffect(() => {
     const controller = new AbortController();
     void requestArtistProfile(name, controller.signal)
@@ -60,13 +68,25 @@ function ArtistSongs({ songs }: { songs: SongItem[] }) {
   ))}</ul>;
 }
 
-type LibraryTab = 'songs' | 'albums';
+function ArtistDetailLoading() {
+  const { t } = useI18n();
+  return <div className="artist-detail-loading" role="status" aria-busy="true">
+    <span className="artist-detail-loading-label">{t('common.loading')}</span>
+    <ul className="artist-songs" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => (
+      <li key={index} className="artist-song artist-song-skeleton">
+        <span className="artist-song-skeleton-cover" />
+        <span className="artist-song-skeleton-copy"><span /><span /></span>
+      </li>
+    ))}</ul>
+  </div>;
+}
+
 export default function ArtistDetailPage({ name }: { name: string }) {
   const { t } = useI18n();
   const { state, retry } = useArtistResource(`/api/artists/${encodeURIComponent(name)}`, validArtistLibrary);
-  const [tab, setTab] = useState<LibraryTab>('songs');
   const tabId = useId();
   const data = state.status === 'ready' ? state.data : null;
+  const { tab, outgoingTab, selectTab, panelsRef } = useArtistDetailMotion(data);
   const tabs: LibraryTab[] = ['songs', 'albums'];
   const selectTabWithKeyboard = (event: KeyboardEvent<HTMLButtonElement>) => {
     let next: LibraryTab | undefined;
@@ -75,26 +95,27 @@ export default function ArtistDetailPage({ name }: { name: string }) {
     if (event.key === 'End') next = 'albums';
     if (next) {
       event.preventDefault();
-      setTab(next);
+      selectTab(next);
       document.getElementById(`${tabId}-${next}`)?.focus();
     }
   };
 
   return (
     <div className="artists-page artist-detail">
-      <Link className="artists-back" href="/artists"><ArrowLeft size={14} aria-hidden="true" />{t('artists.back')}</Link>
+      <ArtistBackButton />
       <ArtistProfileHeader key={name} name={data?.artist.name ?? name} />
-      {state.status === 'loading' && <div className="artists-state" role="status">{t('common.loading')}</div>}
+      {state.status === 'loading' && <ArtistDetailLoading />}
       {state.status === 'error' && <div className="artists-state" role="alert"><p>{t(state.notFound ? 'artists.notFound' : 'artists.detailLoadError')}</p><button type="button" className="artists-button" onClick={retry}>{t('common.reload')}</button></div>}
       {data && <>
         <p className="artist-library-scope">{t('artists.localLibrary')}<span>{t('home.songCount', { count: data.songs.length })}</span><span>{t('home.albumCount', { count: data.albums.length })}</span></p>
         <div className="artist-tabs" role="tablist" aria-label={t('artists.localLibrary')}>
-          {tabs.map((value) => <button key={value} id={`${tabId}-${value}`} type="button" role="tab" aria-selected={tab === value} aria-controls={`${tabId}-${value}-panel`} tabIndex={tab === value ? 0 : -1} onKeyDown={selectTabWithKeyboard} onClick={() => setTab(value)}>{t(value === 'songs' ? 'artists.songsTab' : 'artists.albumsTab')}<span>{value === 'songs' ? data.songs.length : data.albums.length}</span></button>)}
+          {tabs.map((value) => <button key={value} id={`${tabId}-${value}`} type="button" role="tab" aria-selected={tab === value} aria-controls={`${tabId}-${value}-panel`} tabIndex={tab === value ? 0 : -1} onKeyDown={selectTabWithKeyboard} onClick={() => selectTab(value)}>{t(value === 'songs' ? 'artists.songsTab' : 'artists.albumsTab')}<span>{value === 'songs' ? data.songs.length : data.albums.length}</span></button>)}
         </div>
-        <section role="tabpanel" id={`${tabId}-songs-panel`} aria-labelledby={`${tabId}-songs`} hidden={tab !== 'songs'} tabIndex={0}>
+        <div className="artist-tab-panels" ref={panelsRef}>
+        <section className="artist-tab-panel" data-artist-panel="songs" data-outgoing={outgoingTab === 'songs' || undefined} role="tabpanel" id={`${tabId}-songs-panel`} aria-labelledby={`${tabId}-songs`} hidden={tab !== 'songs' && outgoingTab !== 'songs'} aria-hidden={tab !== 'songs' || undefined} inert={tab !== 'songs'} tabIndex={tab === 'songs' ? 0 : -1}>
           {data.songs.length ? <ArtistSongs songs={data.songs} /> : <p className="artists-state">{t('artists.noSongs')}</p>}
         </section>
-        <section role="tabpanel" id={`${tabId}-albums-panel`} aria-labelledby={`${tabId}-albums`} hidden={tab !== 'albums'} tabIndex={0}>
+        <section className="artist-tab-panel" data-artist-panel="albums" data-outgoing={outgoingTab === 'albums' || undefined} role="tabpanel" id={`${tabId}-albums-panel`} aria-labelledby={`${tabId}-albums`} hidden={tab !== 'albums' && outgoingTab !== 'albums'} aria-hidden={tab !== 'albums' || undefined} inert={tab !== 'albums'} tabIndex={tab === 'albums' ? 0 : -1}>
           {data.albums.length ? <div className="artist-albums">{data.albums.map((album) => (
             <details className="artist-album" key={album.key}>
               <summary><CoverImage src={album.coverUrl} size="md" /><span className="artist-album-copy"><span className="artist-album-title">{album.title}</span><span className="artists-meta">{t('home.songCount', { count: album.songs.length })}</span></span><ChevronRight className="artist-album-chevron" size={17} aria-hidden="true" /></summary>
@@ -102,6 +123,7 @@ export default function ArtistDetailPage({ name }: { name: string }) {
             </details>
           ))}</div> : <p className="artists-state">{t('artists.noAlbums')}</p>}
         </section>
+        </div>
       </>}
     </div>
   );
