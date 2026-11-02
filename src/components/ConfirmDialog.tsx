@@ -1,12 +1,25 @@
 'use client';
 
-import { useRef, type ReactNode } from 'react';
+import { Fragment, useRef, type ReactNode } from 'react';
+import ArtistLinks from '@/components/ArtistLinks';
 import Dialog from '@/components/ui/dialog';
+
+/** Interpolate this marker instead of an artist into localized dialog text. */
+export const ARTIST_LINK_MARKER = '\uFFF0artist\uFFF1';
+
+export function artistLinkedDialogBody(text: string, artist?: string | null): ReactNode {
+  return text.split(ARTIST_LINK_MARKER).map((part, index) => (
+    <Fragment key={index}>
+      {index > 0 && <ArtistLinks artist={artist} />}
+      {part}
+    </Fragment>
+  ));
+}
 
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
-  body?: string;
+  body?: ReactNode;
   /** Optional extra content rendered below the body (e.g. a lyric preview). */
   children?: ReactNode;
   confirmLabel: string;

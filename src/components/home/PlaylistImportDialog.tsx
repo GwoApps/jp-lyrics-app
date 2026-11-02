@@ -1,5 +1,7 @@
 'use client';
 
+import ArtistLinks from '@/components/ArtistLinks';
+
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Loader2, AlertTriangle, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
@@ -431,7 +433,7 @@ export default function PlaylistImportDialog({ open, onImported, onClose }: Play
                       <ul className="import-dialog-list">
                         {reviewTracks.map((track, index) => (
                           <li key={`${track.title}-${index}`} className="truncate">
-                            {track.title}{track.artist ? ` — ${track.artist}` : ''}
+                            {track.title}{track.artist && <> — <ArtistLinks artist={track.artist} /></>}
                           </li>
                         ))}
                       </ul>

@@ -78,7 +78,28 @@
     "invalid": "暗號不正確",
     "requestFailed": "無法驗證暗號，請稍後再試"
   },
+  "artists": {
+    "title": "藝人",
+    "search": "搜尋藝人",
+    "artistCount": "{count} 位藝人",
+    "loadError": "無法載入藝人，請重試。",
+    "detailLoadError": "無法載入此藝人的本機曲庫，請重試。",
+    "empty": "歌詞庫中還沒有藝人。",
+    "noMatches": "沒有符合搜尋條件的藝人。",
+    "back": "所有藝人",
+    "genres": "音樂風格",
+    "source": "來源：{source}",
+    "profileSource": "藝人資料",
+    "profileUnavailable": "暫時無法取得藝人資料。",
+    "localLibrary": "本機歌詞庫",
+    "songsTab": "歌曲",
+    "albumsTab": "專輯",
+    "noSongs": "歌詞庫中還沒有此藝人的歌曲。",
+    "noAlbums": "歌詞庫中還沒有此藝人的專輯。",
+    "notFound": "歌詞庫中沒有此藝人。"
+  },
   "home": {
+    "navArtists": "藝人",
     "songList": "歌曲列表",
     "albumList": "專輯列表",
     "navSongs": "歌曲",

@@ -1,11 +1,13 @@
 'use client';
 
+import ArtistLinks from '@/components/ArtistLinks';
+
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useTransitionRouter } from 'next-view-transitions';
 import Link from 'next/link';
 import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Download, Loader2, ExternalLink, PictureInPicture, Maximize2, Repeat, Copy, Check, Languages, ChevronDown, Share2, Info, X, Palette, SlidersHorizontal, FlaskConical } from 'lucide-react';
-import ConfirmDialog from '@/components/ConfirmDialog';
+import ConfirmDialog, { ARTIST_LINK_MARKER, artistLinkedDialogBody } from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import FuriganaLineView from '@/components/FuriganaLine';
 import LyricsDotGrid, { DEFAULT_DOT_GRID_PARAMS, type DotGridParams } from '@/components/LyricsDotGrid';
@@ -398,7 +400,7 @@ export default function SongViewPage() {
                 {cachedSong ? (
                   <>
                     <div className="text-lg sm:text-xl font-semibold tracking-tight truncate">{cachedSong.title}</div>
-                    <div className="text-sm text-[var(--muted-foreground)] truncate">{cachedSong.artist || t('common.unknownArtist')}</div>
+                    <div className="text-sm text-[var(--muted-foreground)] truncate"><ArtistLinks artist={cachedSong.artist} fallback={t('common.unknownArtist')} /></div>
                   </>
                 ) : (
                   <>
@@ -431,7 +433,7 @@ export default function SongViewPage() {
             <div className="mb-2 flex flex-col items-center gap-1">
               <p className="text-sm text-[var(--muted-foreground)]">{cachedSong.title}</p>
               {cachedSong.artist && (
-                <p className="text-xs text-[var(--muted-foreground)]">{cachedSong.artist}</p>
+                <p className="text-xs text-[var(--muted-foreground)]"><ArtistLinks artist={cachedSong.artist} /></p>
               )}
             </div>
           ) : null}
@@ -682,7 +684,7 @@ export default function SongViewPage() {
             </button>
             <div className="flex-1 w-fit max-w-full min-w-0 sm:min-w-24 space-y-0.5 sm:space-y-1">
               <h1 className="text-base sm:text-xl font-semibold tracking-tight break-words">{song.title}</h1>
-              {song.artist && <p className="text-xs sm:text-sm text-[var(--muted-foreground)]">{song.artist}</p>}
+              {song.artist && <p className="text-xs sm:text-sm text-[var(--muted-foreground)]"><ArtistLinks artist={song.artist} /></p>}
               {/* Visibility badge + request/cancel public actions */}
               <div className="flex items-center gap-2 mt-1">
               {song.is_public === 1 ? (
@@ -1233,7 +1235,7 @@ export default function SongViewPage() {
               </span>
               <div className="min-w-0 flex-1">
                 <h2 id="song-info-title" className="truncate text-sm font-semibold sm:text-base">{t('song.info')}</h2>
-                <p className="truncate text-xs text-[var(--muted-foreground)]">{song.title}{song.artist ? ` / ${song.artist}` : ''}</p>
+                <p className="truncate text-xs text-[var(--muted-foreground)]">{song.title}{song.artist && <> / <ArtistLinks artist={song.artist} /></>}</p>
               </div>
               <button
                 type="button"
@@ -1323,7 +1325,7 @@ export default function SongViewPage() {
       <ConfirmDialog
         open={!!data.importReview}
         title={t('home.importReviewTitle')}
-        body={data.importReview ? t('home.importReviewBody', {
+        body={data.importReview ? artistLinkedDialogBody(t('home.importReviewBody', {
           title: data.importReview.title,
           source: data.importReview.source,
           confidence: String(data.importReview.confidence),
@@ -1331,11 +1333,11 @@ export default function SongViewPage() {
           preview: data.importReview.preview,
           matched: data.importReview.match?.title ? t('home.importReviewMatched', {
             matchedTitle: data.importReview.match.title,
-            matchedArtist: data.importReview.match.artist,
+            matchedArtist: ARTIST_LINK_MARKER,
             matchedLink: data.importReview.match.link,
             ambiguous: data.importReview.match.ambiguous ? t('home.importReviewMatchedAmbiguous') : '',
           }) : '',
-        }) : ''}
+        }), data.importReview.match?.artist) : ''}
         confirmLabel={t('home.importReviewConfirm')}
         cancelLabel={t('common.cancel')}
         onConfirm={() => void data.confirmImportReview()}
@@ -1344,14 +1346,14 @@ export default function SongViewPage() {
       <ConfirmDialog
         open={!!data.lowConfidenceSync}
         title={t('song.syncLowConfidenceTitle')}
-        body={data.lowConfidenceSync ? t('song.syncLowConfidenceBody', {
+        body={data.lowConfidenceSync ? artistLinkedDialogBody(t('song.syncLowConfidenceBody', {
           matched: data.lowConfidenceSync.match?.title ? t('song.syncLowConfidenceMatched', {
             matchedTitle: data.lowConfidenceSync.match.title,
-            matchedArtist: data.lowConfidenceSync.match.artist,
+            matchedArtist: ARTIST_LINK_MARKER,
             matchedLink: data.lowConfidenceSync.match.link,
             ambiguous: data.lowConfidenceSync.match.ambiguous ? t('home.importReviewMatchedAmbiguous') : '',
           }) : '',
-        }) : ''}
+        }), data.lowConfidenceSync.match?.artist) : ''}
         confirmLabel={t('song.syncLowConfidenceConfirm')}
         cancelLabel={t('common.cancel')}
         onConfirm={data.confirmLowConfidenceSync}
@@ -1371,7 +1373,7 @@ export default function SongViewPage() {
       <ConfirmDialog
         open={!!data.plainHitSync}
         title={t('song.plainHitTitle')}
-        body={t('song.plainHitBody', {
+        body={artistLinkedDialogBody(t('song.plainHitBody', {
           source: data.plainHitSync
             ? (LYRICS_SOURCE_KEYS[data.plainHitSync.source]
               ? t(LYRICS_SOURCE_KEYS[data.plainHitSync.source])
@@ -1379,11 +1381,11 @@ export default function SongViewPage() {
             : '',
           matched: data.plainHitSync?.match?.title ? t('song.plainHitMatched', {
             matchedTitle: data.plainHitSync.match.title,
-            matchedArtist: data.plainHitSync.match.artist,
+            matchedArtist: ARTIST_LINK_MARKER,
             matchedLink: data.plainHitSync.match.link,
             ambiguous: data.plainHitSync.match.ambiguous ? t('home.importReviewMatchedAmbiguous') : '',
           }) : '',
-        })}
+        }), data.plainHitSync?.match?.artist)}
         confirmLabel={t('song.plainHitConfirm')}
         cancelLabel={t('common.cancel')}
         onConfirm={data.confirmPlainSync}

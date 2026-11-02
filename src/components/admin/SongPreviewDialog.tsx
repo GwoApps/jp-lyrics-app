@@ -2,6 +2,8 @@
 
 'use client';
 
+import ArtistLinks from '@/components/ArtistLinks';
+
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, Check, ExternalLink, Loader2, Music, X } from 'lucide-react';
@@ -106,7 +108,7 @@ function SongPreviewContent({ song, locale, onClose }: Omit<SongPreviewDialogPro
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0">
           <h2 className="text-[15px] font-semibold truncate">{song.title}</h2>
-          {song.artist && <p className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate">{song.artist}</p>}
+          {song.artist && <p className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate"><ArtistLinks artist={song.artist} /></p>}
           {song.created_by_name && (
             <p className="text-[10px] text-[var(--muted-foreground)]/70 mt-0.5">
               {t('home.createdBy')}: {song.created_by_name} · {new Date(song.created_at).toLocaleDateString(bcp47)}

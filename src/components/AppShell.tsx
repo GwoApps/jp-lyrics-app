@@ -57,6 +57,7 @@ function Nav() {
           {([
             { href: '/', label: t('home.navSongs'), active: pathname === '/' },
             { href: '/albums', label: t('home.navAlbums'), active: pathname === '/albums' },
+            { href: '/artists', label: t('home.navArtists'), active: pathname.startsWith('/artists') },
           ] as const).map(({ href, label, active }) => (
             <Link key={href} href={href} aria-current={active ? 'page' : undefined}
               className={`whitespace-nowrap rounded-md px-2 py-1.5 text-xs font-medium transition-colors sm:px-2.5 ${active

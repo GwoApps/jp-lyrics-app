@@ -78,7 +78,28 @@
     "invalid": "Incorrect passphrase",
     "requestFailed": "The passphrase could not be verified. Please try again later"
   },
+  "artists": {
+    "title": "Artists",
+    "search": "Search artists",
+    "artistCount": "{count} artists",
+    "loadError": "Could not load artists. Please try again.",
+    "detailLoadError": "Could not load this artist’s local library. Please try again.",
+    "empty": "No artists in your lyric library yet.",
+    "noMatches": "No artists match your search.",
+    "back": "All artists",
+    "genres": "Genres",
+    "source": "Source: {source}",
+    "profileSource": "Artist profile",
+    "profileUnavailable": "Artist information is unavailable.",
+    "localLibrary": "In your lyric library",
+    "songsTab": "Songs",
+    "albumsTab": "Albums",
+    "noSongs": "No songs by this artist in your lyric library.",
+    "noAlbums": "No albums by this artist in your lyric library.",
+    "notFound": "This artist is not in your lyric library."
+  },
   "home": {
+    "navArtists": "Artists",
     "songList": "Song List",
     "albumList": "Album List",
     "navSongs": "Songs",

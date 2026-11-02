@@ -78,7 +78,28 @@
     "invalid": "合言葉が正しくありません",
     "requestFailed": "合言葉を確認できませんでした。しばらくしてからもう一度お試しください"
   },
+  "artists": {
+    "title": "アーティスト",
+    "search": "アーティストを検索",
+    "artistCount": "{count} 組のアーティスト",
+    "loadError": "アーティストを読み込めませんでした。再試行してください。",
+    "detailLoadError": "このアーティストのローカルライブラリを読み込めませんでした。再試行してください。",
+    "empty": "歌詞ライブラリにアーティストがいません。",
+    "noMatches": "検索に一致するアーティストがいません。",
+    "back": "すべてのアーティスト",
+    "genres": "ジャンル",
+    "source": "出典：{source}",
+    "profileSource": "アーティスト情報",
+    "profileUnavailable": "アーティスト情報を取得できません。",
+    "localLibrary": "ローカル歌詞ライブラリ",
+    "songsTab": "楽曲",
+    "albumsTab": "アルバム",
+    "noSongs": "歌詞ライブラリにこのアーティストの楽曲はありません。",
+    "noAlbums": "歌詞ライブラリにこのアーティストのアルバムはありません。",
+    "notFound": "歌詞ライブラリにこのアーティストはいません。"
+  },
   "home": {
+    "navArtists": "アーティスト",
     "songList": "曲一覧",
     "albumList": "アルバム一覧",
     "navSongs": "曲",

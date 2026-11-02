@@ -1,5 +1,7 @@
 'use client';
 
+import ArtistLinks from '@/components/ArtistLinks';
+
 import { LocateFixed, Maximize2, Minus, Plus, Settings2, X } from 'lucide-react';
 import CoverImage from '@/components/CoverImage';
 import {
@@ -108,7 +110,7 @@ export default function ImmersiveLyricsControls({
         <CoverImage src={coverUrl} alt="" size="sm" className="immersive-song-cover" />
         <div className="immersive-song-text min-w-0">
           <div className="immersive-song-title truncate text-base sm:text-lg font-semibold text-[var(--foreground)]">{song.title}</div>
-          <div className="immersive-song-artist truncate text-sm">{song.artist || t('common.unknownArtist')}</div>
+          <div className="immersive-song-artist truncate text-sm"><ArtistLinks artist={song.artist} fallback={t('common.unknownArtist')} /></div>
         </div>
       </div>
     </>

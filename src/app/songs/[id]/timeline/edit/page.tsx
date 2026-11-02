@@ -1,5 +1,7 @@
 'use client';
 
+import ArtistLinks from '@/components/ArtistLinks';
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -443,7 +445,7 @@ export default function TimelineEditorPage() {
           <CoverImage src={song.cover_url ?? null} alt={song.title} size="sm" />
           <div className="min-w-0">
             <h1 className="truncate text-lg font-semibold sm:text-xl">{t('timelineWorkspace.title')}</h1>
-            <p className="truncate text-sm text-[var(--muted-foreground)]">{song.title}{song.artist ? ` / ${song.artist}` : ''}</p>
+            <p className="truncate text-sm text-[var(--muted-foreground)]">{song.title}{song.artist && <> / <ArtistLinks artist={song.artist} /></>}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 lg:justify-end">

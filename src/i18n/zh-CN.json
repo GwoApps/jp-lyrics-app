@@ -78,7 +78,28 @@
     "invalid": "暗号不正确",
     "requestFailed": "无法验证暗号，请稍后再试"
   },
+  "artists": {
+    "title": "艺人",
+    "search": "搜索艺人",
+    "artistCount": "{count} 位艺人",
+    "loadError": "无法加载艺人，请重试。",
+    "detailLoadError": "无法加载此艺人的本地曲库，请重试。",
+    "empty": "歌词库中还没有艺人。",
+    "noMatches": "没有符合搜索条件的艺人。",
+    "back": "所有艺人",
+    "genres": "音乐风格",
+    "source": "来源：{source}",
+    "profileSource": "艺人资料",
+    "profileUnavailable": "暂时无法获取艺人资料。",
+    "localLibrary": "本地歌词库",
+    "songsTab": "歌曲",
+    "albumsTab": "专辑",
+    "noSongs": "歌词库中还没有此艺人的歌曲。",
+    "noAlbums": "歌词库中还没有此艺人的专辑。",
+    "notFound": "歌词库中没有此艺人。"
+  },
   "home": {
+    "navArtists": "艺人",
     "songList": "歌曲列表",
     "albumList": "专辑列表",
     "navSongs": "歌曲",

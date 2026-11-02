@@ -4,6 +4,7 @@ import { useRef } from 'react';
 import { AlertTriangle, Share2, Star, Trash2 } from 'lucide-react';
 import { Link } from 'next-view-transitions';
 import CoverImage from '@/components/CoverImage';
+import ArtistLinks from '@/components/ArtistLinks';
 import { useCoverPalette } from '@/hooks/useCoverPalette';
 
 export interface SongItemCardSong {
@@ -107,16 +108,21 @@ export default function SongItemCard({
       onPointerLeave={handlePointerCancel}
     >
       <div className="song-item-card__pointer-glow" aria-hidden="true" />
-      <Link
-        href={`/songs/${song.id}`}
-        aria-label={openSongLabel(song.title)}
+      <div
         className="song-item-card__main relative z-10 flex flex-1 min-w-0 items-center gap-3 sm:gap-4 rounded outline-none"
         onPointerEnter={(event) => {
           updatePointer(event);
         }}
       >
-        {!hideCover && <CoverImage src={song.cover_url} alt={song.title} size={variant === 'grid' ? 'md' : 'sm'} className="song-item-card__cover z-10" viewTransitionName={`song-cover-${song.id}`} />}
-        <div className="song-item-card__content relative z-10 flex-1 min-w-0">
+        <Link
+          href={`/songs/${song.id}`}
+          aria-label={openSongLabel(song.title)}
+          className="absolute inset-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+        >
+          <span className="sr-only">{song.title}</span>
+        </Link>
+        {!hideCover && <CoverImage src={song.cover_url} alt={song.title} size={variant === 'grid' ? 'md' : 'sm'} className="song-item-card__cover pointer-events-none z-10" viewTransitionName={`song-cover-${song.id}`} />}
+        <div className="song-item-card__content pointer-events-none relative z-10 flex-1 min-w-0">
           <div className="text-sm font-medium flex items-center gap-2">
             <span className="truncate min-w-0">{song.title}</span>
             {/* Issue #323: same badge the admin song list uses, so the review hint
@@ -129,17 +135,17 @@ export default function SongItemCard({
             )}
             {isPlaying && <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--success)] animate-pulse shrink-0" />}
           </div>
-          <div className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate">
-            <span className="truncate">{song.artist || unknownArtistLabel}</span>
+          <div className="pointer-events-auto text-xs text-[var(--muted-foreground)] mt-0.5 truncate">
+            <ArtistLinks artist={song.artist} fallback={unknownArtistLabel} />
           </div>
           {song.created_by_name && (
             <div className="text-[10px] text-[var(--muted-foreground)]/60 mt-0.5 truncate">{createdByLabel}: {song.created_by_name}</div>
           )}
         </div>
-        <div className="song-item-card__date relative z-10 text-[10px] sm:text-[11px] text-[var(--muted-foreground)] hidden sm:block shrink-0">
+        <div className="song-item-card__date pointer-events-none relative z-10 text-[10px] sm:text-[11px] text-[var(--muted-foreground)] hidden sm:block shrink-0">
           {new Date(song.updated_at).toLocaleDateString(locale)}
         </div>
-      </Link>
+      </div>
       <div className="song-item-card__actions relative z-10 flex items-center gap-0.5 shrink-0">
         {spotifyConnected && (
           <>
