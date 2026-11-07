@@ -54,6 +54,22 @@ html {
   overflow-y: scroll;
   scrollbar-gutter: stable;
 }
+/* Native root gutters already reserve scrollbar width. Radix modal menus and
+   dialogs share RemoveScroll, whose additional body margin would reserve it a
+   second time and move every centered panel. Keep its scroll/focus locks; only
+   disable duplicate width compensation where native stable gutters are used.
+   The extra html specificity also beats RemoveScroll's later injected rule. */
+@supports (scrollbar-gutter: stable) {
+  /* html is the actual scroll container because it explicitly owns overflow-y.
+     Lock it natively as well; body overflow alone cannot stop viewport scroll. */
+  html:has(body[data-scroll-locked]) {
+    overflow-y: hidden;
+  }
+  html body[data-scroll-locked] {
+    margin-right: 0 !important;
+    --removed-body-scroll-bar-size: 0px;
+  }
+}
 /* Issue #274: every language we render gets its own CJK family, so glyph shapes
    match the text instead of everything falling back to Noto Sans JP (which draws
    Japanese variants of 直/骨/次/令/真 … for Chinese text).
@@ -377,17 +393,11 @@ textarea {
   background: rgba(0,0,0,0.45); backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center;
   padding: 16px;
-  animation: fadeIn 0.2s ease-out;
 }
 .confirm-dialog {
   background: var(--card); border: 1px solid var(--border);
   border-radius: 16px; padding: 28px 24px 20px; max-width: 360px; width: 100%;
   box-shadow: 0 20px 60px rgba(0,0,0,0.25);
-  animation: dialogIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-@keyframes dialogIn {
-  from { opacity: 0; transform: translateY(12px) scale(0.97); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .confirm-dialog-icon { font-size: 36px; text-align: center; margin-bottom: 12px; }
 .confirm-dialog-title { font-size: 15px; font-weight: 600; text-align: center; margin-bottom: 12px; }
@@ -416,7 +426,8 @@ textarea {
      the label onto its own line and inflate the button height. */
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 500;
-  cursor: pointer; border: 1px solid var(--border); transition: all 0.15s;
+  cursor: pointer; border: 1px solid var(--border);
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, opacity 150ms ease;
 }
 .confirm-dialog-btn--cancel { background: transparent; color: var(--muted-foreground); }
 .confirm-dialog-btn--cancel:hover { background: var(--muted); color: var(--foreground); }
@@ -430,7 +441,6 @@ textarea {
   background: var(--card); border: 1px solid var(--border);
   border-radius: 16px; padding: 20px; max-width: 480px; width: 100%;
   box-shadow: 0 20px 60px rgba(0,0,0,0.25);
-  animation: dialogIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .import-dialog-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
 .import-dialog-hint { font-size: 12px; line-height: 1.7; color: var(--muted-foreground); margin-bottom: 12px; }
@@ -952,6 +962,20 @@ textarea {
 .song-view {
   --song-accent: var(--border);
 }
+/* On touch browsers :active is unreliable; the button's pointer handlers
+   expose the held-press state without leaving a permanent hint on the cover. */
+@media (hover: none) {
+  /* Touch feedback should remain snappy; the longer 320ms easing is desktop-only. */
+  .song-cover-info-trigger .song-cover-info-overlay,
+  .song-cover-info-trigger .song-cover-info-overlay svg { transition-duration: 120ms; }
+  .song-cover-info-trigger[data-pressed="true"] { transform: scale(0.96); }
+  .song-cover-info-trigger[data-pressed="true"] .song-cover-info-overlay {
+    opacity: 1;
+  }
+  .song-cover-info-trigger[data-pressed="true"] .song-cover-info-overlay svg {
+    transform: scale(1);
+  }
+}
 .song-editor-page.song-view--accented {
   /* Match the themed body so editor workspaces do not render as a second page-sized tint. */
   background: color-mix(in srgb, var(--background) 96%, var(--song-accent));
@@ -1008,6 +1032,32 @@ textarea {
   background: color-mix(in srgb, var(--accent) 82%, var(--song-accent));
   border-color: color-mix(in srgb, var(--border) 72%, var(--song-accent));
 }
+/* Fade individual desktop controls, leaving portaled menus and touch UI unaffected. */
+@media (min-width: 640px) and (hover: hover) and (pointer: fine) {
+  .song-detail-toolbar .song-accent-button,
+  .song-detail-toolbar .song-detail-font-size {
+    opacity: 0.5;
+    transition:
+      color 160ms ease,
+      background-color 160ms ease,
+      border-color 160ms ease,
+      opacity 160ms ease,
+      transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .song-detail-toolbar .song-accent-button:not(:disabled):not([aria-disabled="true"]):is(:hover, :focus-visible, [data-state="open"]),
+  .song-detail-toolbar .song-detail-font-size:is(:hover, :focus-within) {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .song-detail-toolbar .song-accent-button,
+    .song-detail-toolbar .song-detail-font-size {
+      transition: none;
+    }
+  }
+}
+
 .song-accent-button--active {
   color: var(--primary-foreground);
   background: color-mix(in srgb, var(--primary) 88%, var(--song-accent));
@@ -1023,6 +1073,144 @@ textarea {
   background: color-mix(in srgb, var(--accent) 88%, var(--song-accent));
   border: 1px solid color-mix(in srgb, var(--border) 86%, var(--song-accent));
 }
+.song-playback-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 4px;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+}
+.song-playback-tag--warning { color: var(--warning); }
+.song-playback-tag.song-playing-surface--synced { color: var(--success); }
+.song-playback-tag__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 4px 6px;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: inherit;
+}
+.song-playback-tag__trigger > span { max-width: min(44vw, 420px); }
+.song-playback-tag .song-playing-action { display: inline-flex; align-items: center; gap: 4px; flex: none; padding: 3px 6px; border-radius: 999px; font-size: 10px; }
+.song-playback-tag__chevron { transition: transform 160ms ease; }
+.song-playback-tag__chevron--open { transform: rotate(180deg); }
+/* A short accordion reflow moves the lyric panel with the card; retain the card for its exit. */
+.song-view {
+  --song-player-motion-duration: 220ms;
+  --song-player-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+.song-player-disclosure {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  flex-shrink: 0;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition: grid-template-rows var(--song-player-motion-duration) var(--song-player-motion-ease),
+    visibility 0s linear var(--song-player-motion-duration);
+}
+.song-player-disclosure[data-expanded="true"] {
+  grid-template-rows: 1fr;
+  visibility: visible;
+  transition-delay: 0s;
+}
+.song-player-disclosure__clip { min-height: 0; overflow: hidden; }
+.song-player-disclosure .song-player {
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity var(--song-player-motion-duration) var(--song-player-motion-ease),
+    transform var(--song-player-motion-duration) var(--song-player-motion-ease);
+}
+.song-player-disclosure[data-expanded="true"] .song-player {
+  opacity: 1;
+  transform: translateY(0);
+}
+@media (min-width: 640px) {
+  .song-detail-header { transition: margin-bottom var(--song-player-motion-duration) var(--song-player-motion-ease); }
+  .song-view[data-player-expanded="true"] > .song-detail-header { margin-bottom: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .song-player-disclosure, .song-player-disclosure .song-player, .song-detail-header { transition: none; }
+  .song-player-disclosure .song-player { transform: none; }
+}
+/* Explicitly translucent: the lyric halo can pass behind this card. No clipping or opaque underlay. */
+.song-player {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 8px;
+  /* Match the lyric panel's primary-color 90/10 mix; background alone is 40% opaque. */
+  background: color-mix(in srgb, color-mix(in srgb, var(--card) 90%, var(--song-accent-primary, var(--border))) 40%, transparent);
+  color: var(--foreground);
+}
+.song-player__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--foreground) 9%, transparent);
+  cursor: pointer;
+  transition: transform 120ms ease, background-color 120ms ease;
+}
+.song-player__toggle:hover:not(:disabled) { background: color-mix(in srgb, var(--foreground) 15%, transparent); }
+.song-player__toggle:active:not(:disabled) { transform: scale(.95); }
+.song-player__toggle:disabled { opacity: .5; cursor: not-allowed; }
+.song-player__body { flex: 1; min-width: 0; }
+.song-player__meta { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 12px; line-height: 20px; }
+.song-player__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.song-player__state, .song-player__note, .song-player__time { color: var(--muted-foreground); }
+.song-player__note { flex: none; }
+.song-player__timeline { display: flex; align-items: center; gap: 10px; }
+.song-player__time { flex: none; min-width: 32px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.song-player__time:last-child { text-align: right; }
+.song-player input[type="range"] {
+  --player-ink: var(--song-accent-text-dark, var(--foreground));
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  cursor: pointer;
+  background: transparent;
+  touch-action: pan-y;
+}
+[data-theme="light"] .song-player input[type="range"] { --player-ink: var(--song-accent-text-light, var(--foreground)); }
+.song-player input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: linear-gradient(to right, var(--player-ink) var(--player-progress), color-mix(in srgb, var(--foreground) 15%, transparent) var(--player-progress)); }
+.song-player input[type="range"]::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 12px; height: 12px; margin-top: -4px; border: 0; border-radius: 50%; background: var(--player-ink); }
+.song-player input[type="range"]::-moz-range-track { height: 4px; border-radius: 4px; background: color-mix(in srgb, var(--foreground) 15%, transparent); }
+.song-player input[type="range"]::-moz-range-progress { height: 4px; border-radius: 4px; background: var(--player-ink); }
+.song-player input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 50%; background: var(--player-ink); }
+.song-player input:disabled { opacity: .5; cursor: not-allowed; }
+.song-player :focus-visible, .song-playback-tag__trigger:focus-visible { outline: 2px solid var(--foreground); outline-offset: 3px; }
+@media (max-width: 639px) {
+  .song-playback-tag__trigger { min-height: 36px; }
+  .song-player { padding: 10px 12px; gap: 10px; }
+  .song-player__toggle { width: 44px; height: 44px; }
+  .song-player__meta { display: block; }
+  .song-player__note { display: block; font-size: 11px; line-height: 16px; }
+  .song-player input[type="range"] { height: 28px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .song-playback-tag__chevron, .song-player__toggle { transition: none; }
+}
+
 .song-playing-surface {
   background: color-mix(in srgb, var(--accent) 88%, var(--song-accent));
   border: 1px solid color-mix(in srgb, var(--border) 86%, var(--song-accent));
@@ -1194,6 +1382,69 @@ textarea {
 .lyric-active {
   animation: lyricActivate 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
+
+/* Lyric time axis — rendered OUTSIDE the card, in the left gutter of the page.
+   Statics only: LyricTimeAxis.tsx measures the scroller and writes top/height/
+   width on the window, each label's top, and the track's scroll transform. */
+.lyric-time-axis {
+  position: absolute;
+  /* Right edge sits 12px left of the shell (GAP_PX in LyricTimeAxis.tsx). */
+  right: calc(100% + 12px);
+  overflow: hidden;
+  z-index: 2;
+  /* Hidden until the measured gutter actually fits the labels. */
+  visibility: hidden;
+  text-align: right;
+  pointer-events: none;
+  user-select: none;
+  /* Small size, monospace style. */
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-size: 12px;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+.lyric-time-axis__track {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  /* Compositor-only: follow scrollTop without layout per frame. */
+  will-change: transform;
+}
+.lyric-time-axis__label {
+  position: absolute;
+  right: 0;
+  /* `top` is written as the lyric line's centre — centre the label on it. */
+  transform: translateY(-50%);
+  white-space: nowrap;
+  /* Alpha is WRITTEN PER LABEL by LyricTimeAxis.measure() (the opacity
+     ladder: active 1.0, ±1 0.6, ±2 and beyond 0.25, outside the reveal
+     window 0). 0 is the pre-measure default so the very first measure pass
+     FADES labels in from transparent instead of showing every row for a
+     frame — the box is `visibility: hidden` until then either way. */
+  opacity: 0;
+  /* Fade both the tint and the ladder: when playback advances the ±2 window
+     slides one row, and every affected label cross-fades instead of popping
+     (spec: 滚动时渐变透明度). 0.3s tracks the auto-follow scroll (220-700ms)
+     closely enough to read as one motion. */
+  transition: color 0.3s ease, opacity 0.3s ease;
+}
+/* Current line: use a contrast-checked derivative of the album palette; the
+   raw accent remains available for decorative lighting and other surfaces.
+   The gutter is on the page body, so dark/light text colours are selected by
+   the same root theme that chooses the body background. */
+.lyric-time-axis__label--active {
+  color: var(--song-accent-text-dark, var(--foreground));
+}
+[data-theme="light"] .lyric-time-axis__label--active {
+  color: var(--song-accent-text-light, var(--foreground));
+}
+@media (prefers-reduced-motion: reduce) {
+  .lyric-time-axis__label { transition: none; }
+  .lyric-time-axis__track { will-change: auto; }
+}
+
 .safe-area-pb {
   padding-bottom: max(env(safe-area-inset-bottom, 0px), 12px);
 }
@@ -1236,4 +1487,180 @@ textarea {
 @keyframes toastDrop {
   from { opacity: 0; transform: translate(-50%, -12px); }
   to { opacity: 1; transform: translateX(-50%); }
+}
+
+/* Immersive lyrics reuse the song page's ONE scroller and Spotify controller. */
+.song-view.lyrics-immersive-active {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: block;
+  width: 100vw;
+  height: 100dvh;
+  padding: 0;
+  overflow: hidden;
+  background: var(--background);
+}
+.lyrics-immersive-active > :not(.lyrics-panel-shell):not(.toast) { display: none; }
+.lyrics-immersive-active .lyrics-panel-shell {
+  height: 100%;
+  min-height: 0;
+  animation: none;
+}
+.lyrics-immersive-active .lyrics-panel {
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--background);
+}
+/* Only a resolved cover palette may tint the full viewport. A missing or
+   unreadable cover keeps the neutral surface instead of inventing an accent. */
+.lyrics-immersive-active.song-view--accented .lyrics-panel {
+  background: color-mix(in srgb, var(--background) 72%, var(--lyric-orbit-accent));
+}
+[data-theme="light"] .lyrics-immersive-active.song-view--accented .lyrics-panel {
+  background: color-mix(in srgb, var(--background) 82%, var(--lyric-orbit-accent));
+}
+.lyrics-immersive-active .lyrics-ambient-breath,
+.lyrics-immersive-active .lyrics-ambient-orbit,
+.lyrics-immersive-active .lyrics-panel canvas { display: none; }
+.lyrics-immersive-active .lyrics-scroll {
+  height: 100%;
+  max-height: none;
+  padding: 50dvh clamp(20px, 9vw, 128px);
+  font-size: var(--immersive-font-mobile, 34px);
+  text-align: center;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  /* Controls and song credit sit outside the scroller; fade rows before they pass underneath. */
+  mask-image: linear-gradient(to bottom, transparent, #000 96px, #000 calc(100% - 120px), transparent);
+}
+.lyrics-immersive-active .lyrics-scroll::-webkit-scrollbar { display: none; }
+.lyrics-immersive-active .lyrics-scroll > div { max-width: 960px; margin-inline: auto; overflow-wrap: anywhere; }
+/* Fade the entire original/reading/translation pair together. Untimed lyrics
+   and manual browsing retain normal reading contrast. */
+.lyrics-immersive-active .lyrics-scroll > div { transition: opacity 300ms ease; }
+.lyrics-immersive-active .lyrics-scroll > div:not(:last-child) { margin-block-end: 1.15em; }
+.lyrics-immersive-active .lyrics-scroll > [data-lyric-distance="1"] { opacity: 0.62; }
+.lyrics-immersive-active .lyrics-scroll > [data-lyric-distance="2"] { opacity: 0.38; }
+.lyrics-immersive-active .lyrics-scroll[data-follow-paused="true"] > [data-lyric-distance] { opacity: 1; }
+.lyrics-immersive-active .lyric-line-context-trigger { justify-content: center; }
+.lyrics-immersive-active .lyric-line { line-height: 1.75; opacity: 1; transform-origin: center; text-wrap: balance; }
+.lyrics-immersive-active .lyric-line rt { opacity: 0.75; }
+.lyrics-immersive-active .lyric-translation,
+.lyrics-immersive-active .lyric-translation-placeholder {
+  /* Replace the normal view's negative margins; a pair is closer together
+     than two successive lyric rows, including when the translation wraps. */
+  margin-block-start: clamp(12px, 0.4em, 16px);
+  margin-inline: auto;
+  padding-block-end: 0;
+  max-width: min(90%, 46ch);
+  font-size: max(18px, 0.62em);
+  line-height: 1.55;
+  text-align: center;
+  text-wrap: pretty;
+  color: var(--foreground);
+  opacity: 0.85;
+}
+.lyrics-immersive-active .lyric-translation-placeholder { opacity: 0.6; }
+@media (min-width: 640px) {
+  .lyrics-immersive-active .lyrics-scroll {
+    font-size: var(--immersive-font-desktop, 44px);
+  }
+}
+.immersive-actions {
+  position: absolute;
+  z-index: 5;
+  top: max(16px, env(safe-area-inset-top, 0px));
+  right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex;
+  gap: 8px;
+}
+.immersive-action {
+  display: flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--foreground);
+}
+.immersive-action:hover { background: var(--accent); }
+.immersive-action:focus-visible, .immersive-resume:focus-visible, .lyrics-immersive-active .lyrics-scroll:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.immersive-follow-control {
+  position: absolute;
+  z-index: 5;
+  top: calc(max(16px, env(safe-area-inset-top, 0px)) + 56px);
+  right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: calc(100% - 32px);
+}
+.immersive-resume {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 14px;
+}
+.immersive-resume:hover { background: var(--accent); }
+.immersive-song-info {
+  --immersive-cover-size: clamp(52px, 5vw, 64px);
+  position: absolute;
+  z-index: 5;
+  left: max(16px, env(safe-area-inset-left, 0px));
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(90vw, 480px);
+  min-width: 0;
+  padding: 8px 14px 8px 8px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--background) 58%, transparent);
+}
+.immersive-song-artist {
+  color: var(--foreground);
+  opacity: 0.68;
+}
+.immersive-song-info .immersive-song-cover {
+  width: var(--immersive-cover-size);
+  height: var(--immersive-cover-size);
+}
+.immersive-song-text { transform-origin: left center; }
+@media (hover: hover) and (pointer: fine) {
+  .immersive-song-cover {
+    transition: width 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      height 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .immersive-song-text {
+    transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  /* Expand the cover's layout box so both text lines move aside instead of
+     being painted underneath a visually scaled cover. */
+  .immersive-song-info:hover .immersive-song-cover {
+    width: calc(var(--immersive-cover-size) * 1.12);
+    height: calc(var(--immersive-cover-size) * 1.12);
+  }
+  .immersive-song-info:hover .immersive-song-text { transform: scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lyrics-immersive-active .lyric-active { animation: none; }
+  .lyrics-immersive-active .lyric-line,
+  .lyrics-immersive-active .lyrics-scroll > div,
+  .immersive-song-cover, .immersive-song-text { transition: none; }
 }

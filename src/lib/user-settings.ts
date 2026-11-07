@@ -13,7 +13,10 @@ import { eq } from 'drizzle-orm';
 import { getDB, schema } from './db';
 
 // Client-safe value normalizers shared with the /settings page.
-export { normalizeTheme, normalizeReadingMode, normalizeBoolean, normalizeFontSize, normalizeLocale } from './settings-utils';
+export {
+  normalizeTheme, normalizeReadingMode, normalizeBoolean, normalizeFontSize, normalizeLocale,
+  normalizePipThemeChoice, resolvePipTheme, type PipTheme, type PipThemeChoice,
+} from './settings-utils';
 export { MAX_SETTING_VALUE_LENGTH, validateSettingValue, type SettingValidationError } from './settings-utils';
 
 export type SettingKey =
@@ -24,7 +27,9 @@ export type SettingKey =
   | 'romanize_furigana'       // boolean
   | 'show_translation'        // boolean
   | 'follow_playing'          // boolean
+  | 'disable_video_pip'       // boolean — disable canvas-backed video PiP fallback
   | 'translation_target_lang' // BCP-47 tag, e.g. 'zh-CN' | 'en-US'
+  | 'pip_theme'               // 'system' | 'dark' | 'light' — PiP window palette
   | 'sync_settings'           // boolean — master switch for cross-device sync
 
 export const USER_SETTING_KEYS: readonly SettingKey[] = [
@@ -35,7 +40,9 @@ export const USER_SETTING_KEYS: readonly SettingKey[] = [
   'romanize_furigana',
   'show_translation',
   'follow_playing',
+  'disable_video_pip',
   'translation_target_lang',
+  'pip_theme',
   'sync_settings',
 ];
 

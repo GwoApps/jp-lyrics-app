@@ -19,6 +19,7 @@ export type SettingValidationError =
   | 'invalid_font_size'
   | 'invalid_reading_mode'
   | 'invalid_boolean'
+  | 'invalid_pip_theme'
   | 'invalid_target_lang'
   | 'invalid_value_length';
 
@@ -59,10 +60,16 @@ export function validateSettingValue(
     case 'romanize_furigana':
     case 'show_translation':
     case 'follow_playing':
+    case 'disable_video_pip':
     case 'sync_settings':
       return value === 'true' || value === 'false'
         ? { ok: true, value }
         : { ok: false, error: 'invalid_boolean' };
+    case 'pip_theme':
+      // 'system' = follow the main UI theme (the pre-existing behaviour).
+      return value === 'system' || value === 'dark' || value === 'light'
+        ? { ok: true, value }
+        : { ok: false, error: 'invalid_pip_theme' };
     case 'translation_target_lang':
       // Empty string clears the override (fall back to the admin/global default).
       if (value.trim() === '') return { ok: true, value: '' };
@@ -91,6 +98,22 @@ export function normalizeFontSize(v: string | undefined): number {
   const n = parseInt(v, 10);
   if (Number.isNaN(n)) return 20;
   return Math.min(32, Math.max(14, n));
+}
+
+/** Resolved PiP palette: 'dark' | 'light' (never 'system'). */
+export type PipTheme = 'dark' | 'light';
+/** Stored PiP theme preference: `system` follows the main UI theme. */
+export type PipThemeChoice = PipTheme | 'system';
+
+/** Main UI theme that a `system` PiP preference resolves to. */
+export function normalizePipThemeChoice(v: string | undefined): PipThemeChoice {
+  return v === 'dark' || v === 'light' ? v : 'system';
+}
+
+/** Resolve the effective PiP palette from the stored preference. */
+export function resolvePipTheme(choice: string | undefined, mainTheme: PipTheme): PipTheme {
+  const normalized = normalizePipThemeChoice(choice);
+  return normalized === 'system' ? mainTheme : normalized;
 }
 
 export function normalizeLocale(v: string | undefined): string {

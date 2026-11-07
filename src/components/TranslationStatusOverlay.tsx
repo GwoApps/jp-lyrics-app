@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowDown, Brain, CircleAlert, Copy, Download, Eraser, Loader2, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
-interface TranslationStatusOverlayProps {
+export interface TranslationStatusOverlayProps {
   translating: boolean;
   // True briefly after a cancellation/error while the client re-reads the
   // server's final persisted result — show "正在保存已完成部分" instead of a
@@ -34,11 +34,13 @@ interface TranslationStatusOverlayProps {
 }
 
 /**
- * Fixed viewport-level translation status: progress bubble, the
+ * Translation status pill: progress bubble, the
  * "view reasoning" toggle and the Apple-style reasoning panel with its
  * flowing color edge, blink cursor and follow-scroll ("back to bottom").
- * Deliberately rendered at the page root so the lyrics panel's
- * overflow/transform cannot clip or reposition it.
+ * Rendered as a child of the page root's top status stack so the lyrics
+ * panel's overflow/transform cannot clip or reposition it, and so it stacks
+ * below/above the other top status layers instead of overlapping them
+ * (issue #282).
  *
  * After the stream finishes (or when re-opened from the menu row), the
  * reasoning panel stays visible with a close button so the user can read /
@@ -87,14 +89,14 @@ export default function TranslationStatusOverlay({
   };
 
   const reasoningPanel = translationReasoning && showTranslationReasoning ? (
-    <div className="reasoning-glow-wrap w-[min(94vw,560px)]">
+    <div className="reasoning-glow-wrap pointer-events-auto w-[min(94vw,560px)]">
       <div aria-hidden="true" className="reasoning-glow-aura">
         <div className="reasoning-glow-ring">
           <div className="reasoning-glow-spin" />
         </div>
       </div>
       <div className="reasoning-glow w-full overflow-hidden rounded-xl">
-        <div className="relative rounded-[11px] bg-[var(--card)]/95 backdrop-blur-sm">
+        <div className="relative rounded-[11px] bg-[var(--card)]">
           <div className="flex items-center gap-1.5 border-b border-[var(--border)]/60 px-3 py-2 text-[11px] font-medium text-[var(--muted-foreground)]">
             <Brain className="h-3 w-3 text-[var(--primary)]" />
             <span className="min-w-0 flex-1 truncate">{t('song.translationReasoning')}</span>
@@ -173,8 +175,14 @@ export default function TranslationStatusOverlay({
     || reasoningPanel;
   if (!visible) return null;
 
+  // Everything below is the pill payload only: the pill is a flex child of the
+  // shared top status stack (issue #282), which owns the viewport anchor and
+  // the vertical stacking, while the reasoning panel has to be pinned to the
+  // viewport itself (it is a full panel, not a pill) and is therefore
+  // rendered straight into the stack alongside the pill.
   return (
-    <div className="fixed left-1/2 top-3 z-[100] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col items-center gap-2">
+    <>
+      <div className="pointer-events-auto flex flex-col items-center gap-2">
       {translationSaving ? (
         // The server is still persisting the completed lines after a cancel /
         // error — show a saving notice rather than a guessed progress number.
@@ -183,7 +191,6 @@ export default function TranslationStatusOverlay({
             <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[var(--primary)]" />
             {t('song.translationSavingPartial')}
           </span>
-          {reasoningPanel}
         </>
       ) : translating ? (
         <>
@@ -216,7 +223,6 @@ export default function TranslationStatusOverlay({
               {showTranslationReasoning ? t('song.translationReasoningHide') : t('song.translationReasoningShow')}
             </button>
           )}
-          {reasoningPanel}
         </>
       ) : translationError ? (
         <>
@@ -246,9 +252,10 @@ export default function TranslationStatusOverlay({
               <X className="h-3.5 w-3.5" />
             </button>
           </span>
-          {reasoningPanel}
         </>
-      ) : reasoningPanel}
-    </div>
+      ) : null}
+      </div>
+      {reasoningPanel}
+    </>
   );
 }

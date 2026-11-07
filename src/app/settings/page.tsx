@@ -5,7 +5,11 @@ import { Loader2, LogIn, Save, Check } from 'lucide-react';
 import { useI18n, LOCALE_META, type Locale } from '@/lib/i18n';
 import { useAuthSession } from '@/lib/auth-session';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
-import { normalizeTheme, normalizeReadingMode, normalizeBoolean, normalizeFontSize, normalizeLocale } from '@/lib/settings-utils';
+import {
+  normalizeTheme, normalizeReadingMode, normalizeBoolean, normalizeFontSize, normalizeLocale,
+  normalizePipThemeChoice,
+} from '@/lib/settings-utils';
+import { PIP_THEME_EVENT } from '@/lib/pip-theme';
 import {
   isSyncEnabled,
   syncSettingsToLocalStorage,
@@ -15,6 +19,7 @@ import {
 } from '@/lib/sync-settings';
 import { useTheme } from '@/lib/theme';
 import Toast from '@/components/Toast';
+import { getPiPCapabilities, type PiPCapabilities } from '@/lib/pip-support';
 
 type ToastState = { type: 'success' | 'error'; msg: string } | null;
 
@@ -26,7 +31,9 @@ interface SettingsMap {
   romanize_furigana?: string;
   show_translation?: string;
   follow_playing?: string;
+  disable_video_pip?: string;
   translation_target_lang?: string;
+  pip_theme?: string;
   sync_settings?: string;
 }
 
@@ -75,6 +82,7 @@ export default function SettingsPage() {
   const [toast, setToast] = useState<ToastState>(null);
   const [dirty, setDirty] = useState(false);
   const [syncEnabled, setSyncEnabledState] = useState<boolean>(() => isSyncEnabled());
+  const [pipCapabilities, setPiPCapabilities] = useState<PiPCapabilities | null>(null);
 
   // Stable ids linking each Row's visible label to its control. Rendering the
   // controls through ids (instead of aria-label) means the label text is also a
@@ -88,7 +96,9 @@ export default function SettingsPage() {
     romanize_furigana: useId(),
     show_translation: useId(),
     follow_playing: useId(),
+    disable_video_pip: useId(),
     translation_target_lang: useId(),
+    pip_theme: useId(),
   } satisfies Record<keyof SettingsMap, string>;
 
   // Unified unsaved-changes guard covering in-app <Link> clicks (top navigation),
@@ -111,6 +121,12 @@ export default function SettingsPage() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  useEffect(() => {
+    // Read browser-only capability state after hydration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPiPCapabilities(getPiPCapabilities());
+  }, []);
+
   // Load server-persisted settings once authenticated. When cross-device sync
   // is turned off, skip the fetch entirely so a local-only user is never
   // overwritten by stale server values from another device.
@@ -130,6 +146,8 @@ export default function SettingsPage() {
         romanize_furigana: localStorage.getItem('jplrc-romanize-furigana') ?? undefined,
         show_translation: localStorage.getItem('jplrc-show-translation') ?? undefined,
         follow_playing: localStorage.getItem('jplrc-follow-playing') ?? undefined,
+        disable_video_pip: localStorage.getItem('jplrc-disable-video-pip') ?? undefined,
+        pip_theme: localStorage.getItem('jplrc-pip-theme') ?? undefined,
         sync_settings: 'false',
       });
       setLoading(false);
@@ -165,6 +183,12 @@ export default function SettingsPage() {
     } else if (key === 'locale') {
       const l = normalizeLocale(value) as Locale;
       setLocale(l);
+    } else if (key === 'pip_theme') {
+      // Issue #374: persisted immediately so an already-open PiP window picks
+      // the new palette up right away (the event carries the raw choice; 'system'
+      // is resolved there against the live main theme).
+      try { localStorage.setItem('jplrc-pip-theme', value); } catch {}
+      window.dispatchEvent(new CustomEvent(PIP_THEME_EVENT, { detail: value }));
     }
   }, [setTheme, setLocale]);
 
@@ -255,9 +279,14 @@ export default function SettingsPage() {
   const romanizeFurigana = normalizeBoolean(settings.romanize_furigana);
   const showTranslation = normalizeBoolean(settings.show_translation);
   const followPlaying = normalizeBoolean(settings.follow_playing);
+  const disableVideoPiP = normalizeBoolean(settings.disable_video_pip);
   const fontSize = normalizeFontSize(settings.font_size);
   const targetLang = settings.translation_target_lang ?? '';
+  const pipTheme = normalizePipThemeChoice(settings.pip_theme);
   const syncOn = normalizeBoolean(settings.sync_settings);
+  const pipStatusLabel = (supported: boolean | undefined) => supported === undefined
+    ? t('settings.pipChecking')
+    : t(supported ? 'settings.pipSupported' : 'settings.pipUnavailable');
 
   const renderToggle = (id: string, checked: boolean, onChange: (v: boolean) => void) => (
     <button
@@ -344,6 +373,31 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* 画中画 */}
+      <section className="mb-6 rounded-lg border border-[var(--border)] bg-[var(--card)] p-5">
+        <h2 className="mb-2 text-sm font-semibold">{t('settings.sectionPip')}</h2>
+        <div className="divide-y divide-[var(--border)]">
+          <Row
+            label={t('settings.pipTheme')}
+            hint={t('settings.pipThemeHint')}
+            controlId={fieldIds.pip_theme}
+            control={
+              <select
+                id={fieldIds.pip_theme}
+                value={pipTheme}
+                onChange={(e) => handleFieldChange('pip_theme', e.target.value)}
+                className={inputClass}
+                aria-label={t('settings.pipTheme')}
+              >
+                <option value="system">{t('settings.pipThemeSystem')}</option>
+                <option value="dark">{t('settings.themeDark')}</option>
+                <option value="light">{t('settings.themeLight')}</option>
+              </select>
+            }
+          />
+        </div>
+      </section>
+
       {/* 歌词阅读 */}
       <section className="mb-6 rounded-lg border border-[var(--border)] bg-[var(--card)] p-5">
         <h2 className="mb-2 text-sm font-semibold">{t('settings.sectionLyrics')}</h2>
@@ -410,6 +464,32 @@ export default function SettingsPage() {
             hint={t('settings.followPlayingHint')}
             controlId={fieldIds.follow_playing}
             control={renderToggle(fieldIds.follow_playing, followPlaying, (v) => handleFieldChange('follow_playing', String(v)))}
+          />
+        </div>
+      </section>
+
+      {/* Picture-in-Picture capability is browser-specific; only the opt-out is a saved user preference. */}
+      <section className="mb-6 rounded-lg border border-[var(--border)] bg-[var(--card)] p-5">
+        <h2 className="mb-1 text-sm font-semibold">{t('settings.sectionPiP')}</h2>
+        <p className="mb-2 text-xs text-[var(--muted-foreground)]">{t('settings.pipStatusHint')}</p>
+        <div className="divide-y divide-[var(--border)]">
+          <Row
+            label={t('settings.pipDocumentApi')}
+            control={<span className="text-xs text-[var(--muted-foreground)]">{pipStatusLabel(pipCapabilities?.document)}</span>}
+          />
+          <Row
+            label={t('settings.pipVideoApi')}
+            control={<span className="text-xs text-[var(--muted-foreground)]">{pipStatusLabel(pipCapabilities?.video)}</span>}
+          />
+          <Row
+            label={t('settings.pipCanvasCapture')}
+            control={<span className="text-xs text-[var(--muted-foreground)]">{pipStatusLabel(pipCapabilities?.canvasCapture)}</span>}
+          />
+          <Row
+            label={t('settings.disableVideoPiP')}
+            hint={t('settings.disableVideoPiPHint')}
+            controlId={fieldIds.disable_video_pip}
+            control={renderToggle(fieldIds.disable_video_pip, disableVideoPiP, (v) => handleFieldChange('disable_video_pip', String(v)))}
           />
         </div>
       </section>

@@ -10,7 +10,7 @@
 import type { FuriganaLine, ReadingScheme } from './types.ts';
 import { normalizeFuriganaSegments, resolveFuriganaReading } from './romaji.ts';
 import { parseTranslationCache } from './translation/parse.ts';
-import { extractLrcMetadata, isLrcMetadataLine } from './lrc.ts';
+import { LRC_LEADING_TIMESTAMPS_REGEX, extractLrcMetadata, isLrcMetadataLine, stripLrcTimestampsFromLine } from './lrc.ts';
 import { sourceLyricsLang } from './lyrics-reading.ts';
 import { resolveTranslationLang } from './target-lang.ts';
 
@@ -94,7 +94,7 @@ export function renderFuriganaLineToHtml(
   readingScheme: ReadingScheme,
 ): string {
   if (line.segments.length === 0) return '<p class="empty">&nbsp;</p>';
-  const inner = normalizeFuriganaSegments(line.segments).map((seg) => {
+  const inner = normalizeFuriganaSegments(line.segments, readingScheme).map((seg) => {
     if (readingMode === 'none') return escapeHtml(seg.text);
     const reading = resolveFuriganaReading(seg.text, seg.reading, readingMode === 'romaji', readingScheme, seg);
     if (!reading) return escapeHtml(seg.text);
@@ -108,9 +108,6 @@ export function renderFuriganaLineToHtml(
 export function renderPlainLineToHtml(line: string): string {
   return `<p>${line ? escapeHtml(line) : '&nbsp;'}</p>`;
 }
-
-/** Regex matching the full leading timestamp prefix of one synced LRC row. */
-const LRC_LEADING_TIMESTAMPS_RE = /^(?:\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]\s*)+/;
 
 /**
  * Append a translation line after each timed lyric row, reusing the exact same
@@ -131,8 +128,11 @@ function appendLrcTranslations(lyrics: string, translations: string[], rawLyrics
     const trimmed = raw.trim();
     // Metadata tags ([ti:]/[ar:]/…) and blank lines are never lyric rows.
     if (!trimmed || isLrcMetadataLine(trimmed)) return raw;
-    const prefix = trimmed.match(LRC_LEADING_TIMESTAMPS_RE)?.[0] ?? '';
-    const text = trimmed.slice(prefix.length).trim();
+    // Both the prefix to re-emit and the lyric text come from the shared
+    // timestamp syntax in `lrc.ts` — a form the parser accepts must never be
+    // invisible here, or the translation line would be silently dropped.
+    const prefix = trimmed.match(LRC_LEADING_TIMESTAMPS_REGEX)?.[0] ?? '';
+    const text = stripLrcTimestampsFromLine(trimmed);
     // A timestamp with no text carries no lyric, so it consumes no source row.
     if (!text) return raw;
     // The k-th text-bearing synced row corresponds to the k-th non-empty source
@@ -151,6 +151,36 @@ function appendLrcTranslations(lyrics: string, translations: string[], rawLyrics
   }).join('\n');
 }
 
+/**
+ * Join per-segment reading parts into one plain-text line.
+ *
+ * Latin readings carry no inter-word separators of their own, so they are
+ * space-separated word by word with the punctuation glued to the preceding
+ * word. This applies to the `romaji` mode (kana → Latin) and to the
+ * `yue-jyutping` scheme, whose readings are already Latin syllables (issue
+ * #311): without it `gam1tin1tin1hei3han2hou2` had no syllable boundary, while
+ * the `.html`/PiP ruby rendering and the `romaji` mode both showed the parts
+ * apart. Non-Latin readings (kana furigana) keep the plain concatenation so
+ * their output is unchanged.
+ */
+export function joinReadingParts(
+  parts: readonly string[],
+  scheme: ReadingScheme,
+  readingMode: ExportReadingMode,
+): string {
+  // 'none' emits the original text, so it is never split (the caller skips the
+  // splitter entirely, but the contract stays explicit).
+  if (readingMode === 'none') return parts.join('');
+  const latinReadings = readingMode === 'romaji' || scheme === 'yue-jyutping';
+  if (!latinReadings) return parts.join('');
+  // Space-separate latin syllables for readability while keeping punctuation
+  // glued to the preceding word.
+  return parts
+    .join(' ')
+    .replace(/\s+([\p{P}\p{S}])/gu, '$1')
+    .trim();
+}
+
 /** Emit a `.txt` document (original / furigana / romaji with optional translations). */
 export function buildTextExport(
   song: ExportSongData,
@@ -166,18 +196,19 @@ export function buildTextExport(
     const furiganaLine = furiganaLines[index];
     const source = furiganaLine && furiganaLine.segments.length > 0 && readingMode !== 'none'
       ? (() => {
-          const parts = furiganaLine.segments.map((seg) => {
-            if (readingMode === 'furigana') return seg.reading || seg.text;
-            const reading = resolveFuriganaReading(seg.text, seg.reading, true, song.reading_scheme, seg);
-            return reading || seg.text;
-          });
-          if (readingMode !== 'romaji') return parts.join('');
-          // Space-separate romanized word segments for readability while
-          // keeping punctuation glued to the preceding word.
-          return parts
-            .join(' ')
-            .replace(/\s+([\p{P}\p{S}])/gu, '$1')
-            .trim();
+          const parts: string[] = [];
+          for (const seg of furiganaLine.segments) {
+            const part = readingMode === 'furigana'
+              ? seg.reading || seg.text
+              : resolveFuriganaReading(seg.text, seg.reading, true, song.reading_scheme, seg) || seg.text;
+            // A kanji token split into ruby/plain okurigana is still one word.
+            // Keep its romanization together without changing the existing
+            // spaces between independently tokenized Japanese words.
+            if (readingMode === 'romaji' && song.reading_scheme === 'ja-kana'
+              && seg.joinPrev && parts.length) parts[parts.length - 1] += part;
+            else parts.push(part);
+          }
+          return joinReadingParts(parts, song.reading_scheme, readingMode);
         })()
       : rawLine;
     lines.push(source);

@@ -2,6 +2,8 @@
 
 'use client';
 
+import ArtistLinks from '@/components/ArtistLinks';
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -160,7 +162,7 @@ export default function AdminQueueDetail({ song, locale, onDone, onApprove, onRe
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-[15px] font-semibold truncate">{song.title}</h2>
-            {song.artist && <p className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate">{song.artist}</p>}
+            {song.artist && <p className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate"><ArtistLinks artist={song.artist} /></p>}
             {(detail?.created_by_name || song.created_by_name) && (
               <p className="text-[10px] text-[var(--muted-foreground)]/70 mt-0.5">
                 {t('home.createdBy')}: {detail?.created_by_name || song.created_by_name}

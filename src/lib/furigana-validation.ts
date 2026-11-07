@@ -60,7 +60,9 @@ export function validateFuriganaPayload(value: unknown, sourceLyrics: string): V
       if (!segment || typeof segment !== 'object' || Array.isArray(segment)) {
         return { ok: false, error: 'invalid_furigana' };
       }
-      const { text, reading, pos } = segment as { text?: unknown; reading?: unknown; pos?: unknown };
+      const { text, reading, pos, joinPrev } = segment as {
+        text?: unknown; reading?: unknown; pos?: unknown; joinPrev?: unknown;
+      };
       if (
         typeof text !== 'string'
         || text.length === 0
@@ -77,11 +79,18 @@ export function validateFuriganaPayload(value: unknown, sourceLyrics: string): V
       if (pos !== undefined && (typeof pos !== 'string' || pos.length > MAX_POS_LENGTH)) {
         return { ok: false, error: 'invalid_furigana' };
       }
+      if (joinPrev !== undefined && typeof joinPrev !== 'boolean') {
+        return { ok: false, error: 'invalid_furigana' };
+      }
       totalCharacters += text.length + reading.length;
       if (totalCharacters > MAX_TOTAL_CHARACTERS) {
         return { ok: false, error: 'invalid_furigana' };
       }
-      validatedSegments.push(pos === undefined ? { text, reading } : { text, reading, pos });
+      validatedSegments.push({
+        text, reading,
+        ...(pos !== undefined ? { pos } : {}),
+        ...(joinPrev !== undefined ? { joinPrev } : {}),
+      });
     }
 
     if (validatedSegments.map((segment) => segment.text).join('') !== sourceLines[lineIndex]) {

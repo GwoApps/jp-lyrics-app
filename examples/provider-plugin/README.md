@@ -154,6 +154,14 @@ A minimal Node reference implementation lives in
 node examples/provider-plugin/index.mjs --port 8787
 ```
 
+Both flags are optional and fall back to `PORT` / `PROVIDER_TOKEN`, then to
+`8787` / no auth:
+
+```bash
+# /v1/search now requires `Authorization: Bearer secret`
+node examples/provider-plugin/index.mjs --port 8787 --token secret
+```
+
 A production-grade Python implementation of the same protocol — including the
 upstream-adaptation and candidate-identity patterns worth copying — lives in
 [`yt-sidecar/`](../../yt-sidecar/) (this repo's docker-compose deployment runs

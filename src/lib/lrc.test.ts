@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createTimelineDraft, buildTimelineDraft, extractLrcMetadata, findLrcConflicts, findTimelineConflicts, getLrcTextLines, hasSameLrcText, isLrcMetadataLine, mapTimelineTimestamps, offsetLrcLines, parseLrc, resolveLrcTextUpdate, resolveTimelineSave, serializeLrc, serializeTimelineDraft, updateLrcLineTime } from './lrc.ts';
+import { createTimelineDraft, buildTimelineDraft, extractLrcMetadata, findLrcConflicts, findTimelineConflicts, fmtMs, getLrcTextLines, hasSameLrcText, isLrcMetadataLine, mapTimelineTimestamps, offsetLrcLines, parseLrc, parseLrcTimestamp, resolveLrcTextUpdate, resolveTimelineSave, serializeLrc, serializeTimelineDraft, updateLrcLineTime } from './lrc.ts';
 
 test('offsetLrcLines shifts timestamps and clamps at zero', () => {
   const lines = parseLrc('[00:00.250]first\n[01:02.345]second');
@@ -101,6 +101,37 @@ test('parseLrc tolerates non-standard timestamps (single-digit minutes, missing 
   assert.deepEqual(getLrcTextLines('[1:23.45]first\n[01:23]second\n[0:05]third'), ['first', 'second', 'third']);
 });
 
+test('colon-separated timestamps are parsed, stripped and expanded like dot ones', () => {
+  // [00:12:34] means [00:12.340]: the third segment is a fraction of a second,
+  // whatever the separator. Colon digits are zero-padded on the right.
+  const lrc = '[00:12:34]夜に駆ける\n[00:15:00]沈むように';
+  assert.deepEqual(parseLrc(lrc), [
+    { timeMs: 12340, text: '夜に駆ける' },
+    { timeMs: 15000, text: '沈むように' },
+  ]);
+  assert.deepEqual(getLrcTextLines(lrc), ['夜に駆ける', '沈むように']);
+  assert.equal(findLrcConflicts(lrc).length, 0);
+  assert.deepEqual(createTimelineDraft('夜に駆ける\n沈むように', lrc), [
+    { timeMs: 12340, text: '夜に駆ける' },
+    { timeMs: 15000, text: '沈むように' },
+  ]);
+  // A colon row with no lyric text still carries no highlightable line.
+  assert.deepEqual(parseLrc('[00:12:34][00:15:00]chorus'), [
+    { timeMs: 12340, text: 'chorus' },
+    { timeMs: 15000, text: 'chorus' },
+  ]);
+  assert.deepEqual(parseLrc('[00:12:00]'), []);
+  // Colon and dot rows mix freely, and dot-only results are unchanged.
+  assert.deepEqual(parseLrc('[1:23:45]a\n[00:50.000]b'), [
+    { timeMs: 50000, text: 'b' },
+    { timeMs: 83450, text: 'a' },
+  ]);
+  assert.deepEqual(parseLrc('[00:01.000]a\n[01:23]b'), [
+    { timeMs: 1000, text: 'a' },
+    { timeMs: 83000, text: 'b' },
+  ]);
+});
+
 test('non-standard timestamps do not leak into text lines nor get dropped', () => {
   // Mixed input: standard, non-standard, multi-timestamp and a plain row.
   const lrc = '[00:10.00][1:23.45]chorus\n[02:00]verse\nplain line\n[3:04.1]bridge';
@@ -171,6 +202,17 @@ test('parseLrcTimestamp accepts editor timestamps and rejects invalid values', a
   assert.equal(parseLrcTimestamp('01:02.345'), 62345);
   assert.equal(parseLrcTimestamp('1:02.3'), 62300);
   assert.equal(parseLrcTimestamp('bad'), null);
+});
+
+test('parseLrcTimestamp accepts a colon-separated fraction like the LRC parser', () => {
+  // [mm:ss:xx] is the "dot typed as a colon" variant the parser normalises to
+  // the same millisecond value, so manual entry accepts it too.
+  assert.equal(parseLrcTimestamp('00:12:34'), 12340);
+  assert.equal(parseLrcTimestamp('00:12:3'), 12300);
+  assert.equal(parseLrcTimestamp('1:23:450'), 83450);
+  // Existing dot forms and the rejection set are unchanged.
+  assert.equal(parseLrcTimestamp('00:12.34'), 12340);
+  assert.equal(parseLrcTimestamp('1:83:450'), null);
 });
 
 test('hasSameLrcText ignores timestamps but detects lyric edits and line order changes', () => {
@@ -354,6 +396,20 @@ test('buildTimelineDraft fuzzy-matches punctuation and bracket differences', () 
   assert.deepEqual(result.lines, [{ text: 'さよなら、それだけで十分', timeMs: 20000 }]);
 });
 
+test('buildTimelineDraft aligns lines whose kana script differs (ISSUE #317)', () => {
+  // The plain `lyrics_raw` is hiragana while the synced LRC is katakana. Bigram
+  // Dice used to be 0, so every timestamp was dropped for the whole block.
+  const result = buildTimelineDraft(
+    'さよなら\nありがとう',
+    '[00:10.000]サヨナラ\n[00:20.000]アリガトウ',
+  );
+  assert.equal(result.unmatched, 0);
+  assert.deepEqual(result.lines, [
+    { text: 'さよなら', timeMs: 10000 },
+    { text: 'ありがとう', timeMs: 20000 },
+  ]);
+});
+
 test('buildTimelineDraft exact matches never fall back to fuzzy for repeated chorus lines', () => {
   // Repeated identical chorus text must consume its own timestamp queue in order,
   // even when a nearby line is fuzzy-similar, so fuzzy fallback never steals it.
@@ -408,4 +464,31 @@ test('buildTimelineDraft leaves exact full-table equality untouched', () => {
     { text: 'a', timeMs: 1000 },
     { text: 'b', timeMs: 2000 },
   ]);
+});
+
+// fmtMs is a FORMATTER: whatever number it is handed, its output must stay
+// MM:SS.mmm. Live playback positions are fractional (performance.now() carries
+// sub-ms precision), and the un-truncated millisecond segment used to be
+// pasted straight into the string — producing "02:49.613.8999998569489", an
+// extra dot and 9 extra digits on the focused lyric row (2026-10-08).
+test('fmtMs keeps the MM:SS.mmm contract for fractional input', () => {
+  assert.equal(fmtMs(169613.8999998569489), '02:49.613');
+  assert.equal(fmtMs(166610.5), '02:46.610');
+  assert.equal(fmtMs(166610.999), '02:46.610');
+  assert.equal(fmtMs(0.999), '00:00.000');
+});
+
+test('fmtMs keeps exact integer behaviour and boundary rounding', () => {
+  assert.equal(fmtMs(0), '00:00.000');
+  assert.equal(fmtMs(680), '00:00.680');
+  assert.equal(fmtMs(59999), '00:59.999');
+  assert.equal(fmtMs(60000), '01:00.000');
+  assert.equal(fmtMs(60500.5), '01:00.500');
+  assert.equal(fmtMs(3599999.4), '59:59.999');
+});
+
+test('fmtMs output always matches the MM:SS.mmm shape', () => {
+  for (const v of [0, 0.5, 999.999, 1000.1, 61234.5678, 169613.9, 3723456.789]) {
+    assert.match(fmtMs(v), /^\d{2}:\d{2}\.\d{3}$/, `fmtMs(${v})`);
+  }
 });

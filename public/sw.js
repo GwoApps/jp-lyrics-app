@@ -1,20 +1,46 @@
-const CACHE_NAME = 'jplrc-v5';
+const CACHE_NAME = 'jplrc-v6';
 const IMMUTABLE_CACHE = 'jplrc-immutable-v1';
 const KUROMOJI_CACHE = 'jplrc-kuromoji-v1';
+// Keep in sync with src/lib/app-icon.ts and public/manifest.json.
+const APP_ICON_REVISION = 'lyrics-v1';
+const ICON_URLS = [
+  '/icon.svg',
+  '/favicon.ico',
+  '/icon-16x16.png',
+  '/icon-32x32.png',
+  '/icon-192x192.png',
+  '/icon-512x512.png',
+  '/icon-maskable-512x512.png',
+  '/apple-touch-icon.png',
+];
+
+/**
+ * Whether `response` may be persisted in the Cache Storage.
+ *
+ * Issue #298: song endpoints answer with personalized, ACL-gated data
+ * (`/api/songs` + `/api/songs/:id`) and mark those responses
+ * `Cache-Control: private, no-store`. A URL-keyed persistent copy would
+ * otherwise be replayed to whoever uses this browser next — after logout,
+ * session expiry or an account switch — while offline, where the server ACL is
+ * never consulted. When the server says `no-store`, the response is passed
+ * through untouched and never written to a cache.
+ */
+function isCacheable(response) {
+  if (!response || !response.ok) return false;
+  const cacheControl = response.headers.get('Cache-Control') || '';
+  return !/\bno-store\b/i.test(cacheControl);
+}
 
 // Install: precache icons only
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return Promise.allSettled([
-        cache.add('/icon-16x16.png'),
-        cache.add('/icon-32x32.png'),
-        cache.add('/icon-192x192.png'),
-        cache.add('/icon-512x512.png'),
-        cache.add('/icon-maskable-512x512.png'),
-        cache.add('/apple-touch-icon.png'),
-        cache.add('/manifest.json'),
-      ]);
+      const urls = [
+        ...ICON_URLS,
+        ...ICON_URLS.map((url) => `${url}?v=${APP_ICON_REVISION}`),
+        '/manifest.json',
+      ];
+      return Promise.allSettled(urls.map((url) => cache.add(url)));
     })
   );
   self.skipWaiting();
@@ -84,7 +110,7 @@ self.addEventListener('fetch', (event) => {
       event.respondWith(
         fetch(request)
           .then((response) => {
-            if (response.ok) {
+            if (isCacheable(response)) {
               const clone = response.clone();
               caches.open(CACHE_NAME).then((c) => c.put(request, clone));
             }

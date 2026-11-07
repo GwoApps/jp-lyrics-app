@@ -1,0 +1,60 @@
+.artist-profile-title { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 8px; }
+.artist-profile .artist-profile-title h1 { margin: 0; min-width: 0; }
+.artist-profile-edit { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 4px 6px; margin: -4px -6px 0 0; color: var(--muted-foreground); font-size: 11px; border-radius: 4px; }
+.artist-profile-edit:hover { background: var(--accent); color: var(--foreground); }
+.artist-profile-aliases { font-size: 12px; line-height: 1.7; color: var(--muted-foreground); overflow-wrap: anywhere; margin: 0 0 5px; }
+.artist-profile-aliases > span { margin-right: 8px; }
+.artist-profile-facts { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted-foreground); margin: 0 0 10px; }
+.artist-profile-biography { margin: 10px 0 0; }
+.artist-description--collapsed { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.artist-profile-biography .artists-text-button { margin: 2px 0 0 -4px; font-size: 11px; color: var(--muted-foreground); }
+.artist-profile-links { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; }
+.artist-profile-link { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; color: var(--muted-foreground); font-size: 11px; }
+.artist-profile-link:hover, .artist-profile-sources a:hover { color: var(--foreground); text-decoration: underline; text-underline-offset: 3px; }
+.artist-profile-sources { margin-top: 8px; color: var(--muted-foreground); font-size: 11px; }
+.artist-profile-sources summary { cursor: pointer; width: fit-content; min-height: 28px; padding: 5px 0; }
+.artist-profile-sources ul { list-style: none; padding: 3px 0 0; margin: 0; display: grid; gap: 5px; }
+.artist-profile-sources a { display: inline-flex; gap: 4px; align-items: center; }
+.artist-profile-sources > p { margin-top: 6px; font-size: 10px; }
+
+.artist-profile-editor { display: flex; flex-direction: column; max-width: 640px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--foreground); box-shadow: 0 16px 60px rgb(0 0 0 / .2); overflow: hidden; }
+.artist-profile-editor-form { display: flex; flex-direction: column; min-height: 0; max-height: calc(100dvh - 2rem); }
+.artist-profile-editor-heading { display: flex; align-items: flex-start; gap: 12px; padding: 18px 18px 14px; flex: none; border-bottom: 1px solid var(--border); }
+.artist-profile-editor-heading > div { flex: 1; min-width: 0; }
+.artist-profile-editor-heading h2 { font-size: 15px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.artist-profile-editor-heading p, .artist-profile-editor-hint { margin-top: 6px; font-size: 11px; line-height: 1.6; color: var(--muted-foreground); }
+.artist-profile-icon-button { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 32px; border-radius: 4px; color: var(--muted-foreground); }
+.artist-profile-icon-button:hover { background: var(--accent); color: var(--foreground); }
+.artist-profile-editor-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 18px; }
+.artist-profile-fields { display: grid; gap: 14px; border: 0; min-width: 0; padding: 0; margin: 0; }
+.artist-profile-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 12px; }
+.artist-profile-field input:not([type='checkbox']), .artist-profile-field textarea, .artist-profile-field select { display: block; min-width: 0; width: 100%; min-height: 36px; border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; background: var(--input); color: var(--foreground); font-size: 12px; line-height: 1.6; }
+.artist-profile-field input::placeholder, .artist-profile-field textarea::placeholder { color: var(--muted-foreground); opacity: .7; }
+.artist-profile-field textarea { resize: vertical; }
+.artist-profile-field-title { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.artist-profile-field-title select { width: auto; min-height: 30px; padding: 3px 6px; font-size: 11px; }
+.artist-profile-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.artist-profile-editor-section { min-width: 0; border-top: 1px solid var(--border); padding-top: 8px; }
+.artist-profile-editor-section summary { cursor: pointer; font-size: 12px; font-weight: 500; padding: 6px 0; }
+.artist-profile-editor-section > div { display: grid; gap: 12px; padding-top: 6px; }
+.artist-profile-binding-input { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.artist-profile-binding-input input { flex: 1; }
+.artist-profile-binding-input button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; flex: none; }
+.artist-profile-cleared { border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 11px; line-height: 1.6; color: var(--muted-foreground); }
+.artist-profile-cleared > div { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.artist-profile-confirm { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; line-height: 1.6; }
+.artist-profile-confirm input { flex: none; margin-top: 3px; accent-color: var(--primary); }
+.artist-profile-preview { min-width: 0; border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 12px; overflow-wrap: anywhere; }
+.artist-profile-preview p { margin-top: 5px; line-height: 1.6; white-space: pre-line; }
+.artist-profile-preview a { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; color: var(--primary); }
+.artist-profile-editor-error { padding: 9px 10px; margin-bottom: 12px; border: 1px solid var(--destructive); border-radius: 6px; color: var(--destructive); font-size: 12px; line-height: 1.7; }
+.artist-profile-editor-status { display: flex; align-items: center; gap: 8px; color: var(--muted-foreground); font-size: 12px; padding: 10px 0; }
+.artist-profile-editor-footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-top: 1px solid var(--border); padding: 12px 18px; flex: none; }
+.artist-profile-editor-footer > div { display: flex; gap: 8px; }
+.artist-profile-editor-footer .artists-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.artist-profile-save { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+.artist-profile-editor .artist-profile-save:hover { background: var(--primary); opacity: .9; }
+.artist-profile-reset { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; color: var(--muted-foreground); font-size: 11px; text-align: left; }
+.artist-profile-editor :is(button, input, select, textarea):disabled { opacity: .5; cursor: not-allowed; }
+.artist-profile-editor :is(button, input, select, textarea, summary):focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+@media (max-width: 479px) { .artist-profile-field-grid { grid-template-columns: minmax(0, 1fr); } .artist-profile-editor-heading, .artist-profile-editor-body { padding-left: 14px; padding-right: 14px; } .artist-profile-editor-footer { padding: 10px 14px; } }

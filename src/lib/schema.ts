@@ -52,6 +52,8 @@ export const spotifyAuth = sqliteTable('spotify_auth', {
 export const favorites = sqliteTable('favorites', {
   userEmail: text('user_email').notNull(),
   songId: text('song_id').notNull().references(() => songs.id, { onDelete: 'cascade' }),
+  // Existing favorites belong to the default category until explicitly changed.
+  inUnclassified: integer('in_unclassified').notNull().default(1),
   createdAt: text('created_at').notNull().default(sql`(datetime('now', 'localtime'))`),
 }, (t) => [
   primaryKey({ columns: [t.userEmail, t.songId] }),

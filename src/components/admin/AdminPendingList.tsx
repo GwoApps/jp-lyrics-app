@@ -1,5 +1,7 @@
 'use client';
 
+import ArtistLinks from '@/components/ArtistLinks';
+
 import { AlertTriangle, Check, Clock, Eye, X } from 'lucide-react';
 import Link from 'next/link';
 import { useI18n } from '@/lib/i18n';
@@ -51,7 +53,7 @@ export default function AdminPendingList({ songs, locale, onPreview, onApprove, 
                   {t('admin.pendingApproval')}
                 </span>
               </div>
-              <div className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate">{s.artist}</div>
+              <div className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate"><ArtistLinks artist={s.artist} fallback={t('common.unknownArtist')} /></div>
               {s.created_by_name && (
                 <div className="text-[10px] text-[var(--muted-foreground)]/60 mt-0.5">{t('home.createdBy')}: {s.created_by_name}</div>
               )}

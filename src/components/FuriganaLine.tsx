@@ -99,7 +99,7 @@ export default function FuriganaLineView({
     // UI placeholder, not lyric content: it stays in the UI language and must
     // NOT inherit the translation's `lang`.
     <div
-      className={`select-none -mt-[0.6em] pb-[0.6em] sm:-mt-[0.9em] sm:pb-[0.9em] text-[0.72em] leading-relaxed italic text-[var(--muted-foreground)]/40 ${debugTs != null ? 'pl-[60px] sm:pl-[72px]' : ''}`}
+      className={`lyric-translation-placeholder select-none -mt-[0.6em] pb-[0.6em] sm:-mt-[0.9em] sm:pb-[0.9em] text-[0.72em] leading-relaxed italic text-[var(--muted-foreground)]/40 ${debugTs != null ? 'pl-[60px] sm:pl-[72px]' : ''}`}
       aria-hidden="true"
     >
       {t('song.untranslatedHint')}
@@ -127,7 +127,7 @@ export default function FuriganaLineView({
           } ${onSeek && timestamp != null ? 'hover:!opacity-100' : ''}`}
           style={{ fontWeight: isActive ? 700 : 400 }}
         >
-          {normalizeFuriganaSegments(line.segments).map((seg, i) => {
+          {normalizeFuriganaSegments(line.segments, readingScheme).map((seg, i) => {
             if (readingMode === 'original') return <span key={i}>{seg.text}</span>;
             const reading = resolveFuriganaReading(seg.text, seg.reading, romanizeFurigana, readingScheme, seg);
             if (!reading) return <span key={i}>{seg.text}</span>;

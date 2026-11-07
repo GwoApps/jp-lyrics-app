@@ -1,11 +1,12 @@
 'use client';
 
-import { Disc3, LayoutGrid, List, Search, Star, User, X } from 'lucide-react';
+import { LayoutGrid, List, Search, Star, User, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 
-export type SongViewMode = 'list' | 'grid' | 'album';
+export type SongViewMode = 'list' | 'grid';
 
 interface SongFilterBarProps {
+  isAlbumList?: boolean;
   searchQuery: string;
   onSearchChange: (query: string) => void;
   mobileSearchOpen: boolean;
@@ -25,6 +26,7 @@ interface SongFilterBarProps {
  * (search expands on demand) and a full desktop row with the same controls.
  */
 export default function SongFilterBar({
+  isAlbumList = false,
   searchQuery,
   onSearchChange,
   mobileSearchOpen,
@@ -38,12 +40,12 @@ export default function SongFilterBar({
   onViewModeChange,
 }: SongFilterBarProps) {
   const { t } = useI18n();
+  const searchLabel = t(isAlbumList ? 'home.searchAlbums' : 'home.search');
 
   const viewModeGroup = (
     <div className="inline-flex shrink-0 rounded-md border border-[var(--border)] bg-[var(--accent)] p-0.5" role="group" aria-label={t('home.viewMode')}>
       <button type="button" onClick={() => onViewModeChange('list')} className={`rounded p-1.5 transition-colors ${viewMode === 'list' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`} title={t('home.listView')} aria-label={t('home.listView')} aria-pressed={viewMode === 'list'}><List className="h-3.5 w-3.5" /></button>
       <button type="button" onClick={() => onViewModeChange('grid')} className={`rounded p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`} title={t('home.gridView')} aria-label={t('home.gridView')} aria-pressed={viewMode === 'grid'}><LayoutGrid className="h-3.5 w-3.5" /></button>
-      <button type="button" onClick={() => onViewModeChange('album')} className={`rounded p-1.5 transition-colors ${viewMode === 'album' ? 'bg-[var(--card)] text-[var(--foreground)] shadow-sm' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`} title={t('home.albumView')} aria-label={t('home.albumView')} aria-pressed={viewMode === 'album'}><Disc3 className="h-3.5 w-3.5" /></button>
     </div>
   );
 
@@ -69,7 +71,7 @@ export default function SongFilterBar({
             type="button"
             onClick={onToggleMobileSearch}
             className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors ${mobileSearchOpen ? 'bg-[var(--primary)] text-[var(--primary-foreground)]' : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
-            aria-label={t('home.search')}
+            aria-label={searchLabel}
             aria-expanded={mobileSearchOpen}
           >
             <Search className="h-3.5 w-3.5" />
@@ -89,7 +91,7 @@ export default function SongFilterBar({
         {mobileSearchOpen && (
           <div className="home-search-shell relative mt-2">
             <Search className="home-search-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--muted-foreground)]" />
-            <input type="search" autoFocus value={searchQuery} onChange={(e) => onSearchChange(e.target.value)} placeholder={t('home.search')} className="home-search-field w-full rounded-md border border-[var(--border)] bg-[var(--input)] pl-9 pr-8 py-2 text-xs outline-none placeholder:text-[var(--muted-foreground)]/50" />
+            <input type="search" autoFocus value={searchQuery} onChange={(e) => onSearchChange(e.target.value)} placeholder={searchLabel} className="home-search-field w-full rounded-md border border-[var(--border)] bg-[var(--input)] pl-9 pr-8 py-2 text-xs outline-none placeholder:text-[var(--muted-foreground)]/50" />
             {searchQuery && <button onClick={() => onSearchChange('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label={t('common.clear')}><X className="h-3.5 w-3.5" /></button>}
           </div>
         )}
@@ -99,7 +101,7 @@ export default function SongFilterBar({
       <div className="mb-4 hidden sm:flex sm:items-center gap-2">
         <div className="home-search-shell relative flex-1">
           <Search className="home-search-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--muted-foreground)]" />
-          <input type="search" value={searchQuery} onChange={(e) => onSearchChange(e.target.value)} placeholder={t('home.search')} className="home-search-field w-full rounded-md border border-[var(--border)] bg-[var(--input)] pl-9 pr-8 py-2 text-xs outline-none placeholder:text-[var(--muted-foreground)]/50" />
+          <input type="search" value={searchQuery} onChange={(e) => onSearchChange(e.target.value)} placeholder={searchLabel} className="home-search-field w-full rounded-md border border-[var(--border)] bg-[var(--input)] pl-9 pr-8 py-2 text-xs outline-none placeholder:text-[var(--muted-foreground)]/50" />
           {searchQuery && <button onClick={() => onSearchChange('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label={t('common.clear')}><X className="h-3.5 w-3.5" /></button>}
         </div>
         {userFilters}

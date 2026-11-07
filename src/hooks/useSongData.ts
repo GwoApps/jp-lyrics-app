@@ -9,6 +9,7 @@ import { mapTimelineTimestamps, parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
 import type { TranslationProgress } from '@/lib/translation-stream';
 import { useI18n } from '@/lib/i18n';
+import { useTheme } from '@/lib/theme';
 
 import type { CantoneseDetectionResult } from '@/lib/lyrics-reading';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -46,6 +47,7 @@ export interface UseSongDataReturn {
   translatedCount: number;
   showTranslation: boolean;
   setShowTranslation: React.Dispatch<React.SetStateAction<boolean>>;
+  disableVideoPiP: boolean;
   translating: boolean;
   // True briefly after a cancellation/error while the client re-reads the
   // server's final persisted result to show a reliable coverage number.
@@ -134,10 +136,14 @@ export interface UseSongDataReturn {
 export function useSongData(id: string): UseSongDataReturn {
   const router = useRouter();
   const { t } = useI18n();
+  // Issue #374: the PiP palette is its own setting, but a 'system' preference
+  // resolves against the main theme — so PiP still needs the live main theme.
+  const { theme } = useTheme();
   const {
     readingMode, setReadingMode,
     romanizeFurigana, setRomanizeFurigana,
     showTranslation, setShowTranslation,
+    disableVideoPiP,
     debug, setDebug,
     fontSize, setFontSize,
   } = useReadingPreferences();
@@ -189,10 +195,6 @@ export function useSongData(id: string): UseSongDataReturn {
     const renderedRows = furiganaLines.map((line) => line.segments.map((segment) => segment.text).join(''));
     return mapTimelineTimestamps(renderedRows, song.lyrics_raw || '', song.lyrics_synced || '');
   }, [song, furiganaLines]);
-
-  const { openPiP } = usePiP({
-    fontSize, readingMode, romanizeFurigana, song, furiganaLines, lineTimestamps, showToast, t,
-  });
 
   const updateReadingPreference = useCallback(async (payload: {
     reading_scheme?: ReadingScheme;
@@ -251,6 +253,17 @@ export function useSongData(id: string): UseSongDataReturn {
     setShowTranslation, showToast, dismissToast, t, refreshSong, setSong,
   });
 
+  // Issue #331: PiP follows the same "show translation" preference as the main
+  // lyric list — no separate switch. `undefined` keeps PiP source-only when the
+  // preference is off or nothing has been translated yet; the partial-coverage
+  // placeholder then mirrors the detail page (`showUntranslatedHint`).
+  const { openPiP } = usePiP({
+    fontSize, theme, readingMode, romanizeFurigana, song, furiganaLines, lineTimestamps,
+    disableVideoPiP,
+    translationLines: showTranslation && hasTranslation ? translations : undefined,
+    showUntranslatedHint: untranslatedCount > 0,
+    showToast, t,
+  });
 
   // Fetch the single song. Distinguishes a genuine 404 (song absent) from
   // every other failure (HTTP 5xx/429, network or timeout). Pure fetch — no
@@ -375,6 +388,7 @@ export function useSongData(id: string): UseSongDataReturn {
     translatedCount,
     showTranslation,
     setShowTranslation,
+    disableVideoPiP,
     translating,
     translationSaving,
     translationError,

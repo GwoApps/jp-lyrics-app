@@ -5,6 +5,10 @@
 
 import { extractMaterialCoverPalette, type CoverColor, type CoverPalette } from '@/lib/cover-color';
 import { parseTranslationCache } from '@/lib/translation/parse';
+import { canvasFont } from '@/lib/font-family';
+import { sourceLyricsLang } from '@/lib/lyrics-reading';
+import type { ReadingScheme } from '@/lib/types';
+import { resolveTranslationLang } from '@/lib/target-lang';
 
 export type Orientation = 'landscape' | 'portrait';
 
@@ -19,6 +23,8 @@ export interface ShareSong {
   lyrics_translation?: string | null;
   /** BCP-47 tag of the translated language (`songs.lyrics_translation_lang`), used for the `lang` attribute. */
   lyrics_translation_lang?: string | null;
+  /** Reading scheme of the source lyrics, which decides the source language (`ja` / `yue-Hant`). */
+  reading_scheme?: ReadingScheme | null;
 }
 
 /** A lyric line with its optional translation (aligned by source line index). */
@@ -29,6 +35,10 @@ export interface LyricLine {
   translation: string | null;
   /** Original index in the source lyrics (`lyrics_raw`/`lyrics_synced`), used to align with detail-page `?line=` links. */
   index: number;
+  /** BCP-47 tag of {@link text} (from `reading_scheme`), so its glyphs match its language. */
+  lang: string;
+  /** BCP-47 tag of {@link translation} (from `lyrics_translation_lang`), or null when there is none. */
+  translationLang: string | null;
 }
 
 export const LANDSCAPE_W = 1200;
@@ -172,12 +182,24 @@ export function getLyricLines(song: ShareSong): LyricLine[] {
   const raw = song.lyrics_raw || song.lyrics_synced;
   if (!raw) return [];
   const translations = parseTranslations(song);
+  // Issue #336: each block carries the language of both its source text (from
+  // `reading_scheme`) and its translation (from `lyrics_translation_lang`), so
+  // the canvas can pick the matching family per line instead of one generic
+  // `sans-serif` for the whole card.
+  const lang = sourceLyricsLang(song.reading_scheme);
+  const translationLang = resolveTranslationLang(song.lyrics_translation_lang);
   const lines: LyricLine[] = [];
   raw.split('\n').forEach((rawLine, index) => {
     const text = stripLrcTags(rawLine);
     if (!text) return;
     const translation = translations[index]?.trim();
-    lines.push({ text, translation: translation || null, index });
+    lines.push({
+      text,
+      translation: translation || null,
+      index,
+      lang,
+      translationLang: translation ? translationLang : null,
+    });
   });
   return lines;
 }
@@ -204,7 +226,7 @@ export function drawCover(
     ctx.fillStyle = '#334155';
     ctx.fillRect(x, y, size, size);
     ctx.fillStyle = '#94a3b8';
-    ctx.font = `${Math.floor(size * 0.4)}px sans-serif`;
+    ctx.font = canvasFont(song.reading_scheme, Math.floor(size * 0.4));
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('🎵', x + size / 2, y + size / 2);
@@ -220,18 +242,20 @@ function drawCaption(
   startY: number,
   showQrCode: boolean,
   showSourceText: boolean,
+  /** BCP-47 tag of the UI strings (`scanText` / `siteText`), so they font like the UI. */
+  uiTag: string | null | undefined,
 ) {
   ctx.textAlign = 'center';
   let textY = startY;
   if (showQrCode) {
     ctx.fillStyle = '#cbd5e1';
-    ctx.font = '22px sans-serif';
+    ctx.font = canvasFont(uiTag, 22);
     ctx.fillText(scanText, centerX, textY);
     textY += 32;
   }
   if (showSourceText) {
     ctx.fillStyle = '#94a3b8';
-    ctx.font = '18px sans-serif';
+    ctx.font = canvasFont(uiTag, 18);
     ctx.fillText(siteText, centerX, textY);
   }
 }
@@ -257,8 +281,6 @@ function renderLyricBlocks(
   const { x, y, maxWidth, maxHeight, align, includeTranslation } = opts;
   const textH = 44;
   const transH = 26;
-  const textFont = '28px sans-serif';
-  const transFont = '20px sans-serif';
   const textColor = '#e2e8f0';
   const transColor = '#94a3b8';
   // Baseline offsets (alphabetic): the translation hugs its source line
@@ -273,26 +295,32 @@ function renderLyricBlocks(
   let cursorY = y;
   let rendered = 0;
   for (const block of blocks) {
-    // Wrap the source line on its own (1 line when a translation follows, 2 otherwise).
-    const textLines = wrapText(ctx, block.text, maxWidth, includeTranslation ? 1 : 2);
+    // Source lines (1 line when a translation follows, 2 otherwise) are wrapped
+    // below, after the language-specific font is set — `measureText` depends on
+    // `ctx.font`, so wrapping with the wrong family would mis-place line breaks.
+    const textLinesLimit = includeTranslation ? 1 : 2;
     const translation = includeTranslation ? block.translation : null;
+
+    ctx.fillStyle = textColor;
+    ctx.font = canvasFont(block.lang, 28);
+    const textLines = wrapText(ctx, block.text, maxWidth, textLinesLimit);
     const blockH = translation
       ? (textLines.length - 1) * textH + TRANS_OFFSET + NEXT_SOURCE_OFFSET
       : textLines.length * textH;
     if (cursorY + blockH > y + maxHeight) break;
 
-    ctx.fillStyle = textColor;
-    ctx.font = textFont;
     for (const line of textLines) {
       ctx.fillText(line, x, cursorY);
       cursorY += textH;
     }
     if (translation) {
       // Translation baseline sits just below the LAST source baseline.
+      // Issue #336: the source line keeps its own family, so re-measure the
+      // translation with its own font before wrapping it.
+      ctx.font = canvasFont(block.translationLang, 20);
       const transLines = wrapText(ctx, translation, maxWidth, 1);
       let baseline = cursorY - textH + TRANS_OFFSET;
       ctx.fillStyle = transColor;
-      ctx.font = transFont;
       for (const line of transLines) {
         ctx.fillText(line, x, baseline);
         baseline += transH;
@@ -317,6 +345,7 @@ async function drawLandscape(
   showQrCode: boolean,
   showSourceText: boolean,
   includeTranslation: boolean,
+  uiTag: string | null | undefined,
 ) {
   drawCardBackground(ctx, LANDSCAPE_W, LANDSCAPE_H, palette);
 
@@ -328,7 +357,8 @@ async function drawLandscape(
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 52px sans-serif';
+  // Song metadata is not lyric text: like the DOM header it follows the UI language.
+  ctx.font = canvasFont(uiTag, 52, 'bold');
   const titleLines = wrapText(ctx, song.title, 560, 2);
   for (const line of titleLines) {
     ctx.fillText(line, textX, textY);
@@ -336,7 +366,7 @@ async function drawLandscape(
   }
   textY += 2;
   ctx.fillStyle = '#94a3b8';
-  ctx.font = '30px sans-serif';
+  ctx.font = canvasFont(uiTag, 30);
   const artistLines = wrapText(ctx, song.artist || '', 560, 1);
   for (const line of artistLines) {
     ctx.fillText(line, textX, textY);
@@ -373,7 +403,7 @@ async function drawLandscape(
     ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
     ctx.restore();
   }
-  drawCaption(ctx, scanText, siteText, qrX + qrSize / 2, qrY + qrSize + 52, showQrCode, showSourceText);
+  drawCaption(ctx, scanText, siteText, qrX + qrSize / 2, qrY + qrSize + 52, showQrCode, showSourceText, uiTag);
 }
 
 async function drawPortrait(
@@ -388,6 +418,7 @@ async function drawPortrait(
   showQrCode: boolean,
   showSourceText: boolean,
   includeTranslation: boolean,
+  uiTag: string | null | undefined,
 ) {
   drawCardBackground(ctx, PORTRAIT_W, PORTRAIT_H, palette);
 
@@ -409,14 +440,14 @@ async function drawPortrait(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 44px sans-serif';
+  ctx.font = canvasFont(uiTag, 44, 'bold');
   for (const line of wrapText(ctx, song.title, contentW, 2)) {
     ctx.fillText(line, centerX, textY);
     textY += 58;
   }
   textY -= 9;
   ctx.fillStyle = '#94a3b8';
-  ctx.font = '26px sans-serif';
+  ctx.font = canvasFont(uiTag, 26);
   for (const line of wrapText(ctx, song.artist || '', contentW, 1)) {
     ctx.fillText(line, centerX, textY);
     textY += 38;
@@ -450,7 +481,8 @@ async function drawPortrait(
     ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
     ctx.restore();
   }
-  drawCaption(ctx, scanText, siteText, centerX, qrY + qrSize + 52, showQrCode, showSourceText);
+
+  drawCaption(ctx, scanText, siteText, centerX, qrY + qrSize + 52, showQrCode, showSourceText, uiTag);
 }
 
 export async function drawCard(
@@ -464,6 +496,14 @@ export async function drawCard(
   showQrCode: boolean,
   showSourceText: boolean,
   includeTranslation = true,
+  /**
+   * BCP-47 tag of the UI language. Only the UI-owned strings on the card
+   * (title, artist, scan hint, site name) use it — Issue #336: lyrics and
+   * translations font by their own language instead (`getLyricLines`).
+   * Optional so existing callers keep their historical `sans-serif`-equivalent
+   * default (the untagged fallback stack).
+   */
+  uiTag?: string | null,
 ) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -478,10 +518,10 @@ export async function drawCard(
   if (orientation === 'portrait') {
     canvas.width = PORTRAIT_W;
     canvas.height = PORTRAIT_H;
-    await drawPortrait(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics, coverImg, palette, showQrCode, showSourceText, includeTranslation);
+    await drawPortrait(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics, coverImg, palette, showQrCode, showSourceText, includeTranslation, uiTag);
   } else {
     canvas.width = LANDSCAPE_W;
     canvas.height = LANDSCAPE_H;
-    await drawLandscape(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics, coverImg, palette, showQrCode, showSourceText, includeTranslation);
+    await drawLandscape(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics, coverImg, palette, showQrCode, showSourceText, includeTranslation, uiTag);
   }
 }

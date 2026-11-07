@@ -36,19 +36,20 @@ function stageLabel(stage: SyncStage | ProviderStage, t: (key: string, params?: 
 }
 
 /**
- * Fixed viewport-level sync progress line: a spinner with the live source
+ * Sync progress line: a spinner with the live source
  * being queried (e.g. "正在查询 LRCLIB…") and a 取消 button so a long
  * multi-source fetch — or an accidental one — can be stopped without reloading.
- * Rendered at the page root (mirroring TranslationStatusOverlay) so the lyrics
- * panel's overflow/transform cannot clip it. Shown only while syncing; hidden
- * once the request settles (result, not-found, cancelled, etc.).
+ * Rendered as a child of the page root's top status stack (issue #282) so the
+ * lyrics panel's overflow/transform cannot clip it and it stacks below the
+ * translation status instead of sharing their anchor. Shown only while
+ * syncing; hidden once the request settles (result, not-found, cancelled, etc.).
  */
 export default function SyncStatusOverlay({ syncing, stage, onCancel }: SyncStatusOverlayProps) {
   const { t } = useI18n();
   if (!syncing) return null;
 
   return (
-    <div className="fixed left-1/2 top-3 z-[100] flex -translate-x-1/2 items-center gap-2">
+    <div className="flex items-center gap-2">
       <span className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-[var(--border)] bg-[var(--background)]/90 px-3 py-1.5 text-xs text-[var(--muted-foreground)] shadow-sm backdrop-blur-sm">
         <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-[var(--primary)]" />
         {stage ? stageLabel(stage, t) : t('song.syncing')}

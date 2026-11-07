@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { extractMaterialCoverPalette, type CoverColor, type CoverPalette } from '@/lib/cover-color';
+import { readableCoverTextColor } from '@/lib/cover-text-color';
 import { cacheSongPalette, getCachedSongPalette } from '@/lib/song-cover-cache';
 
 export interface CoverTheme {
@@ -107,6 +108,8 @@ export function useCoverTheme(
       '--song-accent-primary': rgb(palette.primary),
       '--song-accent-secondary': rgb(palette.secondary),
       '--song-accent-tertiary': rgb(palette.tertiary),
+      '--song-accent-text-dark': rgb(readableCoverTextColor(palette, 'dark')),
+      '--song-accent-text-light': rgb(readableCoverTextColor(palette, 'light')),
     } as React.CSSProperties;
   }, [palette]);
 

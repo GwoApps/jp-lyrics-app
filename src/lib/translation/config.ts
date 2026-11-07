@@ -24,6 +24,13 @@ export interface TranslationContext {
   fullLyrics?: string[];
   /** Absolute indices (into `fullLyrics`) of the lines actually being translated. */
   targetIndices?: number[];
+  /**
+   * Short tag of the SOURCE lyrics language ('ja' | 'yue'). Selects the
+   * few-shot example direction and the Cantonese reading rule in the prompt.
+   * Unknown / missing values fall back to Japanese, so Japanese songs keep
+   * their previous prompt (issue #316).
+   */
+  sourceLang?: string;
 }
 
 export interface TranslationConfig {
@@ -103,6 +110,16 @@ export const WORKERS_AI_MODELS: readonly string[] = [
   '@cf/qwen/qwq-32b',
   '@cf/zai-org/glm-4.7-flash',
 ];
+
+// Whole-song translation may legitimately take minutes, so its requests get
+// no such budget — but the glossary extraction that runs during the
+// preparation stage is best-effort: an upstream that accepts the connection
+// and then stalls (half-open gateway, slow reasoning model, proxy hang, token
+// rate-limiting without a disconnect) must be abandoned quickly instead of
+// dragging the whole-song translation into "preparing" forever. The
+// anthropic branch already bounded this call with its own 30s AbortController;
+// this constant makes that budget explicit and shared by all three providers.
+export const GLOSSARY_TIMEOUT_MS = 30_000;
 
 /** Attempts and backoff for transient failures (1s, 2s). */
 export const RETRY_ATTEMPTS = 3;

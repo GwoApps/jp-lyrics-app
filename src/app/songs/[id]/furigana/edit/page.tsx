@@ -2,6 +2,8 @@
 
 'use client';
 
+import ArtistLinks from '@/components/ArtistLinks';
+
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -17,6 +19,7 @@ import { useAuthSession } from '@/lib/auth-session';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { furiganaLinesMatchSource } from '@/lib/furigana-validation';
+import { normalizeJapaneseFuriganaLines } from '@/lib/japanese-kanji-reading';
 
 interface AuthState {
   authenticated: boolean;
@@ -107,8 +110,13 @@ export default function FuriganaEditPage() {
       // Legacy/generated annotations can become stale after lyrics are edited. Rebuild them before
       // presenting the editor so a one-word reading correction never submits an invalid full payload.
       if (furiganaLinesMatchSource(parsed, data.lyrics_raw)) {
-        setOriginal(parsed);
-        setDraft(parsed);
+        // Show/edit the same kanji-only segments as the detail page, including
+        // annotations saved before the tokenizer started splitting okurigana.
+        const editorLines = normalizeReadingScheme(data.reading_scheme) === 'ja-kana'
+          ? normalizeJapaneseFuriganaLines(parsed)
+          : parsed;
+        setOriginal(editorLines);
+        setDraft(editorLines);
       } else {
         setOriginal([]);
         setDraft([]);
@@ -308,7 +316,7 @@ export default function FuriganaEditPage() {
       <div className="sticky top-11 z-40 -mx-4 mb-6 flex flex-col gap-3 border-b border-[var(--border)] bg-[var(--background)]/95 px-4 py-3 backdrop-blur-sm sm:-mx-6 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">{t('furigana.title')}</h1>
-          {song.artist && <p className="text-xs text-[var(--muted-foreground)]">{song.artist}</p>}
+          {song.artist && <p className="text-xs text-[var(--muted-foreground)]"><ArtistLinks artist={song.artist} /></p>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button

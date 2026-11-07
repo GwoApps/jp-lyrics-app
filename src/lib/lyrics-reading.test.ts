@@ -1,10 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import type { ReadingScheme } from './types.ts';
+import { validateFuriganaPayload } from './furigana-validation.ts';
 import {
   convertCantoneseLyrics,
   detectCantoneseLyrics,
   getCantoneseReadingCandidates,
   normalizeReadingScheme,
+  sourceLangOf,
   sourceLyricsLang,
 } from './lyrics-reading.ts';
 
@@ -39,6 +42,23 @@ test('sourceLyricsLang maps the reading scheme to a BCP-47 tag', () => {
   assert.equal(sourceLyricsLang('yue-jyutping'), 'yue-Hant');
 });
 
+test('sourceLangOf maps the reading scheme to a translation source-language tag', () => {
+  assert.equal(sourceLangOf(undefined), 'ja');
+  assert.equal(sourceLangOf('ja-kana'), 'ja');
+  assert.equal(sourceLangOf('invalid'), 'ja');
+  assert.equal(sourceLangOf('yue-jyutping'), 'yue');
+});
+
+test('sourceLangOf stays in sync with sourceLyricsLang for every known scheme', () => {
+  // Both are derived from the SAME scheme table, so a newly added scheme can
+  // never end up with a source-language tag in one place and a BCP-47 tag in
+  // the other — the regression this guard exists for (PR #332 review).
+  const known: ReadingScheme[] = ['ja-kana', 'yue-jyutping'];
+  for (const scheme of known) {
+    assert.equal(sourceLangOf(scheme), sourceLyricsLang(scheme).split('-')[0]);
+  }
+});
+
 test('convertCantoneseLyrics preserves every source character and blank line', async () => {
   const source = '香港人講廣東話\n\nHello 香港，今晚見';
   const lines = await convertCantoneseLyrics(source);
@@ -51,6 +71,18 @@ test('convertCantoneseLyrics preserves every source character and blank line', a
     { text: '港', reading: 'gong2' },
   ]);
   assert.equal(lines[2].segments.find((segment) => segment.text === 'H')?.reading, '');
+});
+
+test('convertCantoneseLyrics preserves nonempty whitespace-only CRLF rows', async () => {
+  const source = '\r\n \t\r\n\n';
+  const lines = await convertCantoneseLyrics(source);
+  assert.deepEqual(lines, [
+    { segments: [{ text: '\r', reading: '' }] },
+    { segments: [{ text: ' \t\r', reading: '' }] },
+    { segments: [] },
+    { segments: [] },
+  ]);
+  assert.equal(validateFuriganaPayload(lines, source).ok, true);
 });
 
 test('getCantoneseReadingCandidates returns the contextual reading and alternatives', async () => {

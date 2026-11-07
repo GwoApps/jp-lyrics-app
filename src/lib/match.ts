@@ -3,16 +3,30 @@
  * Spotify "now playing" tracks to database songs.
  *
  * Strategy:
- *  1. Normalize (NFKC, strip whitespace, lowercase)
+ *  1. Normalize (NFKC, fold katakana→hiragana, strip whitespace, lowercase)
  *  2. Title match: exact / substring (with length guard) / bigram Dice
  *  3. Artist bonus: if both sides have artist info, require partial match
  *  4. Composite score → pick best candidate
  */
 
+import { foldKatakanaToHiragana } from './japanese-fold.ts';
+
 // ─── Primitives ───────────────────────────────────────────────
 
+/**
+ * Normalize text for *comparison only*.
+ *
+ * NFKC handles width/case/compatibility forms; on top of it we fold the
+ * fullwidth katakana block onto hiragana so homophones written in different
+ * scripts compare equal (ISSUE #317 — 「さよなら」 vs 「サヨナラ」 used to score 0
+ * at every consumer of this function: LRCLIB/Uta-Net/HTTP-provider title and
+ * artist gates, "now playing" matching, and LRC line alignment).
+ *
+ * Never use the result as a query string or a display value — hand the
+ * original text to lyric sources and to the UI.
+ */
 export function normalize(s: string): string {
-  return s.normalize('NFKC').replace(/\s+/g, '').toLowerCase();
+  return foldKatakanaToHiragana(s.normalize('NFKC')).replace(/\s+/g, '').toLowerCase();
 }
 
 /** Sørensen-Dice bigram coefficient (0–1) */

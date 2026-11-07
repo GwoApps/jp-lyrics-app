@@ -32,83 +32,61 @@ test('song list fetch: returns songs on a successful array response', async () =
   }
 });
 
-test('song list fetch: network failure resolves to an empty failed result (not a throw)', async () => {
-  const restore = installFetch(async () => {
-    throw new TypeError('Failed to fetch');
+const failedResponses: { name: string; scope: 'all' | 'mine'; respond: FetchFn }[] = [
+  {
+    name: 'network failure resolves to an empty failed result (not a throw)',
+    scope: 'all',
+    respond: async () => { throw new TypeError('Failed to fetch'); },
+  },
+  {
+    name: 'HTTP 500 resolves to an empty failed result',
+    scope: 'mine',
+    respond: async () => ({ ok: false, json: async () => ({ error: 'boom' }) }),
+  },
+  {
+    name: 'non-array JSON resolves to an empty failed result (invalid body is not trusted)',
+    scope: 'all',
+    respond: async () => ({ ok: true, json: async () => ({ error: 'session expired' }) }),
+  },
+  {
+    name: 'non-JSON body resolves to an empty failed result',
+    scope: 'all',
+    respond: async () => ({
+      ok: true,
+      json: async () => { throw new SyntaxError('Unexpected token < in JSON'); },
+    }),
+  },
+];
+
+for (const { name, scope, respond } of failedResponses) {
+  test(`song list fetch: ${name}`, async (t) => {
+    t.after(installFetch(async (url, init) => {
+      assert.equal(url, scope === 'mine' ? '/api/songs?mine=1' : '/api/songs');
+      return respond(url, init);
+    }));
+    const result = await requestSongList(scope);
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.songs, []);
   });
-  try {
-    const result = await requestSongList('all');
-    assert.equal(result.ok, false);
-    assert.deepEqual(result.songs, []);
-  } finally {
-    restore();
-  }
-});
+}
 
-test('song list fetch: HTTP 500 resolves to an empty failed result', async () => {
-  const restore = installFetch(async (url) => {
-    assert.equal(url, '/api/songs?mine=1');
-    return { ok: false, json: async () => ({ error: 'boom' }) };
-  });
-  try {
-    const result = await requestSongList('mine');
-    assert.equal(result.ok, false);
-    assert.deepEqual(result.songs, []);
-  } finally {
-    restore();
-  }
-});
-
-test('song list fetch: non-array JSON resolves to an empty failed result (invalid body is not trusted)', async () => {
-  const restore = installFetch(async () => ({ ok: true, json: async () => ({ error: 'session expired' }) }));
-  try {
-    const result = await requestSongList('all');
-    assert.equal(result.ok, false);
-    assert.deepEqual(result.songs, []);
-  } finally {
-    restore();
-  }
-});
-
-test('song list fetch: non-JSON body resolves to an empty failed result', async () => {
-  const restore = installFetch(async () => {
-    throw new SyntaxError('Unexpected token < in JSON');
-  });
-  try {
-    const result = await requestSongList('all');
-    assert.equal(result.ok, false);
-    assert.deepEqual(result.songs, []);
-  } finally {
-    restore();
-  }
-});
-
-test('song list fetch: an aborted request resolves to a failed result instead of hanging', async () => {
+test('song list fetch: caller abort resolves to a failed result without waiting for the 8s timeout', async () => {
+  let requestStarted!: () => void;
+  const started = new Promise<void>((resolve) => { requestStarted = resolve; });
   const restore = installFetch(async (_url, init) => {
     const signal = init?.signal;
-    if (!signal) throw new Error('expected abort signal');
+    assert.ok(signal, 'expected abort signal');
     return new Promise((_resolve, reject) => {
       signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+      requestStarted();
     });
   });
   try {
     const controller = new AbortController();
-    const result = await requestSongList('all', controller.signal);
-    assert.equal(result.ok, false);
-    assert.deepEqual(result.songs, []);
+    const pending = requestSongList('all', controller.signal);
+    await started; // abort only after the mocked fetch is listening
     controller.abort();
-  } finally {
-    restore();
-  }
-});
-
-test('song list fetch: existing cache survives a failed refresh (degraded, non-blocking)', async () => {
-  const restore = installFetch(async () => {
-    throw new TypeError('Failed to fetch');
-  });
-  try {
-    const result = await requestSongList('all');
-    // The caller keeps the previously cached songs; the failure is surfaced separately.
+    const result = await pending;
     assert.equal(result.ok, false);
     assert.deepEqual(result.songs, []);
   } finally {
@@ -116,7 +94,7 @@ test('song list fetch: existing cache survives a failed refresh (degraded, non-b
   }
 });
 
-test('fetchSongList: returns null on network failure and on non-array body', async () => {
+test('fetchSongList: returns null on non-array body', async () => {
   const restore = installFetch(async () => ({ ok: true, json: async () => ({ nope: true }) }));
   try {
     assert.equal(await fetchSongList('all'), null);

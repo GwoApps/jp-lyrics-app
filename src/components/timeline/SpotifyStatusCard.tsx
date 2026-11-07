@@ -1,5 +1,7 @@
 'use client';
 
+import ArtistLinks from '@/components/ArtistLinks';
+
 import { AlertTriangle, Headphones, Loader2, RefreshCw } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { fmtMs, fmtTime } from '@/lib/lrc';
@@ -28,7 +30,7 @@ export default function SpotifyStatusCard({ nowPlaying, liveProgress, canUseSpot
           </div>
           <div className="min-w-0">
             <div className="truncate text-sm font-medium">{nowPlaying?.track?.name || t('timelineWorkspace.spotifyIdle')}</div>
-            <div className="truncate text-xs text-[var(--muted-foreground)]">{nowPlaying?.track?.artist || t('timelineWorkspace.spotifyHint')}</div>
+            <div className="truncate text-xs text-[var(--muted-foreground)]"><ArtistLinks artist={nowPlaying?.track?.artist} fallback={t('timelineWorkspace.spotifyHint')} /></div>
           </div>
         </div>
         <div className="font-mono text-xl font-semibold tabular-nums">{fmtMs(liveProgress)}</div>

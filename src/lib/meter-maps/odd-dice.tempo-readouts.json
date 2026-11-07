@@ -1,0 +1,326 @@
+{
+  "source": "BV1YhJq6LE4Q",
+  "sampleIntervalMs": 200,
+  "changes": [
+    {
+      "startMs": 2933.333,
+      "bpm": 165
+    },
+    {
+      "startMs": 57866.667,
+      "bpm": 166
+    },
+    {
+      "startMs": 58266.667,
+      "bpm": 168
+    },
+    {
+      "startMs": 58666.667,
+      "bpm": 170
+    },
+    {
+      "startMs": 58866.667,
+      "bpm": 172
+    },
+    {
+      "startMs": 59566.667,
+      "bpm": 176
+    },
+    {
+      "startMs": 59966.667,
+      "bpm": 178
+    },
+    {
+      "startMs": 60366.667,
+      "bpm": 180
+    },
+    {
+      "startMs": 60566.667,
+      "bpm": 182
+    },
+    {
+      "startMs": 60966.667,
+      "bpm": 184
+    },
+    {
+      "startMs": 61366.667,
+      "bpm": 186
+    },
+    {
+      "startMs": 61566.667,
+      "bpm": 188
+    },
+    {
+      "startMs": 61966.667,
+      "bpm": 190
+    },
+    {
+      "startMs": 62166.667,
+      "bpm": 192
+    },
+    {
+      "startMs": 62566.667,
+      "bpm": 194
+    },
+    {
+      "startMs": 62766.667,
+      "bpm": 196
+    },
+    {
+      "startMs": 63166.667,
+      "bpm": 198
+    },
+    {
+      "startMs": 63366.667,
+      "bpm": 200
+    },
+    {
+      "startMs": 63800.0,
+      "bpm": 202
+    },
+    {
+      "startMs": 64000.0,
+      "bpm": 203
+    },
+    {
+      "startMs": 64400.0,
+      "bpm": 205
+    },
+    {
+      "startMs": 64600.0,
+      "bpm": 207
+    },
+    {
+      "startMs": 65000.0,
+      "bpm": 209
+    },
+    {
+      "startMs": 65133.333,
+      "bpm": 211
+    },
+    {
+      "startMs": 65533.333,
+      "bpm": 213
+    },
+    {
+      "startMs": 65733.333,
+      "bpm": 215
+    },
+    {
+      "startMs": 66133.333,
+      "bpm": 217
+    },
+    {
+      "startMs": 66333.333,
+      "bpm": 219
+    },
+    {
+      "startMs": 66533.333,
+      "bpm": 221
+    },
+    {
+      "startMs": 66800.0,
+      "bpm": 223
+    },
+    {
+      "startMs": 67200.0,
+      "bpm": 225
+    },
+    {
+      "startMs": 67400.0,
+      "bpm": 228
+    },
+    {
+      "startMs": 68000.0,
+      "bpm": 230
+    },
+    {
+      "startMs": 96566.667,
+      "bpm": 145
+    },
+    {
+      "startMs": 125100.0,
+      "bpm": 165
+    },
+    {
+      "startMs": 138966.667,
+      "bpm": 169
+    },
+    {
+      "startMs": 139366.667,
+      "bpm": 173
+    },
+    {
+      "startMs": 140366.667,
+      "bpm": 185
+    },
+    {
+      "startMs": 140633.333,
+      "bpm": 188
+    },
+    {
+      "startMs": 141033.333,
+      "bpm": 192
+    },
+    {
+      "startMs": 141233.333,
+      "bpm": 196
+    },
+    {
+      "startMs": 141633.333,
+      "bpm": 200
+    },
+    {
+      "startMs": 141833.333,
+      "bpm": 204
+    },
+    {
+      "startMs": 142233.333,
+      "bpm": 208
+    },
+    {
+      "startMs": 142433.333,
+      "bpm": 212
+    },
+    {
+      "startMs": 142833.333,
+      "bpm": 216
+    },
+    {
+      "startMs": 143033.333,
+      "bpm": 220
+    },
+    {
+      "startMs": 143233.333,
+      "bpm": 224
+    },
+    {
+      "startMs": 143633.333,
+      "bpm": 228
+    },
+    {
+      "startMs": 143833.333,
+      "bpm": 230
+    },
+    {
+      "startMs": 230933.333,
+      "bpm": 141
+    },
+    {
+      "startMs": 231533.333,
+      "bpm": 140
+    },
+    {
+      "startMs": 232233.333,
+      "bpm": 139
+    },
+    {
+      "startMs": 233566.667,
+      "bpm": 138
+    },
+    {
+      "startMs": 234366.667,
+      "bpm": 137
+    },
+    {
+      "startMs": 235266.667,
+      "bpm": 136
+    },
+    {
+      "startMs": 236166.667,
+      "bpm": 135
+    },
+    {
+      "startMs": 237166.667,
+      "bpm": 134
+    },
+    {
+      "startMs": 238533.333,
+      "bpm": 133
+    },
+    {
+      "startMs": 239233.333,
+      "bpm": 132
+    },
+    {
+      "startMs": 241000,
+      "bpm": 131
+    },
+    {
+      "startMs": 241633.333,
+      "bpm": 130
+    },
+    {
+      "startMs": 242633.333,
+      "bpm": 124
+    }
+  ],
+  "rejectedSamples": [
+    {
+      "startMs": 59266.667,
+      "frame": 1779,
+      "raw": "4"
+    },
+    {
+      "startMs": 59466.667,
+      "frame": 1785,
+      "raw": "4"
+    },
+    {
+      "startMs": 139766.667,
+      "frame": 4194,
+      "raw": "7"
+    },
+    {
+      "startMs": 139966.667,
+      "frame": 4200,
+      "raw": "1381"
+    },
+    {
+      "startMs": 140166.667,
+      "frame": 4206,
+      "raw": "1381"
+    },
+    {
+      "startMs": 240166.667,
+      "frame": 7206,
+      "raw": "3"
+    },
+    {
+      "startMs": 240366.667,
+      "frame": 7212,
+      "raw": "3"
+    },
+    {
+      "startMs": 240566.667,
+      "frame": 7218,
+      "raw": "3"
+    },
+    {
+      "startMs": 240766.667,
+      "frame": 7224,
+      "raw": "3"
+    },
+    {
+      "startMs": 240966.667,
+      "frame": 7230,
+      "raw": "31"
+    },
+    {
+      "startMs": 241166.667,
+      "frame": 7236,
+      "raw": "3"
+    },
+    {
+      "startMs": 241366.667,
+      "frame": 7242,
+      "raw": "3"
+    },
+    {
+      "startMs": 241566.667,
+      "frame": 7248,
+      "raw": "3"
+    }
+  ],
+  "policy": "Direct readable source integers only; hold the last reliable reading through numeral morphs. Steady sections use observed bar anchors; never derive BPM from 30fps beat intervals."
+}

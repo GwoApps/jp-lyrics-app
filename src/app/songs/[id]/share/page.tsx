@@ -1,22 +1,26 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import QRCode from 'qrcode';
-import { ArrowLeft, Download, Link2, Loader2, Check, Smartphone, Monitor, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ClipboardCopy, Download, Link2, Loader2, Check, Smartphone, Monitor, RefreshCw } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
-import { drawCard, getLyricLines, LANDSCAPE_H, LANDSCAPE_W, type Orientation, type ShareSong } from '@/lib/share-card';
+import { drawCard, getLyricLines, type Orientation, type ShareSong } from '@/lib/share-card';
 import { resolveTranslationLang } from '@/lib/target-lang';
 import { copyToClipboard } from '@/lib/clipboard';
+import { buildShareCopyText } from '@/lib/share-card-copy';
 import Toast from '@/components/Toast';
+import ShareCardPreview from '@/components/share/ShareCardPreview';
+import ShareCopyFeedback from '@/components/share/ShareCopyFeedback';
+import '@/components/share/share-controls.css';
 
 export default function SharePage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { t } = useI18n();
+  const { t, bcp47: uiLanguage } = useI18n();
   const id = (params?.id as string) || '';
   const defaultLine = searchParams?.get('line');
 
@@ -29,10 +33,14 @@ export default function SharePage() {
   const [isLoadError, setIsLoadError] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
-  const [copied, setCopied] = useState(false);
+  // Which copy action just succeeded, so each button flashes its own state.
+  const [copiedKind, setCopiedKind] = useState<'link' | 'lyrics' | 'lyricsWithTranslation' | null>(null);
   const [toast, setToast] = useState<{ type: 'error'; msg: string } | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [orientation, setOrientation] = useState<Orientation>('landscape');
+  const [previewOrientation, setPreviewOrientation] = useState<Orientation>('landscape');
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyRequestRef = useRef(0);
   const [showQrCode, setShowQrCode] = useState(true);
   const [showSourceText, setShowSourceText] = useState(true);
   const [includeTranslation, setIncludeTranslation] = useState(true);
@@ -118,17 +126,11 @@ export default function SharePage() {
     return () => { cancelled = true; };
   }, [pageUrl]);
 
-  useEffect(() => {
-    if (!song || !canvasRef.current) return;
-    if (showQrCode && !qrDataUrl) {
-      setReady(false);
-      return;
-    }
-    setReady(false);
-    let cancelled = false;
+  const renderCard = useCallback(async (canvas: HTMLCanvasElement) => {
+    if (!song) return;
     const selectedLines = lyricLines.filter((_, i) => selected.has(i));
-    drawCard(
-      canvasRef.current,
+    await drawCard(
+      canvas,
       song,
       qrDataUrl || '',
       t('share.scan'),
@@ -138,11 +140,16 @@ export default function SharePage() {
       showQrCode,
       showSourceText,
       includeTranslation,
-    ).then(() => {
-      if (!cancelled) setReady(true);
-    });
-    return () => { cancelled = true; };
-  }, [song, qrDataUrl, pageUrl, t, selected, lyricLines, orientation, showQrCode, showSourceText, includeTranslation]);
+      // Issue #336: the card's canvas does not inherit CSS, so the UI-owned
+      // strings (title, artist, scan hint, site) need the UI language here.
+      uiLanguage,
+    );
+  }, [song, qrDataUrl, t, uiLanguage, selected, lyricLines, orientation, showQrCode, showSourceText, includeTranslation]);
+
+  const handlePreviewReady = useCallback((value: boolean) => {
+    setReady(value);
+    if (value) setPreviewOrientation(orientation);
+  }, [orientation]);
 
   const toggleLine = (idx: number) => {
     setSelected((prev) => {
@@ -176,14 +183,38 @@ export default function SharePage() {
 
   // Issue #266: a failed clipboard write must be surfaced instead of silently
   // returning, matching the other copy paths across the app.
-  const handleCopyLink = async () => {
-    const ok = await copyToClipboard(pageUrl);
+  const flashCopied = (kind: 'link' | 'lyrics' | 'lyricsWithTranslation') => {
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    setCopiedKind(kind);
+    copiedTimerRef.current = setTimeout(() => {
+      copiedTimerRef.current = null;
+      setCopiedKind(null);
+    }, 1500);
+  };
+
+  const copyText = async (text: string, kind: 'link' | 'lyrics' | 'lyricsWithTranslation') => {
+    const request = ++copyRequestRef.current;
+    const ok = await copyToClipboard(text);
+    if (request !== copyRequestRef.current) return;
     if (!ok) {
       setToast({ type: 'error', msg: t('song.copyFailed') });
       return;
     }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    flashCopied(kind);
+  };
+
+  useEffect(() => () => {
+    copyRequestRef.current += 1;
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+  }, []);
+
+  const handleCopyLink = () => copyText(pageUrl, 'link');
+
+  // Share-page text copies reuse the card's already-parsed lyric lines, so LRC
+  // timestamps are always stripped and the translation pairing matches what the
+  // card renders (Issue: copy lyrics / lyrics+translation as plain text).
+  const handleCopyLyrics = (kind: 'lyrics' | 'lyricsWithTranslation') => {
+    void copyText(buildShareCopyText(lyricLines, kind === 'lyricsWithTranslation'), kind);
   };
 
   // Issue #266: auto-dismiss the copy-failure toast, same lifetime as the
@@ -229,13 +260,12 @@ export default function SharePage() {
   }
 
   const hasLyrics = lyricLines.length > 0;
-  const cardAspectClass = orientation === 'portrait'
-    ? 'max-w-md'
-    : 'max-w-3xl';
+  // Only offer the translation copy when at least one line actually has one.
+  const hasTranslation = lyricLines.some((line) => line.translation);
 
   return (
     <div className={`song-view song-editor-page min-h-screen text-[var(--foreground)]${coverTheme.isThemed ? ' song-view--accented' : ''}`} style={coverTheme.style}>
-      <div className={`mx-auto px-3 py-3 sm:px-4 sm:py-6 ${cardAspectClass}`}>
+      <div className="share-page-content mx-auto px-3 py-3 sm:px-4 sm:py-6" data-orientation={previewOrientation}>
         {/* Align navigation and heading scale with the song-detail page. */}
         <div className="mb-3 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] sm:mb-8">
           <button onClick={() => router.push(`/songs/${id}`)} className="inline-flex items-center gap-1 transition-colors hover:text-[var(--foreground)]">
@@ -309,19 +339,13 @@ export default function SharePage() {
           )}
         </div>
 
-        <div className="relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-sm">
-          <canvas
-            ref={canvasRef}
-            width={LANDSCAPE_W}
-            height={LANDSCAPE_H}
-            className="h-auto w-full"
-          />
-          {!ready && (
-            <div className="absolute inset-0 flex items-center justify-center bg-[var(--card)]/80 backdrop-blur-sm">
-              <Loader2 className="h-8 w-8 animate-spin text-[var(--muted-foreground)]" />
-            </div>
-          )}
-        </div>
+        <ShareCardPreview
+          key={id}
+          canvasRef={canvasRef}
+          draw={renderCard}
+          enabled={!showQrCode || !!qrDataUrl}
+          onReadyChange={handlePreviewReady}
+        />
 
         <p className="mt-2 text-center text-sm text-[var(--muted-foreground)] sm:mt-4">
           {t('share.hint')}
@@ -337,13 +361,32 @@ export default function SharePage() {
             {t('share.download')}
           </button>
           <button
-            onClick={handleCopyLink}
+            onClick={() => void handleCopyLink()}
             className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-5 py-2.5 font-medium text-[var(--foreground)] hover:bg-[var(--muted)]"
           >
             <Link2 className="h-4 w-4" />
-            {copied ? t('share.copied') : t('share.copyLink')}
+            {copiedKind === 'link' ? t('share.copied') : t('share.copyLink')}
           </button>
         </div>
+
+        {hasLyrics && (
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-2 sm:mt-3 sm:gap-3">
+            <button
+              onClick={() => handleCopyLyrics('lyrics')}
+              className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-5 py-2.5 font-medium text-[var(--foreground)] hover:bg-[var(--muted)]"
+            >
+              <ShareCopyFeedback copied={copiedKind === 'lyrics'} label={t('share.copyLyrics')} copiedLabel={t('share.copied')} icon={<ClipboardCopy className="h-4 w-4" />} />
+            </button>
+            {hasTranslation && (
+              <button
+                onClick={() => handleCopyLyrics('lyricsWithTranslation')}
+                className="inline-flex items-center gap-2 rounded-xl bg-[var(--accent)] px-5 py-2.5 font-medium text-[var(--foreground)] hover:bg-[var(--muted)]"
+              >
+                <ShareCopyFeedback copied={copiedKind === 'lyricsWithTranslation'} label={t('share.copyLyricsWithTranslation')} copiedLabel={t('share.copied')} icon={<ClipboardCopy className="h-4 w-4" />} />
+              </button>
+            )}
+          </div>
+        )}
 
         {hasLyrics && (
           <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3 sm:mt-8 sm:p-4">
@@ -365,20 +408,23 @@ export default function SharePage() {
                 <button
                   key={idx}
                   onClick={() => toggleLine(idx)}
-                  className={`flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left transition-colors ${
+                  aria-pressed={selected.has(idx)}
+                  data-selected={selected.has(idx)}
+                  className={`share-lyric-item flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left ${
                     selected.has(idx)
                       ? 'song-editor-choice--active'
                       : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
                   }`}
                 >
                   <span
-                    className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
+                    aria-hidden="true"
+                    className={`share-lyric-item__checkbox mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
                       selected.has(idx)
                         ? 'border-[var(--song-accent)] song-editor-primary-button'
                         : 'border-[var(--border)] bg-[var(--background)]'
                     }`}
                   >
-                    {selected.has(idx) && <Check className="h-3.5 w-3.5" />}
+                    <Check className="share-lyric-item__check h-3.5 w-3.5" />
                   </span>
                   <span className="min-w-0">
                     <span className="line-clamp-2 block text-sm">{line.text}</span>

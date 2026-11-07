@@ -9,7 +9,7 @@ import {
   createJob,
   existingResultsForChunk,
   extractPlaylistId,
-  fetchPlaylistTracks,
+  fetchPlaylistTrackPage,
   finishJob,
   getOwnedJob,
   getPersistedTrackResults,
@@ -18,6 +18,7 @@ import {
   processTrack,
   requireSpotifyToken,
   saveTrackResult,
+  type PlaylistFetch,
   type PlaylistJobSummary,
   type PlaylistTrack,
 } from '@/lib/playlist-import';
@@ -96,9 +97,9 @@ export async function POST(request: NextRequest) {
   }
 
   const accessToken = await requireSpotifyToken(user.email);
-  let tracks: PlaylistTrack[];
+  let playlist: PlaylistFetch;
   try {
-    tracks = await fetchPlaylistTracks(playlistId, accessToken);
+    playlist = await fetchPlaylistTrackPage(playlistId, accessToken);
   } catch (error) {
     const status = (error as Error & { status?: number }).status;
     if (status && status !== 200) {
@@ -106,6 +107,7 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ error: 'playlist_fetch_failed' }, { status: 502 });
   }
+  const { tracks } = playlist;
 
   if (tracks.length === 0) {
     return NextResponse.json({ error: 'playlist_empty' }, { status: 400 });
@@ -116,9 +118,18 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     job,
     // Cap notice so large playlists degrade gracefully instead of timing out.
-    truncated: tracks.length >= PLAYLIST_MAX_TRACKS,
+    // `truncated` used to be `tracks.length >= PLAYLIST_MAX_TRACKS`, which also
+    // fired for a playlist of exactly maxTracks (nothing dropped). It now comes
+    // from what Spotify reported (`total` + the `next` page marker), so the cap
+    // is decidable and quantifiable instead of a boolean guess (ISSUE #324).
+    truncated: playlist.truncated,
     maxTracks: PLAYLIST_MAX_TRACKS,
     chunkSize: PLAYLIST_CHUNK_SIZE,
+    // Additive, optional fields — existing callers that only read job/truncated
+    // /maxTracks/chunkSize keep working unchanged.
+    playlistTotal: playlist.playlistTotal,
+    dropped: playlist.dropped,
+    mayHaveMore: playlist.mayHaveMore,
   });
 }
 
@@ -161,7 +172,7 @@ export async function PUT(request: NextRequest) {
   // not lose the track list, and D1 rows are cheap.
   let tracks: PlaylistTrack[];
   try {
-    tracks = await fetchPlaylistTracks(job.playlistId, accessToken);
+    ({ tracks } = await fetchPlaylistTrackPage(job.playlistId, accessToken));
   } catch {
     return NextResponse.json({ error: 'playlist_fetch_failed' }, { status: 502 });
   }

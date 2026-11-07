@@ -1,4 +1,6 @@
 import type { ReadingScheme } from './types';
+import { isKanji } from './compound-readings';
+import { splitJapaneseKanjiReading } from './japanese-kanji-reading';
 
 const BASIC: Record<string, string> = {
   あ: 'a', い: 'i', う: 'u', え: 'e', お: 'o',
@@ -206,12 +208,20 @@ export function splitLongKatakanaForRuby(value: string, maxRomanizedLength = 12)
 }
 
 /** Preserve real separators while joining Korean pieces that upstream tokenizers split mid-word. */
-export function normalizeFuriganaSegments(segments: readonly LyricReadingSegment[]): LyricReadingSegment[] {
+export function normalizeFuriganaSegments(
+  segments: readonly LyricReadingSegment[],
+  scheme: ReadingScheme = 'ja-kana',
+): LyricReadingSegment[] {
   const result: LyricReadingSegment[] = [];
-  for (const segment of segments) {
+  const readingSegments = scheme === 'ja-kana'
+    ? segments.flatMap(splitJapaneseKanjiReading)
+    : segments;
+  for (const segment of readingSegments) {
     const scriptParts = segment.reading
-      ? [{ text: segment.text.normalize('NFC'), reading: segment.reading }]
-      : splitLyricScriptRuns(segment.text).map((text) => ({ text, reading: '' }));
+      ? [{ ...segment, text: segment.text.normalize('NFC') }]
+      : splitLyricScriptRuns(segment.text).map((text) => ({
+          text, reading: '', ...(segment.pos ? { pos: segment.pos } : {}),
+        }));
     const parts = scriptParts.flatMap((part) => (
       !part.reading && isKatakanaReadingSegment(part.text)
         ? splitLongKatakanaForRuby(part.text).map((text) => ({ text, reading: '' }))
@@ -533,6 +543,10 @@ export function resolveFuriganaReading(
   segment?: LyricReadingSegment,
 ): string {
   if (scheme === 'yue-jyutping') return reading;
+  // Kana (including okurigana) is already readable. Unalignable legacy mixed
+  // tokens keep their saved value but never show a whole-word ruby over kana.
+  // The separate romanization mode intentionally transliterates kana too.
+  if (!romanize && ![...text].every(isKanji)) return '';
   // Issue #286: particles are romanized by pronunciation (は→wa, へ→e). The
   // lexical part of speech is only available when the caller passes the whole
   // segment; legacy annotations (and the pre-#286 call shape) keep the literal

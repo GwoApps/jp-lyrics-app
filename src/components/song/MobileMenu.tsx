@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { RefreshCw, Bug, Clock3, Pencil, Trash2, Download, PictureInPicture, Copy, Check, MoreVertical, Languages, ChevronRight, Info, Palette, SlidersHorizontal, FlaskConical, Share2 } from 'lucide-react';
+import { RefreshCw, Bug, Clock3, Pencil, Trash2, Download, PictureInPicture, Copy, Check, MoreVertical, Languages, ChevronRight, Palette, SlidersHorizontal, FlaskConical, Share2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useI18n } from '@/lib/i18n';
 import { useSongData } from '@/hooks/useSongData';
@@ -27,7 +27,7 @@ function mobileContentCls() {
 const mobileItemBase =
   'song-menu-item flex w-full items-center gap-3 rounded-md px-4 py-2.5 text-left text-sm text-[var(--foreground)] data-[highlighted]:bg-[var(--accent)] data-[disabled]:opacity-50';
 
-export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported, onOpenPiP, onShowSongInfo, onRecolorCover, onToggleDotParams, onOpenExperiments, onOpenDownload, canEdit }: {
+export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSupported, onOpenPiP, onRecolorCover, onToggleDotParams, onOpenExperiments, onOpenDownload, canEdit }: {
   data: ReturnType<typeof useSongData>;
   sync: ReturnType<typeof useSpotifySync>;
   song: NonNullable<ReturnType<typeof useSongData>['song']>;
@@ -36,7 +36,6 @@ export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSup
   furiganaLines: ReturnType<typeof useSongData>['furiganaLines'];
   pipSupported: boolean;
   onOpenPiP: () => void;
-  onShowSongInfo: () => void;
   onOpenExperiments: () => void;
   onRecolorCover: () => void;
   onToggleDotParams: () => void;
@@ -49,7 +48,6 @@ export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSup
   // The <DropdownMenuItem> items in the top-level 3-dot menu (kept open when
   // the "edit" submenu is toggled / toggles without closing).
   const mainMenuItems: ToolbarMenuItem[] = [
-    { icon: <Info className="h-4 w-4" />, label: t('song.info'), onClick: onShowSongInfo },
     ...(pipSupported && furiganaLines.length > 0 ? [{ icon: <PictureInPicture className="h-4 w-4" />, label: t('song.pipBtn'), onClick: onOpenPiP }] : []),
     { icon: <Bug className="h-4 w-4" />, label: t('song.debug'), status: t(data.debug ? 'common.on' : 'common.off'), onClick: () => data.setDebug(!data.debug), keepOpen: true },
     { icon: <FlaskConical className="h-4 w-4" />, label: t('song.experimentsTitle'), onClick: () => onOpenExperiments() },

@@ -44,6 +44,8 @@ export interface FuriganaSegment {
    * a missing value simply means "unknown" and keeps the literal reading.
    */
   pos?: string;
+  /** Adjacent part of the preceding tokenizer word after splitting kanji/okurigana. */
+  joinPrev?: boolean;
 }
 
 export interface FuriganaLine {
@@ -76,8 +78,24 @@ export interface SongListItem {
   cover_url?: string | null;
   spotify_track_id?: string | null;
   spotify_album?: string | null;
+  /** Artist-detail metadata. null means unknown; omitted on older/list APIs. */
+  spotify_duration_ms?: number | null;
+  has_lyrics?: boolean | null;
+  has_synced_timeline?: boolean | null;
+  has_furigana?: boolean | null;
+  has_translation?: boolean | null;
+  lyrics_translation_lang?: string | null;
+  /** Current user's favorite existence (including classified favorites); null for guests. */
+  favorited?: boolean | null;
   created_at: string;
   updated_at: string;
+  /**
+   * Issue #323: quality-gate flag written by the lyrics fetcher
+   * (`lyrics-hit.ts` → `playlist-import.ts`). `1` means the lyrics match was
+   * low-confidence / duration-conflicting, so the home list can surface the
+   * same "needs review" badge the admin list uses.
+   */
+  lyrics_needs_review?: number;
 }
 
 /** Song list item as used by the home page (same shape as SongListItem). */

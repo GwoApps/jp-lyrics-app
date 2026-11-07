@@ -8,6 +8,7 @@ import { getUserSettings, applyUserTargetLang } from '@/lib/user-settings';
 import { computeCoverage, extractCompletedArrayItems } from '@/lib/translation-progress';
 import { mergeSliceIntoCache, writeSongField } from '@/lib/translation-cache';
 import { parseTranslationCache } from '@/lib/translation/parse';
+import { sourceLangOf } from '@/lib/lyrics-reading';
 
 const SSE_HEADERS = {
   'Content-Type': 'text/event-stream',
@@ -22,10 +23,11 @@ const SSE_HEADERS = {
 //     stored cache so partial translations survive failures (resume/continue support).
 //     Combined with `force`, cache reuse inside the slice is disabled so the requested lines
 //     are re-translated even when a previous translation is stored (targeted re-translate).
-//   - With `stream: true`: responds text/event-stream (SSE) — the provider's
-//     reasoning/translation deltas are forwarded live as `reasoning` and
-//     `translation` events, then a final `done` event carries the aligned
-//     translations array. Errors arrive as `error` events.
+//   - With `stream: true`: responds text/event-stream (SSE) — `stage` and `progress`
+//     report preparation and line coverage; optional `reasoning` deltas are
+//     forwarded live, then `done` carries the aligned translations array. The
+//     provider's translation chunks are NOT sent as `translation` events.
+//     Errors arrive as `error` events.
 //   - With `persist: false`: returns the translated slice WITHOUT merging it into the stored
 //     cache (and without persisting glossary/reasoning). Used by the editor's AI fill /
 //     single-line re-translate so results stay inside the「草稿 + 保存/放弃」boundary — the
@@ -72,6 +74,7 @@ export async function POST(
     lyricsTranslationLang: schema.songs.lyricsTranslationLang,
     lyricsTranslationReasoning: schema.songs.lyricsTranslationReasoning,
     lyricsGlossary: schema.songs.lyricsGlossary,
+    readingScheme: schema.songs.readingScheme,
   }).from(schema.songs).where(eq(schema.songs.id, id)).get();
   if (!existing) {
     return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
@@ -232,9 +235,17 @@ export async function POST(
   // Returns [ok, errorCode, status]. `ok === false` means a fatal error the
   // caller must abort on: `errorCode` is the API error key and `status` the
   // HTTP status for non-streaming responses (stale source / deleted song).
-  const ensureGlossary = async (): Promise<[boolean, string | null, number | null]> => {
+  //
+  // `signal` is the request's cancel signal. The SSE path passes it so a
+  // cancel / page close during the preparation stage really does abort the
+  // in-flight glossary call (and releases that provider quota) instead of
+  // letting it run to completion for a client that is already gone — the same
+  // behaviour the translation stream got in #15. The non-streaming path has no
+  // request signal to forward and relies on the call's own timeout budget
+  // (issue #359).
+  const ensureGlossary = async (signal?: AbortSignal): Promise<[boolean, string | null, number | null]> => {
     if (glossary !== null) return [true, null, null];
-    const extracted = await extractLyricsGlossary(existing.title, existing.artist, lines, config);
+    const extracted = await extractLyricsGlossary(existing.title, existing.artist, lines, config, fetch, signal);
     if (extracted !== null) {
       // Only persist a SUCCESSFUL extraction. A failure returns null and is
       // left unwritten, so the next whole-song translation retries it instead
@@ -273,6 +284,13 @@ export async function POST(
     title: existing.title,
     artist: existing.artist,
     glossary: glossary ?? undefined,
+    // Source language drives the few-shot direction and the Cantonese reading
+    // rule (issue #316). It is derived from the song's reading scheme via the
+    // shared scheme→source table in lib/lyrics-reading (the same signal the UI
+    // uses for source-lyric lang/readings), so a NEW reading scheme only needs
+    // its entry added there — this call site keeps working unchanged. Unknown /
+    // NULL schemes normalize to Japanese, so those songs are unaffected.
+    sourceLang: sourceLangOf(existing.readingScheme),
     // Slice requests (missing-line fill / single-line re-translate) get the
     // full song as REFERENCE CONTEXT so the model resolves Japanese omitted
     // subjects, pronouns and proper nouns from the surrounding lyrics instead
@@ -411,7 +429,7 @@ export async function POST(
           // generic "preparing" notice — the glossary internals stay opaque
           // (issue #172).
           send('stage', { stage: 'glossary_extraction' });
-          const [glossaryOk, glossaryCode] = await ensureGlossary();
+          const [glossaryOk, glossaryCode] = await ensureGlossary(request.signal);
           if (!glossaryOk) {
             // Stale source / deleted song detected during extraction — the
             // write could not be committed, so abort the stream with the real

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { MAX_CONSECUTIVE_ERRORS, backoffDelay } from '@/lib/retry-backoff';
 import { isSpotifyTransientError } from '@/lib/spotify-error';
+import { reconcileSeek, trackIdentity, type SeekOverride, type SeekObservation } from '@/lib/spotify-seek-override';
 
 export interface NowPlayingData {
   connected: boolean;
@@ -21,6 +22,7 @@ interface DiffMessage {
   d: Partial<NowPlayingData>; // changed fields only
   _full?: boolean; // true when server sends full data
   _sync?: SyncState; // degraded-state flag pushed by the server poller
+  _observedAt?: number; // when Spotify GET began, before its response arrived
 }
 
 const EMPTY: NowPlayingData = { connected: false, is_playing: false, progress_ms: 0, duration_ms: 0, track: null };
@@ -69,9 +71,40 @@ export function useNowPlaying(enabled = true) {
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gotMessageRef = useRef(false);
   const localDataRef = useRef<NowPlayingData>(EMPTY);
+  const mountedRef = useRef(true);
+  // Raw SSE data above must remain untouched for diff/checksum verification.
+  // Only the displayed state receives a successful seek while the server catches up.
+  const displayedDataRef = useRef<NowPlayingData | null>(null);
+  const seekOverrideRef = useRef<SeekOverride | null>(null);
+  const latestObservationRef = useRef({ client: 0, server: 0 });
+  const publishData = useCallback((observation: NowPlayingData, observed: SeekObservation) => {
+    // A delayed pre-command poll/SSE observation must not undo a newer control readback.
+    // Keep raw SSE/checksum state untouched; this orders only the displayed observations.
+    const latest = latestObservationRef.current[observed.source];
+    if (observed.startedAt > 0 && observed.startedAt < latest) return;
+    latestObservationRef.current[observed.source] = Math.max(latest, observed.startedAt);
+    const reconciled = reconcileSeek(observation, seekOverrideRef.current, performance.now(), observed);
+    seekOverrideRef.current = reconciled.pending;
+    displayedDataRef.current = reconciled.data;
+    setData(reconciled.data);
+  }, []);
+  const applySuccessfulSeek = useCallback((positionMs: number, expectedTrackKey: string, serverAppliedAt: number): number | null => {
+    const current = displayedDataRef.current;
+    if (!enabled || !mountedRef.current || !current?.connected || !current.track
+      || !expectedTrackKey || !Number.isFinite(serverAppliedAt)
+      || trackIdentity(current.track) !== expectedTrackKey) return null;
+    const position = Math.min(Math.max(0, positionMs), current.duration_ms > 0 ? current.duration_ms : Infinity);
+    seekOverrideRef.current = {
+      trackKey: expectedTrackKey, positionMs: position,
+      appliedAt: performance.now(), clientAppliedAt: Date.now(), serverAppliedAt,
+    };
+    const next = { ...current, progress_ms: position };
+    displayedDataRef.current = next;
+    setData(next);
+    return position;
+  }, [enabled]);
   const localSeqRef = useRef(0);
   const checksumErrRef = useRef(0);
-  const mountedRef = useRef(true);
   const lastMessageTimeRef = useRef(0);
   const clientErrorsRef = useRef(0);
   // Mirrors syncState so event handlers (visibility change) can read the latest
@@ -89,13 +122,13 @@ export function useNowPlaying(enabled = true) {
   }, []);
 
   /** A successful fetch/poll resets the failure counter and the degraded state. */
-  const handlePollSuccess = useCallback((d: NowPlayingData) => {
+  const handlePollSuccess = useCallback((d: NowPlayingData, observedAt: number, source: SeekObservation['source'] = 'client') => {
     if (!mountedRef.current) return;
     clientErrorsRef.current = 0;
     setSyncState('connected');
-    setData(d);
+    publishData(d, { source, startedAt: observedAt });
     lastMessageTimeRef.current = Date.now();
-  }, []);
+  }, [publishData]);
 
   // Holds the latest scheduler so the error path can re-schedule itself (backoff)
   // without a circular dependency. Updated in an effect, never during render.
@@ -106,9 +139,14 @@ export function useNowPlaying(enabled = true) {
     stopClientPolling();
     const run = async () => {
       if (!mountedRef.current) return;
+      const clientFetchStart = Date.now(); // fallback for older servers without observation headers
       try {
         const res = await fetch('/api/spotify/now-playing');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const serverObservedAt = Number(res.headers.get('X-Spotify-Observed-At'));
+        const observed = Number.isFinite(serverObservedAt) && serverObservedAt > 0
+          ? { source: 'server' as const, startedAt: serverObservedAt }
+          : { source: 'client' as const, startedAt: clientFetchStart };
         const d = await res.json();
         // Transient Spotify fault (429/5xx): auto-retry with backoff instead of
         // the normal cadence, but never count toward a permanent stop — these
@@ -116,12 +154,12 @@ export function useNowPlaying(enabled = true) {
         if (d && d.error && isSpotifyTransientError(d.error)) {
           clientErrorsRef.current = 0;
           setSyncState('retrying');
-          setData(d);
+          publishData(d, observed);
           lastMessageTimeRef.current = Date.now();
           scheduleClientPollRef.current(backoffDelay(1));
           return;
         }
-        handlePollSuccess(d);
+        handlePollSuccess(d, observed.startedAt, observed.source);
         // Success → back to the normal poll cadence.
         scheduleClientPollRef.current(CLIENT_POLL_INTERVAL_MS);
       } catch {
@@ -141,7 +179,7 @@ export function useNowPlaying(enabled = true) {
     } else {
       pollRef.current = setTimeout(() => { void run(); }, delayMs);
     }
-  }, [handlePollSuccess, stopClientPolling]);
+  }, [handlePollSuccess, publishData, stopClientPolling]);
 
   useEffect(() => {
     scheduleClientPollRef.current = scheduleClientPoll;
@@ -165,6 +203,8 @@ export function useNowPlaying(enabled = true) {
       esRef.current?.close();
       esRef.current = null;
       stopClientPolling();
+      seekOverrideRef.current = null;
+      displayedDataRef.current = null;
       return;
     }
     mountedRef.current = true;
@@ -210,7 +250,7 @@ export function useNowPlaying(enabled = true) {
           receivedFullMessage = true;
           localDataRef.current = fullData;
           localSeqRef.current = msg.seq;
-          handlePollSuccess(fullData);
+          handlePollSuccess(fullData, msg._observedAt ?? 0, 'server');
           if (msg._sync) setSyncState(msg._sync);
           gotMessageRef.current = true;
           stopClientPolling();
@@ -259,7 +299,7 @@ export function useNowPlaying(enabled = true) {
           localDataRef.current = msg.d as unknown as NowPlayingData;
           localSeqRef.current = msg.seq;
           setSyncState(msg._sync ?? 'connected');
-          setData(localDataRef.current);
+          publishData(localDataRef.current, { source: 'server', startedAt: msg._observedAt ?? 0 });
           return;
         }
 
@@ -282,7 +322,7 @@ export function useNowPlaying(enabled = true) {
         localSeqRef.current = msg.seq;
         checksumErrRef.current = 0;
         if (msg._sync) setSyncState(msg._sync);
-        setData(candidate);
+        publishData(candidate, { source: 'server', startedAt: msg._observedAt ?? 0 });
       } catch { /* ignore parse errors */ }
     };
 
@@ -310,7 +350,7 @@ export function useNowPlaying(enabled = true) {
         }, 5000);
       }
     };
-  }, [startFallback, stopClientPolling, requestFullRefresh]);
+  }, [startFallback, stopClientPolling, requestFullRefresh, publishData]);
 
   useEffect(() => {
     connectSSERef.current = connectSSE;
@@ -335,6 +375,18 @@ export function useNowPlaying(enabled = true) {
       connectSSE();
     }
   }, [pollMode, scheduleClientPoll, stopClientPolling, connectSSE]);
+
+  /** Read actual Spotify state after a control operation, without replacing the SSE stream. */
+  const refreshPlayback = useCallback(async () => {
+    if (!enabled) return;
+    const startedAt = Date.now();
+    const response = await fetch('/api/spotify/now-playing', { cache: 'no-store' });
+    if (!response.ok) throw new Error('playback_state_unavailable');
+    const observedAt = Number(response.headers.get('X-Spotify-Observed-At'));
+    const observation = await response.json() as NowPlayingData;
+    if (mountedRef.current) publishData(observation, Number.isFinite(observedAt) && observedAt > 0
+      ? { source: 'server', startedAt: observedAt } : { source: 'client', startedAt });
+  }, [enabled, publishData]);
 
   // ─── Start appropriate mode once config is loaded ───
   useEffect(() => {
@@ -397,5 +449,11 @@ export function useNowPlaying(enabled = true) {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [enabled, pollMode, connectSSE, startClientPolling, stopClientPolling]);
 
-  return { data: enabled ? data : null, syncState: enabled ? syncState : 'connected', resumeSync };
+  return {
+    data: enabled ? data : null,
+    syncState: enabled ? syncState : 'connected',
+    resumeSync,
+    applySuccessfulSeek,
+    refreshPlayback,
+  };
 }

@@ -5,13 +5,15 @@ import {
   decodeBase64Utf8,
   decodePetitLyricsLsyToLrc,
   durationStatus,
-  fetchFromLrclib,
+  fetchFromLrclib as fetchFromLrclibRaw,
   fetchFromUtaNet,
   lrclibConfidence,
   parsePetitLyricsResponse,
   parseUtaNetCandidates,
   petitLyricsXmlToLrc,
-  searchLrclib,
+  petitLyricsCandidateMatches,
+  searchLrclib as searchLrclibRaw,
+  type LrclibEvidence,
   stripTimestamps,
   unescapeLyrics,
   utaNetConfidence,
@@ -79,6 +81,29 @@ test('parses PetitLyrics candidate metadata and converts its WYSIWYG timing to l
   assert.deepEqual(candidate, { type: 3, data: timingXml, title: 'テスト曲', artist: '歌手 A' });
   assert.equal(typeof candidate?.data, 'string');
   assert.equal(petitLyricsXmlToLrc(candidate!.data as string), '[00:01.47]第一行');
+});
+
+test('PetitLyrics accepts a candidate whose title differs only by kana script (ISSUE #317)', () => {
+  // PetitLyrics indexes 「サヨナラ」 in katakana while the requested Spotify title
+  // is hiragana — the exact-equality gate used to reject the candidate outright.
+  assert.equal(
+    petitLyricsCandidateMatches({ title: 'サヨナラ', artist: 'アイミョン' }, 'さよなら', 'あいみょん'),
+    true,
+  );
+  // Halfwidth katakana (NFKC) and punctuation differences stay tolerated.
+  assert.equal(
+    petitLyricsCandidateMatches({ title: 'サヨナラ！（Live）', artist: 'アイミョン' }, 'さよなら(Live)', 'あいみょん'),
+    true,
+  );
+  // Different readings must still be rejected — folding does not widen the gate.
+  assert.equal(
+    petitLyricsCandidateMatches({ title: 'サヨナラ', artist: '別の人' }, 'さよなら', 'あいみょん'),
+    false,
+  );
+  assert.equal(
+    petitLyricsCandidateMatches({ title: 'ヒマワリ', artist: 'アイミョン' }, 'さよなら', 'あいみょん'),
+    false,
+  );
 });
 
 // ─── Duration / album evidence ───────────────────────────────
@@ -159,6 +184,14 @@ function mockFetch(handler: (url: string) => Response | null): () => void {
   return () => { globalThis.fetch = original; };
 }
 
+// The tests mock every HTTP response. Waiting on the public LRCLIB quota
+// between synthetic requests adds ~30s but validates no extra behaviour; keep
+// production defaults untouched and disable only the throttle in this fixture.
+const fetchFromLrclib = (title: string, artist: string, evidence?: LrclibEvidence) =>
+  fetchFromLrclibRaw(title, artist, evidence, undefined, { rateLimitMs: 0 });
+const searchLrclib = (query: string, title: string, artist: string, evidence?: LrclibEvidence) =>
+  searchLrclibRaw(query, title, artist, evidence, undefined, { rateLimitMs: 0 });
+
 const lrclibTrack = (overrides: Record<string, unknown>) => ({
   id: 1,
   trackName: 'Idol',
@@ -168,6 +201,23 @@ const lrclibTrack = (overrides: Record<string, unknown>) => ({
   syncedLyrics: '[00:00.10]テスト',
   plainLyrics: 'テスト',
   ...overrides,
+});
+
+test('LRCLIB throttle still spaces requests when a nonzero interval is configured', async () => {
+  const calls: number[] = [];
+  const restore = mockFetch(() => {
+    calls.push(performance.now());
+    return new Response(JSON.stringify(lrclibTrack({})), { status: 200 });
+  });
+  try {
+    const opts = { rateLimitMs: 35 };
+    await fetchFromLrclibRaw('Idol', 'YOASOBI', undefined, undefined, opts);
+    await fetchFromLrclibRaw('Idol', 'YOASOBI', undefined, undefined, opts);
+    assert.equal(calls.length, 2);
+    assert.ok(calls[1] - calls[0] >= 25, `throttle elapsed ${calls[1] - calls[0]}ms`);
+  } finally {
+    restore();
+  }
 });
 
 test('fetchFromLrclib returns a plain hit unchanged when duration agrees with Spotify', async () => {
@@ -206,6 +256,31 @@ test('fetchFromLrclib prefers an album-scoped hit when the bare exact duration c
   }
 });
 
+// Three failure shapes of the album-scoped fallback share one invariant: the
+// bare 90s recording remains a reviewable duration conflict, never a miss.
+for (const { name, albumResponse } of [
+  { name: 'temporary error', albumResponse: () => new Response('boom', { status: 500 }) },
+  { name: 'non-JSON response', albumResponse: () => new Response('<html>gateway error</html>', { status: 200 }) },
+  { name: '404', albumResponse: () => new Response(JSON.stringify({ message: 'Not found', name: 'TrackNotFound' }), { status: 404 }) },
+]) {
+  test(`fetchFromLrclib keeps the bare hit when the album fallback returns ${name}`, async () => {
+    let albumRequests = 0;
+    const restore = mockFetch((url) => {
+      if (url.includes('album_name')) { albumRequests += 1; return albumResponse(); }
+      return new Response(JSON.stringify(lrclibTrack({ duration: 90 })), { status: 200 });
+    });
+    try {
+      const hit = await fetchFromLrclib('Idol', 'YOASOBI', { durationMs: 213_000, album: 'Idol' });
+      assert.equal(albumRequests, 1, 'the album fallback was attempted');
+      assert.equal(hit.hit?.duration, 'conflict');
+      assert.equal(hit.hit?.result.synced, '[00:00.10]テスト');
+      assert.equal(hit.rateLimited, false);
+    } finally {
+      restore();
+    }
+  });
+}
+
 test('fetchFromLrclib falls back to the album-scoped query when the bare exact 404s', async () => {
   let albumScopedCalled = false;
   const restore = mockFetch((url) => {
@@ -219,6 +294,28 @@ test('fetchFromLrclib falls back to the album-scoped query when the bare exact 4
     const hit = await fetchFromLrclib('Idol', 'YOASOBI', { durationMs: 213_000, album: 'Idol' });
     assert.equal(albumScopedCalled, true);
     assert.equal(hit.hit?.duration, 'match');
+  } finally {
+    restore();
+  }
+});
+
+test('searchLrclib matches a kana-heterogeneous candidate without mutating the query (ISSUE #317)', async () => {
+  // The candidate is indexed in katakana while the caller's title/artist are
+  // hiragana. Folding must make the hard gates pass — and the *request* must
+  // still carry the caller's original spelling.
+  const seenUrls: string[] = [];
+  const restore = mockFetch((url) => {
+    seenUrls.push(url);
+    return new Response(JSON.stringify([lrclibTrack({ trackName: 'サヨナラ', artistName: 'アイミョン' })]), { status: 200 });
+  });
+  try {
+    const hit = await searchLrclib('さよなら あいみょん', 'さよなら', 'あいみょん');
+    assert.ok(hit.hit, 'kana-heterogeneous candidate must survive the gates');
+    const searchUrl = seenUrls.find((u) => u.includes('/api/search'));
+    assert.ok(searchUrl, 'fuzzy search must have been issued');
+    const query = decodeURIComponent(new URL(searchUrl).searchParams.get('q') ?? '');
+    assert.equal(query, 'さよなら あいみょん');
+    assert.doesNotMatch(query, /[\u30a1-\u30f6]/, 'query must not be folded to katakana or rewritten');
   } finally {
     restore();
   }
@@ -264,7 +361,7 @@ test('lrclib 429 is retried once then surfaced as rateLimited, not a silent miss
     attempts += 1;
     // First two requests 429 (with Retry-After), then a successful hit.
     if (attempts <= 2) {
-      return new Response('too many requests', { status: 429, headers: { 'Retry-After': '1' } });
+      return new Response('too many requests', { status: 429, headers: { 'Retry-After': '0.001' } });
     }
     return new Response(JSON.stringify(lrclibTrack({})), { status: 200 });
   });
@@ -283,7 +380,7 @@ test('lrclib 429 retry succeeds after Retry-After and returns the hit', async ()
   const restore = mockFetch(() => {
     attempts += 1;
     if (attempts === 1) {
-      return new Response('too many requests', { status: 429, headers: { 'Retry-After': '1' } });
+      return new Response('too many requests', { status: 429, headers: { 'Retry-After': '0.001' } });
     }
     return new Response(JSON.stringify(lrclibTrack({})), { status: 200 });
   });
@@ -413,6 +510,27 @@ test('fetchFromUtaNet returns null when no candidate clears the thresholds', asy
   try {
     const hit = await fetchFromUtaNet('アイドル', 'YOASOBI');
     assert.equal(hit, null);
+  } finally {
+    restore();
+  }
+});
+
+test('fetchFromUtaNet accepts a kana-heterogeneous hit without folding the search keyword', async () => {
+  let searchUrl = '';
+  const restore = mockFetch((url) => {
+    if (url.includes('/search/')) {
+      searchUrl = url;
+      return new Response(utanetSearchHtml([['777', 'サヨナラ', 'アイミョン']]), { status: 200 });
+    }
+    if (url.includes('/song/')) return new Response(utanetLyricsHtml, { status: 200 });
+    return null;
+  });
+  try {
+    const hit = await fetchFromUtaNet('さよなら', 'あいみょん');
+    assert.ok(hit, 'kana-heterogeneous Uta-Net row must be accepted');
+    assert.equal(hit?.matchedTitle, 'サヨナラ');
+    const keyword = decodeURIComponent(new URL(searchUrl).searchParams.get('Keyword') ?? '');
+    assert.equal(keyword, 'さよなら あいみょん');
   } finally {
     restore();
   }
