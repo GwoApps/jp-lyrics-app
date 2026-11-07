@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Music, Plus, Unlink, Download, ExternalLink, Loader2, Search, Disc3, RefreshCw, ChevronRight } from 'lucide-react';
+import { Music, Plus, Unlink, Download, ExternalLink, Loader2, Search, Disc3, RefreshCw, ChevronRight, X } from 'lucide-react';
 import ConfirmDialog, { ARTIST_LINK_MARKER, artistLinkedDialogBody } from '@/components/ConfirmDialog';
 import ArtistLinks from '@/components/ArtistLinks';
 import SongItemCard from '@/components/SongItemCard';
@@ -25,6 +25,7 @@ import { buildManualCreateUrl } from '@/lib/song-prefill';
 import { getCachedSongs, setCachedSongs } from '@/lib/song-list-cache';
 import { requestSongList } from '@/lib/song-list-fetch';
 import { groupSongsByAlbum } from '@/lib/song-albums';
+import { noResultsMessage } from '@/lib/search-filter-a11y';
 
 type ToastState = { type: 'success' | 'error'; msg: string; actionSong?: { id: string; title: string } } | null;
 const EMPTY_SONG_IDS = new Set<string>();
@@ -396,12 +397,15 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
   const visibleCollectionSongs = visibleCollection && collectionSongs?.id === visibleCollection
     ? collectionSongs.ids : EMPTY_SONG_IDS;
 
-  // Filter songs by search query (mySongsOnly is handled server-side via ?mine=1)
+  // Filter songs by search query (mySongsOnly is handled server-side via ?mine=1).
+  // Whitespace-only input is not a filter: the toolbar hides its chip for it, so
+  // filtering on it would resurrect the "invisible filter" this issue is about.
+  const appliedSearch = searchQuery.trim();
   const filteredSongs = songs.filter((s) => {
     if (currentUser && favoritesOnly && !visibleFavorites.has(s.id)) return false;
     if (visibleCollection && !visibleCollectionSongs.has(s.id)) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
+    if (appliedSearch) {
+      const q = appliedSearch.toLowerCase();
       return s.title.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q)
         || (listKind === 'albums' && !!s.spotify_album?.toLowerCase().includes(q));
     }
@@ -513,7 +517,7 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
           <h1 className="text-lg font-semibold tracking-tight">{t(listKind === 'albums' ? 'home.albumList' : 'home.songList')}</h1>
           <p className="text-xs text-[var(--muted-foreground)] mt-1">{listKind === 'albums'
             ? `${t('home.albumCount', { count: albumGroups.length })} · ${t('home.songCount', { count: albumTrackCount })}`
-            : `${t('home.songCount', { count: filteredSongs.length })}${(searchQuery || mySongsOnly || favoritesOnly) && filteredSongs.length !== songs.length ? ` / ${songs.length}` : ''}`}</p>
+            : `${t('home.songCount', { count: filteredSongs.length })}${(appliedSearch || mySongsOnly || favoritesOnly) && filteredSongs.length !== songs.length ? ` / ${songs.length}` : ''}`}</p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {spotify === null ? null : spotify.connected ? (
@@ -692,7 +696,12 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
       ) : (listKind === 'albums' ? albumGroups.length === 0 : filteredSongs.length === 0) ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Search className="h-8 w-8 mb-3 text-[var(--muted-foreground)] opacity-20" />
-          <p className="text-sm text-[var(--muted-foreground)]">{t(listKind === 'albums' ? 'home.noAlbumResults' : 'home.noResults')}</p>
+          <p className="text-sm text-[var(--muted-foreground)]">{noResultsMessage(listKind, appliedSearch, t)}</p>
+          {appliedSearch && (
+            <button onClick={() => setSearchQuery('')} className="mt-5 inline-flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-4 py-2 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
+              <X className="h-3.5 w-3.5" /> {t('home.clearSearch')}
+            </button>
+          )}
         </div>
       ) : (
         <div id="songs" ref={songListRef} className={listKind === 'albums'

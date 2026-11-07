@@ -2,6 +2,7 @@
 
 import { LayoutGrid, List, Search, Star, User, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { clearSearchLabel, searchChipLabel, searchToggleLabel } from '@/lib/search-filter-a11y';
 
 export type SongViewMode = 'list' | 'grid';
 
@@ -41,6 +42,7 @@ export default function SongFilterBar({
 }: SongFilterBarProps) {
   const { t } = useI18n();
   const searchLabel = t(isAlbumList ? 'home.searchAlbums' : 'home.search');
+  const appliedQuery = searchQuery.trim();
 
   const viewModeGroup = (
     <div className="inline-flex shrink-0 rounded-md border border-[var(--border)] bg-[var(--accent)] p-0.5" role="group" aria-label={t('home.viewMode')}>
@@ -70,8 +72,8 @@ export default function SongFilterBar({
           <button
             type="button"
             onClick={onToggleMobileSearch}
-            className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors ${mobileSearchOpen ? 'bg-[var(--primary)] text-[var(--primary-foreground)]' : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
-            aria-label={searchLabel}
+            className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors ${mobileSearchOpen ? 'bg-[var(--primary)] text-[var(--primary-foreground)]' : appliedQuery ? 'bg-[var(--primary)]/15 text-[var(--primary)]' : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
+            aria-label={searchToggleLabel(appliedQuery, searchLabel, t)}
             aria-expanded={mobileSearchOpen}
           >
             <Search className="h-3.5 w-3.5" />
@@ -88,11 +90,33 @@ export default function SongFilterBar({
           )}
           <div className="ml-auto">{viewModeGroup}</div>
         </div>
-        {mobileSearchOpen && (
+        {mobileSearchOpen ? (
           <div className="home-search-shell relative mt-2">
             <Search className="home-search-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--muted-foreground)]" />
             <input type="search" autoFocus value={searchQuery} onChange={(e) => onSearchChange(e.target.value)} placeholder={searchLabel} className="home-search-field w-full rounded-md border border-[var(--border)] bg-[var(--input)] pl-9 pr-8 py-2 text-xs outline-none placeholder:text-[var(--muted-foreground)]/50" />
             {searchQuery && <button onClick={() => onSearchChange('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]" aria-label={t('common.clear')}><X className="h-3.5 w-3.5" /></button>}
+          </div>
+        ) : appliedQuery && (
+          /* Collapsed input, query still filtering the list: keep it visible and
+             clearable so the mobile toolbar never hides an active search (#371). */
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onToggleMobileSearch}
+              className="inline-flex min-w-0 items-center gap-1.5 rounded-md bg-[var(--primary)]/15 px-2 py-1 text-xs text-[var(--primary)]"
+              aria-label={searchToggleLabel(appliedQuery, searchLabel, t)}
+            >
+              <Search className="h-3 w-3 shrink-0" />
+              <span className="truncate">{searchChipLabel(appliedQuery, t)}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onSearchChange('')}
+              className="inline-flex shrink-0 items-center justify-center rounded-md p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              aria-label={clearSearchLabel(appliedQuery, t)}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
         )}
       </div>
