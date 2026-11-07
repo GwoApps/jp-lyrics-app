@@ -33,6 +33,11 @@ export async function POST(
     artist: schema.songs.artist,
     lyricsRaw: schema.songs.lyricsRaw,
     lyricsSynced: schema.songs.lyricsSynced,
+    // Read-only: `persistCandidate` reports whether an actual cache reset
+    // happened so the client can say so (issue #304).
+    lyricsFurigana: schema.songs.lyricsFurigana,
+    lyricsTranslation: schema.songs.lyricsTranslation,
+    lyricsGlossary: schema.songs.lyricsGlossary,
     readingScheme: schema.songs.readingScheme,
     spotifyTrackId: schema.songs.spotifyTrackId,
     createdBy: schema.songs.createdBy,

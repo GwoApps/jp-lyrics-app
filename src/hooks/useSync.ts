@@ -75,6 +75,7 @@ export function useSync(deps: UseSyncDeps): UseSyncReturn {
     source: string;
     lines: number;
     lrc: string;
+    cachesReset?: boolean;
   }) => {
     const songRes = await fetch(`/api/songs/${id}`);
     if (songRes.ok) {
@@ -82,7 +83,9 @@ export function useSync(deps: UseSyncDeps): UseSyncReturn {
       setSong(updated);
     }
     const sourceKey = LYRICS_SOURCE_KEYS[data.source];
-    showToast('success', t('song.synced', {
+    // The server resets furigana / translation when the lyric text changes;
+    // say so instead of letting hand-corrected readings disappear silently.
+    showToast('success', t(data.cachesReset ? 'song.syncedCachesReset' : 'song.synced', {
       source: sourceKey ? t(sourceKey) : data.source,
       lines: String(data.lines),
     }));
@@ -148,7 +151,7 @@ export function useSync(deps: UseSyncDeps): UseSyncReturn {
         const updated = await fetch(`/api/songs/${id}`, { cache: 'no-store' });
         if (updated.ok) setSong(await updated.json());
         const sourceKey = LYRICS_SOURCE_KEYS[data.source];
-        showToast('success', t('song.plainUpdated', {
+        showToast('success', t(data.cachesReset ? 'song.plainUpdatedCachesReset' : 'song.plainUpdated', {
           source: sourceKey ? t(sourceKey) : data.source,
         }));
         return;
@@ -262,7 +265,7 @@ export function useSync(deps: UseSyncDeps): UseSyncReturn {
         const updated = await fetch(`/api/songs/${id}`, { cache: 'no-store' });
         if (updated.ok) setSong(await updated.json());
         const sourceKey = LYRICS_SOURCE_KEYS[data.source];
-        showToast('success', t('song.plainUpdated', {
+        showToast('success', t(data.cachesReset ? 'song.plainUpdatedCachesReset' : 'song.plainUpdated', {
           source: sourceKey ? t(sourceKey) : data.source,
         }));
         return;

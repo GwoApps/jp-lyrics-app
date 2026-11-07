@@ -5,46 +5,7 @@ import { classifyLyricsHit } from '@/lib/lyrics-hit';
 import { getSpotifyTrack, searchSpotifyTrack } from '@/lib/spotify';
 import { signCandidate, type CandidateTokenPayload } from '@/lib/candidate-token';
 import { applySyncWrite } from '@/lib/sync-write';
-
-/**
- * Normalize every line terminator to `\n` (LF).
- *
- * Providers ship CRLF/CR payloads (`lyrics-fetcher.ts` folds them in its own
- * paths, an admin HTTP provider's JSON does not), while the stored
- * `lyrics_raw` is always compared to the candidate verbatim. Comparing the two
- * without folding first would report "changed" for a byte-identical document
- * that only differs in line endings — wiping furigana / translation for
- * nothing.
- */
-export function normalizeLrcEol(value: string): string {
-  return value.replace(/\r\n?/g, '\n');
-}
-
-/**
- * Decide whether a sync candidate really changes the stored lyric content
- * (issue #304).
- *
- * The derived caches (furigana / translation / glossary / reading scheme
- * confirmation) are all indexed by `lyrics_raw` LINE NUMBER, so they may only
- * survive a sync when the new text is line-for-line identical to what is
- * already stored. The previous check compared the timestamp-stripped,
- * blank-line-dropped text (`getLrcTextLines`), which is NOT what gets written:
- * a candidate that merely moved a blank line / replaced it with a full-width
- * space row compared "equal" and kept the caches, but was written verbatim —
- * shifting translation and furigana by one row, refusing every later furigana
- * save with `furigana_source_mismatch`, and defeating the whole-song
- * translation cache short-circuit.
- *
- * The comparison baseline now matches the written value exactly: after EOL
- * normalization the two documents are compared as a whole, so any difference
- * in line count, line order or whitespace counts as a content change and the
- * caches are reset. The trade-off is deliberate (see #304, option 1): a pure
- * formatting difference like an inserted blank line re-runs the translation
- * once, but never leaves caches misaligned with the stored lyrics.
- */
-export function hasSyncContentChanged(storedRaw: string, candidatePlain: string): boolean {
-  return normalizeLrcEol(candidatePlain) !== normalizeLrcEol(storedRaw);
-}
+import { hasDerivedLyricsCaches, hasLyricsContentChanged, normalizeSyncContent } from '@/lib/lyrics-content';
 
 /**
  * Single-song (re)sync business logic (issue #148 / #120).
@@ -82,8 +43,14 @@ export async function persistCandidate(
   },
 ): Promise<{ status: number; body: unknown }> {
 /* eslint-enable @typescript-eslint/no-explicit-any */
-  const plain = candidate.plain;
-  const synced = candidate.synced;
+  // Line endings are folded to LF on the way in, so the value compared below IS
+  // the value written: every downstream reader indexes lyrics by
+  // `lyrics_raw.split('\n')` (furigana validation, translation rows, export,
+  // the client renderer), and a CRLF candidate left verbatim would keep a
+  // trailing `\r` on every row — line counts would match while each row's text
+  // still would not, which is exactly the "looks synced, saves refuse with
+  // furigana_source_mismatch" failure from #304 (issue #304, review point 1).
+  const { plain, synced } = normalizeSyncContent(candidate);
   // A plain-text candidate has no synced LRC timeline; this drives the
   // `plainUpdated` flag the client uses to show the confirmation toast and to
   // clear the timeline view after a plain-text overwrite.
@@ -93,14 +60,26 @@ export async function persistCandidate(
   // fetched lyric text actually differs from what is currently stored. Re-syncing
   // the same lyrics — e.g. just to refresh LRC timestamps or fix the source — must
   // not erase manual furigana corrections, consumed AI translation quota, or the
-  // confirmed reading scheme (matches the content-aware PUT route behaviour).
+  // confirmed reading scheme.
   //
-  // The check is a strict whole-document comparison (EOL-normalized) so the
-  // "changed?" baseline is exactly the value written into `lyrics_raw` below:
-  // the derived caches are indexed by `lyrics_raw` line number, so keeping them
-  // across a re-wrapped candidate would leave them silently misaligned (issue
-  // #304). A pure blank-line difference therefore resets them on purpose.
-  const contentChanged = hasSyncContentChanged(song.lyricsRaw, plain);
+  // The comparison is a strict whole-document one (after the same EOL fold) so
+  // the "changed?" baseline equals the written value: those caches are indexed
+  // by `lyrics_raw` LINE NUMBER, so keeping them across a re-wrapped candidate
+  // would leave them silently misaligned (issue #304). A pure blank-line
+  // difference therefore resets them on purpose.
+  //
+  // Note this deliberately differs from the songs PUT route, which compares the
+  // blank-line-stripped text view (`getLrcTextLines`) and also writes that same
+  // stripped text — there too the baseline equals the written value. The two
+  // paths use different line models, and each is self-consistent.
+  const contentChanged = hasLyricsContentChanged(song.lyricsRaw, plain);
+  // Whether the reset actually destroys something the user would miss. Only
+  // used to tell them (the reset is not silent), never to skip it.
+  const cachesReset = contentChanged && hasDerivedLyricsCaches({
+    furigana: song.lyricsFurigana,
+    translation: song.lyricsTranslation,
+    glossary: song.lyricsGlossary,
+  });
 
   // CAS write: the UPDATE only matches while `lyrics_raw` still equals the
   // snapshot this request was based on. If another tab/session edited the
@@ -153,6 +132,10 @@ export async function persistCandidate(
       confidence: candidate.confidence,
       lines: parsed.length,
       lrc: synced,
+      // The derived caches were dropped because the lyric content changed —
+      // the client says so instead of letting furigana / translation vanish
+      // silently (issue #304, review point 2).
+      cachesReset,
       spotify_track_id: fresh?.spotifyTrack?.id ?? null,
     },
   };

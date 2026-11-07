@@ -8,6 +8,7 @@
  */
 import * as heModule from 'he';
 import { parseLrc, stripLrcTimestamps } from '../lrc.ts';
+import { normalizeLyricsEol } from '../lyrics-content.ts';
 
 const decodeHtmlEntity = (heModule as unknown as { default?: typeof heModule }).default?.decode ?? heModule.decode;
 
@@ -42,6 +43,13 @@ export function hasValidLrcTimeline(synced: string): boolean {
  * side is present we derive the other (strip timestamps from synced, or wrap
  * plain into no timeline), and HTML-decode both sides.
  *
+ * Line endings are folded to LF here, at the single point where provider
+ * payloads enter the app (issue #304). Everything downstream indexes lyrics by
+ * `lyrics_raw.split('\n')` — furigana validation, translation rows, export, the
+ * client renderer — so a CRLF / CR payload that reached storage would shift or
+ * break every one of them. Folding the written value is what makes
+ * `hasLyricsContentChanged`'s baseline genuinely equal to what is written.
+ *
  * A `synced_lyrics` payload with no valid LRC timeline (malformed / plain-only)
  * is downgraded: `syncedValid` is false and `synced` is dropped so the caller
  * never treats it as a timed high-confidence hit.
@@ -50,7 +58,7 @@ export function normalizeCandidateLyrics(input: {
   plainLyrics?: string;
   syncedLyrics?: string;
 }): { plain: string; synced: string; syncedValid: boolean } {
-  let synced = input.syncedLyrics ? unescapeLyrics(input.syncedLyrics) : '';
+  let synced = input.syncedLyrics ? normalizeLyricsEol(unescapeLyrics(input.syncedLyrics)) : '';
   let syncedValid = false;
   if (synced) {
     // Only keep synced lyrics that carry at least one valid timestamp row.
@@ -59,7 +67,7 @@ export function normalizeCandidateLyrics(input: {
   }
   const plainFromSynced = synced ? stripTimestamps(synced) : '';
   const plain = input.plainLyrics
-    ? unescapeLyrics(input.plainLyrics)
+    ? normalizeLyricsEol(unescapeLyrics(input.plainLyrics))
     : plainFromSynced;
   return { plain, synced, syncedValid };
 }
