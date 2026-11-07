@@ -787,7 +787,6 @@ export default function AdminPage() {
 
       {/* Song content preview */}
       <SongPreviewDialog
-        key={previewSong?.id ?? 'none'}
         song={previewSong}
         locale={locale}
         onClose={handleClosePreview}

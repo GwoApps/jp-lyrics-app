@@ -1,3 +1,4 @@
 ytmusicapi>=1.0.0
+requests>=2.31.0
 fastapi>=0.115.0
 uvicorn>=0.30.0

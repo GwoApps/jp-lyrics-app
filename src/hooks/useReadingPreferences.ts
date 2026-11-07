@@ -23,6 +23,10 @@ export function useReadingPreferences() {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('jplrc-show-translation') === 'true';
   });
+  const [disableVideoPiP, setDisableVideoPiP] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('jplrc-disable-video-pip') === 'true';
+  });
   const [debug, setDebug] = useState(false);
   const [fontSize, setFontSize] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -36,6 +40,16 @@ export function useReadingPreferences() {
   useEffect(() => { localStorage.setItem('jplrc-reading-mode', readingMode); }, [readingMode]);
   useEffect(() => { localStorage.setItem('jplrc-romanize-furigana', String(romanizeFurigana)); }, [romanizeFurigana]);
   useEffect(() => { localStorage.setItem('jplrc-show-translation', String(showTranslation)); }, [showTranslation]);
+  useEffect(() => { localStorage.setItem('jplrc-disable-video-pip', String(disableVideoPiP)); }, [disableVideoPiP]);
+
+  useEffect(() => {
+    const onSyncedSetting = (event: Event) => {
+      const value = (event as CustomEvent<boolean>).detail;
+      if (typeof value === 'boolean') setDisableVideoPiP(value);
+    };
+    window.addEventListener('jplrc-disable-video-pip-change', onSyncedSetting);
+    return () => window.removeEventListener('jplrc-disable-video-pip-change', onSyncedSetting);
+  }, []);
 
   return {
     readingMode,
@@ -44,6 +58,8 @@ export function useReadingPreferences() {
     setRomanizeFurigana,
     showTranslation,
     setShowTranslation,
+    disableVideoPiP,
+    setDisableVideoPiP,
     debug,
     setDebug,
     fontSize,

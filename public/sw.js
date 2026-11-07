@@ -1,6 +1,18 @@
-const CACHE_NAME = 'jplrc-v5';
+const CACHE_NAME = 'jplrc-v6';
 const IMMUTABLE_CACHE = 'jplrc-immutable-v1';
 const KUROMOJI_CACHE = 'jplrc-kuromoji-v1';
+// Keep in sync with src/lib/app-icon.ts and public/manifest.json.
+const APP_ICON_REVISION = 'lyrics-v1';
+const ICON_URLS = [
+  '/icon.svg',
+  '/favicon.ico',
+  '/icon-16x16.png',
+  '/icon-32x32.png',
+  '/icon-192x192.png',
+  '/icon-512x512.png',
+  '/icon-maskable-512x512.png',
+  '/apple-touch-icon.png',
+];
 
 /**
  * Whether `response` may be persisted in the Cache Storage.
@@ -23,15 +35,12 @@ function isCacheable(response) {
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return Promise.allSettled([
-        cache.add('/icon-16x16.png'),
-        cache.add('/icon-32x32.png'),
-        cache.add('/icon-192x192.png'),
-        cache.add('/icon-512x512.png'),
-        cache.add('/icon-maskable-512x512.png'),
-        cache.add('/apple-touch-icon.png'),
-        cache.add('/manifest.json'),
-      ]);
+      const urls = [
+        ...ICON_URLS,
+        ...ICON_URLS.map((url) => `${url}?v=${APP_ICON_REVISION}`),
+        '/manifest.json',
+      ];
+      return Promise.allSettled(urls.map((url) => cache.add(url)));
     })
   );
   self.skipWaiting();

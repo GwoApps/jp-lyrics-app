@@ -1,5 +1,7 @@
 'use client';
 
+import ArtistLinks from '@/components/ArtistLinks';
+
 import { AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, Eye, ListMusic, Search, Trash2, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { localeToBCP47, type AdminSong } from './admin-types';
@@ -152,7 +154,7 @@ export default function AdminSongList({
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate">{s.artist}</div>
+                  <div className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate"><ArtistLinks artist={s.artist} fallback={t('common.unknownArtist')} /></div>
                   {s.created_by_name && (
                     <div className="text-[10px] text-[var(--muted-foreground)]/60 mt-0.5">
                       {t('home.createdBy')}: {s.created_by_name}

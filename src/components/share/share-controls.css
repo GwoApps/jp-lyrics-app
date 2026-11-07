@@ -1,0 +1,49 @@
+/* Share controls reuse the song page's duration/curve instead of a motion dependency. */
+.share-page-content {
+  max-width: 48rem;
+  transition: max-width var(--song-player-motion-duration, 220ms) var(--song-player-motion-ease, cubic-bezier(.22, 1, .36, 1));
+}
+.share-page-content[data-orientation="portrait"] { max-width: 28rem; }
+
+.share-lyric-item {
+  transition: background-color 160ms ease, color 160ms ease;
+}
+.share-lyric-item__checkbox {
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.share-lyric-item__check {
+  opacity: 0;
+  transform: scale(.9);
+  transition: opacity 160ms var(--song-player-motion-ease, cubic-bezier(.22, 1, .36, 1)), transform 160ms var(--song-player-motion-ease, cubic-bezier(.22, 1, .36, 1));
+}
+.share-lyric-item[data-selected="true"] .share-lyric-item__check {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Shared grid cell reserves the larger localized label so adjacent buttons do not jump. */
+.share-copy-feedback { display: inline-grid; vertical-align: middle; }
+.share-copy-feedback__state {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  pointer-events: none;
+  transition: opacity 160ms var(--song-player-motion-ease, cubic-bezier(.22, 1, .36, 1)), transform 160ms var(--song-player-motion-ease, cubic-bezier(.22, 1, .36, 1));
+}
+.share-copy-feedback__default { opacity: 1; transform: translateY(0); }
+.share-copy-feedback__success { opacity: 0; transform: translateY(3px); }
+.share-copy-feedback[data-copied="true"] .share-copy-feedback__default { opacity: 0; transform: translateY(-3px); }
+.share-copy-feedback[data-copied="true"] .share-copy-feedback__success { opacity: 1; transform: translateY(0); }
+
+@media (prefers-reduced-motion: reduce) {
+  .share-page-content { transition: none; }
+  .share-lyric-item,
+  .share-lyric-item__checkbox { transition-duration: 100ms; }
+  .share-lyric-item__check,
+  .share-copy-feedback__state { transition: opacity 100ms linear; }
+  .share-lyric-item__check,
+  .share-lyric-item[data-selected="true"] .share-lyric-item__check,
+  .share-copy-feedback[data-copied] .share-copy-feedback__state { transform: none; }
+}

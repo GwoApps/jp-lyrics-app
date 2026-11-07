@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Music, Plus, Unlink, Download, ExternalLink, Loader2, Search, Disc3, RefreshCw, ChevronRight } from 'lucide-react';
-import ConfirmDialog from '@/components/ConfirmDialog';
+import ConfirmDialog, { ARTIST_LINK_MARKER, artistLinkedDialogBody } from '@/components/ConfirmDialog';
+import ArtistLinks from '@/components/ArtistLinks';
 import SongItemCard from '@/components/SongItemCard';
 import NowPlayingMetadata from '@/components/NowPlayingMetadata';
 import Toast from '@/components/Toast';
@@ -719,30 +720,36 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
               const contentId = `${albumGroupIdPrefix}-content-${albumGroupIndex}`;
               return (
                 <section key={group.key} className="album-group min-w-0 rounded-lg border border-[var(--border)] bg-[var(--card)]/40 p-2.5 sm:p-3">
-                  <h2 className="min-w-0">
+                  <div
+                    className="relative flex min-w-0 items-center gap-2.5 rounded px-1 transition-[margin] duration-200 ease-in-out"
+                    style={{ marginBottom: isCollapsed ? 0 : '0.625rem' }}
+                  >
                     <button
                       type="button"
                       id={headerId}
                       onClick={() => toggleAlbumCollapse(group.key)}
                       aria-expanded={!isCollapsed}
                       aria-controls={contentId}
-                      className="flex w-full min-w-0 cursor-pointer items-center gap-2.5 rounded px-1 text-left select-none transition-[margin] duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-                      style={{ marginBottom: isCollapsed ? 0 : '0.625rem' }}
+                      className="absolute inset-0 w-full cursor-pointer rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
                     >
+                      <span className="sr-only">{group.album}</span>
+                    </button>
                       {coverUrl ? (
                         // Provider cover hosts are dynamic and cannot be enumerated for next/image.
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={coverUrl} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover bg-[var(--muted)]" loading="lazy" />
+                        <img src={coverUrl} alt="" className="pointer-events-none h-10 w-10 shrink-0 rounded-md object-cover bg-[var(--muted)]" loading="lazy" />
                       ) : (
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[var(--accent)] text-[var(--muted-foreground)]"><Disc3 className="h-4 w-4" /></div>
+                        <div className="pointer-events-none flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[var(--accent)] text-[var(--muted-foreground)]"><Disc3 className="h-4 w-4" /></div>
                       )}
-                      <div className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold tracking-tight">{group.album}</span>
-                        <span className="block truncate text-xs text-[var(--muted-foreground)]">{group.artist ? `${group.artist} · ${t('home.albumTrackCount', { count: group.songs.length })}` : t('home.albumTrackCount', { count: group.songs.length })}</span>
+                      <div className="pointer-events-none relative min-w-0 flex-1">
+                        <h2 className="truncate text-sm font-semibold tracking-tight">{group.album}</h2>
+                        <div className="truncate text-xs text-[var(--muted-foreground)]">
+                          {group.artist && <><span className="pointer-events-auto"><ArtistLinks artist={group.artist} /></span> · </>}
+                          {t('home.albumTrackCount', { count: group.songs.length })}
+                        </div>
                       </div>
-                      <ChevronRight className={`h-4 w-4 shrink-0 text-[var(--muted-foreground)] transition-transform ${!isCollapsed ? 'rotate-90' : ''}`} />
-                    </button>
-                  </h2>
+                      <ChevronRight className={`pointer-events-none h-4 w-4 shrink-0 text-[var(--muted-foreground)] transition-transform ${!isCollapsed ? 'rotate-90' : ''}`} />
+                  </div>
                   <div
                     id={contentId}
                     role="group"
@@ -769,12 +776,12 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
           setFavoriteDialogSong(toast.actionSong!);
           setToast(null);
         } : undefined} />}
-      {favoriteDialogSong && (
-        <FavoriteCategoriesDialog key={favoriteDialogSong.id} song={favoriteDialogSong}
-          onCreated={(collection) => setCollections((prev) => [...prev, collection])}
-          onChanged={(favorited, categories) => handleFavoriteChanged(favoriteDialogSong.id, favorited, categories)}
-          onClose={closeFavoriteDialog} />
-      )}
+      <FavoriteCategoriesDialog open={!!favoriteDialogSong} song={favoriteDialogSong}
+        onCreated={(collection) => setCollections((prev) => [...prev, collection])}
+        onChanged={(favorited, categories) => {
+          if (favoriteDialogSong) handleFavoriteChanged(favoriteDialogSong.id, favorited, categories);
+        }}
+        onClose={closeFavoriteDialog} />
 
       <ConfirmDialog
         open={!!deleteTarget}
@@ -819,7 +826,7 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
       <ConfirmDialog
         open={!!importReview}
         title={t('home.importReviewTitle')}
-        body={importReview ? t('home.importReviewBody', {
+        body={importReview ? artistLinkedDialogBody(t('home.importReviewBody', {
           title: importReview.title,
           source: importReview.source,
           confidence: String(importReview.confidence),
@@ -827,11 +834,11 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
           preview: importReview.preview,
           matched: importReview.match?.title ? t('home.importReviewMatched', {
             matchedTitle: importReview.match.title,
-            matchedArtist: importReview.match.artist,
+            matchedArtist: ARTIST_LINK_MARKER,
             matchedLink: importReview.match.link,
             ambiguous: importReview.match.ambiguous ? t('home.importReviewMatchedAmbiguous') : '',
           }) : '',
-        }) : ''}
+        }), importReview.match?.artist) : ''}
         confirmLabel={t('home.importReviewConfirm')}
         cancelLabel={t('common.cancel')}
         onConfirm={() => void confirmImportReview()}

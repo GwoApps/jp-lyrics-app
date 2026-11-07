@@ -1,127 +1,79 @@
 # 歌詞ノート
 
-ふりがな表示・AI 翻訳・Spotify リアルタイム同期・実験パネル（歌詞ドットグリッド上のマイクスペクトラム）・PWA 対応の日本語歌詞管理 Web アプリ。
+日本語・広東語の歌詞を読むための Web アプリ。ふりがな／粤拼、AI 翻訳、Spotify の再生同期、PWA に対応しています。**アプリ内では公開曲をログインなしで閲覧できます（リバースプロキシ側で別途アクセス制限をかける場合があります）。曲の作成・編集・取り込み・翻訳には Spotify OAuth ログインが必要です。** 新しいデータベースには曲がなく、ログイン後に追加・取り込みます。
 
-[English](README.md) | [中文](README-zh.md) | [機能一覧](FEATURES.md) | [Deploy Guide](DEPLOYMENT.md)
+[English](README.md) | [中文](README-zh.md) | [機能一覧](FEATURES.md) | [デプロイガイド](DEPLOYMENT.md)
 
-## 機能
+## 主な機能
 
-ふりがな・AI 翻訳・Spotify 連動の自動スクロールを備えた日本語歌詞リーダー：
+- 読み方の切り替え、行ごとの操作、再生位置への追従スクロール、没入型の全画面歌詞表示（対応ブラウザではネイティブ全画面）。
+- Spotify の再生同期、プレイリスト取り込み、行ごとのタイムスタンプ編集、シェアカード、ピクチャーインピクチャー歌詞（ブラウザによって利用可否が異なります）。
+- OpenAI 互換・Anthropic・Cloudflare Workers AI による曲全体／行単位の翻訳。SSE で準備段階と進捗を通知し、最終的な `done` イベントで訳文を返します。推論内容はプロバイダが提供する場合のみ表示します。
+- 設定可能な歌詞ソースチェーン：LRCLIB などの内蔵ソースと、管理者が設定する HTTP プロバイダ。[YouTube Music sidecar](yt-sidecar/README.md) は付属のプラグイン例です。
+- 4言語 UI（ja、en、zh-CN、zh-TW）、お気に入りとコレクション、PWA、ダーク／ライトテーマ。
 
-- ふりがな表示、読み方モード（ふりがな / ローマ字）、フォントサイズ調整
-- AI 歌詞翻訳：SSE ストリーミング + ライブ思考パネル + プラグイン可能な LLM プロバイダ
-- Spotify リアルタイム同期（SSE またはポーリング）+ 行ごとのイージング自動スクロール
-- タイムライン注釈ワークスペース：再生位置に合わせて行ごとにマーク
-- 行ごとのコンテキストメニュー：デスクトップは右クリック、モバイルは長押しで開く
-- シェアカード生成（QR + 選択行 → PNG）、管理コンソール
-- PWA、ダーク/ライトテーマ、4言語 UI、お気に入り＆コレクション
-
-詳細は **[FEATURES.md](FEATURES.md)** を参照してください。
+詳しくは [FEATURES.md](FEATURES.md)、独自の歌詞ソースについては[プラグイン仕様](examples/provider-plugin/README.md)をご覧ください。グローバルな歌詞ソースは**管理画面 → システム → 歌詞ソース Provider**で設定します。
 
 ## 技術スタック
 
 | レイヤー | 技術 |
 |---|---|
-| フレームワーク | Next.js 16（App Router） |
-| UI | React 19、Tailwind CSS v4、Lucide Icons |
-| データベース | Drizzle ORM + @libsql/client（Turso、ローカル SQLite、Cloudflare D1） |
-| ふりがなエンジン | kuromoji-es（ブラウザ CDN、遅延読み込み） |
-| 歌詞ソース | lrclib.net |
-| 音楽連携 | Spotify Web API（OAuth 2.0）+ SSE / クライアントポーリング |
-| 翻訳 | OpenAI 互換 / Anthropic / Workers AI（SSE ストリーミング） |
-| 音声（実験） | Web Audio API（AnalyserNode、getUserMedia） |
-| デプロイ | Docker（セルフホスト）、Cloudflare Workers、Vercel Edge |
+| アプリ | Next.js 16（App Router）、React 19、Tailwind CSS v4 |
+| データベース | Drizzle ORM + libSQL（ローカル SQLite／Turso）、または Cloudflare D1 |
+| 歌詞 | 内蔵ソース + バージョン付き HTTP プラグイン、ブラウザ側の読み方エンジン |
+| 音楽／AI | Spotify Web API（OAuth 2.0）、OpenAI 互換／Anthropic／Workers AI |
+| ホスティング | Docker（Node.js）、Cloudflare Workers、Vercel（サーバーレスではクライアント側 Spotify ポーリング） |
 
-## クイックスタート
+## ローカルでの起動
+
+**Node.js 22** と npm を使用します。依存関係はコミット済みのロックファイルに従い `npm ci` でインストールしてください。
 
 ```bash
 git clone https://cnb.cool/siubeng/jp-lyrics-app.git
 cd jp-lyrics-app
-npm install
+npm ci
 cp .env.example .env
 npm run dev
-# → http://localhost:3000
+# http://localhost:3000
 ```
 
-### 環境変数
+起動と公開曲の閲覧には Spotify の認証情報は不要ですが、**アプリへのログイン方法は Spotify OAuth のみ**です。曲を作成・管理するには、`.env` に `SPOTIFY_CLIENT_ID` と `SPOTIFY_CLIENT_SECRET` を設定し、[Spotify Developer Dashboard](https://developer.spotify.com/dashboard) でアプリを作成して `http://localhost:3000/api/auth/callback` をリダイレクト URI に登録してください。再生同期やプレイリスト取り込みにも Spotify 接続が必要です。AI 翻訳にはプロバイダの設定が別途必要ですが、閲覧や手動編集には不要です。
 
-| 変数名 | 必須 | 説明 |
-|---|---|---|
-| `SPOTIFY_CLIENT_ID` | いいえ | Spotify クライアント ID |
-| `SPOTIFY_CLIENT_SECRET` | いいえ | Spotify クライアントシークレット |
-| `SPOTIFY_REDIRECT_URI` | いいえ | コールバック URL を上書き（デフォルト：リクエスト元 + `/api/auth/callback`） |
-| `SPOTIFY_POLL_MODE` | いいえ | `client`（デフォルト）または `server`。[DEPLOYMENT.md](DEPLOYMENT.md) 参照 |
-| `TURSO_URL` | いいえ | Turso データベース URL（例 `libsql://xxx.turso.io`）。未設定ならローカル SQLite にフォールバック。CF D1 は binding を使用 |
-| `TURSO_AUTH_TOKEN` | いいえ | Turso 認証トークン（`TURSO_URL` 設定時に必須） |
-| `TRANSLATION_PROVIDER` | いいえ | `openai`（デフォルト、OpenAI 互換）または `anthropic`（Anthropic Messages API） |
-| `TRANSLATION_BASE_URL` | いいえ | OpenAI 互換 API のベース URL（デフォルト `https://api.deepseek.com/v1`） |
-| `TRANSLATION_API_KEY` | いいえ | LLM API キー（未設定なら `DEEPSEEK_API_KEY` にフォールバック） |
-| `TRANSLATION_MODEL` | いいえ | モデル名（デフォルト `deepseek-v4-flash`） |
-| `TRANSLATION_TARGET_LANG` | いいえ | デフォルトの翻訳先言語（デフォルト `zh-CN`） |
-| `AI_DAILY_NEURON_LIMIT` | いいえ | 1日の翻訳クォータ（トークン）。超過時は `429 / ai_quota_exceeded` |
-| `JPLRC_LOGIN_PASSPHRASE_REQUIRED` | いいえ | Spotify OAuth 開始前にパスフレーズを要求するか |
-| `JPLRC_LOGIN_PASSPHRASE` | いいえ | パスフレーズ本体（サーバー側でのみ検証） |
-| `SESSION_SECRET` | いいえ | 本番推奨：ログイン/セッション Cookie を独立に署名 |
-| `LYRICS_PROVIDER_ALLOW_HTTP` | いいえ | 平文 `http://` HTTP 歌詞プロバイダを許可（既定 `false`、fail-closed） |
-| `LYRICS_PROVIDER_ALLOW_PRIVATE_NETWORK` | いいえ | ループバック/プライベート/Docker-bridge アドレスを許可（既定 `false`） |
-| `LYRICS_PROVIDER_SECRET_KEY` | Bearer プロバイダのみ | プロバイダ Bearer トークンを暗号化する AES-GCM 鍵 |
-| `LYRICS_PROVIDER_DEFAULT_TIMEOUT_MS` | いいえ | プロバイダごとの検索予算（既定 `20000`） |
-| `LYRICS_PROVIDER_MAX_TIMEOUT_MS` | いいえ | 管理者のタイムアウト上書き上限（既定 `60000`） |
-| `LYRICS_PROVIDER_MANIFEST_TIMEOUT_MS` | いいえ | manifest/接続テスト予算（既定 `15000`） |
-| `LYRICS_PROVIDER_CHAIN_TIMEOUT_MS` | いいえ | プロバイダチェーン全体の予算（既定 `180000`） |
+### 設定の概要
 
-HTTP 歌詞プロバイダの完全なデプロイガイドは [DEPLOYMENT.md](DEPLOYMENT.md) 第 4 節を参照してください。
+| 設定 | 用途 |
+|---|---|
+| `SPOTIFY_CLIENT_ID`、`SPOTIFY_CLIENT_SECRET` | OAuth ログイン。ログイン機能に必要、匿名での公開曲閲覧には不要 |
+| `SPOTIFY_REDIRECT_URI`、`SPOTIFY_POLL_MODE` | コールバック URI の上書き。再生モードは `client`（既定）または `server`（常駐 Node サーバーのみ） |
+| `TURSO_URL`、`TURSO_AUTH_TOKEN` | 任意のリモート DB。URL がなければ Node は `data/local.db` を使用。Workers は D1 binding を使用 |
+| `TRANSLATION_PROVIDER` | `openai`（既定）、`anthropic`、`workers-ai`（Cloudflare AI binding が必要） |
+| `TRANSLATION_BASE_URL`、`TRANSLATION_API_KEY`、`TRANSLATION_MODEL`、`TRANSLATION_TARGET_LANG` | 接続先／キー／モデル／既定の翻訳先言語。Workers AI に API キーは不要です。サンプル `.env` には OpenAI 互換モデルが設定されているため、プロバイダを変える場合はモデル設定も変更または削除してください。 |
+| `AI_DAILY_NEURON_LIMIT` | 任意の1日あたり翻訳上限 |
+| `SESSION_SECRET`、`JPLRC_LOGIN_PASSPHRASE_REQUIRED`、`JPLRC_LOGIN_PASSPHRASE` | 本番では独立したセッション署名用シークレットを設定。OAuth 前のパスフレーズ確認は任意 |
+| `LYRICS_PROVIDER_*` | HTTP 歌詞ソースのデプロイレベルのネットワーク制限、Bearer キー暗号化、タイムアウト。詳細は[デプロイガイド第4節](DEPLOYMENT.md#4-http-lyrics-providers-deployment-configuration-issue-148) |
 
-Spotify 連携はオプションです。設定しなくても歌詞の管理は可能です。
+管理者はアプリ内でも**グローバルな翻訳プロバイダ／モデル**を設定できます。DB に保存された空でない値が環境変数に優先し、空欄は環境変数へフォールバックします。ログインユーザーは翻訳先言語を個別に上書きできます。詳細は [.env.example](.env.example) と [DEPLOYMENT.md](DEPLOYMENT.md) を参照。実際の認証情報はコミットしないでください。
 
-[Spotify Developer Dashboard](https://developer.spotify.com/dashboard) でアプリを作成し、リダイレクト URI を `http://localhost:3000/api/auth/callback` に設定してください。
+### Docker は別のデプロイ手順です
 
-## Docker デプロイ
+付属の `docker-compose.yml` は **localhost ですぐ動く構成ではありません**。既存の Traefik 外部ネットワークと認証ミドルウェアが必要で、ホストにポートを公開せず、YouTube Music sidecar 用のホストファイルもマウントします。[Docker デプロイガイド](DEPLOYMENT.md#1-docker-self-hosted)で前提条件を確認し、`.env` を調整してから `docker compose up -d --build` を実行してください。Traefik を使わないローカル試用には、上記の `npm run dev` を使用してください。
+
+## 開発と検証
 
 ```bash
-docker compose up -d --build
+npm run check       # TypeScript、ESLint、i18n、テスト
+npm run check:full  # 上記 + 本番ビルド
 ```
 
-詳細（Docker / Cloudflare Workers / Vercel）は [DEPLOYMENT.md](DEPLOYMENT.md) を参照してください。
+主要ディレクトリ：[`src/app/`](src/app/)（画面／API）、[`src/components/`](src/components/)（UI）、[`src/hooks/`](src/hooks/)（クライアント側処理）、[`src/lib/`](src/lib/)（DB・歌詞・翻訳）、[`src/i18n/`](src/i18n/)（4言語）、[`drizzle/`](drizzle/)（SQL マイグレーション）、[`yt-sidecar/`](yt-sidecar/)（HTTP プロバイダ）。機能の説明は [FEATURES.md](FEATURES.md)、デプロイ／マイグレーションは [DEPLOYMENT.md](DEPLOYMENT.md) を参照してください。
 
-## プロジェクト構造
+## API の概要
 
-```
-src/
-├── app/
-│   ├── page.tsx                          # 曲一覧：検索、フィルター、再生中
-│   ├── admin/page.tsx                    # 管理コンソール（ユーザー/曲/承認待ち/翻訳）
-│   ├── songs/
-│   │   ├── new/page.tsx                  # 曲作成
-│   │   └── [id]/
-│   │       ├── page.tsx                  # 歌詞詳細（Spotify 同期、ドットグリッド、メニュー、PiP）
-│   │       ├── edit/page.tsx             # 曲編集
-│   │       ├── translation/page.tsx      # 全曲翻訳ワークスペース
-│   │       ├── share/page.tsx            # シェアカード生成（描画は lib/share-card.ts）
-│   │       └── timeline/edit/page.tsx    # タイムライン注釈ワークスペース
-│   └── api/                              # songs / collections / admin / auth / spotify / me
-├── components/
-│   ├── home/                             # SongFilterBar、CollectionsPanel、PlaylistImportDialog
-│   ├── song/                             # ToolbarMenu、MobileMenu（メニュー項目と型）
-│   ├── admin/                            # AdminTabs、AdminUserList、AdminSongList、AdminPendingList、BlockUserDialog、TranslationConfigPanel、admin-types
-│   ├── timeline/                         # SpotifyStatusCard、OffsetControls、MarkCurrentLineCard、TimelineLineRow
-│   ├── LyricsDotGrid.tsx                 # ドットマトリクス Canvas（スポットライト + マイクスペクトラム）
-│   ├── ExperimentsPanel.tsx              # 実験：マイクスペクトラムのトグル
-│   ├── TranslationStatusOverlay.tsx      # 翻訳進捗バブル + 思考パネル
-│   └── ui/                               # 小さなプリミティブ
-├── hooks/                                # useSongData / useSpotifySync / useNowPlaying / useSpectrumCapture / useCoverPalette
-├── lib/
-│   ├── translation/                      # config / prompts / parse / index（プロバイダ + ストリーミング）
-│   ├── translation-stream.ts             # /translate 用クライアント SSE リーダー
-│   ├── translation-errors.ts             # エラーコード → i18n キー
-│   ├── share-card.ts                     # シェアカード用純粋 Canvas 描画
-│   ├── scroll-ease.ts                    # Apple 風イージングスクロール
-│   ├── lrc.ts / match.ts / romaji.ts / lyrics-fetcher.ts
-│   ├── cover-color.ts / cover-store.ts   # カバー配色 + R2/blob ストレージ
-│   ├── ai-usage.ts                       # 1日の翻訳クォータ
-│   └── theme.tsx / i18n.tsx / types.ts
-└── i18n/                                 # ja / en / zh-CN / zh-TW
-```
+- 曲一覧・公開曲の詳細：[`src/app/api/songs/`](src/app/api/songs/) の `GET`。書き込みと取り込みには Spotify ログインセッションが必要です。
+- `POST /api/songs/[id]/translate`：`stream: true` なら SSE で `stage` と `progress`、任意の `reasoning` 増分、最後に訳文を含む `done`、失敗時に `error` を送ります。訳文のチャンクを個別の `translation` イベントとしては送信しません。曲全体と一部の行の翻訳に対応。詳しくは[ルートの説明](src/app/api/songs/%5Bid%5D/translate/route.ts)を参照してください。
+- 管理者向け歌詞ソース API：[`src/app/api/admin/lyrics-providers/`](src/app/api/admin/lyrics-providers/)（管理者のみ）。プラグイン実装者は管理 API を検索に流用せず、[バージョン付き HTTP 仕様](examples/provider-plugin/README.md)を使用してください。
+
+メソッドとリクエスト形式は [API ルートのソースコード](src/app/api/)を正とし、README に古くなりやすい全エンドポイント一覧は重複掲載しません。
 
 ## ライセンス
 

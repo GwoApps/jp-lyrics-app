@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, Plus } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
-import { useModalFocus } from '@/hooks/useModalFocus';
+import Dialog from '@/components/ui/dialog';
 import type { CollectionInfo } from '@/components/home/CollectionsPanel';
 
 export interface FavoriteCategories {
@@ -13,13 +13,14 @@ export interface FavoriteCategories {
 }
 
 interface Props {
-  song: { id: string; title: string };
+  open?: boolean;
+  song: { id: string; title: string } | null;
   onCreated: (collection: CollectionInfo) => void;
   onChanged: (favorited: boolean, categories: FavoriteCategories) => void;
   onClose: () => void;
 }
 
-export default function FavoriteCategoriesDialog({ song, onCreated, onChanged, onClose }: Props) {
+export default function FavoriteCategoriesDialog({ open = true, song, onCreated, onChanged, onClose }: Props) {
   const { t } = useI18n();
   const [categories, setCategories] = useState<FavoriteCategories | null>(null);
   const [availableCollections, setAvailableCollections] = useState<CollectionInfo[] | null>(null);
@@ -28,20 +29,34 @@ export default function FavoriteCategoriesDialog({ song, onCreated, onChanged, o
   const [showCreate, setShowCreate] = useState(false);
   const [draftCollections, setDraftCollections] = useState<CollectionInfo[]>([]);
   const [newName, setNewName] = useState('');
-  const titleId = useId();
-  const dialogRef = useRef<HTMLDivElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const requestInFlight = useRef(false);
+  const songId = song?.id;
+  const [previousSession, setPreviousSession] = useState({ open, songId });
+
+  // The component stays mounted for exit motion. Reset before rendering each new
+  // open session, including a quick reopen before the previous exit has finished.
+  if (previousSession.open !== open || previousSession.songId !== songId) {
+    setPreviousSession({ open, songId });
+    if (open) {
+      setCategories(null);
+      setAvailableCollections(null);
+      setError(null);
+      setBusy(false);
+      setShowCreate(false);
+      setDraftCollections([]);
+      setNewName('');
+    }
+  }
 
   const close = useCallback(() => {
     if (!requestInFlight.current) onClose();
   }, [onClose]);
-  useModalFocus({ open: true, dialogRef, initialFocusRef: cancelRef, onEscape: close });
-
   useEffect(() => {
+    if (!open || !songId) return;
     let active = true;
     Promise.all([
-      fetch(`/api/songs/${encodeURIComponent(song.id)}/favorite`),
+      fetch(`/api/songs/${encodeURIComponent(songId)}/favorite`),
       fetch('/api/collections'),
     ]).then(async ([favoriteResponse, collectionsResponse]) => {
       if (!favoriteResponse.ok || !collectionsResponse.ok) throw new Error();
@@ -57,7 +72,7 @@ export default function FavoriteCategoriesDialog({ song, onCreated, onChanged, o
       }
     }).catch(() => { if (active) setError(t('home.favoriteLoadFailed')); });
     return () => { active = false; };
-  }, [song.id, t]);
+  }, [open, songId, t]);
 
   const create = () => {
     const name = newName.trim();
@@ -73,7 +88,7 @@ export default function FavoriteCategoriesDialog({ song, onCreated, onChanged, o
   };
 
   const save = async (remove = false) => {
-    if (!categories || !availableCollections || busy) return;
+    if (!song || !categories || !availableCollections || busy) return;
     if (!remove && !categories.inUnclassified && categories.collectionIds.length === 0) {
       setError(t('home.favoriteSelectionRequired'));
       return;
@@ -116,11 +131,10 @@ export default function FavoriteCategoriesDialog({ song, onCreated, onChanged, o
   };
 
   return (
-    <div className="confirm-overlay" onClick={close}>
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId}
-        data-favorite-dialog="" className="w-[min(420px,calc(100vw-32px))] max-h-[min(80vh,640px)] flex flex-col rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] p-5"
-        onClick={(event) => event.stopPropagation()} onMouseDown={(event) => event.stopPropagation()}>
-        <h2 id={titleId} className="text-left text-base font-semibold mb-4">{t('home.favoriteCategoriesTitle', { title: song.title })}</h2>
+    <Dialog open={open && !!song} onClose={close} dismissible={!busy}
+      initialFocusRef={cancelRef} title={t('home.favoriteCategoriesTitle', { title: song?.title ?? '' })}
+      data-favorite-dialog="" className="max-w-[420px] max-h-[min(80vh,640px)] flex flex-col rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] p-5">
+        <h2 className="text-left text-base font-semibold mb-4">{t('home.favoriteCategoriesTitle', { title: song?.title ?? '' })}</h2>
         <div className="min-h-0 overflow-y-auto flex-1 space-y-0.5" role="group" aria-label={t('home.favoriteCategoriesLabel')}>
           <button type="button" onClick={() => setShowCreate(true)} disabled={busy || !categories || !availableCollections}
             className="w-full text-left flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-[var(--primary)] hover:bg-[var(--accent)] transition-colors disabled:opacity-50">
@@ -161,7 +175,6 @@ export default function FavoriteCategoriesDialog({ song, onCreated, onChanged, o
           <button type="button" onClick={() => void save()} disabled={busy || !categories || !availableCollections}
             className="rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-medium text-[var(--primary-foreground)] disabled:opacity-50">{t('common.save')}</button>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

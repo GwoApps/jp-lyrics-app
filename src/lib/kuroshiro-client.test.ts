@@ -22,8 +22,11 @@ interface TokenizerModule {
   __setTokenizerLoaderForTest: (loader: Loader) => void;
 }
 
-const mod = (await import('./kuroshiro-client.ts')) as unknown as TokenizerModule;
-const { getTokenizer, resetTokenizer, __setTokenizerLoaderForTest } = mod;
+const mod = (await import('./kuroshiro-client.ts')) as unknown as TokenizerModule & {
+  convertToFuriganaClient: (source: string) => Promise<{ segments: { text: string; reading: string }[] }[]>;
+};
+const { getTokenizer, resetTokenizer, __setTokenizerLoaderForTest, convertToFuriganaClient } = mod;
+const { validateFuriganaPayload } = await import('./furigana-validation.ts');
 
 function useLoader(loader: Loader): void {
   resetTokenizer();
@@ -87,6 +90,19 @@ test('a retry cleared by resetTokenizer drops even a successful memoized tokeniz
   resetTokenizer();
   await getTokenizer();
   assert.equal(attempts, 2);
+});
+
+test('CRLF and whitespace-only lyric rows reconstruct the exact source on save', async () => {
+  useLoader(async () => ({
+    tokenize: (line: string) => [{ surface_form: line, reading: '' }],
+  }));
+
+  const source = '空\r\n\r\n \t\r\n\n次\r';
+  const lines = await convertToFuriganaClient(source);
+  assert.deepEqual(lines[1], { segments: [{ text: '\r', reading: '' }] });
+  assert.deepEqual(lines[2], { segments: [{ text: ' \t\r', reading: '' }] });
+  assert.deepEqual(lines[3], { segments: [] });
+  assert.equal(validateFuriganaPayload(lines, source).ok, true);
 });
 
 test.after(() => {

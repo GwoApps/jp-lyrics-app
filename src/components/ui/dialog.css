@@ -1,0 +1,38 @@
+/* Named independently of route .fade-in; Radix Presence waits for these exit animations. */
+.ui-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgb(0 0 0 / .6);
+  backdrop-filter: blur(4px);
+}
+.ui-dialog-content {
+  --song-accent: var(--song-page-accent, var(--border));
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  /* Match the overlay layer: portal DOM order also stacks nested dialogs correctly. */
+  z-index: 100;
+  max-height: calc(100dvh - 2rem);
+  outline: none;
+}
+.ui-dialog-overlay[data-state="open"] { animation: ui-dialog-backdrop-in 180ms cubic-bezier(.22, 1, .36, 1); }
+.ui-dialog-overlay[data-state="closed"] { animation: ui-dialog-backdrop-out 140ms cubic-bezier(.22, 1, .36, 1); }
+.ui-dialog-content[data-state="open"] { animation: ui-dialog-in 200ms cubic-bezier(.22, 1, .36, 1); }
+.ui-dialog-content[data-state="closed"] { animation: ui-dialog-out 140ms cubic-bezier(.22, 1, .36, 1); pointer-events: none; }
+@keyframes ui-dialog-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ui-dialog-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes ui-dialog-in {
+  from { opacity: 0; transform: translateY(6px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes ui-dialog-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(6px) scale(.98); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-dialog-overlay[data-state], .ui-dialog-content[data-state] { animation-duration: 100ms; }
+  @keyframes ui-dialog-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes ui-dialog-out { from { opacity: 1; } to { opacity: 0; } }
+}

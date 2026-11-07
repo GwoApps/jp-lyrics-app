@@ -1,195 +1,79 @@
 # 歌詞ノート (Kashi Note)
 
-A Japanese lyrics management web app with furigana annotation, AI translation, Spotify real-time sync, an experiments panel (mic spectrum on the lyrics dot grid), and PWA support.
+A web reader for Japanese and Cantonese lyrics, with furigana/Jyutping, AI translation, Spotify-synced playback, and installable PWA support. **Within the app, guests can read public songs (a reverse proxy may impose additional access controls); creating, editing, importing, and translating songs requires Spotify OAuth login.** A new database has no songs until a signed-in user adds or imports them.
 
 [Features](FEATURES.md) | [日本語](README-ja.md) | [中文](README-zh.md) | [Deployment Guide](DEPLOYMENT.md)
 
-## Features
+## Highlights
 
-A Japanese lyrics reader with furigana, AI translation, Spotify-synced
-auto-scroll, and more:
+- Lyrics reading modes, per-line actions, synced follow-scroll, and a full-screen immersive lyrics view (browser full-screen where supported).
+- Spotify playback sync, playlist import, timestamp editing, share cards, and picture-in-picture lyrics (browser support varies).
+- Whole-song and per-line AI translation via OpenAI-compatible, Anthropic, or Cloudflare Workers AI. SSE reports stages and completion progress; the final `done` event contains the translated lines. Reasoning is displayed only when the provider supplies it.
+- Configurable lyrics-source chain: built-in sources including LRCLIB and administrator-managed HTTP providers. The bundled [YouTube Music sidecar](yt-sidecar/README.md) is one provider-plugin example.
+- Four UI languages (ja, en, zh-CN, zh-TW), favorites/collections, PWA, and dark/light themes.
 
-- Furigana annotations, reading modes (furigana / romaji), adjustable font size
-- AI lyric translation with a live reasoning panel and pluggable LLM providers
-- Spotify real-time sync (SSE or polling) with line-by-line eased follow-scroll
-- Timeline workspace for marking lyrics against live playback
-- Per-line actions via context menu — right-click on desktop, long-press on mobile
-- Share-card generator (QR + selected lines → PNG), admin console
-- PWA, dark/light theme, 4 UI languages, favorites & collections
-
-See **[FEATURES.md](FEATURES.md)** for the full walkthrough.
+See [FEATURES.md](FEATURES.md) for the walkthrough and [the provider protocol](examples/provider-plugin/README.md) for custom lyrics sources. Administrators configure global lyrics sources under **Admin → System → Lyrics Providers**.
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 16 (App Router) |
-| UI | React 19, Tailwind CSS v4, Lucide Icons |
-| Database | Drizzle ORM + @libsql/client (Turso, local SQLite, or Cloudflare D1) |
-| Furigana Engine | kuromoji-es (browser CDN, lazy-loaded) |
-| Lyrics Source | lrclib.net |
-| Music Integration | Spotify Web API (OAuth 2.0) + SSE / client polling |
-| Translation | OpenAI-compatible / Anthropic / Workers AI (SSE streaming) |
-| Audio (experiments) | Web Audio API (AnalyserNode, getUserMedia) |
-| Deployment | Docker (self-hosted), Cloudflare Workers, Vercel Edge |
+| App | Next.js 16 (App Router), React 19, Tailwind CSS v4 |
+| Database | Drizzle ORM + libSQL (local SQLite or Turso), or Cloudflare D1 |
+| Lyrics | Built-in sources + versioned HTTP provider plugins; browser-loaded reading engine |
+| Music / AI | Spotify Web API (OAuth 2.0); OpenAI-compatible, Anthropic, or Workers AI |
+| Hosting | Docker (Node.js), Cloudflare Workers, or Vercel (client-side Spotify polling on serverless) |
 
-## Quick Start
+## Local Quick Start
+
+Use **Node.js 22** and npm. The lockfile is committed; use `npm ci` for a reproducible install.
 
 ```bash
-# Clone
 git clone https://cnb.cool/siubeng/jp-lyrics-app.git
 cd jp-lyrics-app
-
-# Install dependencies
-npm install
-
-# Configure environment
+npm ci
 cp .env.example .env
-# Edit .env with your Spotify credentials (optional) and translation API key (optional)
-
-# Start dev server
 npm run dev
-# → http://localhost:3000
+# http://localhost:3000
 ```
 
-### Environment Variables
+Spotify credentials are not needed to start the app or browse public songs, but **Spotify OAuth is the only application login**. To create/manage songs, add `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` to `.env`, create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), and register `http://localhost:3000/api/auth/callback` as its redirect URI. Playback sync and playlist import also need a Spotify connection. AI translation needs a configured provider; it is optional for basic reading/editing.
 
-| Variable | Required | Description |
-|---|---|---|
-| `SPOTIFY_CLIENT_ID` | No | Spotify app client ID |
-| `SPOTIFY_CLIENT_SECRET` | No | Spotify app client secret |
-| `SPOTIFY_REDIRECT_URI` | No | Override callback URL (default: request origin + `/api/auth/callback`) |
-| `SPOTIFY_POLL_MODE` | No | `client` (default) or `server`. See [DEPLOYMENT.md](DEPLOYMENT.md) |
-| `TURSO_URL` | No | Turso database URL (e.g. `libsql://xxx.turso.io`). Without this, falls back to local SQLite file. For CF D1, use binding instead |
-| `TURSO_AUTH_TOKEN` | No | Turso auth token (required when `TURSO_URL` is set) |
-| `TRANSLATION_PROVIDER` | No | `openai` (default, OpenAI-compatible) or `anthropic` (Anthropic Messages API) |
-| `TRANSLATION_BASE_URL` | No | OpenAI-compatible base URL (default `https://api.deepseek.com/v1`) |
-| `TRANSLATION_API_KEY` | No | LLM API key (falls back to `DEEPSEEK_API_KEY`) |
-| `TRANSLATION_MODEL` | No | Model name (default `deepseek-v4-flash`) |
-| `TRANSLATION_TARGET_LANG` | No | Default target language for translation (default `zh-CN`) |
-| `AI_DAILY_NEURON_LIMIT` | No | Daily translation quota (tokens); over-limit requests return `429 / ai_quota_exceeded` |
-| `JPLRC_LOGIN_PASSPHRASE_REQUIRED` | No | Require a passphrase before starting Spotify OAuth |
-| `JPLRC_LOGIN_PASSPHRASE` | No | The passphrase itself (validated server-side only) |
-| `SESSION_SECRET` | No | Recommended in production: signs login/session cookies |
-| `LYRICS_PROVIDER_ALLOW_HTTP` | No | Allow plaintext `http://` HTTP lyrics providers (default `false`, fail-closed) |
-| `LYRICS_PROVIDER_ALLOW_PRIVATE_NETWORK` | No | Allow loopback/private/Docker-bridge addresses for providers (default `false`) |
-| `LYRICS_PROVIDER_SECRET_KEY` | Only for Bearer providers | AES-GCM key to encrypt provider Bearer tokens at rest |
-| `LYRICS_PROVIDER_DEFAULT_TIMEOUT_MS` | No | Per-provider search budget (default `20000`) |
-| `LYRICS_PROVIDER_MAX_TIMEOUT_MS` | No | Ceiling for admin per-config timeout override (default `60000`) |
-| `LYRICS_PROVIDER_MANIFEST_TIMEOUT_MS` | No | Manifest/test-connection budget (default `15000`) |
-| `LYRICS_PROVIDER_CHAIN_TIMEOUT_MS` | No | Whole provider chain budget (default `180000`) |
+### Configuration at a glance
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) §4 for the full HTTP lyrics-provider deployment guide.
+| Setting | Purpose |
+|---|---|
+| `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET` | OAuth login; required for signed-in features, not anonymous public reading |
+| `SPOTIFY_REDIRECT_URI`, `SPOTIFY_POLL_MODE` | Override OAuth callback; playback mode `client` (default) or `server` (persistent Node server only) |
+| `TURSO_URL`, `TURSO_AUTH_TOKEN` | Optional remote database; without a URL, Node uses `data/local.db`; Workers use a D1 binding |
+| `TRANSLATION_PROVIDER` | `openai` (default), `anthropic`, or `workers-ai` (Cloudflare AI binding required) |
+| `TRANSLATION_BASE_URL`, `TRANSLATION_API_KEY`, `TRANSLATION_MODEL`, `TRANSLATION_TARGET_LANG` | Provider endpoint/key/model/default target language; Workers AI needs no API key. The sample `.env` sets an OpenAI-compatible model: change or remove it when changing providers. |
+| `AI_DAILY_NEURON_LIMIT` | Optional daily translation quota |
+| `SESSION_SECRET`, `JPLRC_LOGIN_PASSPHRASE_REQUIRED`, `JPLRC_LOGIN_PASSPHRASE` | Set a dedicated session-signing secret in production; optional pre-OAuth passphrase gate |
+| `LYRICS_PROVIDER_*` | Deployment-level network policy, Bearer-token encryption key, and request budgets for HTTP lyrics plugins; see [§4 of the deployment guide](DEPLOYMENT.md#4-http-lyrics-providers-deployment-configuration-issue-148) |
 
-Spotify integration is optional. Without it, you can still manage lyrics manually.
+Admins can also set the **global translation provider/model** in the app. Non-empty admin-stored values override the environment; empty fields fall back to it. A signed-in user's target-language preference can override the global default. See [.env.example](.env.example) and [DEPLOYMENT.md](DEPLOYMENT.md) for details. Do not commit real credentials.
 
-Create an app on the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) and set the redirect URI to `http://localhost:3000/api/auth/callback`.
+### Docker is a separate deployment path
 
-## Deployment
+The included `docker-compose.yml` is **not** a standalone localhost setup: it uses an existing external Traefik network and auth middleware, publishes no host port, and mounts a host file for the YouTube Music sidecar. Check those prerequisites (and customize `.env`) before `docker compose up -d --build`; see [Docker setup in DEPLOYMENT.md](DEPLOYMENT.md#1-docker-self-hosted). For a local trial without Traefik, use `npm run dev` above.
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed guides:
+## Development
 
-- **Docker** (self-hosted) — Local SQLite, Traefik reverse proxy
-- **Cloudflare Workers** — Turso database, edge-compatible
-- **Vercel** — Turso database, edge runtime
-
-## Project Structure
-
-```
-src/
-├── app/
-│   ├── page.tsx                          # / — songs list route (shared SongLibraryPage)
-│   ├── albums/page.tsx                   # /albums — grouped album list route
-│   ├── layout.tsx                        # Root layout with PWA meta, SW registration
-│   ├── globals.css                       # Theme variables, animations
-│   ├── admin/page.tsx                    # Admin console (users / songs / pending / translation)
-│   ├── songs/
-│   │   ├── new/page.tsx                  # Create song
-│   │   └── [id]/
-│   │       ├── page.tsx                  # Lyrics detail (Spotify sync, dot grid, menus, PiP)
-│   │       ├── edit/page.tsx             # Edit song
-│   │       ├── translation/page.tsx      # Full-song translation workspace
-│   │       ├── share/page.tsx            # Share-card generator (drawing lives in lib/share-card.ts)
-│   │       └── timeline/edit/page.tsx    # Timeline annotation workspace
-│   └── api/
-│       ├── songs/                        # CRUD + search + favorites filter
-│       ├── songs/import/                 # lrclib one-click import
-│       ├── songs/import-playlist/        # Spotify playlist batch import
-│       ├── songs/[id]/sync/              # Fetch synced lyrics
-│       ├── songs/[id]/export/            # Export as txt/lrc/html
-│       ├── songs/[id]/favorite/          # Toggle favorite
-│       ├── songs/[id]/translate/         # SSE translation stream (reasoning + result)
-│       ├── collections/                  # Collection CRUD
-│       ├── admin/                        # Admin API (users / songs management)
-│       ├── auth/                         # Spotify OAuth
-│       ├── spotify/
-│       │   ├── config/                   # Poll mode config for client
-│       │   ├── now-playing/              # Current track (REST)
-│       │   ├── now-playing/stream/       # SSE endpoint (server mode only)
-│       │   └── status/                   # Connection status
-│       └── me/                           # Current user
-├── components/
-│   ├── home/                             # Shared SongLibraryPage, SongFilterBar (List/Grid), CollectionsPanel, PlaylistImportDialog
-│   ├── song/                             # ToolbarMenu, MobileMenu (menu items/types)
-│   ├── admin/                            # AdminTabs, AdminUserList, AdminSongList, AdminPendingList, BlockUserDialog, TranslationConfigPanel, admin-types
-│   ├── timeline/                         # SpotifyStatusCard, OffsetControls, MarkCurrentLineCard, TimelineLineRow
-│   ├── LyricsDotGrid.tsx                 # Dot-matrix canvas (spotlight + mic spectrum)
-│   ├── ExperimentsPanel.tsx              # Experiments: mic spectrum toggle
-│   ├── TranslationStatusOverlay.tsx      # Translation progress bubble + reasoning panel
-│   ├── SongForm.tsx, FuriganaEditor.tsx, CoverImage.tsx, SongItemCard.tsx
-│   └── ui/                               # Small primitives
-├── hooks/
-│   ├── useSongData.ts                    # Song data + translation orchestration
-│   ├── useSpotifySync.ts                 # Playback state + lyrics sync (Apple-style eased scroll)
-│   ├── useNowPlaying.ts                  # SSE + polling dual mode
-│   ├── useSpectrumCapture.ts             # Mic → AnalyserNode → shared spectrum buffer
-│   └── useCoverPalette.ts                # Cover-derived accent colors
-├── lib/
-│   ├── db.ts, schema.ts                  # @libsql/client + Drizzle schema
-│   ├── translation/                      # config / prompts / parse / index (providers + streaming)
-│   ├── translation-stream.ts             # Client-side SSE reader for /translate
-│   ├── translation-errors.ts             # Error-code → i18n-key map
-│   ├── share-card.ts                     # Pure canvas drawing for share cards
-│   ├── scroll-ease.ts                    # Apple-style eased scroll animation
-│   ├── lrc.ts, match.ts, romaji.ts, lyrics-fetcher.ts, linkcore-lyrics.ts
-│   ├── kuroshiro-client.ts               # Client-side furigana (CDN lazy-load)
-│   ├── spotify.ts, spotify-poller.ts     # Spotify token management + server poller
-│   ├── auth.ts, auth-session.ts, login-gate.ts
-│   ├── cover-color.ts, cover-compress.ts, cover-store.ts   # Cover palette + R2/blob storage
-│   ├── ai-usage.ts                       # Daily translation quota tracking
-│   ├── theme.tsx, i18n.tsx               # ThemeProvider + I18nProvider
-│   └── types.ts                          # Shared types
-└── i18n/
-    ├── ja.json                           # Japanese
-    ├── en.json                           # English
-    ├── zh-CN.json                        # Simplified Chinese
-    └── zh-TW.json                        # Traditional Chinese
+```bash
+npm run check       # TypeScript, ESLint, i18n, tests
+npm run check:full  # all checks plus a production build
 ```
 
-## API Reference
+Project map: [`src/app/`](src/app/) (pages and API routes), [`src/components/`](src/components/) (UI), [`src/hooks/`](src/hooks/) (client behavior), [`src/lib/`](src/lib/) (database, lyrics and translation), [`src/i18n/`](src/i18n/) (four locales), [`drizzle/`](drizzle/) (SQL migrations), and [`yt-sidecar/`](yt-sidecar/) (HTTP provider). For feature workflows see [FEATURES.md](FEATURES.md); for deployment and migration rules see [DEPLOYMENT.md](DEPLOYMENT.md).
 
-| Endpoint | Method | Description |
-|---|---|---|
-| `/api/songs` | GET | List songs (`?q=`, `?mine=1`, `?favorites=1`; `?favorites=1&unclassified=1` limits to favorites in the default category) |
-| `/api/songs` | POST | Create song |
-| `/api/songs/import` | POST | Import from lrclib by title + artist |
-| `/api/songs/import-playlist` | POST | Batch import from Spotify playlist |
-| `/api/songs/[id]` | GET/PUT/DELETE | Single song CRUD |
-| `/api/songs/[id]/sync` | POST | Fetch synced lyrics (lrclib) |
-| `/api/songs/[id]/export` | GET | Export as `?format=txt\|lrc\|html` |
-| `/api/songs/[id]/favorite` | GET/POST/PUT/DELETE | Read category memberships; idempotently add to default; atomically save selected categories (`inUnclassified`, `collectionIds`, optional `newCollections` names); remove from all categories |
-| `/api/songs/[id]/translate` | POST | SSE stream — `reasoning` / `done` (translations) / `error` events |
-| `/api/admin/users` | GET | List users (admin only) |
-| `/api/admin/users/[id]` | PUT/DELETE | Toggle admin/block, delete user (admin only) |
-| `/api/admin/songs` | GET | List all songs (admin only) |
-| `/api/admin/songs/[id]` | PUT/DELETE | Toggle visibility / approve / delete (admin only) |
-| `/api/auth/login` | GET | Spotify OAuth login |
-| `/api/auth/callback` | GET | Spotify OAuth callback |
-| `/api/spotify/config` | GET | Poll mode config |
-| `/api/spotify/now-playing` | GET | Current track (REST) |
-| `/api/spotify/now-playing/stream` | GET | SSE now-playing (server mode only) |
-| `/api/collections` | GET/POST | Collections CRUD |
-| `/api/me` | GET | Current authenticated user |
+## API orientation
+
+- Song listings and public song details: [`src/app/api/songs/`](src/app/api/songs/) (`GET`); writes/imports need a Spotify-authenticated session.
+- `POST /api/songs/[id]/translate`: with `stream: true`, SSE emits `stage` and `progress`, optional `reasoning` deltas, then `done` with translated lines, or `error`. Translation chunks are not sent as individual `translation` events. The endpoint supports whole-song and selected-line translation; see [route documentation](src/app/api/songs/%5Bid%5D/translate/route.ts).
+- Admin-managed providers: [`src/app/api/admin/lyrics-providers/`](src/app/api/admin/lyrics-providers/) (admin-only). Plugin authors should use the [versioned HTTP protocol](examples/provider-plugin/README.md), not the admin API as a search endpoint.
+
+The [API route tree](src/app/api/) is the source of truth for methods and request bodies; it is more reliable than a duplicated exhaustive endpoint list in this README.
 
 ## License
 

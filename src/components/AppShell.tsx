@@ -3,13 +3,16 @@
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { Link as TransitionLink } from '@/components/navigation/ViewTransitions';
+import './navigation/library-navigation.css';
 import { I18nProvider, useI18n } from '@/lib/i18n';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useAuthSession } from '@/lib/auth-session';
 import { fetchAndSyncSettings } from '@/lib/sync-settings';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { APP_REPO_URL } from '@/lib/app-links';
-import { Sun, Moon, Settings, Music2 } from 'lucide-react';
+import { Sun, Moon, Settings } from 'lucide-react';
+import AppIcon from '@/components/AppIcon';
 
 function Nav() {
   const { t } = useI18n();
@@ -46,7 +49,7 @@ function Nav() {
     <nav className="app-topbar sticky top-0 z-50 border-b border-[var(--border)] bg-[var(--background)]/80 backdrop-blur-sm">
       <div className="mx-auto flex h-11 max-w-[860px] items-center px-4 sm:px-6">
         <Link href="/" aria-label={t('common.appName')} title={t('common.appName')} className="shrink-0 whitespace-nowrap text-sm font-bold tracking-tight text-[var(--primary)]">
-          <Music2 className="h-4 w-4 min-[390px]:hidden" aria-hidden="true" />
+          <AppIcon className="h-4 w-4 min-[390px]:hidden" aria-hidden="true" />
           <span className="hidden min-[390px]:inline">{t('common.appName')}</span>
         </Link>
         <span className="ml-2.5 hidden text-xs text-[var(--muted-foreground)] lg:inline">
@@ -56,13 +59,14 @@ function Nav() {
           {([
             { href: '/', label: t('home.navSongs'), active: pathname === '/' },
             { href: '/albums', label: t('home.navAlbums'), active: pathname === '/albums' },
+            { href: '/artists', label: t('home.navArtists'), active: pathname.startsWith('/artists') },
           ] as const).map(({ href, label, active }) => (
-            <Link key={href} href={href} aria-current={active ? 'page' : undefined}
+            <TransitionLink key={href} href={href} aria-current={active ? 'page' : undefined}
               className={`whitespace-nowrap rounded-md px-2 py-1.5 text-xs font-medium transition-colors sm:px-2.5 ${active
                 ? 'bg-[var(--accent)] text-[var(--foreground)]'
                 : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)]'}`}>
               {label}
-            </Link>
+            </TransitionLink>
           ))}
         </div>
         <div className="flex-1" />

@@ -105,7 +105,7 @@ export function detectCantoneseLyrics(rawLyrics: string): CantoneseDetectionResu
 export async function convertCantoneseLyrics(rawLyrics: string): Promise<FuriganaLine[]> {
   const { getJyutpingList } = await import('to-jyutping');
   return rawLyrics.split('\n').map((line) => {
-    if (!line.trim()) return { segments: [] };
+    if (!line.trim()) return { segments: line ? [{ text: line, reading: '' }] : [] };
     const segments: FuriganaSegment[] = getJyutpingList(line).map(([text, reading]) => ({
       text,
       reading: reading ?? '',

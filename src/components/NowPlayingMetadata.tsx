@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import ArtistLinks from '@/components/ArtistLinks';
+import { useI18n } from '@/lib/i18n';
 
 interface NowPlayingTrack {
   id: string;
@@ -20,6 +22,7 @@ function trackKey(track: NowPlayingTrack) {
 
 /** Fades the prior track out before showing the next track, avoiding text replacement flashes. */
 export default function NowPlayingMetadata({ track }: NowPlayingMetadataProps) {
+  const { t } = useI18n();
   const [displayedTrack, setDisplayedTrack] = useState(track);
   const [phase, setPhase] = useState<Phase>('idle');
   const incomingKey = trackKey(track);
@@ -44,7 +47,7 @@ export default function NowPlayingMetadata({ track }: NowPlayingMetadataProps) {
   return (
     <div className={`now-playing-metadata now-playing-metadata--${phase}`} aria-live="polite">
       <div className="text-sm font-medium truncate">{displayedTrack.name}</div>
-      <div className="text-xs text-[var(--muted-foreground)] truncate">{displayedTrack.artist}</div>
+      <div className="text-xs text-[var(--muted-foreground)] truncate"><ArtistLinks artist={displayedTrack.artist} fallback={t('common.unknownArtist')} /></div>
     </div>
   );
 }

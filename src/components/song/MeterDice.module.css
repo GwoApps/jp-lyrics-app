@@ -1,0 +1,220 @@
+.dice {
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 52px;
+  margin-inline-start: auto;
+  color: var(--muted-foreground);
+  user-select: none;
+  pointer-events: auto;
+}
+
+.face {
+  display: block;
+  width: var(--dice-face-size);
+  height: var(--dice-face-size);
+  overflow: visible;
+  transform-origin: center;
+}
+
+@media (min-width: 640px) {
+  .dice {
+    width: 78px;
+  }
+}
+
+.outline {
+  fill: var(--card);
+  stroke: var(--border);
+  stroke-width: 2;
+}
+
+.socket {
+  fill: var(--muted-foreground);
+  opacity: 0.22;
+}
+
+/* Static, small concentric washes; only their opacity changes. */
+.haloOuter, .haloInner, .filament {
+  fill: var(--song-accent, var(--primary));
+}
+
+.core {
+  fill: #fff3d6;
+}
+
+.haloOuter, .haloInner, .filament, .core {
+  opacity: 0;
+}
+
+.dice[data-motion='continuous'] .pip > :not(.socket) {
+  transition: opacity 110ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.dice[data-motion='continuous'] .pip[data-lit='true'] > :not(.socket) {
+  /* WAAPI owns ignition; a CSS transition would override its opacity. */
+  transition: none;
+}
+
+.pip[data-lit='true'] .haloOuter { opacity: 0.08; }
+.pip[data-lit='true'] .haloInner { opacity: 0.16; }
+.pip[data-lit='true'] .filament { opacity: 0.85; }
+.pip[data-lit='true'] .core { opacity: 0.9; }
+
+.meter {
+  min-height: 12px;
+  font-size: 10px;
+  line-height: 12px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dice[data-motion] .pip > :not(.socket) {
+    transition: none;
+  }
+
+  .face {
+    /* Also guards an in-flight WAAPI turn when the OS preference changes. */
+    transform: none !important;
+  }
+}
+
+/* Face-sized decoration: independent of the caption and WAAPI face rotation. */
+.dice {
+  position: relative;
+  isolation: isolate;
+  overflow: visible;
+}
+
+.glow {
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  left: 50%;
+  width: var(--dice-face-size);
+  height: var(--dice-face-size);
+  transform: translateX(-50%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Clip rotating geometry first; blur the clipped edge outside the opaque face. */
+.light, .glowBreath {
+  position: absolute;
+  inset: 1%;
+  border-radius: calc(var(--dice-face-size) * 0.23);
+  pointer-events: none;
+}
+
+.light { filter: blur(7px); }
+.light[data-meter-light='secondary'] { filter: blur(6px); }
+
+.lightViewport {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: clip;
+}
+
+.lightField {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 2%, color-mix(in srgb, var(--song-accent-primary, var(--primary)) 85%, transparent), transparent 48%);
+  animation: diceGlowOrbit 3.2s linear infinite paused;
+}
+
+.light[data-meter-light='secondary'] .lightField {
+  background: radial-gradient(ellipse at 50% 2%, color-mix(in srgb, var(--song-accent-secondary, var(--primary)) 75%, transparent), transparent 44%);
+  animation: diceGlowOrbit 4.4s linear infinite reverse paused;
+}
+
+.glowBreath {
+  box-sizing: border-box;
+  border: calc(var(--dice-face-size) * 0.02) solid color-mix(in srgb, var(--song-accent-tertiary, var(--primary)) 35%, transparent);
+  box-shadow: 0 0 12px 3px color-mix(in srgb, var(--song-accent-primary, var(--primary)) 28%, transparent);
+  opacity: 0.65;
+  animation: diceGlowBreath 2.4s ease-in-out infinite paused;
+}
+
+.dice[data-glow='active'][data-glow-motion='running'] .lightField,
+.dice[data-glow='active'][data-glow-motion='running'] .glowBreath {
+  animation-play-state: running;
+}
+
+.dice[data-glow-motion='static'] .lightField,
+.dice[data-glow-motion='static'] .glowBreath { animation: none; }
+
+@keyframes diceGlowOrbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes diceGlowBreath {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.85; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glow { transition: none; }
+  .dice .lightField, .dice .glowBreath { animation: none; }
+}
+
+.trigger {
+  --dice-face-size: 48px;
+  position: relative;
+  margin-inline-start: auto;
+  flex: 0 0 auto;
+  padding: 0;
+  padding-inline-start: 0;
+  transition: padding-inline-start 200ms cubic-bezier(0.23, 1, 0.32, 1);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.trigger:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; border-radius: 8px; }
+.visual {
+  position: relative;
+  isolation: isolate;
+  display: block;
+  width: var(--dice-face-size);
+  height: var(--dice-face-size);
+  /* Anchor the painted SVG stroke at x=99, not its transparent viewBox edge. */
+  transform-origin: 99% top;
+  transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1);
+  pointer-events: auto;
+}
+.trigger[data-active='true'] .visual { transform: scale(1.5); }
+/* Grow the flex item leftward; its content and right edge stay in place.
+   Match the visual transition so the reserved space follows every zoom frame. */
+.trigger[data-active='true'] {
+  padding-inline-start: calc(var(--dice-face-size) * 0.5);
+}
+@media (min-width: 640px) {
+  .trigger { --dice-face-size: 72px; }
+}
+.hint {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + var(--dice-face-size) * 0.5 + 8px);
+  right: 0;
+  width: max-content;
+  max-width: min(220px, 80vw);
+  font-size: 12px;
+  color: var(--foreground);
+  background: var(--card);
+  border-radius: 4px;
+  pointer-events: none;
+}
+.hint:not(:empty) { padding: 4px 8px; }
+.trigger[data-active='true'] .meter { transform: translateY(calc(var(--dice-face-size) * 0.5)); }
+@media (prefers-reduced-motion: reduce) {
+  .trigger, .visual { transition: none; }
+}

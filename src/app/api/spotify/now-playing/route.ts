@@ -14,21 +14,23 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ connected: false });
   }
 
+  const observedAt = Date.now(); // immediately before the Spotify GET, after token refresh
+  const headers = { 'X-Spotify-Observed-At': String(observedAt) };
   const res = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   if (res.status === 204 || res.status === 202) {
-    return NextResponse.json({ connected: true, is_playing: false });
+    return NextResponse.json({ connected: true, is_playing: false }, { headers });
   }
 
   if (!res.ok) {
-    return NextResponse.json({ connected: true, is_playing: false, error: res.status });
+    return NextResponse.json({ connected: true, is_playing: false, error: res.status }, { headers });
   }
 
   const data = await res.json();
   if (!data || !data.item) {
-    return NextResponse.json({ connected: true, is_playing: false });
+    return NextResponse.json({ connected: true, is_playing: false }, { headers });
   }
 
   const track = normalizeSpotifyTrack(data.item);
@@ -46,5 +48,5 @@ export async function GET(request: NextRequest) {
       album: track.album,
       cover_url: track.coverUrl,
     } : null,
-  });
+  }, { headers });
 }
