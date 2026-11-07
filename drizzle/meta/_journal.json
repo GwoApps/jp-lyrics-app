@@ -169,6 +169,20 @@
       "when": 1792108800000,
       "tag": "0022_add_favorite_unclassified",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1792108800001,
+      "tag": "0022_playlist_import_track_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1792108800002,
+      "tag": "0023_playlist_import_track_index_unique",
+      "breakpoints": true
     }
   ]
 }

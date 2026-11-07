@@ -161,6 +161,7 @@
     "playlistImportInvalidJob": "無效的匯入任務",
     "playlistImportJobNotFound": "找不到匯入任務",
     "playlistImportJobFailed": "匯入任務已失敗",
+    "playlistImportResumeUnsupported": "此匯入任務在升級前建立，無法繼續恢復。請重新發起一次匯入。",
     "collections": "收藏集",
     "collectionsTitle": "管理收藏集",
     "newCollectionPlaceholder": "新收藏集名稱...",

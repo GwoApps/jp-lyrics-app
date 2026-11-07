@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { and, eq, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, lt, or, sql } from 'drizzle-orm';
 import { getDB, schema } from '@/lib/db';
 import { fetchLyricsWithChain } from '@/lib/lyrics-provider';
 import { classifyLyricsHit } from '@/lib/lyrics-hit';
@@ -12,18 +12,29 @@ import type { AuthUser } from '@/lib/auth';
  *
  * The whole import is deliberately split into many short Worker requests so a
  * large playlist never exhausts the Cloudflare execution / subrequest limits in
- * a single invocation. Track outcomes are persisted per Spotify track id, which
- * makes retries idempotent and lets the client resume after a timeout, cancel,
- * or a page refresh.
+ * a single invocation. Track outcomes are persisted per *playlist slot*
+ * (`trackIndex` — the position of the track inside the playlist), which makes
+ * retries idempotent and lets the client resume after a timeout, cancel, or a
+ * page refresh.
+ *
+ * Slot identity matters (ISSUE #347): a playlist may contain the same song more
+ * than once, so keying the result rows on the Spotify track id made the second
+ * occurrence look like a retry of the first — the INSERT hit ON CONFLICT, the
+ * counters were not bumped, and `processed` could never reach `total`.
  */
 
-/** How many tracks one Worker request may process before returning. */
-export const PLAYLIST_CHUNK_SIZE = 8;
-/** Upper bound on tracks per job — protects the playlist fetch itself. */
-export const PLAYLIST_MAX_TRACKS = 200;
-/** Hard timeout for a single external lyrics fetch (LRCLIB + PetitLyrics + …). */
-export const LYRICS_FETCH_TIMEOUT_MS = 20_000;
+import {
+  PLAYLIST_MAX_TRACKS,
+  LYRICS_FETCH_TIMEOUT_MS,
+} from '@/lib/playlist-import-constants';
 
+export {
+  PLAYLIST_CHUNK_SIZE,
+  PLAYLIST_CHUNK_HOP,
+  PLAYLIST_IMPORT_RESUME_UNSUPPORTED,
+  PLAYLIST_MAX_TRACKS,
+  LYRICS_FETCH_TIMEOUT_MS,
+} from '@/lib/playlist-import-constants';
 export type TrackStatus = 'imported' | 'skipped' | 'failed';
 
 export interface PlaylistTrack {
@@ -54,13 +65,28 @@ export interface PersistedTrackResult {
   needsReview: boolean;
 }
 
-/** All persisted outcomes for a job, in the order they were processed. */
+/**
+ * Outcome of a resume read: the persisted rows in slot order plus the offset of
+ * the first slot that is *not* persisted.
+ *
+ * The offset matters because slot 0 is the client's cursor origin: a job whose
+ * earliest row cannot be attributed to a slot (rows written before migration
+ * 0022) must not be resumed, and `resumeOffset` is negative in exactly that case.
+ */
+export interface PersistedTrackResults {
+  results: PersistedTrackResult[];
+  /** Slot index of the first not-yet-persisted row, or a negative value when the ordering is unknown. */
+  resumeOffset: number;
+}
+
+/** All persisted outcomes for a job, in playlist order (one row per slot). */
 export async function listTrackResults(
   jobId: string,
 ): Promise<PlaylistTrackResult[]> {
   const db = getDB();
   const rows = await db.select({
     spotifyTrackId: schema.playlistImportTrackResults.spotifyTrackId,
+    trackIndex: schema.playlistImportTrackResults.trackIndex,
     title: schema.playlistImportTrackResults.title,
     artist: schema.playlistImportTrackResults.artist,
     status: schema.playlistImportTrackResults.status,
@@ -68,9 +94,9 @@ export async function listTrackResults(
   })
     .from(schema.playlistImportTrackResults)
     .where(eq(schema.playlistImportTrackResults.jobId, jobId))
-    .orderBy(schema.playlistImportTrackResults.createdAt)
+    .orderBy(asc(schema.playlistImportTrackResults.trackIndex), asc(schema.playlistImportTrackResults.createdAt))
     .all();
-  return rows.map((row: { spotifyTrackId: string; title: string; artist: string; status: string; needsReview: number }) => ({
+  return rows.map((row: { spotifyTrackId: string; trackIndex: number; title: string; artist: string; status: string; needsReview: number }) => ({
     spotifyId: row.spotifyTrackId,
     title: row.title,
     artist: row.artist,
@@ -251,27 +277,43 @@ export async function getOwnedJob(
   return row ?? null;
 }
 
-/** Persist the outcome of a single track (idempotent by job id + Spotify track id). */
+/**
+ * Persist the outcome of one playlist slot (idempotent by job id + track index).
+ *
+ * `trackIndex` is the position of the track in the playlist, i.e. the slot
+ * identity requested by ISSUE #347. Two identical songs in a playlist are two
+ * different slots and therefore two different rows, so `processed` always
+ * reaches `total`; a retry of the *same* slot is still a no-op.
+ *
+ * Deliberately NOT an upsert: the first writer wins, exactly like the previous
+ * ON CONFLICT DO NOTHING behaviour that #212 relies on (a replayed chunk must
+ * not re-classify an already-counted slot, nor bump the counters twice).
+ */
 export async function saveTrackResult(
   jobId: string,
+  trackIndex: number,
   track: PlaylistTrack,
   result: Omit<PlaylistTrackResult, 'title' | 'artist'>,
   db: ReturnType<typeof getDB> = getDB(),
 ): Promise<void> {
-  // The track-result row is the source of truth. We insert it FIRST (idempotent
-  // via ON CONFLICT DO NOTHING) and only bump the job counters when the INSERT
-  // actually added a NEW row. A conflicting duplicate is a no-op for both the
-  // result table and the counters, so a client retry or a concurrent chunk
-  // submit never over-counts processed / imported / skipped / failed.
+  // The track-result row is the source of truth. We insert it FIRST and only
+  // bump the job counters when the INSERT actually added a NEW row. A duplicate
+  // `(jobId, trackIndex)` is a no-op for both the result table and the counters,
+  // so a client retry or a concurrent chunk submit never over-counts
+  // processed / imported / skipped / failed (ISSUE #212).
   //
-  // Doing the insert first also removes the old "counted but no result" window:
-  // if the INSERT fails, the counters are never touched. Each write here is a
+  // Doing the insert first also removes the "counted but no result" window: if
+  // the INSERT fails, the counters are never touched. Each write here is a
   // single short statement (no multi-statement transaction), which keeps the
   // update concurrency-safe — the pattern this codebase uses everywhere for D1
   // / libsql writes (see ai-usage.ts, sync-write.ts).
+  //
+  // `(jobId, trackIndex)` is unique via `playlist_import_track_results_job_track_idx`
+  // (migration 0022 / `repairPlaylistImportSlotIdentity()`).
   const inserted = await db.insert(schema.playlistImportTrackResults).values({
     jobId,
     spotifyTrackId: track.id,
+    trackIndex,
     title: track.title,
     artist: track.artist,
     status: result.status,
@@ -350,32 +392,81 @@ export async function requireSpotifyToken(userEmail: string): Promise<string> {
 }
 
 /**
- * Look up the saved outcome for every track of the job. Tracks that already
- * have a result (from a previous timed-out / cancelled request) are replayed
- * from this map on resume — without re-fetching lyrics or double-counting.
+ * Look up the saved outcome of every slot that overlaps `[offset, offset+limit)`.
+ *
+ * Slots already handled by a previous (timed-out / cancelled) request are
+ * replayed from this map on resume — without re-fetching lyrics or
+ * double-counting. The map is keyed by playlist index (not Spotify track id), so
+ * a playlist containing the same song twice replays both slots correctly.
  */
 export async function existingResultsForChunk(
   jobId: string,
-  tracks: PlaylistTrack[],
-): Promise<Map<string, PersistedTrackResult>> {
-  const results = new Map<string, PersistedTrackResult>();
-  if (tracks.length === 0) return results;
+  offset: number,
+  limit: number,
+): Promise<Map<number, PersistedTrackResult>> {
+  const results = new Map<number, PersistedTrackResult>();
+  if (limit <= 0) return results;
   const db = getDB();
   const rows = await db.select({
-    spotifyTrackId: schema.playlistImportTrackResults.spotifyTrackId,
+    trackIndex: schema.playlistImportTrackResults.trackIndex,
     status: schema.playlistImportTrackResults.status,
     needsReview: schema.playlistImportTrackResults.needsReview,
   })
     .from(schema.playlistImportTrackResults)
-    .where(eq(schema.playlistImportTrackResults.jobId, jobId))
+    .where(and(
+      eq(schema.playlistImportTrackResults.jobId, jobId),
+      gte(schema.playlistImportTrackResults.trackIndex, offset),
+      lt(schema.playlistImportTrackResults.trackIndex, offset + limit),
+    ))
     .all();
   for (const row of rows) {
-    results.set(row.spotifyTrackId, {
+    results.set(row.trackIndex, {
       status: row.status as TrackStatus,
       needsReview: !!row.needsReview,
     });
   }
   return results;
+}
+
+/**
+ * Read back every persisted slot of a job for a resume (GET handler) and work
+ * out the slot the client must continue from.
+ *
+ * Rows are ordered by `track_index`, so the cursor is the offset of the first
+ * missing slot. A first row that is not slot 0 means the rows cannot be
+ * attributed to slots (a pre-0022 database reports a negative `resumeOffset`),
+ * letting the caller refuse the resume instead of double-counting slot 0.
+ */
+export async function getPersistedTrackResults(
+  jobId: string,
+): Promise<PersistedTrackResults> {
+  const db = getDB();
+  const rows = await db.select({
+    trackIndex: schema.playlistImportTrackResults.trackIndex,
+    status: schema.playlistImportTrackResults.status,
+    needsReview: schema.playlistImportTrackResults.needsReview,
+  })
+    .from(schema.playlistImportTrackResults)
+    .where(eq(schema.playlistImportTrackResults.jobId, jobId))
+    .orderBy(asc(schema.playlistImportTrackResults.trackIndex), asc(schema.playlistImportTrackResults.createdAt))
+    .all();
+
+  const results = rows.map((row: { status: string; needsReview: number }) => ({
+    status: row.status as TrackStatus,
+    needsReview: !!row.needsReview,
+  }));
+
+  let resumeOffset = 0;
+  for (const row of rows) {
+    if (row.trackIndex === resumeOffset) {
+      resumeOffset += 1;
+      continue;
+    }
+    // The first row is not slot 0 → the rows carry no usable slot mapping.
+    if (resumeOffset === 0) resumeOffset = -1;
+    break;
+  }
+  return { results, resumeOffset };
 }
 
 /**

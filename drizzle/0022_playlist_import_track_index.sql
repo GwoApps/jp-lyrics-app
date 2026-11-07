@@ -1,0 +1,19 @@
+-- ISSUE #347 — playlist import counts stall when a playlist repeats a song.
+--
+-- `playlist_import_track_results` was keyed by (job_id, spotify_track_id), so a
+-- playlist slot holding a song that already appeared in an earlier slot hit
+-- ON CONFLICT: `saveTrackResult` treated it as a retry, skipped the counter
+-- bump and `processed` could never reach `total` ("completed" with 2/3).
+--
+-- The playlist slot — the track's position inside the playlist — becomes the
+-- row identity. Each slot owns exactly one row, while re-submitting the same
+-- offset still re-inserts the same (job_id, track_index) and stays a no-op.
+--
+-- Additive only: no existing migration is touched and no column is dropped.
+-- Rows written before this migration carry no slot information (the new column
+-- defaults to 0 for all of them), so they are renumbered onto negative slots by
+-- `repairPlaylistImportSlotIdentity()` in src/lib/db.ts before the unique index
+-- is built. Those negative slots can never collide with a real one (>= 0), and
+-- `getPersistedTrackResults()` refuses to resume such a job instead of guessing
+-- where it stopped. Completed imports are unaffected.
+ALTER TABLE `playlist_import_track_results` ADD `track_index` integer DEFAULT 0 NOT NULL;

@@ -7,6 +7,7 @@ import { Loader2, AlertTriangle, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import Dialog from '@/components/ui/dialog';
 import { importErrorMsg } from '@/lib/import-errors';
+import { PLAYLIST_CHUNK_HOP } from '@/lib/playlist-import-constants';
 import type { SongItem } from '@/lib/types';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import Toast from '@/components/Toast';
@@ -26,6 +27,19 @@ interface PlaylistTrackResult {
   status: 'imported' | 'skipped' | 'failed';
   needsReview?: boolean;
   rateLimited?: boolean;
+}
+
+/**
+ * Accumulated summary list, keyed by playlist slot.
+ *
+ * A playlist may legitimately contain the same song twice (ISSUE #347), so the
+ * Spotify track id is NOT a usable identity here — merging by it dropped the
+ * second occurrence from the review / rate-limit lists. The slot key is the
+ * request offset plus the track's position inside that chunk, which is the same
+ * identity the server persists.
+ */
+function slotKey(offset: number, indexInChunk: number): string {
+  return `${offset}:${indexInChunk}`;
 }
 
 interface JobSummary {
@@ -162,8 +176,16 @@ export default function PlaylistImportDialog({ open, onImported, onClose }: Play
 
   /** Process chunks until the job completes or the user cancels. */
   const runImport = useCallback(async (jobId: string, total: number, startOffset: number, seedResults: PlaylistTrackResult[] = []) => {
+    // Mirrors the server cursor: `offset` starts on a chunk boundary and hops by
+    // exactly PLAYLIST_CHUNK_HOP, so the reply to a request made at
+    // `requestOffset` is indexed by slots `requestOffset + 0..n-1` — the slot
+    // identity the server persists.
     let offset = startOffset;
     const accumulated: PlaylistTrackResult[] = [...seedResults];
+    // Slot → track map for de-duplication. Seed rows come from a resumed job
+    // (GET) ordered by slot, covering everything before the resume cursor.
+    const accumulatedBySlot: Record<string, PlaylistTrackResult> = {};
+    seedResults.forEach((tr, i) => { accumulatedBySlot[slotKey(i, i)] = tr; });
     let lastSummary: JobSummary | null = null;
     let retries = 0;
     let finished = false;
@@ -173,6 +195,10 @@ export default function PlaylistImportDialog({ open, onImported, onClose }: Play
       // Keep the resume cursor fresh so a crash mid-loop is resumable.
       const processed = Math.min(offset, total);
       persistResume({ jobId, total, offset, processed });
+
+      // Capture the offset this request is made at — the reply is indexed by
+      // these slots even if `offset` moves on before the response arrives.
+      const requestOffset = offset;
 
       let response: Response;
       try {
@@ -217,19 +243,24 @@ export default function PlaylistImportDialog({ open, onImported, onClose }: Play
       lastSummary = chunk.job;
       setJob(chunk.job);
       if (chunk.tracks.length > 0) {
-        // Merge by Spotify track id — a timed-out chunk can replay already-done
+        // Merge by playlist slot — a timed-out chunk can replay already-done
         // tracks, so pushing blindly would double-count them on the client.
-        const seen = new Set(accumulated.map((tr) => tr.spotifyId).filter(Boolean));
-        for (const tr of chunk.tracks) {
-          if (tr.spotifyId && seen.has(tr.spotifyId)) continue;
-          accumulated.push(tr);
-          if (tr.spotifyId) seen.add(tr.spotifyId);
+        // Keying on the slot (not the Spotify id) keeps legitimate duplicates.
+        for (let i = 0; i < chunk.tracks.length; i += 1) {
+          const key = slotKey(requestOffset, i);
+          if (accumulatedBySlot[key]) continue;
+          accumulatedBySlot[key] = chunk.tracks[i];
+          accumulated.push(chunk.tracks[i]);
         }
         setResult([...accumulated]);
         const lastTrack = chunk.tracks[chunk.tracks.length - 1];
         setCurrentTitle(lastTrack.title);
       }
-      offset = chunk.nextOffset;
+      // Server wins the cursor; the local hop keeps the client in step even if
+      // the playlist shrank and the server advanced past the end of the chunk.
+      offset = typeof chunk.nextOffset === 'number'
+        ? chunk.nextOffset
+        : requestOffset + PLAYLIST_CHUNK_HOP;
       finished = chunk.done;
     }
 
@@ -280,6 +311,22 @@ export default function PlaylistImportDialog({ open, onImported, onClose }: Play
         const data = await res.json();
         if (data.job) setJob(data.job);
         if (Array.isArray(data.tracks)) seeded = data.tracks as PlaylistTrackResult[];
+        // The server owns the cursor (slot 0 is its origin); fall back to the
+        // locally persisted offset only when the reply omits it.
+        const serverOffset = typeof data.resumeOffset === 'number' ? data.resumeOffset : null;
+        void runImport(resumeState.jobId, resumeState.total, serverOffset ?? resumeState.offset, seeded);
+        return;
+      }
+      // A job started before migration 0022 has rows without a slot index and
+      // cannot be resumed safely — tell the user to start a new import instead
+      // of continuing from a guessed offset.
+      const data = await res.json().catch(() => null);
+      if (data?.error === 'resume_unsupported') {
+        persistResume(null);
+        setResumeState(null);
+        setAlert({ message: t('home.playlistImportResumeUnsupported') });
+        setImporting(false);
+        return;
       }
     } catch { /* non-fatal — resume still works */ }
     void runImport(resumeState.jobId, resumeState.total, resumeState.offset, seeded);

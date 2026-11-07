@@ -161,6 +161,7 @@
     "playlistImportInvalidJob": "無効な取込ジョブです",
     "playlistImportJobNotFound": "取込ジョブが見つかりません",
     "playlistImportJobFailed": "取込ジョブが失敗しました",
+    "playlistImportResumeUnsupported": "このインポートは再開機能の更新前に開始されたため、続行できません。新しくインポートし直してください。",
     "collections": "コレクション",
     "collectionsTitle": "コレクション管理",
     "newCollectionPlaceholder": "新しいコレクション名...",
