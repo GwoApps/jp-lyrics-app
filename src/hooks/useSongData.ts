@@ -9,6 +9,7 @@ import { mapTimelineTimestamps, parseLrc } from '@/lib/lrc';
 import type { SpotifyState } from './useSpotifySync';
 import type { TranslationProgress } from '@/lib/translation-stream';
 import { useI18n } from '@/lib/i18n';
+import { useTheme } from '@/lib/theme';
 
 import type { CantoneseDetectionResult } from '@/lib/lyrics-reading';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -135,6 +136,9 @@ export interface UseSongDataReturn {
 export function useSongData(id: string): UseSongDataReturn {
   const router = useRouter();
   const { t } = useI18n();
+  // Issue #374: the PiP palette is its own setting, but a 'system' preference
+  // resolves against the main theme — so PiP still needs the live main theme.
+  const { theme } = useTheme();
   const {
     readingMode, setReadingMode,
     romanizeFurigana, setRomanizeFurigana,
@@ -254,7 +258,7 @@ export function useSongData(id: string): UseSongDataReturn {
   // preference is off or nothing has been translated yet; the partial-coverage
   // placeholder then mirrors the detail page (`showUntranslatedHint`).
   const { openPiP } = usePiP({
-    fontSize, readingMode, romanizeFurigana, song, furiganaLines, lineTimestamps,
+    fontSize, theme, readingMode, romanizeFurigana, song, furiganaLines, lineTimestamps,
     disableVideoPiP,
     translationLines: showTranslation && hasTranslation ? translations : undefined,
     showUntranslatedHint: untranslatedCount > 0,

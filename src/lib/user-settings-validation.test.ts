@@ -37,6 +37,16 @@ test('reading_mode accepts original/furigana, rejects others', () => {
     { ok: false, error: 'invalid_reading_mode' });
 });
 
+test('pip_theme accepts system/dark/light (issue #374)', () => {
+  for (const v of ['system', 'dark', 'light']) {
+    assert.deepEqual(validateSettingValue('pip_theme', v), { ok: true, value: v });
+  }
+  for (const v of ['auto', '', 'DARK']) {
+    assert.deepEqual(validateSettingValue('pip_theme', v),
+      { ok: false, error: 'invalid_pip_theme' });
+  }
+});
+
 test('boolean settings accept only true/false', () => {
   for (const key of ['romanize_furigana', 'show_translation', 'follow_playing', 'sync_settings']) {
     assert.deepEqual(validateSettingValue(key as never, 'true'), { ok: true, value: 'true' });

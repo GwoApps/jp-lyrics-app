@@ -5,7 +5,11 @@ import { Loader2, LogIn, Save, Check } from 'lucide-react';
 import { useI18n, LOCALE_META, type Locale } from '@/lib/i18n';
 import { useAuthSession } from '@/lib/auth-session';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
-import { normalizeTheme, normalizeReadingMode, normalizeBoolean, normalizeFontSize, normalizeLocale } from '@/lib/settings-utils';
+import {
+  normalizeTheme, normalizeReadingMode, normalizeBoolean, normalizeFontSize, normalizeLocale,
+  normalizePipThemeChoice,
+} from '@/lib/settings-utils';
+import { PIP_THEME_EVENT } from '@/lib/pip-theme';
 import {
   isSyncEnabled,
   syncSettingsToLocalStorage,
@@ -29,6 +33,7 @@ interface SettingsMap {
   follow_playing?: string;
   disable_video_pip?: string;
   translation_target_lang?: string;
+  pip_theme?: string;
   sync_settings?: string;
 }
 
@@ -93,6 +98,7 @@ export default function SettingsPage() {
     follow_playing: useId(),
     disable_video_pip: useId(),
     translation_target_lang: useId(),
+    pip_theme: useId(),
   } satisfies Record<keyof SettingsMap, string>;
 
   // Unified unsaved-changes guard covering in-app <Link> clicks (top navigation),
@@ -141,6 +147,7 @@ export default function SettingsPage() {
         show_translation: localStorage.getItem('jplrc-show-translation') ?? undefined,
         follow_playing: localStorage.getItem('jplrc-follow-playing') ?? undefined,
         disable_video_pip: localStorage.getItem('jplrc-disable-video-pip') ?? undefined,
+        pip_theme: localStorage.getItem('jplrc-pip-theme') ?? undefined,
         sync_settings: 'false',
       });
       setLoading(false);
@@ -176,6 +183,12 @@ export default function SettingsPage() {
     } else if (key === 'locale') {
       const l = normalizeLocale(value) as Locale;
       setLocale(l);
+    } else if (key === 'pip_theme') {
+      // Issue #374: persisted immediately so an already-open PiP window picks
+      // the new palette up right away (the event carries the raw choice; 'system'
+      // is resolved there against the live main theme).
+      try { localStorage.setItem('jplrc-pip-theme', value); } catch {}
+      window.dispatchEvent(new CustomEvent(PIP_THEME_EVENT, { detail: value }));
     }
   }, [setTheme, setLocale]);
 
@@ -269,6 +282,7 @@ export default function SettingsPage() {
   const disableVideoPiP = normalizeBoolean(settings.disable_video_pip);
   const fontSize = normalizeFontSize(settings.font_size);
   const targetLang = settings.translation_target_lang ?? '';
+  const pipTheme = normalizePipThemeChoice(settings.pip_theme);
   const syncOn = normalizeBoolean(settings.sync_settings);
   const pipStatusLabel = (supported: boolean | undefined) => supported === undefined
     ? t('settings.pipChecking')
@@ -353,6 +367,31 @@ export default function SettingsPage() {
                 {(Object.keys(LOCALE_META) as Locale[]).map((l) => (
                   <option key={l} value={l}>{LOCALE_META[l].label}</option>
                 ))}
+              </select>
+            }
+          />
+        </div>
+      </section>
+
+      {/* 画中画 */}
+      <section className="mb-6 rounded-lg border border-[var(--border)] bg-[var(--card)] p-5">
+        <h2 className="mb-2 text-sm font-semibold">{t('settings.sectionPip')}</h2>
+        <div className="divide-y divide-[var(--border)]">
+          <Row
+            label={t('settings.pipTheme')}
+            hint={t('settings.pipThemeHint')}
+            controlId={fieldIds.pip_theme}
+            control={
+              <select
+                id={fieldIds.pip_theme}
+                value={pipTheme}
+                onChange={(e) => handleFieldChange('pip_theme', e.target.value)}
+                className={inputClass}
+                aria-label={t('settings.pipTheme')}
+              >
+                <option value="system">{t('settings.pipThemeSystem')}</option>
+                <option value="dark">{t('settings.themeDark')}</option>
+                <option value="light">{t('settings.themeLight')}</option>
               </select>
             }
           />

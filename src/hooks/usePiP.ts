@@ -7,9 +7,16 @@ import { renderPipLyricsHtml } from '@/lib/pip-render';
 import { normalizeFuriganaSegments, resolveFuriganaReading } from '@/lib/romaji';
 import { normalizeReadingScheme } from '@/lib/lyrics-reading';
 import { getPiPCapabilities } from '@/lib/pip-support';
+import { PIP_PALETTES, PIP_THEME_EVENT, pipPaletteVars, readStoredPipTheme } from '@/lib/pip-theme';
+import { resolvePipTheme, type PipTheme } from '@/lib/settings-utils';
 
 interface UsePiPDeps {
   fontSize: number;
+  /**
+   * Main UI theme. Used as the fallback palette and — more importantly — as the
+   * change trigger: a `system` PiP setting must repaint an open window too.
+   */
+  theme: PipTheme;
   readingMode: ReadingMode;
   romanizeFurigana: boolean;
   disableVideoPiP: boolean;
@@ -44,9 +51,31 @@ interface PipLyricsSource {
 
 export function usePiP(deps: UsePiPDeps) {
   const {
-    fontSize, readingMode, romanizeFurigana, disableVideoPiP, song, furiganaLines, lineTimestamps,
+    fontSize, theme, readingMode, romanizeFurigana, disableVideoPiP, song, furiganaLines, lineTimestamps,
     translationLines, showUntranslatedHint, showToast, t,
   } = deps;
+
+  // Issue #374: the PiP palette is its own preference ('system' follows the main
+  // theme). Kept in a ref so `openPiP` doesn't need to be rebuilt when only the
+  // PiP colour changes, and read fresh on every open / live push.
+  const pipThemeChoiceRef = useRef<string>('system');
+  useEffect(() => {
+    pipThemeChoiceRef.current = readStoredPipTheme();
+  }, []);
+  useEffect(() => {
+    const onPipThemeChange = (e: Event) => {
+      const detail = (e as CustomEvent<string | undefined>).detail;
+      pipThemeChoiceRef.current = typeof detail === 'string' ? detail : readStoredPipTheme();
+    };
+    window.addEventListener(PIP_THEME_EVENT, onPipThemeChange);
+    return () => window.removeEventListener(PIP_THEME_EVENT, onPipThemeChange);
+  }, []);
+
+  /** Current palette: the stored PiP preference resolved against the main theme. */
+  const currentPipTheme = useCallback(
+    () => resolvePipTheme(pipThemeChoiceRef.current, theme),
+    [theme],
+  );
 
   // Keep a reference to the page-provided pipWindowRef so the useEffect below
   // can push live font-size / reading-mode updates into an already-open PiP
@@ -309,42 +338,61 @@ export function usePiP(deps: UsePiPDeps) {
       pipWindowRef.current = pipWindow;
       pipWindowRefInternal.current = pipWindowRef;
 
+      // A PiP-theme change made while this window is open never re-renders the
+      // page, so the `useEffect([theme])` below can't see it — repaint here
+      // instead, and let the click-to-open handler (which closes the window)
+      // see the fresh value too.
+      const onPipThemeChange = (e: Event) => {
+        const detail = (e as CustomEvent<string | undefined>).detail;
+        pipThemeChoiceRef.current = typeof detail === 'string' ? detail : readStoredPipTheme();
+        if (pipWindow.closed) return;
+        const next = resolvePipTheme(pipThemeChoiceRef.current, theme);
+        pipWindow.postMessage({ type: 'pip-theme', colorScheme: next, vars: pipPaletteVars(next) }, '*');
+      };
+      window.addEventListener(PIP_THEME_EVENT, onPipThemeChange);
+      pipWindow.addEventListener('pagehide', () => window.removeEventListener(PIP_THEME_EVENT, onPipThemeChange));
+
       const title = escapeHtml(songArg?.title || '');
       const artist = escapeHtml(songArg?.artist || '');
 
       // Lyric lines read their size from this CSS variable so the open window
       // can be resized live via a `pip-font-size` message without rebuilding.
       const pipFontSize = fontSize;
+      // Every colour the window needs is a `--pip-*` variable (issue #374), so
+      // the palette can be swapped in place by a `pip-theme` message.
+      const palette = PIP_PALETTES[currentPipTheme()];
 
       pipWindow.document.documentElement.innerHTML = `
         <head>
-          <meta name="color-scheme" content="dark">
-          <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500&family=Noto+Sans+SC:wght@400;500&family=Noto+Sans+TC:wght@400;500&display=swap" rel="stylesheet">
+          <meta name="color-scheme" content="${palette.colorScheme}">
+          <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500&family=Noto+Sans+SC:wght@400;500&family=Noto Sans TC:wght@400;500&display=swap" rel="stylesheet">
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            html { --pip-font-size: ${pipFontSize}px; }
-            html, body { background: #0a0a0a; color: #a3a3a3; font-family: 'Noto Sans JP', 'system-ui', system-ui, -apple-system, sans-serif; height: 100%; overflow: hidden; }
-            #pip-header { padding: 8px 12px; border-bottom: 1px solid #262626; font-size: 11px; color: #737373; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-            #pip-header .title { color: #e5e5e5; font-weight: 500; }
+            /* Palette comes from PIP_PALETTES (src/lib/pip-theme.ts) — the only
+               place colours live; the rules below just consume the variables. */
+            html { --pip-font-size: ${pipFontSize}px; --pip-bg: ${palette.bg}; --pip-fg: ${palette.fg}; --pip-strong: ${palette.strong}; --pip-muted: ${palette.muted}; --pip-faint: ${palette.faint}; --pip-border: ${palette.border}; --pip-active: ${palette.active}; --pip-active-reading: ${palette.activeReading}; --pip-translation: ${palette.translation}; --pip-active-translation: ${palette.activeTranslation}; }
+            html, body { background: var(--pip-bg); color: var(--pip-fg); font-family: 'Noto Sans JP', 'system-ui', system-ui, -apple-system, sans-serif; height: 100%; overflow: hidden; }
+            #pip-header { padding: 8px 12px; border-bottom: 1px solid var(--pip-border); font-size: 11px; color: var(--pip-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            #pip-header .title { color: var(--pip-strong); font-weight: 500; }
             #pip-lyrics { height: calc(100% - 36px); overflow-y: auto; padding: 12px; scroll-behavior: smooth; }
             .line { line-height: 2.2; padding: 2px 4px; border-radius: 4px; transition: color 0.3s, transform 0.3s, opacity 0.3s; transform-origin: left; opacity: 0.6; font-size: var(--pip-font-size); }
             .line.has-ts { cursor: pointer; }
-            .line.has-ts:hover { color: #e5e5e5; opacity: 0.9; }
+            .line.has-ts:hover { color: var(--pip-strong); opacity: 0.9; }
             @keyframes lyricActivate { 0% { transform: scale(1); filter: brightness(1); } 40% { transform: scale(1.06); filter: brightness(1.25); } 100% { transform: scale(1.03); filter: brightness(1); } }
-            .line.active { color: #ffffff; transform: scale(1.03); opacity: 1; font-weight: 700; animation: lyricActivate 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+            .line.active { color: var(--pip-active); transform: scale(1.03); opacity: 1; font-weight: 700; animation: lyricActivate 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
             .line.empty { height: 1.5em; }
-            ruby rt { font-size: 0.5em; color: #a3a3a3; }
+            ruby rt { font-size: 0.5em; color: var(--pip-fg); }
             ruby.korean-word rt { padding-inline: 0.16em; }
             ruby.cantonese-reading { ruby-overhang: none; white-space: nowrap; }
             ruby.cantonese-reading rt { padding-inline: 0.08em; }
             ruby.katakana-chunk { ruby-overhang: none; white-space: nowrap; }
-            .line.active ruby rt { color: #d4d4d4; }
+            .line.active ruby rt { color: var(--pip-active-reading); }
             /* Issue #331: translation typography mirrors the detail page
                (FuriganaLine): 0.72em, pulled into the source line's half-leading
                and padded back so line spacing stays uniform. */
-            .line .translation { margin-top: -0.6em; padding-bottom: 0.6em; font-size: 0.72em; line-height: 1.6; color: #8a8a8a; }
-            .line.untranslated-hint .translation, .line .translation.untranslated-hint { font-style: italic; color: #5c5c5c; }
-            .line.active .translation { color: #a3a3a3; }
+            .line .translation { margin-top: -0.6em; padding-bottom: 0.6em; font-size: 0.72em; line-height: 1.6; color: var(--pip-translation); }
+            .line.untranslated-hint .translation, .line .translation.untranslated-hint { font-style: italic; color: var(--pip-faint); }
+            .line.active .translation { color: var(--pip-active-translation); }
             /* Per-language fonts, same policy as globals.css: a Chinese
                translation must not be drawn with Japanese glyph shapes, and
                readings (romaji / jyutping) stay in the Latin stack. */
@@ -426,6 +474,18 @@ export function usePiP(deps: UsePiPDeps) {
           if (!msg || typeof msg !== 'object') return;
           if (msg.type === 'pip-font-size' && typeof msg.fontSize === 'number') {
             document.documentElement.style.setProperty('--pip-font-size', msg.fontSize + 'px');
+          } else if (msg.type === 'pip-theme' && msg.vars && typeof msg.vars === 'object') {
+            // Issue #374: swap the palette in place — no close/re-open needed.
+            var root = document.documentElement;
+            Object.keys(msg.vars).forEach(function(name) {
+              if (name.indexOf('--pip-') !== 0) return;
+              root.style.setProperty(name, msg.vars[name]);
+            });
+            if (msg.colorScheme === 'dark' || msg.colorScheme === 'light') {
+              var meta = document.querySelector('meta[name="color-scheme"]');
+              if (meta) meta.setAttribute('content', msg.colorScheme);
+              root.style.colorScheme = msg.colorScheme;
+            }
           } else if (msg.type === 'pip-lyrics-render' && typeof msg.html === 'string') {
             var container = document.getElementById('pip-lyrics');
             if (!container) return;
@@ -457,7 +517,7 @@ export function usePiP(deps: UsePiPDeps) {
       console.error('PiP failed:', e);
       showToast('error', t('song.pipFailed'));
     }
-  }, [fontSize, readingMode, romanizeFurigana, disableVideoPiP, t, showToast, drawVideoPiP]);
+  }, [currentPipTheme, fontSize, theme, readingMode, romanizeFurigana, disableVideoPiP, t, showToast, drawVideoPiP]);
 
   // Keep an already-open PiP window in sync with the main page.
   // Font size is applied live via the CSS variable (no rebuild needed).
@@ -466,6 +526,22 @@ export function usePiP(deps: UsePiPDeps) {
     if (!pipWin || pipWin.closed) return;
     pipWin.postMessage({ type: 'pip-font-size', fontSize }, '*');
   }, [fontSize]);
+
+  // PiP theme (issue #374): follows the stored preference — or the main theme
+  // when it is 'system' — and repaints the open window instead of asking the
+  // user to close and re-open it. A change made while the window is open can't
+  // fire this effect (the ref update doesn't re-render), so `openPiP` also
+  // listens once on `window` and pushes the palette from the event itself.
+  useEffect(() => {
+    const pipWin = pipWindowRefInternal.current?.current;
+    if (!pipWin || pipWin.closed) return;
+    const pipTheme = resolvePipTheme(pipThemeChoiceRef.current, theme);
+    pipWin.postMessage({
+      type: 'pip-theme',
+      colorScheme: pipTheme,
+      vars: pipPaletteVars(pipTheme),
+    }, '*');
+  }, [theme]);
 
   // Reading mode / romanize toggle, translation updates (issue #331) and lyric
   // data changes regenerate the PiP lyrics list in place instead of forcing a
