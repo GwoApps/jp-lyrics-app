@@ -5,6 +5,7 @@ import type { FuriganaLine, FuriganaSegment, ReadingScheme } from '@/lib/types';
 import { useI18n } from '@/lib/i18n';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { getCantoneseReadingCandidates } from '@/lib/lyrics-reading';
+import { getJapaneseReadingContext } from '@/lib/japanese-reading-context';
 
 interface FuriganaEditorProps {
   lines: FuriganaLine[];
@@ -70,7 +71,11 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
   }, [active, lines]);
 
   const activeText = activeSeg?.text ?? '';
-  const hasActiveKanji = /[\u3400-\u4DBF\u4E00-\u9FFF]/.test(activeText);
+  const hasActiveKanji = /\p{Script=Han}/u.test(activeText);
+  const readingContext = useMemo(() => active && activeSeg
+    ? getJapaneseReadingContext(lines[active.lineIndex].segments, active.segIndex)
+    : { word: '', start: 0 }, [active, activeSeg, lines]);
+  const { word: activeWord, start: activeWordStart } = readingContext;
 
   useEffect(() => {
     if (!hasActiveKanji) return;
@@ -83,13 +88,14 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
     // in this effect (see react-hooks/set-state-in-effect).
     const isNetworkPath = readingScheme !== 'yue-jyutping';
     const loadCandidates = isNetworkPath
-      ? fetch(`/api/furigana/readings?text=${encodeURIComponent(activeText)}`, { signal: controller.signal })
+      ? fetch(`/api/furigana/readings?${new URLSearchParams({ text: activeText, word: activeWord, start: String(activeWordStart) })}`, { signal: controller.signal })
         .then(async (response) => {
           if (!response.ok) throw new Error('readings request failed');
           const payload = await response.json() as { candidates?: unknown };
-          return Array.isArray(payload.candidates)
-            ? payload.candidates.filter((candidate): candidate is string => typeof candidate === 'string')
-            : [];
+          if (!Array.isArray(payload.candidates) || payload.candidates.some((candidate) => typeof candidate !== 'string')) {
+            throw new Error('invalid readings response');
+          }
+          return payload.candidates as string[];
         })
       : getCantoneseReadingCandidates(activeText);
 
@@ -111,7 +117,7 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
       });
 
     return () => controller.abort();
-  }, [activeText, hasActiveKanji, readingScheme, candidatesRetry]);
+  }, [activeText, activeWord, activeWordStart, hasActiveKanji, readingScheme, candidatesRetry]);
 
   const selectableReadings = useMemo(() => {
     if (!activeSeg || !hasActiveKanji) return [];
@@ -138,9 +144,9 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
     setDraft(segment.reading);
     setReadingCandidates([]);
     setCandidatesError(false);
-    setCandidatesRetry(0);
+    setCandidatesRetry((attempt) => attempt + 1);
     setReadingCandidatesLoading(
-      readingScheme !== 'yue-jyutping' && /[\u3400-\u4DBF\u4E00-\u9FFF]/.test(segment.text)
+      readingScheme !== 'yue-jyutping' && /\p{Script=Han}/u.test(segment.text)
     );
   }, [lines, readingScheme]);
 
@@ -195,8 +201,10 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
   const splitSegment = useCallback(() => {
     if (!active) return;
     const seg = lines[active.lineIndex].segments[active.segIndex];
-    if (seg.text.length <= 1) return;
-    const chars = seg.text.split('').map((ch) => ({ text: ch, reading: '' }));
+    if ([...seg.text].length <= 1) return;
+    const chars = [...seg.text].map((ch, index) => ({
+      ...seg, text: ch, reading: '', joinPrev: index > 0 || seg.joinPrev === true,
+    }));
     const line = lines[active.lineIndex];
     const nextSegments = [
       ...line.segments.slice(0, active.segIndex),
@@ -208,9 +216,9 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
     setDraft('');
     setReadingCandidates([]);
     setCandidatesError(false);
-    setCandidatesRetry(0);
+    setCandidatesRetry((attempt) => attempt + 1);
     setReadingCandidatesLoading(
-      readingScheme !== 'yue-jyutping' && /[\u3400-\u4DBF\u4E00-\u9FFF]/.test(chars[0].text)
+      readingScheme !== 'yue-jyutping' && /\p{Script=Han}/u.test(chars[0].text)
     );
   }, [active, lines, updateLineSegments, readingScheme]);
 
@@ -222,6 +230,7 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
     const next = line.segments[active.segIndex + 1];
     if (isNonEditableDisplaySegment(next.text)) return;
     const merged: FuriganaSegment = {
+      ...current,
       text: current.text + next.text,
       reading: current.reading && next.reading
         ? current.reading + next.reading
@@ -237,9 +246,9 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
     setDraft(merged.reading);
     setReadingCandidates([]);
     setCandidatesError(false);
-    setCandidatesRetry(0);
+    setCandidatesRetry((attempt) => attempt + 1);
     setReadingCandidatesLoading(
-      readingScheme !== 'yue-jyutping' && /[\u3400-\u4DBF\u4E00-\u9FFF]/.test(merged.text)
+      readingScheme !== 'yue-jyutping' && /\p{Script=Han}/u.test(merged.text)
     );
   }, [active, lines, updateLineSegments, readingScheme]);
 
@@ -376,7 +385,7 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
             {isActiveLine && activeSeg && (
               <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--muted)] p-2 sm:p-3">
                 <span className="text-xs text-[var(--muted-foreground)]">{activeSeg.text}</span>
-                {hasActiveKanji && (readingCandidatesLoading || candidatesError || selectableReadings.length > 1) && (
+                {hasActiveKanji && (readingCandidatesLoading || candidatesError || selectableReadings.some((reading) => reading !== activeSeg.reading)) && (
                   <div className="flex w-full flex-wrap items-center gap-1.5">
                     <span className="mr-1 text-[11px] text-[var(--muted-foreground)]">{t('furigana.suggestions')}</span>
                     {readingCandidatesLoading ? (
@@ -410,6 +419,16 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
                         {reading}
                       </button>
                     ))}
+                    {readingScheme === 'ja-kana' && (
+                      <a
+                        href="https://www.edrdg.org/edrdg/licence.html"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full text-[10px] text-[var(--muted-foreground)] underline underline-offset-2"
+                      >
+                        KANJIDIC2 / JMdict · EDRDG · CC BY-SA 4.0
+                      </a>
+                    )}
                   </div>
                 )}
                 <span className="text-[11px] text-[var(--muted-foreground)]">{t('furigana.manualReading')}</span>

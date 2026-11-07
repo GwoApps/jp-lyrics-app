@@ -1,0 +1,72 @@
+{
+  "artifacts": {
+    "japanese-readings-restrictions.json": {
+      "bytes": 7899021,
+      "sha256": "3480ee6d39ef4fe25d5065b702dbaa70f3d51e218e220175c90c0276a229c76a"
+    },
+    "japanese-readings.json": {
+      "bytes": 9380107,
+      "sha256": "6090e71c074609703500beb2e4d6adb1269f2cbfdd9f5bb0a1241d6157484b13"
+    }
+  },
+  "attribution": "This package uses the KANJIDIC2 and JMdict dictionary files. These files are the property of the Electronic Dictionary Research and Development Group, and are used in conformance with the Group's licence. Copyright James William BREEN and the Electronic Dictionary Research and Development Group. Derived dictionary data: CC BY-SA 4.0.",
+  "counts": {
+    "annotated_kanji_readings": 0,
+    "annotated_word_entries": 48909,
+    "jmdict": {
+      "entries": 219036,
+      "entries_with_kanji": 175869,
+      "incompatible_pairs_not_added": 6489,
+      "no_kanji_readings_not_paired": 6641
+    },
+    "kanji": 12356,
+    "kanji_readings": 35559,
+    "source_kanji_characters": 13108,
+    "word_readings": 244708,
+    "words": 227154
+  },
+  "generator": "scripts/update-japanese-reading-dictionary.py",
+  "generator_sha256": "9cf9e98d694f3c40dd02d5245b6282b6d73011fcc99761432e7ab71ab1f7aaee",
+  "license": "CC-BY-SA-4.0",
+  "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+  "policy": {
+    "kanji": "All ja_on/ja_kun; hiragana; strip affix hyphens and dotted okurigana; no nanori.",
+    "kun": "Original kun stem/okurigana pairs retained for contextual compatibility checks.",
+    "reproducibility": "Cached retrieval timestamps are reused; no generation-time timestamp. Identical verified sources and generator yield byte-identical artifacts.",
+    "usage": "No rare/obsolete forms or readings are dropped; source usage and sense restrictions are preserved in the restrictions sidecar. XML entity descriptions are expanded by the XML parser.",
+    "words": "All exact kanji-containing orthographies; obey re_restr/re_nokanji; unique readings ordered by commonness then source order."
+  },
+  "schema_version": 2,
+  "sources": {
+    "jmdict": {
+      "bytes": 10594173,
+      "last_modified": "Sat, 07 Nov 2026 03:30:27 GMT",
+      "resolved_url": "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz",
+      "retrieved_at": "2026-11-07T08:52:52+00:00",
+      "sha256": "490d2fef9cd8dfcdfcd618863c827fe2efd52992b002fb502679d4e1b7fb039d",
+      "upstream_urls": [
+        "https://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz",
+        "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz"
+      ],
+      "url": "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz",
+      "version": "JMdict created: 2026-11-07"
+    },
+    "kanjidic2": {
+      "bytes": 1488573,
+      "last_modified": "Sat, 07 Nov 2026 02:35:04 GMT",
+      "resolved_url": "https://www.edrdg.org/kanjidic/kanjidic2.xml.gz",
+      "retrieved_at": "2026-11-07T08:52:41+00:00",
+      "sha256": "0ac6d0c0fba4a43a20c3d24c010b3b6a0066b80fe273c2c867041a97faf80ce7",
+      "upstream_urls": [
+        "https://www.edrdg.org/kanjidic/kanjidic2.xml.gz"
+      ],
+      "url": "https://www.edrdg.org/kanjidic/kanjidic2.xml.gz",
+      "version": {
+        "database_version": "2026-311",
+        "date_of_creation": "2026-11-07",
+        "file_version": "4"
+      }
+    }
+  },
+  "upstream_license_url": "https://www.edrdg.org/edrdg/licence.html"
+}

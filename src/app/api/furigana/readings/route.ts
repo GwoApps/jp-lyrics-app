@@ -1,67 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { lru } from 'tiny-lru';
 import { getAuthUser } from '@/lib/auth';
+import { getJapaneseReadingCandidates } from '@/lib/japanese-reading-candidates';
 
-const KANJI_RE = /[\u3400-\u4DBF\u4E00-\u9FFF]/;
-const MAX_TEXT_LENGTH = 32;
-const MAX_CANDIDATES = 8;
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const MAX_CACHE_SIZE = 1000;
-// LRU + TTL 缓存：容量超限自动淘汰最旧 key，条目到期自动失效，防止常驻进程内存无界增长。
-const readingCache = lru<string[]>(MAX_CACHE_SIZE, CACHE_TTL_MS);
-
-type JishoEntry = {
-  japanese?: Array<{ word?: string; reading?: string }>;
-};
-
-/**
- * Returns dictionary readings for an exact kanji word. The editor keeps the
- * tokenizer's contextual reading first; these are alternatives for users to
- * choose when a word is ambiguous in lyric context.
- */
+/** Local KANJIDIC2/JMdict readings; no per-click third-party dependency. */
 export async function GET(request: NextRequest) {
   const user = await getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: 'login_required' }, { status: 401 });
   }
 
-  const text = request.nextUrl.searchParams.get('text')?.trim() ?? '';
-  if (!text || text.length > MAX_TEXT_LENGTH || !KANJI_RE.test(text)) {
-    return NextResponse.json({ candidates: [] });
+  const params = request.nextUrl.searchParams;
+  const text = params.get('text') ?? '';
+  const word = params.get('word') ?? text;
+  const startParam = params.get('start');
+  const start = startParam === null ? 0 : /^\d+$/.test(startParam) ? Number(startParam) : NaN;
+  if (!text || text.length > 32 || word.length > 64 || !Number.isInteger(start)
+    || word.slice(start, start + text.length) !== text) {
+    return NextResponse.json({ error: 'invalid_reading_query' }, { status: 400 });
   }
-
-  const cached = readingCache.get(text);
-  if (cached) {
-    return NextResponse.json({ candidates: cached });
-  }
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5_000);
 
   try {
-    const response = await fetch(`https://jisho.org/api/v1/search/words?keyword=${encodeURIComponent(text)}`, {
-      headers: { Accept: 'application/json' },
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      return NextResponse.json({ candidates: [] });
-    }
-
-    const payload = await response.json() as { data?: JishoEntry[] };
-    const candidates = [...new Set(
-      (payload.data ?? [])
-        .flatMap((entry) => entry.japanese ?? [])
-        .filter((form) => form.word === text && form.reading)
-        .map((form) => form.reading!)
-    )].slice(0, MAX_CANDIDATES);
-
-    readingCache.set(text, candidates);
-    return NextResponse.json({ candidates });
+    return NextResponse.json({ candidates: getJapaneseReadingCandidates(text, { word, start }) });
   } catch (error) {
-    // Suggestions are an enhancement. Manual editing remains available offline.
-    console.error(`[readings] furigana suggestion lookup failed — ${error instanceof Error ? error.message : String(error)}`);
-    return NextResponse.json({ candidates: [] });
-  } finally {
-    clearTimeout(timeout);
+    console.error(`[readings] local dictionary lookup failed — ${error instanceof Error ? error.message : String(error)}`);
+    // A failed lookup must reach the editor's error/retry path, not pretend
+    // that a successful dictionary query found no alternatives.
+    return NextResponse.json({ error: 'reading_lookup_failed' }, { status: 503 });
   }
 }
