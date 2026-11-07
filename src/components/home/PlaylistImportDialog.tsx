@@ -7,7 +7,7 @@ import { Loader2, AlertTriangle, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import Dialog from '@/components/ui/dialog';
 import { importErrorMsg } from '@/lib/import-errors';
-import { PLAYLIST_CHUNK_HOP } from '@/lib/playlist-import';
+import { PLAYLIST_CHUNK_HOP } from '@/lib/playlist-import-constants';
 import type { SongItem } from '@/lib/types';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import Toast from '@/components/Toast';
