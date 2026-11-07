@@ -8,6 +8,7 @@ import { useI18n } from '@/lib/i18n';
 import type { ReadingScheme } from '@/lib/types';
 import { detectCantoneseLyrics } from '@/lib/lyrics-reading';
 import { isCoverRejected, MAX_COVER_BYTES, prepareCoverFile } from '@/lib/cover-compress';
+import { linkcoreErrorKey } from '@/lib/linkcore-error-keys';
 
 export type LyricsMode = 'text' | 'lrc';
 
@@ -160,8 +161,8 @@ export default function SongForm({
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const key = typeof data.error === 'string' ? `new.${data.error}` : 'new.linkcoreImportFailed';
-        showToast('error', t(key));
+        const key = typeof data.error === 'string' ? linkcoreErrorKey(data.error) : null;
+        showToast('error', t(key ?? 'new.linkcoreImportFailed'));
         return;
       }
       handleLyricsChange(data.lyrics);
@@ -539,7 +540,7 @@ export default function SongForm({
             disabled={saving}
             className="song-editor-primary-button rounded-md px-5 py-2.5 text-sm font-medium transition-opacity disabled:opacity-50"
           >
-            {saving ? t(`${ns}.converting`) : (saveLabel ?? t(`${ns}.save`))}
+            {saving ? t(`${ns}.converting`) : (saveLabel ?? t('common.save'))}
           </button>
           <button onClick={() => (guardNavigate ? guardNavigate(cancelHref) : router.push(cancelHref))} className="rounded-md px-5 py-2.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
             {t('common.cancel')}

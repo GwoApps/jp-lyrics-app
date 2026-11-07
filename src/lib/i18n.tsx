@@ -44,6 +44,9 @@ type I18nContextValue = {
   t: (key: string, vars?: Record<string, string | number>) => string;
 };
 
+/** Keys already reported as missing, so a re-render does not spam the console. */
+const warnedMissingKeys = new Set<string>();
+
 const I18nContext = createContext<I18nContextValue>({ locale: 'zh-CN', bcp47: 'zh-CN', setLocale: () => {}, t: (k) => k });
 const subscribeHydration = () => () => {};
 
@@ -68,6 +71,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     const [ns, k] = key.split('.');
     const dict = LOCALES[locale];
     let val = dict?.[ns]?.[k] ?? LOCALES['zh-CN'][ns]?.[k] ?? key;
+    // Falling back to the key itself means no dictionary has this entry, so the
+    // UI is about to render an internal identifier. Dev builds shout about it;
+    // `validate:i18n` is the CI-side counterpart that catches it before merge.
+    if (val === key && process.env.NODE_ENV !== 'production' && !warnedMissingKeys.has(key)) {
+      warnedMissingKeys.add(key);
+      console.warn(`[i18n] missing translation key "${key}" — rendered as-is`);
+    }
     if (vars) {
       for (const [rk, rv] of Object.entries(vars)) {
         val = val.replace(`{${rk}}`, String(rv));
