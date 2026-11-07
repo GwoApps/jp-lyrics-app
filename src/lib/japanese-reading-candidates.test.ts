@@ -43,7 +43,10 @@ test('word readings map only onto the selected kanji part', () => {
 test('dictionary-checked inflections align kana before suggesting a kanji reading', () => {
   assert.equal(getJapaneseReadingCandidates('食', { word: '食べた', start: 0 })[0], 'た');
   assert.equal(getJapaneseReadingCandidates('思', { word: '思い', start: 0 })[0], 'おも');
-  assert.equal(getJapaneseReadingCandidates('行', { word: '行った', start: 0 })[0], 'い');
+  const wentOrPerformed = getJapaneseReadingCandidates('行', { word: '行った', start: 0 });
+  assert.ok(wentOrPerformed.includes('い')); // 行く → いった
+  assert.ok(wentOrPerformed.includes('おこな')); // 行う → おこなった: also a valid spelling, not a rank prediction
+  assert.ok(!wentOrPerformed.includes('いく'));
   assert.equal(getJapaneseReadingCandidates('書', { word: '書きました', start: 0 })[0], 'か');
 });
 
@@ -66,6 +69,15 @@ test('contextual candidates never duplicate an existing okurigana suffix', () =>
 test('replaced annotation arrays safely invalidate old editor selections', () => {
   assert.deepEqual(getJapaneseReadingContext([{ text: '世界', reading: 'せかい' }], 1), { word: '', start: 0 });
   assert.deepEqual(getJapaneseReadingContext([], 0), { word: '', start: 0 });
+});
+
+test('real target-song tokenizer fragments have valid word-derived candidates', () => {
+  for (const [text, word, expected] of [
+    ['届', '届か', 'とど'], ['溜', '溜まっ', 'た'], ['黒', '黒く', 'くろ'],
+    ['濁', '濁っ', 'にご'], ['攫', '攫わ', 'さら'], ['意外', '意外と', 'いがい'],
+  ]) assert.ok(getJapaneseReadingCandidates(text, { word, start: 0 }).includes(expected), word);
+  assert.deepEqual(getJapaneseReadingCandidates('呼吸'), ['こきゅう']);
+  assert.ok(!getJapaneseReadingCandidates('過去').includes('すぎさ'));
 });
 
 test('invalid/mismatched context and non-kanji requests never produce guesses', () => {

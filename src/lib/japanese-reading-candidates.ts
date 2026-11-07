@@ -2,79 +2,23 @@ import dictionary from './dictionaries/japanese-readings.json' with { type: 'jso
 import { splitJapaneseKanjiReading } from './japanese-kanji-reading';
 import { katakanaToHiragana } from './compound-readings';
 import type { JapaneseReadingContext } from './japanese-reading-context';
+import { getInflectedJapaneseReadings, type JapaneseLexemes } from './japanese-inflection';
 
 interface ReadingDictionary {
   kanji: Record<string, string[]>;
   words: Record<string, string[]>;
   kun: Record<string, string[][]>;
+  lexemes: JapaneseLexemes;
 }
 const data: ReadingDictionary = dictionary;
 const KANJI_RE = /\p{Script=Han}/u;
 const MAX_CANDIDATES = 24;
 
-// Dictionary-checked inflection hypotheses only, never synthetic pronunciations.
-// Each pair maps a surface suffix back to a lexical suffix. Transform the matched
-// dictionary reading to the same surface before aligning its kana to the text.
-const INFLECTIONS: readonly (readonly [string, string])[] = [
-  ['って', 'う'], ['って', 'つ'], ['って', 'る'],
-  ['った', 'う'], ['った', 'つ'], ['った', 'る'],
-  ['んで', 'む'], ['んで', 'ぶ'], ['んで', 'ぬ'],
-  ['んだ', 'む'], ['んだ', 'ぶ'], ['んだ', 'ぬ'],
-  ['いて', 'く'], ['いた', 'く'], ['いで', 'ぐ'], ['いだ', 'ぐ'],
-  ['して', 'す'], ['した', 'す'], ['して', 'する'], ['した', 'する'],
-  ['て', 'る'], ['た', 'る'], ['ない', 'る'], ['なかった', 'る'],
-  ['かった', 'い'], ['くて', 'い'],
-  ['い', 'う'], ['き', 'く'], ['ぎ', 'ぐ'], ['し', 'す'],
-  ['ち', 'つ'], ['に', 'ぬ'], ['び', 'ぶ'], ['み', 'む'], ['り', 'る'],
-  ['', 'る'],
-];
-const POLITE_ENDINGS = ['ます', 'ました', 'ません', 'ませんでした', 'ましょう'];
-const GODAN_STEMS: readonly (readonly [string, string])[] = [
-  ['い', 'う'], ['き', 'く'], ['ぎ', 'ぐ'], ['し', 'す'],
-  ['ち', 'つ'], ['に', 'ぬ'], ['び', 'ぶ'], ['み', 'む'], ['り', 'る'],
-];
-
 function wordReadings(surface: string): string[] {
-  const readings = [...(data.words[surface] ?? [])];
-  const irregularEndings: Record<string, [string, string]> = {
-    'て': ['きて', 'して'], 'た': ['きた', 'した'],
-    'ない': ['こない', 'しない'], 'なかった': ['こなかった', 'しなかった'],
-    'ます': ['きます', 'します'], 'ました': ['きました', 'しました'],
-    'ません': ['きません', 'しません'], 'ませんでした': ['きませんでした', 'しませんでした'],
-    'ましょう': ['きましょう', 'しましょう'],
-  };
-  for (const [ending, [come, doReading]] of Object.entries(irregularEndings)) {
-    for (const [spelling, lemmaEnding, readingEnding, inflected] of [
-      ['来', '来る', 'くる', come], ['為', '為る', 'する', doReading],
-    ]) {
-      const suffix = spelling + ending;
-      if (!surface.endsWith(suffix)) continue;
-      const lemma = surface.slice(0, -suffix.length) + lemmaEnding;
-      for (const reading of data.words[lemma] ?? []) {
-        if (reading.endsWith(readingEnding)) readings.push(reading.slice(0, -readingEnding.length) + inflected);
-      }
-    }
-  }
-  const rules = [...INFLECTIONS];
-  for (const ending of POLITE_ENDINGS) {
-    rules.push([ending, 'る']);
-    for (const [stem, base] of GODAN_STEMS) rules.push([stem + ending, base]);
-  }
-  // 行く has irregular gemination, unlike other -く verbs.
-  if (surface === '行った' || surface === '行って') {
-    for (const reading of data.words['行く'] ?? []) {
-      if (reading.endsWith('く')) readings.push(reading.slice(0, -1) + (surface.endsWith('た') ? 'った' : 'って'));
-    }
-  }
-  for (const [ending, base] of rules) {
-    if (!surface.endsWith(ending) || surface.length <= ending.length) continue;
-    const lemma = (ending ? surface.slice(0, -ending.length) : surface) + base;
-    for (const reading of data.words[lemma] ?? []) {
-      if (lemma === '来る' || (lemma.endsWith('来る') && reading.endsWith('くる')) || lemma.endsWith('為る')) continue;
-      if (reading.endsWith(base)) readings.push(reading.slice(0, -base.length) + ending);
-    }
-  }
-  return [...new Set(readings)];
+  return [...new Set([
+    ...(data.words[surface] ?? []),
+    ...getInflectedJapaneseReadings(surface, data.lexemes),
+  ])];
 }
 
 function alignReading(text: string, context: JapaneseReadingContext, reading: string): string | null {

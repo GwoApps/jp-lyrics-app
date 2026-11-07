@@ -627,6 +627,7 @@
     "line": "第 {n} 行",
     "readingPlaceholder": "例如：ひらがな",
     "jyutpingPlaceholder": "例如：hoeng1",
+    "suggestionsEmpty": "词典未找到匹配读音，仍可手动输入",
     "suggestions": "候选读音",
     "suggestionsLoading": "正在查询词典…",
     "manualReading": "或手动输入",

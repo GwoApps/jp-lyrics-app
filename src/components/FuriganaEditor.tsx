@@ -385,7 +385,7 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
             {isActiveLine && activeSeg && (
               <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--muted)] p-2 sm:p-3">
                 <span className="text-xs text-[var(--muted-foreground)]">{activeSeg.text}</span>
-                {hasActiveKanji && (readingCandidatesLoading || candidatesError || selectableReadings.some((reading) => reading !== activeSeg.reading)) && (
+                {hasActiveKanji && (
                   <div className="flex w-full flex-wrap items-center gap-1.5">
                     <span className="mr-1 text-[11px] text-[var(--muted-foreground)]">{t('furigana.suggestions')}</span>
                     {readingCandidatesLoading ? (
@@ -419,6 +419,9 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
                         {reading}
                       </button>
                     ))}
+                    {!readingCandidatesLoading && !candidatesError && readingCandidates.length === 0 && (
+                      <span className="text-[11px] text-[var(--muted-foreground)]">{t('furigana.suggestionsEmpty')}</span>
+                    )}
                     {readingScheme === 'ja-kana' && (
                       <a
                         href="https://www.edrdg.org/edrdg/licence.html"

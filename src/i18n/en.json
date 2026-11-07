@@ -627,6 +627,7 @@
     "line": "Line {n}",
     "readingPlaceholder": "e.g. ひらがな",
     "jyutpingPlaceholder": "e.g. hoeng1",
+    "suggestionsEmpty": "No matching dictionary reading. You can still enter one manually.",
     "suggestions": "Suggested readings",
     "suggestionsLoading": "Looking up dictionary…",
     "manualReading": "or enter manually",

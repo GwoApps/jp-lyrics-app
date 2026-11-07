@@ -5,8 +5,8 @@
       "sha256": "3480ee6d39ef4fe25d5065b702dbaa70f3d51e218e220175c90c0276a229c76a"
     },
     "japanese-readings.json": {
-      "bytes": 9380107,
-      "sha256": "6090e71c074609703500beb2e4d6adb1269f2cbfdd9f5bb0a1241d6157484b13"
+      "bytes": 11588791,
+      "sha256": "a23686a30343e0621d5ba26788910e5c01b26814f7d68ff9312f3e6785e3f50e"
     }
   },
   "attribution": "This package uses the KANJIDIC2 and JMdict dictionary files. These files are the property of the Electronic Dictionary Research and Development Group, and are used in conformance with the Group's licence. Copyright James William BREEN and the Electronic Dictionary Research and Development Group. Derived dictionary data: CC BY-SA 4.0.",
@@ -21,22 +21,26 @@
     },
     "kanji": 12356,
     "kanji_readings": 35559,
+    "lexeme_classes": 50625,
+    "lexeme_readings": 53626,
+    "lexemes": 50196,
     "source_kanji_characters": 13108,
     "word_readings": 244708,
     "words": 227154
   },
   "generator": "scripts/update-japanese-reading-dictionary.py",
-  "generator_sha256": "9cf9e98d694f3c40dd02d5245b6282b6d73011fcc99761432e7ab71ab1f7aaee",
+  "generator_sha256": "ad330382bda464626417ae134d27d39b379a7de8d40bdd51036c842fd6c166fa",
   "license": "CC-BY-SA-4.0",
   "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
   "policy": {
     "kanji": "All ja_on/ja_kun; hiragana; strip affix hyphens and dotted okurigana; no nanori.",
     "kun": "Original kun stem/okurigana pairs retained for contextual compatibility checks.",
+    "lexemes": "Inflection and adj-na/adv-to grammar POS codes recovered from source DTD entities; exact orthography -> POS -> compatible readings. Obey re_restr/re_nokanji, sense stagk/stagr and inherited POS; retain words reading order. No noun-only classes.",
     "reproducibility": "Cached retrieval timestamps are reused; no generation-time timestamp. Identical verified sources and generator yield byte-identical artifacts.",
     "usage": "No rare/obsolete forms or readings are dropped; source usage and sense restrictions are preserved in the restrictions sidecar. XML entity descriptions are expanded by the XML parser.",
     "words": "All exact kanji-containing orthographies; obey re_restr/re_nokanji; unique readings ordered by commonness then source order."
   },
-  "schema_version": 2,
+  "schema_version": 3,
   "sources": {
     "jmdict": {
       "bytes": 10594173,

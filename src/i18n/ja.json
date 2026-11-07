@@ -627,6 +627,7 @@
     "line": "{n}行目",
     "readingPlaceholder": "例：ひらがな",
     "jyutpingPlaceholder": "例：hoeng1",
+    "suggestionsEmpty": "辞書に一致する読みがありません。手入力できます",
     "suggestions": "候補の読み",
     "suggestionsLoading": "辞書を検索中…",
     "manualReading": "または手入力",

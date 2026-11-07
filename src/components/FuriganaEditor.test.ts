@@ -15,11 +15,11 @@ function nodes(root: React.ReactNode): Element[] {
   const node = root as Element;
   return [node, ...React.Children.toArray(node.props.children as React.ReactNode).flatMap(nodes)];
 }
-function editor(lines: FuriganaLine[], segIndex: number) {
+function editor(lines: FuriganaLine[], segIndex: number, candidates: string[] = []) {
   const exports: Record<string, unknown> = {};
   let index = 0;
   let changed: FuriganaLine[] | null = null;
-  const values: unknown[] = [{ lineIndex: 0, segIndex }, '', [], false, false, 0, false];
+  const values: unknown[] = [{ lineIndex: 0, segIndex }, '', candidates, false, false, 0, false];
   const hooks = {
     useState: () => [values[index++], () => {}],
     useRef: () => ({ current: null }),
@@ -46,6 +46,18 @@ function editor(lines: FuriganaLine[], segIndex: number) {
     (button.props.onClick as () => void)();
   } };
 }
+
+test('a dictionary reading remains visible even when it matches the saved reading', () => {
+  const h = editor([{ segments: [{ text: '呼吸', reading: 'こきゅう' }] }], 0, ['こきゅう']);
+  assert.ok(nodes(h.tree).some(node => node.type === 'button' && node.props.children === 'こきゅう'));
+  assert.ok(nodes(h.tree).some(node => node.props.children === 'furigana.suggestions'));
+  assert.ok(!nodes(h.tree).some(node => node.props.children === 'furigana.suggestionsEmpty'));
+});
+
+test('successful no-match has an explicit empty message rather than hiding the whole row', () => {
+  const h = editor([{ segments: [{ text: '謎', reading: '' }] }], 0, []);
+  assert.ok(nodes(h.tree).some(node => node.props.children === 'furigana.suggestionsEmpty'));
+});
 
 test('reconvert/reset with a shorter annotation array never crashes an old selection', () => {
   assert.doesNotThrow(() => editor([{ segments: [{ text: '世界', reading: 'せかい' }] }], 1));

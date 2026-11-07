@@ -151,8 +151,31 @@ def priority(tags: list[str]) -> int:
                 else ranks.get(tag, 1000) for tag in tags), default=1000)
 
 
-def build_words(path: Path) -> tuple[dict, list, dict]:
+CONJUGATABLE_POS = frozenset({
+    "v1", "v1-s", "v5u", "v5k", "v5k-s", "v5g", "v5s", "v5t", "v5n",
+    "v5b", "v5m", "v5r", "v5r-i", "vk", "vs", "vs-i", "vs-s", "adj-i", "adj-ix",
+    "adj-na", "adv-to",
+})
+
+
+def conjugatable_pos_descriptions(path: Path) -> dict[str, str]:
+    """Recover entity codes before ElementTree expands POS into descriptions."""
+    header = []
+    with gzip.open(path, "rt", encoding="utf-8") as stream:
+        for line in stream:
+            header.append(line)
+            if "<JMdict" in line:
+                break
+    declarations = re.findall(r'''<!ENTITY\s+([\w-]+)\s+(["'])(.*?)\2\s*>''',
+                              "".join(header), re.DOTALL)
+    return {ET.fromstring("<text>" + description + "</text>").text or "": code
+            for code, _, description in declarations if code in CONJUGATABLE_POS}
+
+
+def build_words(path: Path) -> tuple[dict, list, dict, dict]:
     ranked: dict[str, dict[str, tuple]] = {}
+    lexical: dict[str, dict[str, set[str]]] = {}
+    pos_codes = conjugatable_pos_descriptions(path)
     annotations = []
     stats = Counter()
     with gzip.open(path, "rb") as source:
@@ -173,6 +196,16 @@ def build_words(path: Path) -> tuple[dict, list, dict]:
                     form_notes.append({"text": word, "info": texts(k, "ke_inf")})
             if form_notes:
                 notes["forms"] = form_notes
+            # A missing POS inherits the last explicit POS within this entry,
+            # even when that preceding sense was restricted to another form.
+            senses = []
+            inherited_pos: list[str] = []
+            for sense in entry.findall("sense"):
+                explicit_pos = texts(sense, "pos")
+                if explicit_pos:
+                    inherited_pos = explicit_pos
+                codes = {pos_codes[pos] for pos in inherited_pos if pos in pos_codes}
+                senses.append((set(texts(sense, "stagk")), set(texts(sense, "stagr")), codes))
             reading_notes = []
             for reading_index, r in enumerate(entry.findall("r_ele")):
                 original = r.findtext("reb") or ""
@@ -203,6 +236,11 @@ def build_words(path: Path) -> tuple[dict, list, dict]:
                     candidates = ranked.setdefault(word, {})
                     if value not in candidates or rank < candidates[value]:
                         candidates[value] = rank
+                    for spellings, pronunciations, codes in senses:
+                        if (spellings and word not in spellings) or (pronunciations and original not in pronunciations):
+                            continue
+                        for code in codes:
+                            lexical.setdefault(word, {}).setdefault(code, set()).add(value)
             if reading_notes:
                 notes["readings"] = reading_notes
             sense_notes = []
@@ -219,7 +257,10 @@ def build_words(path: Path) -> tuple[dict, list, dict]:
                 annotations.append(notes)
             entry.clear()
     words = {word: sorted(readings, key=lambda r: (readings[r], r)) for word, readings in ranked.items()}
-    return words, annotations, dict(stats)
+    lexemes = {word: {code: [reading for reading in words[word] if reading in compatible]
+                      for code, compatible in classes.items()}
+               for word, classes in lexical.items()}
+    return words, annotations, dict(stats), lexemes
 
 
 def source_version(path: Path) -> str | None:
@@ -234,7 +275,7 @@ def source_version(path: Path) -> str | None:
 
 
 def verify(data: dict, cache_dir: Path) -> None:
-    assert set(data) == {"kanji", "words", "kun"}
+    assert set(data) == {"kanji", "words", "kun", "lexemes"}
     assert ["おお", "きい"] in data["kun"]["大"]
     assert ["う", "まれる"] in data["kun"]["生"]
     for key in ("kanji", "words"):
@@ -250,6 +291,17 @@ def verify(data: dict, cache_dir: Path) -> None:
         assert reading in data[key][word], (key, word, reading)
     assert "おもう" not in data["kanji"]["思"]
     assert "たべる" not in data["kanji"]["食"]
+    for word, classes in data["lexemes"].items():
+        assert word in data["words"] and classes
+        for code, readings in classes.items():
+            assert code in CONJUGATABLE_POS and readings
+            assert readings == [r for r in data["words"][word] if r in readings]
+    for word, code, reading in (("届く", "v5k", "とどく"), ("溜まる", "v5r", "たまる"),
+                                ("黒い", "adj-i", "くろい"), ("濁る", "v5r", "にごる"),
+                                ("攫う", "v5u", "さらう"), ("過去る", "v5r", "すぎさる")):
+        assert reading in data["lexemes"][word][code], (word, code, reading)
+    assert data["lexemes"]["意外"] == {"adj-na": ["いがい"], "adv-to": ["いがい"]}
+    assert "過去" not in data["lexemes"]
     # Independent synthetic parser tests exercise restriction and priority logic.
     fixture = '''<JMdict><entry><ent_seq>1</ent_seq>
     <k_ele><keb>食</keb></k_ele><k_ele><keb>思</keb></k_ele>
@@ -262,7 +314,32 @@ def verify(data: dict, cache_dir: Path) -> None:
         path = Path(directory) / "fixture.gz"
         with gzip.open(path, "wt", encoding="utf-8") as stream:
             stream.write(fixture)
-        words, notes, _ = build_words(path)
+        words, notes, _, lexemes = build_words(path)
+        assert lexemes == {}
+        # Artificial descriptions ensure codes come from this DTD, not a
+        # hard-coded English description map. Test inheritance and its reset.
+        lexical_fixture = '''<!DOCTYPE JMdict [
+        <!ENTITY v1 "test ichidan"><!ENTITY v5r "test godan"><!ENTITY n "test noun">
+        ]>
+        <JMdict><entry><ent_seq>1</ent_seq>
+        <k_ele><keb>試る</keb></k_ele><k_ele><keb>験る</keb></k_ele>
+        <r_ele><reb>ためる</reb></r_ele>
+        <r_ele><reb>しる</reb><re_restr>試る</re_restr></r_ele>
+        <r_ele><reb>けんる</reb><re_restr>験る</re_restr></r_ele>
+        <r_ele><reb>かな</reb><re_nokanji/></r_ele>
+        <sense><stagk>試る</stagk><stagr>ためる</stagr><pos>&v1;</pos></sense>
+        <sense><stagk>験る</stagk><stagr>けんる</stagr></sense>
+        <sense><stagk>試る</stagk><stagr>しる</stagr><pos>&v5r;</pos></sense>
+        <sense><stagr>かな</stagr></sense>
+        <sense><stagk>試る</stagk><stagr>けんる</stagr></sense>
+        <sense><pos>&n;</pos></sense>
+        <sense><stagk>験る</stagk><stagr>ためる</stagr></sense>
+        </entry></JMdict>'''
+        with gzip.open(path, "wt", encoding="utf-8") as stream:
+            stream.write(lexical_fixture)
+        _, _, _, lexemes = build_words(path)
+        assert lexemes == {"試る": {"v1": ["ためる"], "v5r": ["しる"]},
+                           "験る": {"v1": ["けんる"]}}, lexemes
     assert words == {"食": ["しょく", "く"], "思": ["し"]}, words
     assert notes[0]["readings"][0]["restricted_to"] == ["思"]
     assert notes[0]["readings"][2]["no_kanji"] is True
@@ -273,8 +350,8 @@ def main(args: argparse.Namespace) -> None:
     args.cache_dir.mkdir(parents=True, exist_ok=True)
     sources = {name: acquire(name, args.cache_dir, args.refresh, args.offline) for name in SOURCES}
     kanji, header, kanji_notes, character_count, kun = build_kanji(sources["kanjidic2"][0])
-    words, word_notes, stats = build_words(sources["jmdict"][0])
-    data = {"kanji": kanji, "words": words, "kun": kun}
+    words, word_notes, stats, lexemes = build_words(sources["jmdict"][0])
+    data = {"kanji": kanji, "words": words, "kun": kun, "lexemes": lexemes}
     verify(data, args.cache_dir)
     artifacts = {
         "japanese-readings.json": data,
@@ -283,7 +360,7 @@ def main(args: argparse.Namespace) -> None:
     for filename, content in artifacts.items():
         write_json(args.output_dir / filename, content)
     metadata = {
-        "schema_version": 2, "generator": "scripts/update-japanese-reading-dictionary.py",
+        "schema_version": 3, "generator": "scripts/update-japanese-reading-dictionary.py",
         "generator_sha256": sha256(Path(__file__)),
         "attribution": ATTRIBUTION, "license": "CC-BY-SA-4.0",
         "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
@@ -293,6 +370,9 @@ def main(args: argparse.Namespace) -> None:
                     for name, (path, meta) in sources.items()},
         "counts": {"kanji": len(kanji), "kanji_readings": sum(map(len, kanji.values())),
                    "words": len(words), "word_readings": sum(map(len, words.values())),
+                   "lexemes": len(lexemes),
+                   "lexeme_classes": sum(map(len, lexemes.values())),
+                   "lexeme_readings": sum(len(r) for classes in lexemes.values() for r in classes.values()),
                    "source_kanji_characters": character_count, "jmdict": stats,
                    "annotated_kanji_readings": len(kanji_notes), "annotated_word_entries": len(word_notes)},
         "artifacts": {filename: {"sha256": sha256(args.output_dir / filename),
@@ -302,6 +382,7 @@ def main(args: argparse.Namespace) -> None:
             "kanji": "All ja_on/ja_kun; hiragana; strip affix hyphens and dotted okurigana; no nanori.",
             "kun": "Original kun stem/okurigana pairs retained for contextual compatibility checks.",
             "words": "All exact kanji-containing orthographies; obey re_restr/re_nokanji; unique readings ordered by commonness then source order.",
+            "lexemes": "Inflection and adj-na/adv-to grammar POS codes recovered from source DTD entities; exact orthography -> POS -> compatible readings. Obey re_restr/re_nokanji, sense stagk/stagr and inherited POS; retain words reading order. No noun-only classes.",
             "usage": "No rare/obsolete forms or readings are dropped; source usage and sense restrictions are preserved in the restrictions sidecar. XML entity descriptions are expanded by the XML parser.",
             "reproducibility": "Cached retrieval timestamps are reused; no generation-time timestamp. Identical verified sources and generator yield byte-identical artifacts.",
         },
