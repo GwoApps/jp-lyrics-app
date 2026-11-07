@@ -23,7 +23,7 @@ import { MAX_CANDIDATES_PER_PROVIDER } from './lyrics-provider/normalize.ts';
 import { normalizeCandidateLyrics } from './lyrics-provider/normalize.ts';
 import { hasProviderSecretKey, maskSecret } from './lyrics-provider/secret.ts';
 import { isSameOriginRequest } from './admin.ts';
-import { scoreCandidate } from './lyrics-provider/orchestrator.ts';
+import { preferCandidate, scoreCandidate } from './lyrics-provider/orchestrator.ts';
 
 // ─── Policy: private IP detection ─────────────────────────────
 
@@ -617,4 +617,91 @@ test('scoreCandidate falls back to empty link when sourceUrl is missing', () => 
   assert.equal(result.match?.link, '');
   assert.equal(result.match?.title, 'Same Song');
   assert.equal(result.match?.artist, 'Artist');
+});
+
+// ─── Builtin LRCLIB adapter: plain-only entries (ISSUE #376) ─────────
+
+/** Mock fetch: `/api/get` → exact response, `/api/search` → search results. */
+function mockLrclibFetch(exact: () => Response, search?: () => Response): () => void {
+  const original = globalThis.fetch as unknown;
+  globalThis.fetch = (async (input: unknown) => {
+    const url = String(input);
+    if (url.includes('/api/search')) {
+      return search ? search() : new Response('[]', { status: 200 });
+    }
+    if (url.includes('/api/get')) return exact();
+    return new Response(null, { status: 404 });
+  }) as typeof fetch;
+  return () => { globalThis.fetch = original as typeof fetch; };
+}
+
+const lrclibJson = (body: unknown) => () => new Response(JSON.stringify(body), { status: 200 });
+const lrclibEntry = (overrides: Record<string, unknown>) => ({
+  id: 1,
+  trackName: 'Same Song',
+  artistName: 'Artist',
+  albumName: 'Album',
+  duration: 213,
+  syncedLyrics: '[00:00.10]Line one',
+  plainLyrics: 'Line one',
+  ...overrides,
+});
+
+test('builtinLyricsProvider(lrclib) returns a plain-only hit instead of empty', async () => {
+  const restore = mockLrclibFetch(lrclibJson(lrclibEntry({ syncedLyrics: null, plainLyrics: 'Line one\nLine two' })));
+  try {
+    const provider = builtinLyricsProvider({
+      id: 'builtin:lrclib',
+      name: 'LRCLIB',
+      sourceConfig: JSON.stringify({ rate_limit_ms: 0, fuzzy_enabled: false }),
+    });
+    const outcome = await provider.search({ title: 'Same Song', artists: ['Artist'] }, {});
+    assert.equal(outcome.status, 'hit');
+    assert.equal(outcome.candidates.length, 1);
+    assert.equal(outcome.candidates[0]?.syncedLyrics, undefined);
+    assert.equal(outcome.candidates[0]?.plainLyrics, 'Line one\nLine two');
+  } finally {
+    restore();
+  }
+});
+
+test('builtinLyricsProvider(lrclib) prefers a timed fuzzy hit over an exact plain-only one', async () => {
+  // Exact stage only has plain text; a later fuzzy stage has the timeline.
+  const restore = mockLrclibFetch(
+    lrclibJson(lrclibEntry({ syncedLyrics: null, plainLyrics: 'Line one' })),
+    lrclibJson([lrclibEntry({ id: 2 })]),
+  );
+  try {
+    const provider = builtinLyricsProvider({
+      id: 'builtin:lrclib',
+      name: 'LRCLIB',
+      sourceConfig: JSON.stringify({ rate_limit_ms: 0 }),
+    });
+    const outcome = await provider.search({ title: 'Same Song', artists: ['Artist'] }, {});
+    assert.equal(outcome.status, 'hit');
+    assert.equal(outcome.candidates[0]?.syncedLyrics, '[00:00.10]Line one');
+  } finally {
+    restore();
+  }
+});
+
+// ─── Orchestrator: a plain candidate never short-circuits a lane ──────
+
+test('preferCandidate never downgrades a timed winner to a plain one', () => {
+  const timed = {
+    result: { synced: '[00:01.00]Line', plain: 'Line' },
+    source: 'lrclib',
+    confidence: 70,
+  };
+  const plain = { result: { synced: '', plain: 'Line' }, source: 'lrclib', confidence: 99 };
+  assert.equal(preferCandidate(plain, timed), timed, 'timed wins despite lower confidence');
+  assert.equal(preferCandidate(timed, plain), timed, 'plain never displaces a timed hit');
+  assert.equal(preferCandidate(plain, null), plain, 'the first candidate is always kept');
+});
+
+test('preferCandidate keeps the higher confidence within the same class', () => {
+  const weak = { result: { synced: '', plain: 'Line' }, source: 'a', confidence: 70 };
+  const strong = { result: { synced: '', plain: 'Line' }, source: 'b', confidence: 80 };
+  assert.equal(preferCandidate(strong, weak), strong);
+  assert.equal(preferCandidate(weak, strong), strong);
 });

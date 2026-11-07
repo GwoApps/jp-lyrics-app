@@ -71,12 +71,19 @@ export function utaNetConfidence(score: number): number {
 }
 
 /**
+ * Penalty applied to a plain-only LRCLIB entry (ISSUE #376): same-stage timed
+ * hits keep the full score, so a plain candidate can never outrank a timeline.
+ */
+export const LRCLIB_PLAIN_PENALTY = 8;
+
+/**
  * Compute the final confidence for an LRCLIB hit.
  *
- * Confidence is now evidence-based instead of hard-coded: an exact hit that
+ * Confidence is evidence-based instead of hard-coded: an exact hit that
  * disagrees with the Spotify duration drops below the review threshold (it is
  * likely a TV-size / live / remaster of the same title + artist), while a
- * duration + album match keeps the top score.
+ * duration + album match keeps the top score. Plain-only entries
+ * (`syncedLyrics` absent) take an extra {@link LRCLIB_PLAIN_PENALTY} hit.
  */
 export function lrclibConfidence(
   hit: LrclibHit | null | undefined,
@@ -85,15 +92,21 @@ export function lrclibConfidence(
 ): number {
   if (!hit) return 0;
   const duration = hit.duration;
+  let score: number;
   if (exact) {
-    if (duration === 'conflict') return base - 20; // e.g. 98 → 78 → needs_review
-    if (duration === 'match') return Math.min(99, base + 1);
-    if (duration === 'close') return base - 3;
-    return base; // unknown duration → old score
+    if (duration === 'conflict') score = base - 20; // e.g. 98 → 78 → needs_review
+    else if (duration === 'match') score = Math.min(99, base + 1);
+    else if (duration === 'close') score = base - 3;
+    else score = base; // unknown duration → old score
+  } else if (duration === 'match' || hit.album === 'match') {
+    // Fuzzy search: already nudged during candidate scoring.
+    score = Math.min(86, base + 4);
+  } else {
+    score = base;
   }
-  // Fuzzy search: already nudged during candidate scoring.
-  if (duration === 'match' || hit.album === 'match') return Math.min(86, base + 4);
-  return base;
+  // A plain-only LRCLIB entry never carries a timeline, so it always ranks
+  // below a timed hit from the same stage (ISSUE #376).
+  return hit.result.synced.trim() ? score : Math.max(0, score - LRCLIB_PLAIN_PENALTY);
 }
 
 export function stripTimestamps(lrc: string): string {
@@ -345,12 +358,22 @@ export interface LrclibHit {
   album: AlbumStatus;
 }
 
+/**
+ * Validate one LRCLIB entry into a scored hit.
+ *
+ * An entry with a timeline (`syncedLyrics`) is a normal hit. A plain-only entry
+ * (`plainLyrics` without timestamps) is still real lyrics LRCLIB has for this
+ * recording, so it becomes a plain-text candidate instead of a miss — the
+ * downstream `classifyLyricsHit` + plainHit confirmation flow decides whether
+ * it may be written (ISSUE #376).
+ */
 function toLrclibHit(track: LrclibTrack, evidence?: LrclibEvidence): LrclibHit | null {
-  if (!track.syncedLyrics) return null;
+  const synced = track.syncedLyrics ?? '';
+  if (!synced.trim() && !track.plainLyrics?.trim()) return null;
   return {
     result: {
-      synced: track.syncedLyrics || '',
-      plain: track.plainLyrics || stripTimestamps(track.syncedLyrics || ''),
+      synced,
+      plain: track.plainLyrics || stripTimestamps(synced),
     },
     duration: durationStatus(track.duration, evidence?.durationMs),
     album: albumStatus(track.albumName, evidence?.album),
@@ -361,7 +384,9 @@ async function lrclibGet(params: URLSearchParams, settings: LrclibSettings, sign
   const headers = { 'User-Agent': 'jp-lyrics-app/1.0' };
   return lrclibFetch(`${settings.apiBase}/get?${params}`, headers, async (res) => {
     const data = await res.json();
-    if (data && typeof data === 'object' && data.syncedLyrics) {
+    // Accept plain-only entries too: LRCLIB having the lyrics without a
+    // timeline is still a usable (reviewable) candidate (ISSUE #376).
+    if (data && typeof data === 'object' && (data.syncedLyrics || data.plainLyrics?.trim())) {
       return data as LrclibTrack;
     }
     return null;
@@ -387,6 +412,10 @@ interface LrclibFetchOutcome {
  *     version of the same title + artist.
  *  3. When the bare query found nothing (multi-version ambiguity 404s), try the
  *     album-scoped query as a last resort.
+ *
+ * A plain-only bare hit is kept as a fallback instead of being returned right
+ * away: the album-scoped query may still hold the timed version of the same
+ * recording, and a timeline always outranks plain text (ISSUE #376).
  */
 export async function fetchFromLrclib(
   title: string,
@@ -410,6 +439,19 @@ export async function fetchFromLrclib(
   if (!plainRes.ok) return { hit: null, rateLimited: plainRes.rateLimited };
   const plain = plainRes.data;
   if (plain) {
+    const bareHit = toLrclibHit(plain, evidence);
+    const barePlainOnly = !!bareHit && !bareHit.result.synced.trim();
+    if (barePlainOnly) {
+      // Plain-only bare entry: try the album-scoped query for a timed version,
+      // then fall back to the plain candidate (never a miss).
+      if (!evidence?.album) return { hit: bareHit, rateLimited: false };
+      const timed = await albumScoped();
+      if (timed.ok && timed.data) {
+        const scopedHit = toLrclibHit(timed.data, evidence);
+        if (scopedHit?.result.synced.trim()) return { hit: scopedHit, rateLimited: false };
+      }
+      return { hit: bareHit, rateLimited: timed.ok ? false : timed.rateLimited };
+    }
     if (
       evidence?.album
       && durationStatus(plain.duration, evidence.durationMs) === 'conflict'
@@ -468,11 +510,16 @@ export async function searchLrclib(
   if (!res.ok) return { hit: null, rateLimited: res.rateLimited };
 
   const results = res.data as LrclibTrack[];
-  let best: LrclibHit | null = null;
-  let bestScore = -1;
+  // Timed candidates always win over plain-only ones, whatever their score:
+  // a plain entry is only the last resort for this source (ISSUE #376).
+  let bestSynced: LrclibHit | null = null;
+  let bestSyncedScore = -1;
+  let bestPlain: LrclibHit | null = null;
+  let bestPlainScore = -1;
   const hasRequestedArtist = artist.trim().length > 0;
   for (const item of results) {
-    if (!item.syncedLyrics) continue;
+    const synced = item.syncedLyrics ?? '';
+    if (!synced.trim() && !item.plainLyrics?.trim()) continue;
     const itemTitle = String(item.trackName ?? '');
     const itemArtist = String(item.artistName ?? '');
     const tScore = titleScore(title, itemTitle);
@@ -494,19 +541,22 @@ export async function searchLrclib(
     if (album === 'match') score += 0.03;
     else if (album === 'partial') score += 0.01;
 
-    if (score > bestScore) {
-      bestScore = score;
-      best = {
-        result: {
-          synced: item.syncedLyrics || '',
-          plain: item.plainLyrics || stripTimestamps(item.syncedLyrics || ''),
-        },
-        duration,
-        album,
-      };
+    const hit: LrclibHit = {
+      result: { synced, plain: item.plainLyrics || stripTimestamps(synced) },
+      duration,
+      album,
+    };
+    if (synced) {
+      if (score > bestSyncedScore) {
+        bestSyncedScore = score;
+        bestSynced = hit;
+      }
+    } else if (score > bestPlainScore) {
+      bestPlainScore = score;
+      bestPlain = hit;
     }
   }
-  return { hit: best, rateLimited: false };
+  return { hit: bestSynced ?? bestPlain, rateLimited: false };
 }
 
 // ─── PetitLyrics ──

@@ -8,6 +8,7 @@ import {
   fetchFromLrclib as fetchFromLrclibRaw,
   fetchFromUtaNet,
   lrclibConfidence,
+  LRCLIB_PLAIN_PENALTY,
   parsePetitLyricsResponse,
   parseUtaNetCandidates,
   petitLyricsXmlToLrc,
@@ -547,4 +548,105 @@ test('fetchFromUtaNet matches artist even when a feature artist is appended', as
   } finally {
     restore();
   }
+});
+// ─── LRCLIB plain-only entries (ISSUE #376) ─────────────────────
+//
+// LRCLIB holds two kinds of entries: with `syncedLyrics` (LRC timeline) and
+// plain-only (`plainLyrics` without timestamps). Plain-only entries used to be
+// dropped by three separate `syncedLyrics` gates, so a song whose only LRCLIB
+// data was plain text was reported as "no lyrics" even though the upstream had
+// it. They are now accepted as plain-text candidates — but a timed entry from
+// the same source always wins.
+
+const plainOnlyTrack = (overrides: Record<string, unknown>) =>
+  lrclibTrack({ syncedLyrics: null, plainLyrics: 'テスト\n二行目', ...overrides });
+
+test('fetchFromLrclib returns a plain-only exact hit instead of a miss', async () => {
+  const restore = mockFetch((url) => {
+    assert.match(url, /\/api\/get/);
+    return new Response(JSON.stringify(plainOnlyTrack({})), { status: 200 });
+  });
+  try {
+    // No album evidence → the bare hit is the only query issued.
+    const hit = await fetchFromLrclib('Idol', 'YOASOBI');
+    assert.ok(hit.hit, 'a plain-only entry must produce a candidate');
+    assert.equal(hit.hit?.result.synced, '');
+    assert.equal(hit.hit?.result.plain, 'テスト\n二行目');
+  } finally {
+    restore();
+  }
+});
+
+test('fetchFromLrclib upgrades a plain-only bare hit to the album-scoped timed version', async () => {
+  const restore = mockFetch((url) => {
+    if (url.includes('album_name')) {
+      return new Response(JSON.stringify(lrclibTrack({ duration: 213 })), { status: 200 });
+    }
+    return new Response(JSON.stringify(plainOnlyTrack({ duration: 213 })), { status: 200 });
+  });
+  try {
+    const hit = await fetchFromLrclib('Idol', 'YOASOBI', { durationMs: 213_000, album: 'Idol' });
+    assert.equal(hit.hit?.result.synced, '[00:00.10]テスト', 'a timeline outranks plain text');
+  } finally {
+    restore();
+  }
+});
+
+test('fetchFromLrclib keeps the plain-only bare hit when the album-scoped query misses', async () => {
+  const restore = mockFetch((url) => {
+    if (url.includes('album_name')) {
+      return new Response(JSON.stringify({ message: 'Not found', name: 'TrackNotFound' }), { status: 404 });
+    }
+    return new Response(JSON.stringify(plainOnlyTrack({})), { status: 200 });
+  });
+  try {
+    const hit = await fetchFromLrclib('Idol', 'YOASOBI', { durationMs: 213_000, album: 'Idol' });
+    assert.equal(hit.hit?.result.synced, '');
+    assert.equal(hit.hit?.result.plain, 'テスト\n二行目');
+  } finally {
+    restore();
+  }
+});
+
+test('searchLrclib returns a plain-only candidate when no timed entry qualifies', async () => {
+  const restore = mockFetch((url) => {
+    assert.match(url, /\/api\/search/);
+    return new Response(JSON.stringify([plainOnlyTrack({ id: 3 })]), { status: 200 });
+  });
+  try {
+    const hit = await searchLrclib('Idol YOASOBI', 'Idol', 'YOASOBI', { durationMs: 213_000 });
+    assert.ok(hit.hit, 'a plain-only search result must survive the gates');
+    assert.equal(hit.hit?.result.synced, '');
+    assert.equal(hit.hit?.result.plain, 'テスト\n二行目');
+  } finally {
+    restore();
+  }
+});
+
+test('searchLrclib still prefers a timed entry over a better-scoring plain one', async () => {
+  const restore = mockFetch((url) => {
+    assert.match(url, /\/api\/search/);
+    return new Response(JSON.stringify([
+      // Plain entry with both album + duration evidence → higher raw score.
+      plainOnlyTrack({ id: 1, albumName: 'Idol', duration: 213 }),
+      // Timed entry without album evidence → lower raw score, still wins.
+      lrclibTrack({ id: 2, albumName: null, duration: null }),
+    ]), { status: 200 });
+  });
+  try {
+    const hit = await searchLrclib('Idol YOASOBI', 'Idol', 'YOASOBI', { durationMs: 213_000, album: 'Idol' });
+    assert.equal(hit.hit?.result.synced, '[00:00.10]テスト');
+  } finally {
+    restore();
+  }
+});
+
+test('lrclibConfidence ranks a plain-only hit below the same-stage timed hit', () => {
+  const timed = { result: { synced: '[00:00.10]テスト', plain: 'テスト' }, duration: 'match' as const, album: 'match' as const };
+  const plain = { result: { synced: '', plain: 'テスト' }, duration: 'match' as const, album: 'match' as const };
+  assert.equal(lrclibConfidence(timed, 98, true), 99);
+  assert.equal(lrclibConfidence(plain, 98, true), 99 - LRCLIB_PLAIN_PENALTY);
+  assert.ok(lrclibConfidence(plain, 98, true) < lrclibConfidence(timed, 98, true));
+  // A plain fuzzy hit must not beat a timed fuzzy hit either.
+  assert.ok(lrclibConfidence(plain, 78, false) < lrclibConfidence(timed, 78, false));
 });

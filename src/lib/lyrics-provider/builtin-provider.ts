@@ -16,6 +16,7 @@ import {
   fetchFromPetitLyrics,
   fetchFromUtaNet,
   lrclibConfidence,
+  type LrclibHit,
   utaNetConfidence,
 } from '../lyrics-fetcher.ts';
 
@@ -201,11 +202,27 @@ async function searchBuiltinLrclib(
   } : undefined;
   let rateLimited = false;
 
+  // A plain-only entry is returned only after every timed stage missed: a
+  // timeline always outranks plain text, so plain hits are collected here as
+  // the source's last resort instead of ending the chain early (ISSUE #376).
+  let plainFallback: ProviderOutcome | null = null;
+  let plainFallbackConfidence = -1;
+  const settle = (hit: LrclibHit | null, candidateId: string, base: number, exact: boolean): ProviderOutcome | null => {
+    if (!hit) return null;
+    const confidence = lrclibConfidence(hit, base, exact);
+    const scored = lrclibHitOutcome(hit.result, candidateId, confidence);
+    if (hit.result.synced.trim()) return scored;
+    if (confidence > plainFallbackConfidence) {
+      plainFallbackConfidence = confidence;
+      plainFallback = scored;
+    }
+    return null;
+  };
+
   let outcome = await fetchFromLrclib(query.title, query.artists[0] ?? '', evidence, signal, lrclibOpts);
   rateLimited = rateLimited || outcome.rateLimited;
-  if (outcome.hit) {
-    return lrclibHitOutcome(outcome.hit.result, 'lrclib', lrclibConfidence(outcome.hit, 98, true));
-  }
+  let timed = settle(outcome.hit, 'lrclib', 98, true);
+  if (timed) return timed;
 
   // Fuzzy stage is skippable — exact match is faster and avoids extra requests
   // to rate-limited public endpoints.
@@ -214,26 +231,24 @@ async function searchBuiltinLrclib(
   if (query.spotifyCanonical) {
     outcome = await fetchFromLrclib(query.spotifyCanonical.name, query.spotifyCanonical.artist, evidence, signal, lrclibOpts);
     rateLimited = rateLimited || outcome.rateLimited;
-    if (outcome.hit) {
-      return lrclibHitOutcome(outcome.hit.result, 'lrclib', lrclibConfidence(outcome.hit, 96, true));
-    }
+    timed = settle(outcome.hit, 'lrclib', 96, true);
+    if (timed) return timed;
     if (fuzzy) {
       outcome = await searchLrclib(`${query.spotifyCanonical.name} ${query.spotifyCanonical.artist}`, query.spotifyCanonical.name, query.spotifyCanonical.artist, evidence, signal, lrclibOpts);
       rateLimited = rateLimited || outcome.rateLimited;
-      if (outcome.hit) {
-        return lrclibHitOutcome(outcome.hit.result, 'lrclib-search', lrclibConfidence(outcome.hit, 82, false));
-      }
+      timed = settle(outcome.hit, 'lrclib-search', 82, false);
+      if (timed) return timed;
     }
   }
 
   if (fuzzy) {
     outcome = await searchLrclib(`${query.title} ${query.artists[0] ?? ''}`, query.title, query.artists[0] ?? '', evidence, signal, lrclibOpts);
     rateLimited = rateLimited || outcome.rateLimited;
-    if (outcome.hit) {
-      return lrclibHitOutcome(outcome.hit.result, 'lrclib-search', lrclibConfidence(outcome.hit, 78, false));
-    }
+    timed = settle(outcome.hit, 'lrclib-search', 78, false);
+    if (timed) return timed;
   }
 
+  if (plainFallback) return plainFallback;
   return { status: 'empty', candidates: [], ...(rateLimited ? { rateLimited: true } : {}) };
 }
 

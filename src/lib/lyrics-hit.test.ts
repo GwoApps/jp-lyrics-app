@@ -131,3 +131,28 @@ test('classifyLyricsHit routes duration-conflict exact hits to review in the thr
     );
   }
 });
+
+test('classifyLyricsHit routes LRCLIB plain-only hits by their timeline risk (ISSUE #376)', () => {
+  // lrclibConfidence gives an exact plain-only hit 98 - LRCLIB_PLAIN_PENALTY,
+  // i.e. 91 with full duration/album evidence — still above the review floor,
+  // so only a timeline the candidate would erase can send it to review.
+  assert.equal(classifyLyricsHit({
+    source: 'lrclib',
+    confidence: 91,
+    synced: false,
+    hasExistingTimeline: false,
+  }), 'accepted');
+  assert.equal(classifyLyricsHit({
+    source: 'lrclib',
+    confidence: 91,
+    synced: false,
+    hasExistingTimeline: true,
+  }), 'needs_review');
+  // A plain fuzzy hit (78 - penalty) always lands on review.
+  assert.equal(classifyLyricsHit({
+    source: 'lrclib-search',
+    confidence: 70,
+    synced: false,
+    hasExistingTimeline: false,
+  }), 'needs_review');
+});

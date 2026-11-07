@@ -103,6 +103,26 @@ export function scoreCandidate(
   };
 }
 
+/** A candidate carries a real LRC timeline (a plain-text one does not). */
+export function isTimedHit(result: LyricsFetchResult): boolean {
+  return !!result.result?.synced.trim();
+}
+
+/**
+ * Compare two chain candidates: a timed hit always outranks a plain-text one,
+ * whatever the confidence numbers say — plain text is only ever a fallback
+ * (ISSUE #376). Within the same class the higher confidence wins.
+ */
+export function preferCandidate(
+  candidate: LyricsFetchResult,
+  current: LyricsFetchResult | null,
+): LyricsFetchResult {
+  if (!current) return candidate;
+  const candidateTimed = isTimedHit(candidate);
+  if (candidateTimed !== isTimedHit(current)) return candidateTimed ? candidate : current;
+  return candidate.confidence > current.confidence ? candidate : current;
+}
+
 /**
  * Provenance key persisted as the song's `lyrics_source`. Providers may supply
  * a stable `candidate_id` (e.g. the ytmusic plugin's `ytmusic`), which doubles
@@ -186,6 +206,7 @@ export async function fetchLyricsWithChain(
     let rateLimited = false;
     let timedOut = false;
 
+
     for (const provider of providers) {
       if (combinedSignal.aborted) {
         if (opts?.signal?.aborted) throw opts.signal.reason;
@@ -233,11 +254,20 @@ export async function fetchLyricsWithChain(
             provenanceSource(candidate.candidateId, provider.id),
           );
         }
-        if (scored && (!best || scored.confidence > best.confidence)) {
-          best = scored;
-        }
+        if (scored) best = preferCandidate(scored, best);
       }
-      if (best) return { ...best, rateLimited: best.rateLimited || rateLimited };
+      // A timed hit ends the chain. A plain-text one does NOT: a later source
+      // may still return the same lyrics with a timeline, so a plain candidate
+      // is only kept as the fallback (ISSUE #376).
+      if (best !== null && isTimedHit(best)) {
+        const timed: LyricsFetchResult = best;
+        return { ...timed, rateLimited: timed.rateLimited || rateLimited };
+      }
+    }
+
+    if (best !== null) {
+      const fallback: LyricsFetchResult = best;
+      return { ...fallback, rateLimited: fallback.rateLimited || rateLimited };
     }
 
     // No source produced a trusted hit → report a miss (or the rate-limit flag).
