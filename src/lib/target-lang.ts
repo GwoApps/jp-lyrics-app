@@ -8,11 +8,23 @@
  * translation will produce (issue #123).
  */
 
-/** Common target-language presets, aligned with the admin config combobox. */
+/**
+ * Common target-language presets — the single source for every target-language
+ * picker (settings page, admin translation panel) and for the display labels
+ * shown on the song page.
+ *
+ * `label` is the language's endonym, written once and never localized: the
+ * same string is correct in all four UI languages, so the presets need no
+ * `targetLang.*` i18n keys (and cannot drift per locale). Region-flavoured
+ * wording such as 「中國臺灣」/「中國香港」 is deliberately absent — the ISO code
+ * in {@link targetLangDisplay} is what distinguishes the variants.
+ *
+ * When adding a preset, add it here only.
+ */
 export const TARGET_LANG_PRESETS = [
   { value: 'zh-CN', label: '简体中文' },
   { value: 'zh-TW', label: '繁體中文' },
-  { value: 'zh-HK', label: '繁體中文（香港）' },
+  { value: 'zh-HK', label: '繁體中文' },
   { value: 'en-US', label: 'English' },
 ] as const;
 
@@ -23,11 +35,18 @@ export function isKnownTargetLang(code: string | null | undefined): code is Targ
   return !!code && TARGET_LANG_PRESETS.some((p) => p.value === code);
 }
 
-/** Display name for a known preset, otherwise the raw code (custom values). */
+/**
+ * Display name for a known preset — endonym plus its ISO code, e.g.
+ * `繁體中文（zh-TW）` — otherwise the raw code (custom values).
+ *
+ * Every surface that names a target language goes through here (song-page
+ * toasts and prompts, the reasoning export header, both pickers), so the same
+ * code never shows up under two different names. See issue #330.
+ */
 export function targetLangDisplay(code: string | null | undefined): string {
   if (!code) return '';
   const preset = TARGET_LANG_PRESETS.find((p) => p.value === code);
-  return preset ? preset.label : code;
+  return preset ? `${preset.label}（${preset.value}）` : code;
 }
 
 /** Language tag used to render translation text when none is stored. */

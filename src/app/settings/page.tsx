@@ -20,6 +20,7 @@ import {
 import { useTheme } from '@/lib/theme';
 import Toast from '@/components/Toast';
 import { getPiPCapabilities, type PiPCapabilities } from '@/lib/pip-support';
+import { TARGET_LANG_PRESETS, targetLangDisplay } from '@/lib/target-lang';
 
 type ToastState = { type: 'success' | 'error'; msg: string } | null;
 
@@ -36,14 +37,6 @@ interface SettingsMap {
   pip_theme?: string;
   sync_settings?: string;
 }
-
-/** Common target-language presets, aligned with the admin config combobox. */
-const TARGET_LANG_PRESETS = [
-  { value: 'zh-CN', label: '简体中文 (zh-CN)' },
-  { value: 'zh-TW', label: '繁體中文（中國臺灣）(zh-TW)' },
-  { value: 'zh-HK', label: '繁體中文（中國香港）(zh-HK)' },
-  { value: 'en-US', label: 'English (en-US)' },
-] as const;
 
 const inputClass = 'w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-sm outline-none transition-colors focus:border-[var(--primary)]';
 
@@ -512,7 +505,7 @@ export default function SettingsPage() {
               >
                 <option value="">{t('settings.translationTargetLangDefault')}</option>
                 {TARGET_LANG_PRESETS.map((p) => (
-                  <option key={p.value} value={p.value}>{p.label}</option>
+                  <option key={p.value} value={p.value}>{targetLangDisplay(p.value)}</option>
                 ))}
               </select>
             }

@@ -7,6 +7,9 @@ import { Eye, EyeOff, Loader2, Plug, PlugZap, RotateCcw, Trash2, Save, CheckCirc
 import ConfirmDialog from '@/components/ConfirmDialog';
 import Toast from '@/components/Toast';
 import { useI18n } from '@/lib/i18n';
+// Shared with the settings page: admins may still type a custom code, but the
+// preset list and its labels live in one place (src/lib/target-lang.ts).
+import { TARGET_LANG_PRESETS, targetLangDisplay } from '@/lib/target-lang';
 
 interface StoredConfig {
   provider?: string;
@@ -37,14 +40,6 @@ interface TestResult {
 }
 
 const EMPTY_FORM: FormConfig = { provider: '', base_url: '', api_key: '', model: '', target_lang: '', system_prompt: null };
-
-/** Common target-language presets offered in the combobox; admins may still type a custom code. */
-const TARGET_LANG_PRESETS = [
-  { value: 'zh-CN', label: '简体中文 (zh-CN)' },
-  { value: 'zh-TW', label: '繁體中文（中國臺灣）(zh-TW)' },
-  { value: 'zh-HK', label: '繁體中文（中國香港）(zh-HK)' },
-  { value: 'en-US', label: 'English (en-US)' },
-] as const;
 
 /** Sentinel option value for the "custom target language" branch of the select. */
 const CUSTOM_LANG_OPTION = '__custom__';
@@ -322,7 +317,7 @@ export default function TranslationConfigPanel({ onConfigChange }: TranslationCo
             </div>
             <div className="flex items-center gap-2">
               <dt className="w-28 shrink-0 text-xs text-[var(--muted-foreground)]">{t('admin.translationTargetLang')}</dt>
-              <dd className="font-mono text-xs">{effective.target_lang || '—'}</dd>
+              <dd className="text-xs">{targetLangDisplay(effective.target_lang) || '—'}</dd>
             </div>
           </dl>
         ) : (
@@ -369,7 +364,7 @@ export default function TranslationConfigPanel({ onConfigChange }: TranslationCo
             >
               <option value="">{t('admin.translationTargetLangDefault')}</option>
               {TARGET_LANG_PRESETS.map((p) => (
-                <option key={p.value} value={p.value}>{p.label}</option>
+                <option key={p.value} value={p.value}>{targetLangDisplay(p.value)}</option>
               ))}
               <option value={CUSTOM_LANG_OPTION}>{t('admin.translationTargetLangCustom')}</option>
             </select>

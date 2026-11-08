@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   DEFAULT_TRANSLATION_LANG,
+  TARGET_LANG_PRESETS,
   isKnownTargetLang,
   resolveTranslationLang,
   targetLangDisplay,
@@ -43,7 +45,24 @@ test('resolveTranslationLang prefers the stored value over the fallback', () => 
 test('existing preset helpers stay consistent', () => {
   assert.equal(isKnownTargetLang('zh-HK'), true);
   assert.equal(isKnownTargetLang('zh-hk'), false);
-  assert.equal(targetLangDisplay('zh-TW'), '繁體中文');
+  assert.notEqual(targetLangDisplay('zh-TW'), 'zh-TW');
   assert.equal(targetLangDisplay('pt-BR'), 'pt-BR');
   assert.equal(targetLangDisplay(null), '');
+});
+
+test('preset labels are rendered as label plus the ISO code', () => {
+  // issue #330: every surface goes through one formatting rule.
+  for (const { value, label } of TARGET_LANG_PRESETS) {
+    assert.equal(targetLangDisplay(value), `${label}（${value}）`);
+  }
+  // The code is what tells the variants apart, whatever the label says.
+  assert.notEqual(targetLangDisplay('zh-TW'), targetLangDisplay('zh-HK'));
+});
+
+test('the two pickers use the shared preset list instead of local copies', () => {
+  for (const path of ['../app/settings/page.tsx', '../components/admin/TranslationConfigPanel.tsx']) {
+    const source = readFileSync(new URL(path, import.meta.url), 'utf8');
+    assert.doesNotMatch(source, /const\s+TARGET_LANG_PRESETS\s*=/, `${path} redeclares TARGET_LANG_PRESETS`);
+    assert.match(source, /from '@\/lib\/target-lang'/, `${path} does not import the shared presets`);
+  }
 });
