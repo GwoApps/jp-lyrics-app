@@ -4,6 +4,8 @@ import { songVisibilityWhere } from '@/lib/song-visibility';
 import { getAuthUser } from '@/lib/auth';
 import { findBestMatch, type SongCandidate } from '@/lib/match';
 
+const NO_STORE_HEADERS = { 'Cache-Control': 'private, no-store' } as const;
+
 /**
  * Lightweight "now playing" song matcher for the song detail page.
  *
@@ -27,13 +29,15 @@ export async function GET(request: NextRequest) {
   const trackId = request.nextUrl.searchParams.get('track_id')?.trim() || '';
   const title = request.nextUrl.searchParams.get('title')?.trim() || '';
   const artist = request.nextUrl.searchParams.get('artist')?.trim() || '';
+  // Manual lyric discovery can reuse another release; auto-follow defaults strict.
+  const purpose = request.nextUrl.searchParams.get('purpose') === 'lyrics' ? 'lyrics' : 'playback';
   // Optional: skip a specific song (e.g. the one already rendered on this
   // page) so "查看这首歌"/follow-playing matches an *other* song.
   const excludeId = request.nextUrl.searchParams.get('exclude')?.trim() || '';
 
   // Without a title there is nothing to match against.
   if (!title) {
-    return NextResponse.json({ match: null });
+    return NextResponse.json({ match: null }, { headers: NO_STORE_HEADERS });
   }
 
   const db = getDB();
@@ -63,10 +67,11 @@ export async function GET(request: NextRequest) {
     candidates,
     { id: trackId || undefined, name: title, artist },
     user?.email || '',
+    purpose,
   );
 
   if (!match) {
-    return NextResponse.json({ match: null });
+    return NextResponse.json({ match: null }, { headers: NO_STORE_HEADERS });
   }
 
   // Only the summary the detail page needs to offer "查看这首歌" / follow-playing.
@@ -77,5 +82,5 @@ export async function GET(request: NextRequest) {
       artist: match.artist,
       spotify_track_id: match.spotify_track_id ?? null,
     },
-  });
+  }, { headers: NO_STORE_HEADERS });
 }

@@ -473,8 +473,9 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
     }
   };
 
-  // Find matching song in DB for currently playing track (uses title + artist scoring)
-  const matchedSong = findBestMatch(songs, nowPlaying?.track, currentUser?.email);
+  // Manual lyric discovery may reuse an exact title/artist across release IDs.
+  // isSongPlaying stays strict so another recording never drives sync/highlighting.
+  const matchedSong = findBestMatch(songs, nowPlaying?.track, currentUser?.email, 'lyrics');
   const visibleFavorites = currentUser ? favorites : EMPTY_SONG_IDS;
   const visibleCollection = currentUser && favoritesOnly ? filterCollection : null;
   const visibleCollectionSongs = visibleCollection && collectionSongs?.id === visibleCollection
@@ -705,6 +706,7 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
               <NowPlayingMetadata track={nowPlaying.track} />
               {matchedSong ? (
                 <button
+                  aria-label={t('home.view')}
                   onClick={() => router.push(`/songs/${matchedSong.id}`)}
                   className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-[var(--muted-foreground)] bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors shrink-0"
                 >

@@ -160,6 +160,8 @@ export interface SongCandidate {
   is_public?: number;
 }
 
+export type SongMatchPurpose = 'playback' | 'lyrics';
+
 export interface PlayingTrack {
   id?: string;
   name: string;
@@ -207,7 +209,24 @@ export function isSameSpotifyTrack(
 }
 
 /**
+ * Looking up reusable lyrics is deliberately weaker than proving playback identity.
+ * A single and an album release may have different IDs. Offer an existing lyric
+ * page only when BOTH the normalized title and full artist credits are exact;
+ * never strip version suffixes or accept fuzzy/partial artists across IDs.
+ * This score MUST NOT drive timed highlighting, seek, or automatic following.
+ */
+function lyricsDiscoveryScore(song: SongCandidate, track: PlayingTrack): number {
+  const playbackScore = songMatchScore(song, track);
+  if (playbackScore > 0 || !song.spotify_track_id || !track.id) return playbackScore;
+  const title = normalize(song.title);
+  const artist = normalize(song.artist);
+  return title && artist && title === normalize(track.name) && artist === normalize(track.artist) ? 1 : 0;
+}
+
+/**
  * Find the best-matching DB song for a Spotify track.
+ * Defaults to strict playback identity. `lyrics` only offers manual navigation;
+ * its metadata fallback does not authorize playback sync or auto-follow.
  *
  * Evidence priority:
  *   1. Spotify Track ID exact match (strongest evidence — wins regardless of owner)
@@ -224,6 +243,7 @@ export function findBestMatch(
   songs: SongCandidate[],
   track: PlayingTrack | null | undefined,
   currentUserEmail?: string,
+  purpose: SongMatchPurpose = 'playback',
 ): SongCandidate | null {
   if (!track) return null;
 
@@ -235,7 +255,7 @@ export function findBestMatch(
   let bestPublicFuzzyScore = 0;
 
   for (const song of songs) {
-    const score = songMatchScore(song, track);
+    const score = purpose === 'lyrics' ? lyricsDiscoveryScore(song, track) : songMatchScore(song, track);
     if (score < 0.5) continue;
 
     const isOwn = currentUserEmail && song.created_by === currentUserEmail;

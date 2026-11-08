@@ -1,3 +1,6 @@
+import type { SongMatchPurpose } from './match.ts';
+export type { SongMatchPurpose } from './match.ts';
+
 export interface MatchTrack {
   id?: string;
   name: string;
@@ -16,9 +19,11 @@ export interface MatchResult {
 export async function matchSong(
   track: MatchTrack,
   excludeId?: string,
+  purpose: SongMatchPurpose = 'playback',
 ): Promise<MatchResult | null> {
   if (!track?.name) return null;
   const params = new URLSearchParams({ title: track.name, artist: track.artist || '' });
+  params.set('purpose', purpose);
   if (track.id) params.set('track_id', track.id);
   if (excludeId) params.set('exclude', excludeId);
   try {

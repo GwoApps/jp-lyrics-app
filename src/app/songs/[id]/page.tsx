@@ -164,9 +164,9 @@ export default function SongViewPage() {
   // Data + handlers hook
   const data = useSongData(id);
   const [showSyncConfirm, setShowSyncConfirm] = useState(false);
-  // Best-matching *other* DB song for the currently-playing Spotify track,
-  // resolved lazily via the lightweight /api/spotify/match-song endpoint
-  // (never the full public list). Drives the "查看这首歌" button.
+  // Best existing lyric page for manual viewing (including this page when a
+  // different Spotify release uses the same title/artist). Never drives sync.
+  // Resolved by the lightweight endpoint, without downloading the catalogue.
   const [otherSongMatch, setOtherSongMatch] = useState<{
     id: string; title: string; artist: string; spotify_track_id?: string | null;
   } | null>(null);
@@ -265,10 +265,9 @@ export default function SongViewPage() {
   useEffect(() => { syncRefs.current.currentSongId = id; }, [id]);
   useEffect(() => { syncRefs.current.currentUserEmail = currentUserEmail; }, [currentUserEmail]);
 
-  // Resolve the best-matching *other* song for the currently-playing track on
-  // demand. Only fires while a track is actually playing and differs from this
-  // page's song — the full public list is never downloaded. Uses the
-  // lightweight /api/spotify/match-song endpoint.
+  // Manual lyric discovery may select this page across release IDs; in that
+  // case suppress the redundant import action. Auto-follow uses its separate,
+  // strict playback request in useSpotifySync.
   const playingTrack = sync.spotify?.is_playing ? (sync.spotify?.track ?? null) : null;
   const playingTrackKey = playingTrack
     ? `${playingTrack.id || ''}||${playingTrack.name}||${playingTrack.artist}`
@@ -286,7 +285,8 @@ export default function SongViewPage() {
     }
     void data.matchSong(
       { id: playingTrack.id || undefined, name: playingTrack.name, artist: playingTrack.artist },
-      id,
+      undefined,
+      'lyrics',
     ).then(applyMatch);
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -583,9 +583,7 @@ export default function SongViewPage() {
   const immersiveSynced = !!(isSynced && !data.debug);
   const hasSyncData = syncLines.length > 0;
   const debugSyncActive = spotify?.is_playing && syncLines.length > 0 ? findActiveLine(syncLines, spotify.progress_ms) : -1;
-  // Best-matching *other* song for the playing track — resolved lazily via the
-  // lightweight /api/spotify/match-song endpoint (never the full list). Null
-  // when there is nothing to match or no other song matches.
+  // Manual lyric destination; equal to id means the user is already viewing it.
   const playingMatch = otherSongMatch;
   const songThemeStyle = coverTheme.style;
   const coverSaturation = coverColor ? Math.max(colorSaturation(coverColor.primary), colorSaturation(coverColor.secondary), colorSaturation(coverColor.tertiary)) : 0;
@@ -926,7 +924,7 @@ export default function SongViewPage() {
             <SongPlaybackStatus connected={spotifyConnected} spotify={spotify} syncState={syncState}
               matching={!simulated && isSameSong} simulatedPlaying={simulation.playback?.is_playing === true}
               expanded={playerExpanded} onToggle={() => setPlayerExpanded((value) => !value)} onResume={() => void resumeSync()}
-              otherTrackAction={playingMatch ? (
+              otherTrackAction={playingMatch?.id === id ? null : playingMatch ? (
                 <button type="button" onClick={() => router.push(`/songs/${playingMatch.id}`)} className="song-playing-action inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium text-[var(--foreground)] transition-colors shrink-0">
                   <ExternalLink className="h-3 w-3" /><span>{t('song.show')}</span>
                 </button>

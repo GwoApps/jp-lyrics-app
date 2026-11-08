@@ -8,6 +8,7 @@ import {
   normalize,
   songMatchScore,
   titleScore,
+  isSongPlaying,
   type SongCandidate,
 } from './match.ts';
 
@@ -226,4 +227,47 @@ test('kana folding does not loosen the version-suffix guard', () => {
   assert.equal(titleScore('世界が終わるまで君と踊っていた', '世界が終わるまで君と踊っていた -LIVE'), 0.85);
   // Kanji stays untouched → still no match between different readings.
   assert.equal(titleScore('さよなら', '別れ'), 0);
+});
+
+// Lyrics discovery is not proof that two Spotify releases share a recording.
+const singleRelease = song({
+  id: '29168e2c-bc3a-4dd9-9c5b-43bc2a1feb36',
+  title: 'ゆーえふおー',
+  artist: '稀羽すう',
+  spotify_track_id: '6OTrur84YEvnlgy3y0KSlQ',
+  created_by: ME,
+});
+const albumRelease = { id: '3r92b4KGVgW1TXmLYkoFdr', name: 'ゆーえふおー', artist: '稀羽すう' };
+
+test('lyrics discovery: the real single/album pair offers the existing lyrics without identifying the recordings', () => {
+  assert.equal(findBestMatch([singleRelease], albumRelease, ME, 'lyrics')?.id, singleRelease.id);
+  assert.equal(findBestMatch([singleRelease], albumRelease, ME), null);
+  assert.equal(songMatchScore(singleRelease, albumRelease), 0);
+  assert.equal(isSameSpotifyTrack(singleRelease, albumRelease), false);
+  assert.equal(isSongPlaying(singleRelease, albumRelease, ME), false);
+});
+
+test('lyrics discovery: an exact Spotify ID still wins over the owner’s other release', () => {
+  const exact = song({ ...singleRelease, id: 'public-album', created_by: OTHER, spotify_track_id: albumRelease.id });
+  assert.equal(findBestMatch([singleRelease, exact], albumRelease, ME, 'lyrics')?.id, exact.id);
+});
+
+test('lyrics discovery: different IDs require exact normalized titles and full artist credits', () => {
+  for (const variation of [
+    { name: albumRelease.name + ' - Live', artist: albumRelease.artist },
+    { name: albumRelease.name + ' (Instrumental)', artist: albumRelease.artist },
+    { name: albumRelease.name, artist: '別の歌手' },
+    { name: albumRelease.name, artist: '' },
+    { name: albumRelease.name, artist: albumRelease.artist + ', Guest' },
+  ]) {
+    assert.equal(findBestMatch([singleRelease], { ...albumRelease, ...variation }, ME, 'lyrics'), null);
+  }
+});
+
+test('lyrics discovery: comparison normalization and owner/public visibility are preserved', () => {
+  const stored = song({ id: 'kana', title: 'サヨナラ', artist: 'ヨルシカ', spotify_track_id: 'single' });
+  const playing = { id: 'album', name: 'さよなら', artist: 'よるしか' };
+  assert.equal(findBestMatch([stored], playing, ME, 'lyrics')?.id, stored.id);
+  assert.equal(findBestMatch([{ ...stored, is_public: 0 }], playing, ME, 'lyrics'), null);
+  assert.equal(findBestMatch([{ ...stored, is_public: 0, created_by: ME }], playing, ME, 'lyrics')?.id, stored.id);
 });

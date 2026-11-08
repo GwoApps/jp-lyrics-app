@@ -17,7 +17,7 @@ import { useReadingPreferences } from './useReadingPreferences';
 import { useImport } from './useImport';
 import { useTranslation } from './useTranslation';
 import { useSync } from './useSync';
-import { matchSong } from '@/lib/match-song';
+import { matchSong, type SongMatchPurpose } from '@/lib/match-song';
 import { updateReadingScheme } from '@/lib/reading-scheme';
 import { usePiP } from './usePiP';
 import { useFurigana } from './useFurigana';
@@ -114,7 +114,7 @@ export interface UseSongDataReturn {
   /** Server-side "now playing" match: returns the best DB song for a Spotify track
    *  (or null), fetching only the winning candidate instead of the full list.
    *  `excludeId` skips the song rendered on this page (the "other song" match). */
-  matchSong: (track: { id?: string; name: string; artist: string }, excludeId?: string) => Promise<{
+  matchSong: (track: { id?: string; name: string; artist: string }, excludeId?: string, purpose?: SongMatchPurpose) => Promise<{
     id: string; title: string; artist: string; spotify_track_id?: string | null;
   } | null>;
   handleSync: () => Promise<void>;
