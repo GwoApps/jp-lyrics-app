@@ -6,6 +6,7 @@ import { getAuthUser } from '@/lib/auth';
 import { isSongVisibleToUser } from '@/lib/song-visibility';
 import { findLrcConflicts, resolveTimelineSave } from '@/lib/lrc';
 import { buildSongUpdateSet } from '@/lib/song-update';
+import { applyManualPins, validateGlossaryInput } from '@/lib/lyrics-glossary';
 
 /** Strip internal email while exposing server-authoritative capabilities. */
 function sanitizeSong(song: Song, canEdit: boolean): SongData {
@@ -122,10 +123,30 @@ export async function PUT(
   const db = getDB();
   const { id } = await params;
   const body = await request.json();
-  const { title, artist, lyrics_raw, lyrics_synced, reading_scheme, reading_scheme_confirmed, clear_furigana, clear_translation, clear_reasoning, clear_glossary, cover_palette, source_lyrics } = body;
+  const { title, artist, lyrics_raw, lyrics_synced, reading_scheme, reading_scheme_confirmed, clear_furigana, clear_translation, clear_reasoning, clear_glossary, cover_palette, source_lyrics, lyrics_glossary } = body;
 
   if (cover_palette !== undefined && cover_palette !== null && !isCoverPaletteShape(cover_palette)) {
     return NextResponse.json({ error: 'invalid_cover_palette' }, { status: 400 });
+  }
+
+  // Hand-edited terminology table (issue #341). The column feeds the system
+  // prompt of EVERY later translation, so it is validated here: entry shape,
+  // count cap, per-field length and duplicate `original` values.
+  let glossaryPatch: { lyrics_glossary?: { original: string; translation: string }[] | null } = {};
+  let submittedGlossary: { original: string; translation: string }[] | null = null;
+  if (lyrics_glossary !== undefined) {
+    if (lyrics_glossary === null) {
+      glossaryPatch = { lyrics_glossary: null };
+    } else {
+      const validation = validateGlossaryInput(lyrics_glossary);
+      if (!validation.ok) {
+        return NextResponse.json({ error: validation.error }, { status: 400 });
+      }
+      // Pinning is resolved against the stored table (only new/changed terms
+      // are the user's own correction), which needs the existing row.
+      glossaryPatch = { lyrics_glossary: validation.entries };
+      submittedGlossary = validation.entries;
+    }
   }
 
   if (reading_scheme !== undefined && reading_scheme !== 'ja-kana' && reading_scheme !== 'yue-jyutping') {
@@ -168,12 +189,17 @@ export async function PUT(
     }
   }
 
+  if (submittedGlossary) {
+    glossaryPatch = { lyrics_glossary: applyManualPins(submittedGlossary, existing.lyrics_glossary) };
+  }
+
   // Minimal-set UPDATE: only fields present in the payload are written, with
   // cross-field invalidation expressed as SQL CASE against the live column
   // values (issue #211 — see lib/song-update.ts).
   const set = buildSongUpdateSet(existing, {
     title, artist, cover_palette, reading_scheme, reading_scheme_confirmed,
     lyrics_raw, lyrics_synced, clear_furigana, clear_translation, clear_reasoning, clear_glossary,
+    ...glossaryPatch,
   });
 
   const updatedRow = await db.update(schema.songs)

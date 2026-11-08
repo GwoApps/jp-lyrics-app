@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { Eraser, Info, RefreshCw, ArrowLeft } from 'lucide-react';
 import SongForm from '@/components/SongForm';
 import Toast from '@/components/Toast';
+import GlossaryPanel from '@/components/song/GlossaryPanel';
 import { useI18n } from '@/lib/i18n';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { extractLrcMetadata } from '@/lib/lrc';
@@ -13,6 +14,7 @@ import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import type { SongData } from '@/lib/types';
 import { LYRICS_SOURCE_KEYS } from '@/lib/lyrics-source';
 import { formatDbDateTime } from '@/lib/db-time';
+import { hasGlossaryEntries, type GlossaryEntry } from '@/lib/lyrics-glossary';
 
 type SubDataKey = 'furigana' | 'translation' | 'reasoning' | 'glossary';
 
@@ -149,6 +151,11 @@ export default function EditSongPage() {
     }
   };
 
+  /** Terms changed server-side: keep the local row in sync (no interaction with the form draft). */
+  const applyGlossary = (entries: GlossaryEntry[]) => {
+    setSong((prev) => prev ? { ...prev, lyrics_glossary: JSON.stringify(entries) } : prev);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-32">
@@ -188,7 +195,9 @@ export default function EditSongPage() {
   const hasFurigana = !!song.lyrics_furigana && song.lyrics_furigana !== '[]';
   const hasTranslation = !!song.lyrics_translation && song.lyrics_translation !== '[]';
   const hasReasoning = !!song.lyrics_translation_reasoning;
-  const hasGlossary = !!song.lyrics_glossary;
+  // The column also holds a 'null' retry marker when the last extraction
+  // failed (issue #341) — that is not a glossary to clear.
+  const hasGlossary = hasGlossaryEntries(song.lyrics_glossary);
 
   const subDataItems: { key: SubDataKey; present: boolean; label: string }[] = [
     { key: 'furigana', present: hasFurigana, label: t('song.clearFurigana') },
@@ -278,6 +287,18 @@ export default function EditSongPage() {
             </div>
           )}
         </dl>
+      </section>
+
+      {/* 术语表 — 抽取结果以「use exactly these translations」的形式进入此后每一次
+          翻译的系统提示词，所以这里既能看也能改（issue #341）。 */}
+      <section className="mt-8">
+        <GlossaryPanel
+          songId={id}
+          value={song.lyrics_glossary}
+          editable={song.permissions?.can_edit === true}
+          onSaved={applyGlossary}
+          onNotify={showToast}
+        />
       </section>
 
       {/* 歌词相关子数据清除区 — 不需要调试模式，编辑页默认展示 */}

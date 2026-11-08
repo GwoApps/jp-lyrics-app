@@ -42,6 +42,7 @@ import {
   type TranslationTestResult,
 } from './config.ts';
 import { DEFAULT_SYSTEM_PROMPT, GLOSSARY_PROMPT, renderSystemPrompt } from './prompts.ts';
+import { GLOSSARY_MAX_ENTRIES } from '../lyrics-glossary.ts';
 import { extractJsonArray, parseTranslationResponse } from './parse.ts';
 
 // Re-export the public configuration API so `@/lib/translation` keeps its
@@ -581,7 +582,9 @@ export async function extractLyricsGlossary(
         typeof item === 'object' && item !== null
         && typeof (item as GlossaryEntry).original === 'string'
         && typeof (item as GlossaryEntry).translation === 'string')
-      .slice(0, 20);
+      // Same cap the prompt asks for and the manual editor enforces — one
+      // number, one place (lib/lyrics-glossary).
+      .slice(0, GLOSSARY_MAX_ENTRIES);
   } catch (error) {
     // Terminology is best-effort — but a silent failure hides provider/network issues.
     console.warn(`[translation] glossary extraction failed — ${error instanceof Error ? error.message : String(error)}`);

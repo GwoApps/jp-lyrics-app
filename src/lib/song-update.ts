@@ -1,5 +1,6 @@
 import { or, sql } from 'drizzle-orm';
 import type { CoverPaletteJson } from '@/lib/types';
+import { manualGlossaryEntries, type GlossaryEntry } from '@/lib/lyrics-glossary';
 import { resolveLrcTextUpdate } from '@/lib/lrc';
 import { nowUtcSql } from './db-time-sql.ts';
 
@@ -12,7 +13,7 @@ import { nowUtcSql } from './db-time-sql.ts';
  * touching different fields therefore never overwrite each other.
  */
 export function buildSongUpdateSet(
-  existing: { lyrics_raw: string; lyrics_synced: string },
+  existing: { lyrics_raw: string; lyrics_synced: string; lyrics_glossary?: string | null },
   body: {
     title?: string;
     artist?: string;
@@ -25,9 +26,15 @@ export function buildSongUpdateSet(
     clear_translation?: boolean;
     clear_reasoning?: boolean;
     clear_glossary?: boolean;
+    /**
+     * Hand-edited terminology table (issue #341). Validated by the route;
+     * `null` clears it. When present it wins over the lyrics-change
+     * invalidation below — the caller is explicitly pinning terms.
+     */
+    lyrics_glossary?: GlossaryEntry[] | null;
   },
 ): Record<string, unknown> {
-  const { title, artist, cover_palette, reading_scheme, reading_scheme_confirmed, lyrics_raw, lyrics_synced, clear_furigana, clear_translation, clear_reasoning, clear_glossary } = body;
+  const { title, artist, cover_palette, reading_scheme, reading_scheme_confirmed, lyrics_raw, lyrics_synced, clear_furigana, clear_translation, clear_reasoning, clear_glossary, lyrics_glossary } = body;
   const set: Record<string, unknown> = {};
 
   // --- Independent fields: write only when present in the payload ---
@@ -99,11 +106,26 @@ export function buildSongUpdateSet(
   }
 
   // Glossary: invalidated when lyrics content changes or explicitly via
-  // clear_glossary.
+  // clear_glossary. Hand-written entries survive the invalidation — they are
+  // the user's own correction of an auto-extracted mistranslation, and wiping
+  // them on every lyrics edit is exactly the dead end of issue #341 (clear the
+  // table, watch the next extraction reproduce the same error). Only the
+  // auto-extracted entries are dropped, because those were derived from the
+  // text that just changed.
   if (clear_glossary === true) {
     set.lyricsGlossary = null;
   } else if (effectiveNewRaw !== undefined) {
-    set.lyricsGlossary = sql`CASE WHEN ${effectiveNewRaw} != lyrics_raw THEN NULL ELSE lyrics_glossary END`;
+    const manual = manualGlossaryEntries(existing.lyrics_glossary ?? null);
+    set.lyricsGlossary = manual.length > 0
+      ? sql`CASE WHEN ${effectiveNewRaw} != lyrics_raw THEN ${JSON.stringify(manual)} ELSE lyrics_glossary END`
+      : sql`CASE WHEN ${effectiveNewRaw} != lyrics_raw THEN NULL ELSE lyrics_glossary END`;
+  }
+
+  // Explicit hand-edited glossary wins over the invalidation above: the user
+  // submitted these terms, so they must survive even a lyrics change in the
+  // same request (issue #341).
+  if (lyrics_glossary !== undefined) {
+    set.lyricsGlossary = lyrics_glossary === null ? null : JSON.stringify(lyrics_glossary);
   }
 
   // reading_scheme_confirmed auto-reset: when lyrics content changes and the

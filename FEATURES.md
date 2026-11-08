@@ -60,7 +60,11 @@ and [DEPLOYMENT.md](DEPLOYMENT.md).
   after persistence (or `error` on failure). Translation text is not sent as
   a separate `translation` delta event.
 - **Terminology glossary** — Extracts names/terms from the source lyrics
-  and injects them into the prompt for consistent translations.
+  and injects them into the prompt for consistent translations. The table is
+  visible and editable per song (edit page): delete a wrong rendering, pin the
+  correct one by hand, or re-run the extraction. "No terms" and "extraction
+  failed" are reported differently, so a translation that ran without the
+  terminology constraint is never mistaken for a checked one.
 - **Pluggable providers** — OpenAI-compatible APIs, Anthropic Messages API,
   and Cloudflare Workers AI (`TRANSLATION_PROVIDER`). Admin-stored non-empty
   translation settings override environment defaults; blank values fall back.

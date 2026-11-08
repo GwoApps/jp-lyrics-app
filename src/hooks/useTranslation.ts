@@ -241,7 +241,7 @@ export function useTranslation(deps: UseTranslationDeps): UseTranslationReturn {
         setTranslationProgress(progress);
       };
       let streamedReasoning = '';
-      const { translations, lang: streamLang, error: streamError, progress: errorProgress } = await readTranslationStream(
+      const { translations, lang: streamLang, error: streamError, progress: errorProgress, glossaryFailed } = await readTranslationStream(
         res.body,
         (delta) => {
           streamedReasoning += delta;
@@ -276,11 +276,17 @@ export function useTranslation(deps: UseTranslationDeps): UseTranslationReturn {
           ? song.lyrics_raw.split('\n').filter((line) => line.trim() !== '').length
           : total;
         const partial = translatedNow < coverable;
-        const msg = partial
+        const baseMsg = partial
           ? t('song.translationReadyPartial', { done: String(translatedNow), total: String(coverable) })
           : streamLang
             ? t('song.translationReadyLang', { lang: targetLangDisplay(streamLang) })
             : t('song.translationReady');
+        // Extraction failed, so this run carried NO terminology constraint —
+        // say it instead of letting the user read the result as terminology-
+        // checked (issue #341). The edit page's terminology panel shows details.
+        const msg = glossaryFailed
+          ? `${baseMsg}${t('song.translationGlossaryFailed')}`
+          : baseMsg;
         // Keep the streamed reasoning for later review, but leave no panel
         // open once the translation has completed (including partial results).
         reasoningUserHiddenRef.current = true;

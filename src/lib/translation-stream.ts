@@ -31,6 +31,12 @@ export interface TranslationStreamResult {
   /** Error code from the `error` event (e.g. ai_quota_exceeded). */
   error: string | null;
   /**
+   * True when the server ran this translation WITHOUT a terminology
+   * constraint because glossary extraction failed (issue #341). Distinct from
+   * "the song has no terms", which is a normal result.
+   */
+  glossaryFailed: boolean;
+  /**
    * Progress snapshot reported alongside the error. The server persists the
    * complete lines that streamed in before the failure and reports how many
    * of the requested lines are now translated — the client can use it to
@@ -49,6 +55,7 @@ export async function readTranslationStream(
   let streamLang: string | null = null;
   let streamError: string | null = null;
   let errorProgress: TranslationProgress | null = null;
+  let glossaryFailed = false;
   let finished = false;
 
   for await (const { event: eventName, data: dataStr } of readSseFrames(body)) {
@@ -58,6 +65,7 @@ export async function readTranslationStream(
       error?: string;
       lang?: string;
       stage?: string;
+      glossary_failed?: boolean;
       requestDone?: number;
       requestTotal?: number;
       covered?: number;
@@ -93,14 +101,16 @@ export async function readTranslationStream(
     } else if (eventName === 'done' && Array.isArray(payload.translations)) {
       translations = payload.translations;
       if (typeof payload.lang === 'string') streamLang = payload.lang;
+      glossaryFailed = payload.glossary_failed === true;
       finished = true;
     } else if (eventName === 'error' && payload.error) {
       streamError = payload.error;
       errorProgress = toProgress(payload);
+      glossaryFailed = payload.glossary_failed === true;
       finished = true;
     }
     if (finished) break;
   }
 
-  return { translations, lang: streamLang, error: streamError, progress: errorProgress };
+  return { translations, lang: streamLang, error: streamError, progress: errorProgress, glossaryFailed };
 }

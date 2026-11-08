@@ -9,6 +9,14 @@ import { computeCoverage, extractCompletedArrayItems } from '@/lib/translation-p
 import { mergeSliceIntoCache, writeSongField } from '@/lib/translation-cache';
 import { parseTranslationCache } from '@/lib/translation/parse';
 import { sourceLangOf } from '@/lib/lyrics-reading';
+import {
+  GLOSSARY_FAILED_MARKER,
+  manualGlossaryEntries,
+  mergeGlossaryEntries,
+  needsGlossaryExtraction,
+  parseLyricsGlossary,
+  serializeLyricsGlossary,
+} from '@/lib/lyrics-glossary';
 
 const SSE_HEADERS = {
   'Content-Type': 'text/event-stream',
@@ -207,25 +215,23 @@ export async function POST(
   // never fully translated (or whose glossary was cleared after an edit) must
   // still get consistent proper-noun constraints when lines are filled/re-
   // translated piecemeal (issue #146).
-  // Three distinguishable states (see extractLyricsGlossary): a stored array
-  // (possibly empty = genuinely no terms) is reused as-is; a stored `null`
-  // means the last extraction FAILED, so it is retried on the next translation
-  // request instead of being pinned to "no terms" forever.
+  //
+  // Stored states (issue #341, see lib/lyrics-glossary): 'ok' is reused
+  // verbatim, 'absent' / 'failed' / 'damaged' fall through to extraction below,
+  // and a table holding ONLY hand-pinned terms is re-extracted too — a lyrics
+  // edit drops the auto entries and keeps the pins, so the new text deserves
+  // its own extraction.
+  const storedGlossary = parseLyricsGlossary(existing.lyricsGlossary);
+  const preservedManual = manualGlossaryEntries(existing.lyricsGlossary);
   let glossary: GlossaryEntry[] | null = null;
-  if (existing.lyricsGlossary) {
-    try {
-      const parsed = JSON.parse(existing.lyricsGlossary);
-      if (Array.isArray(parsed)) {
-        glossary = parsed as GlossaryEntry[];
-      } else if (parsed === null) {
-        // Last extraction failed — fall through and retry below.
-        console.warn(`[translate] retrying glossary extraction for "${existing.title}" (previous attempt failed)`);
-      }
-    } catch (error) {
-      // Damaged glossary — ignore and translate without terminology.
-      console.warn(`[translate] stored glossary unparseable for "${existing.title}" — ${error instanceof Error ? error.message : String(error)}`);
-      /* ignored */
-    }
+  if (!needsGlossaryExtraction(storedGlossary)) {
+    glossary = storedGlossary.entries;
+  } else if (storedGlossary.state === 'failed') {
+    console.warn(`[translate] retrying glossary extraction for "${existing.title}" (previous attempt failed)`);
+  } else if (storedGlossary.state === 'damaged') {
+    // Unreadable value: do not spend it on the prompt, but re-extract (the run
+    // below repairs the column) instead of translating unconstrained forever.
+    console.warn(`[translate] stored glossary unparseable for "${existing.title}" — re-extracting`);
   }
   // Extract (or reuse) the terminology glossary from the full song.
   // Streaming mode calls this INSIDE the SSE stream — right after emitting a
@@ -243,6 +249,12 @@ export async function POST(
   // behaviour the translation stream got in #15. The non-streaming path has no
   // request signal to forward and relies on the call's own timeout budget
   // (issue #359).
+  // Whether THIS request ran without a terminology constraint because
+  // extraction failed (distinct from "the song genuinely has no terms").
+  // Reported to the client so the result can be read as "not terminology-
+  // checked" instead of silently inheriting the same untraceable mistranslation
+  // (issue #341).
+  let glossaryExtractionFailed = false;
   const ensureGlossary = async (signal?: AbortSignal): Promise<[boolean, string | null, number | null]> => {
     if (glossary !== null) return [true, null, null];
     const extracted = await extractLyricsGlossary(existing.title, existing.artist, lines, config, { signal });
@@ -252,7 +264,9 @@ export async function POST(
       // of permanently pinning this song to an empty glossary.
       // CAS on the request-start lyrics so a mid-flight lyrics edit can never
       // be pinned to a glossary derived from the OLD text.
-      glossary = extracted;
+      // Hand-pinned terms always win over the freshly extracted ones: the
+      // model must learn the user's correction, never overwrite it (#341).
+      glossary = mergeGlossaryEntries(preservedManual, extracted);
       // With `persist: false` we use the freshly-extracted glossary for THIS
       // request's prompt but do NOT write it back — the caller is a draft-only
       // editor flow and must not mutate the stored glossary either (#251).
@@ -260,7 +274,7 @@ export async function POST(
         const glossaryWrite = await writeSongField(db, {
           id,
           sourceLyrics: existing.lyricsRaw,
-          patch: { lyricsGlossary: JSON.stringify(glossary) },
+          patch: { lyricsGlossary: serializeLyricsGlossary(glossary) },
         });
         if (!glossaryWrite.ok) {
           // Lyrics were edited while we extracted the glossary — the source the
@@ -271,9 +285,31 @@ export async function POST(
         }
       }
     } else {
-      // Degrade to "no terminology" for THIS run only; extraction is retried
-      // on the next request. Still observable in the logs for triage.
-      console.warn(`[translate] glossary extraction failed for "${existing.title}" — translating without terminology; will retry next time`);
+      // Degrade for THIS run only; extraction is retried on the next request.
+      // Still observable in the logs for triage.
+      console.warn(`[translate] glossary extraction failed for "${existing.title}" — retrying next time`);
+      // The flag is about THIS run, so it is reported for draft-only flows too.
+      glossaryExtractionFailed = true;
+      if (preservedManual.length > 0) {
+        // Hand-pinned terms are still valid — never throw them away because the
+        // model call failed. Their presence alone keeps that state retryable
+        // (`needsGlossaryExtraction`), so no failure marker is needed.
+        glossary = preservedManual;
+      } else if (persist) {
+        // Record the failure in the column ('null' marker) so the client can
+        // tell "extraction failed, this run had no terminology constraint"
+        // apart from "this song genuinely has no terms" (issue #341). The same
+        // lyrics CAS as a successful write applies: never stamp a failure onto
+        // new lyrics. Draft-only flows (`persist: false`) leave the column be.
+        const markerWrite = await writeSongField(db, {
+          id,
+          sourceLyrics: existing.lyricsRaw,
+          patch: { lyricsGlossary: GLOSSARY_FAILED_MARKER },
+        });
+        if (!markerWrite.ok) {
+          console.warn('[translate] glossary failure marker not persisted (source lyrics changed mid-flight)');
+        }
+      }
     }
     return [true, null, null];
   };
@@ -487,7 +523,7 @@ export async function POST(
               return;
             }
           }
-          send('done', { start, count: finalSlice.length, translations: finalSlice, cached: false, lang: config.targetLang, ...progressPayload(requestDone, coverage) });
+          send('done', { start, count: finalSlice.length, translations: finalSlice, cached: false, lang: config.targetLang, glossary_failed: glossaryExtractionFailed, ...progressPayload(requestDone, coverage) });
         } catch (error) {
           // Client cancelled (cancel button or closed the page): the upstream
           // fetch was aborted via request.signal, so no AI quota is wasted.
@@ -636,5 +672,12 @@ export async function POST(
     }
     return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
   }
-  return NextResponse.json({ start, count: finalSlice.length, translations: finalSlice, cached: false, lang: config.targetLang });
+  return NextResponse.json({
+    start,
+    count: finalSlice.length,
+    translations: finalSlice,
+    cached: false,
+    lang: config.targetLang,
+    glossary_failed: glossaryExtractionFailed,
+  });
 }

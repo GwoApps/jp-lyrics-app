@@ -6,6 +6,7 @@ import { getSpotifyTrack, searchSpotifyTrack } from '@/lib/spotify';
 import { signCandidate, type CandidateTokenPayload } from '@/lib/candidate-token';
 import { applySyncWrite } from '@/lib/sync-write';
 import { hasDerivedLyricsCaches, hasLyricsContentChanged, normalizeSyncContent } from '@/lib/lyrics-content';
+import { manualGlossaryEntries } from '@/lib/lyrics-glossary';
 
 /**
  * Single-song (re)sync business logic (issue #148 / #120).
@@ -16,6 +17,12 @@ import { hasDerivedLyricsCaches, hasLyricsContentChanged, normalizeSyncContent }
  * compare-and-set on `lyrics_raw`, so a concurrent lyrics edit can never be
  * silently clobbered.
  */
+
+/** The glossary value to keep across a content-changing lyrics write. */
+function keepManualGlossary(stored: string | null | undefined): string | null {
+  const manual = manualGlossaryEntries(stored ?? null);
+  return manual.length > 0 ? JSON.stringify(manual) : null;
+}
 
 /**
  * Atomically write the reviewed candidate. When called from the token path the
@@ -101,7 +108,10 @@ export async function persistCandidate(
         lyricsFurigana: '[]',
         lyricsTranslation: '[]',
         lyricsTranslationReasoning: null,
-        lyricsGlossary: null,
+        // Hand-written terms survive a lyrics change (issue #341): they are the
+        // user's correction, not something derived from the old text — only the
+        // auto-extracted entries are invalidated.
+        lyricsGlossary: keepManualGlossary(song.lyricsGlossary),
         // The Cantonese-detection banner only applies to the kana scheme; when the
         // lyrics changed under it, re-prompt the user (same as the PUT route).
         readingSchemeConfirmed: song.readingScheme === 'ja-kana' ? 0 : undefined,

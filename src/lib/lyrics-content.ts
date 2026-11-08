@@ -1,10 +1,13 @@
 /**
  * Pure content-equality helpers shared by the lyrics write paths (issue #304).
  *
- * Zero imports on purpose: these must stay usable from tests that cannot boot a
+ * Import-light on purpose: these must stay usable from tests that cannot boot a
  * database. `sync-service.ts` transitively imports `lib/db`, so a unit test
- * aimed at these two-line predicates must not pull it in.
+ * aimed at these predicates must not pull it in — the only dependency is the
+ * dependency-free `lyrics-glossary` module.
  */
+
+import { hasAutoGlossaryEntries } from './lyrics-glossary.ts';
 
 /**
  * Normalize every line terminator to `\n` (LF).
@@ -88,5 +91,8 @@ export function hasDerivedLyricsCaches(input: {
 }): boolean {
   return hasJsonEntries(input.furigana)
     || hasJsonEntries(input.translation)
-    || hasJsonEntries(input.glossary);
+    // Only the part of the glossary a lyrics change actually destroys counts:
+    // the 'null' retry marker is not content, and hand-pinned entries survive
+    // the write (issue #341).
+    || hasAutoGlossaryEntries(input.glossary);
 }

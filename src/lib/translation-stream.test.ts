@@ -86,3 +86,21 @@ test('readTranslationStream splits events split across chunks', async () => {
   assert.deepEqual(progresses, [{ requestDone: 1, requestTotal: 2, covered: 3, coverable: 10 }]);
   assert.deepEqual(result.translations, ['x']);
 });
+
+test('readTranslationStream reports a failed glossary extraction instead of staying silent', async () => {
+  const stream = sseBody([
+    'event: stage\ndata: {"stage":"glossary_extraction"}\n\n',
+    'event: done\ndata: {"start":0,"count":1,"translations":["a"],"lang":"zh-CN","glossary_failed":true}\n\n',
+  ]);
+  const result = await readTranslationStream(stream, () => {});
+  assert.equal(result.glossaryFailed, true);
+  assert.deepEqual(result.translations, ['a']);
+});
+
+test('a normal extraction result is not reported as a glossary failure', async () => {
+  const stream = sseBody([
+    'event: done\ndata: {"start":0,"count":1,"translations":["a"],"lang":"zh-CN","glossary_failed":false}\n\n',
+  ]);
+  const result = await readTranslationStream(stream, () => {});
+  assert.equal(result.glossaryFailed, false);
+});

@@ -52,6 +52,7 @@ import { useAuthSession } from '@/lib/auth-session';
 import type { SyncRefs } from '@/hooks/useSpotifySync';
 import { LYRICS_SOURCE_KEYS } from '@/lib/lyrics-source';
 import { copyToClipboard } from '@/lib/clipboard';
+import { parseLyricsGlossary } from '@/lib/lyrics-glossary';
 import { getPiPCapabilities } from '@/lib/pip-support';
 import { formatDbDateTime } from '@/lib/db-time';
 
@@ -537,6 +538,7 @@ export default function SongViewPage() {
   // Derived state
   const { song, furiganaLines, syncLines, lineTimestamps } = data;
   const canEdit = song?.permissions?.can_edit === true;
+  const glossary = parseLyricsGlossary(song?.lyrics_glossary);
   const lyricsSourceKey = song ? LYRICS_SOURCE_KEYS[song.lyrics_source] : undefined;
   const lyricsSourceLabel = song ? (lyricsSourceKey ? t(lyricsSourceKey) : song.lyrics_source) : '';
   const { spotify, syncState, resumeSync, activeLine, isSameSong, followPlaying, setFollowPlaying, pipWindowRef, playbackMsRef } = sync;
@@ -1332,6 +1334,34 @@ export default function SongViewPage() {
                   {t('song.spotifyAlbum', { album: song.spotify_album })}
                 </div>
               )}
+              {/* Terminology table (issue #341): it constrains every later
+                  translation, so it is inspectable here. Editing lives on the
+                  edit page (GlossaryPanel). */}
+              <div className="rounded-lg bg-[var(--accent)] px-3 py-2.5">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className="font-medium text-[var(--foreground)]">{t('song.glossaryTitle')}</span>
+                  <span className={glossary.state === 'failed' || glossary.state === 'damaged' ? 'text-[var(--warning)]' : 'text-[var(--muted-foreground)]'}>
+                    {glossary.state === 'failed'
+                      ? t('song.glossaryFailedTag')
+                      : glossary.state === 'damaged'
+                        ? t('song.glossaryDamagedTag')
+                        : glossary.state === 'ok' && glossary.entries.length > 0
+                          ? t('song.glossaryCount', { count: String(glossary.entries.length) })
+                          : glossary.state === 'ok'
+                            ? t('song.glossaryEmpty')
+                            : t('song.glossaryNotExtracted')}
+                  </span>
+                </div>
+                {glossary.entries.length > 0 && (
+                  <ul className="flex flex-col gap-0.5 text-[11px] text-[var(--muted-foreground)]">
+                    {glossary.entries.map((entry, index) => (
+                      <li key={`${entry.original}-${index}`} className="break-words">
+                        {entry.original} <span className="opacity-60">→</span> {entry.translation}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
 
             <footer className="flex justify-end border-t border-[var(--border)] px-4 py-3 sm:px-5">

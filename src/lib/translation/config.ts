@@ -5,10 +5,11 @@
 
 export type TranslationProvider = 'openai' | 'anthropic' | 'workers-ai';
 
-export interface GlossaryEntry {
-  original: string;
-  translation: string;
-}
+// The entry shape (and the column's parsing/validation rules) live in
+// lib/lyrics-glossary so the client and the write path share one definition.
+import type { GlossaryEntry } from '../lyrics-glossary.ts';
+
+export type { GlossaryEntry };
 
 /** Per-request translation context: song identity + terminology table. */
 export interface TranslationContext {
