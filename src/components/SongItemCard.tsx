@@ -6,6 +6,7 @@ import { Link } from '@/components/navigation/ViewTransitions';
 import CoverImage from '@/components/CoverImage';
 import ArtistLinks from '@/components/ArtistLinks';
 import { useCoverPalette } from '@/hooks/useCoverPalette';
+import { formatDbDate } from '@/lib/db-time';
 
 export interface SongItemCardSong {
   id: string;
@@ -143,7 +144,7 @@ export default function SongItemCard({
           )}
         </div>
         <div className="song-item-card__date pointer-events-none relative z-10 text-[10px] sm:text-[11px] text-[var(--muted-foreground)] hidden sm:block shrink-0">
-          {new Date(song.updated_at).toLocaleDateString(locale)}
+          {formatDbDate(song.updated_at, locale)}
         </div>
       </div>
       <div className="song-item-card__actions relative z-10 flex items-center gap-0.5 shrink-0">

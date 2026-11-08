@@ -10,6 +10,7 @@ import { AlertTriangle, Check, ExternalLink, Loader2, Music, X } from 'lucide-re
 import Dialog from '@/components/ui/dialog';
 import { useI18n } from '@/lib/i18n';
 import { localeToBCP47, type AdminSong } from './admin-types';
+import { formatDbDate } from '@/lib/db-time';
 
 interface SongPreviewDialogProps {
   song: AdminSong | null;
@@ -111,7 +112,7 @@ function SongPreviewContent({ song, locale, onClose }: Omit<SongPreviewDialogPro
           {song.artist && <p className="text-xs text-[var(--muted-foreground)] mt-0.5 truncate"><ArtistLinks artist={song.artist} /></p>}
           {song.created_by_name && (
             <p className="text-[10px] text-[var(--muted-foreground)]/70 mt-0.5">
-              {t('home.createdBy')}: {song.created_by_name} · {new Date(song.created_at).toLocaleDateString(bcp47)}
+              {t('home.createdBy')}: {song.created_by_name} · {formatDbDate(song.created_at, bcp47)}
             </p>
           )}
         </div>

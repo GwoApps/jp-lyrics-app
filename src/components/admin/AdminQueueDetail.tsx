@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { localeToBCP47, type AdminSong } from './admin-types';
+import { formatDbDate } from '@/lib/db-time';
 
 export interface QueueDetail {
   id: string;
@@ -154,6 +155,7 @@ export default function AdminQueueDetail({ song, locale, onDone, onApprove, onRe
     : (song.has_synced_timeline ?? false) === true || song.has_synced_timeline === 1;
   const needsReview = detail?.lyrics_needs_review === 1 || song.lyrics_needs_review === 1;
   const lineCount = rawLines.length > 0 ? rawLines.length : (song.lyric_line_count ?? 0);
+  const createdOn = formatDbDate(detail?.created_at, bcp47);
 
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--card)]">
@@ -166,7 +168,7 @@ export default function AdminQueueDetail({ song, locale, onDone, onApprove, onRe
             {(detail?.created_by_name || song.created_by_name) && (
               <p className="text-[10px] text-[var(--muted-foreground)]/70 mt-0.5">
                 {t('home.createdBy')}: {detail?.created_by_name || song.created_by_name}
-                {detail?.created_at && ` · ${new Date(detail.created_at).toLocaleDateString(bcp47)}`}
+                {createdOn && ` · ${createdOn}`}
               </p>
             )}
           </div>

@@ -9,6 +9,7 @@ import {
 import { useI18n } from '@/lib/i18n';
 import Dialog from '@/components/ui/dialog';
 import { localeToBCP47 } from './admin-types';
+import { formatDbDateTime } from '@/lib/db-time';
 import TranslationConfigPanel from './TranslationConfigPanel';
 import LyricsProvidersPanel from './LyricsProvidersPanel';
 
@@ -228,7 +229,7 @@ export default function AdminSystemPanel() {
                     </span>
                   </div>
                   <div className="text-[10px] text-[var(--muted-foreground)]/70">
-                    {t('home.createdBy')}: {job.user_email} · {new Date(job.updated_at).toLocaleString(bcp47)}
+                    {t('home.createdBy')}: {job.user_email} · {formatDbDateTime(job.updated_at, bcp47)}
                   </div>
                 </li>
               );
@@ -250,7 +251,7 @@ export default function AdminSystemPanel() {
             {data.recent_activity.map((entry) => (
               <li key={entry.id} className="flex items-center gap-2 text-xs">
                 <span className="font-mono text-[10px] text-[var(--muted-foreground)]">
-                  {new Date(entry.occurred_at).toLocaleString(bcp47)}
+                  {formatDbDateTime(entry.occurred_at, bcp47)}
                 </span>
                 <span className="rounded bg-[var(--muted)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--foreground)]">
                   {entry.action}

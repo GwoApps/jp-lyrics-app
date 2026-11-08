@@ -4,6 +4,7 @@ import { AlertTriangle, ChevronRight, Clock } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import ArtistLinks from '@/components/ArtistLinks';
 import { localeToBCP47, type AdminSong } from './admin-types';
+import { formatDbDate } from '@/lib/db-time';
 
 interface AdminQueueListProps {
   songs: AdminSong[];
@@ -69,7 +70,7 @@ export default function AdminQueueList({ songs, locale, selectedId, onSelect }: 
                   <span className="text-[10px] text-[var(--muted-foreground)]/60">{s.created_by_name}</span>
                 )}
                 <span className="text-[10px] text-[var(--muted-foreground)]/60">
-                  {new Date(s.created_at).toLocaleDateString(bcp47)}
+                  {formatDbDate(s.created_at, bcp47)}
                 </span>
                 <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--muted)] text-[var(--muted-foreground)]">
                   {t('admin.lyricLines', { count: String(lineCount(s)) })}

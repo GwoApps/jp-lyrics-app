@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB, sql } from '@/lib/db';
+import { nowUtcSql } from '@/lib/db-time-sql';
 import { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI, base64Encode } from '@/lib/spotify';
 import { signSession } from '@/lib/auth';
 import {
@@ -133,7 +134,7 @@ export async function GET(request: NextRequest) {
   // Upsert Spotify auth
   await db.run(sql`
     INSERT INTO spotify_auth (user_email, access_token, refresh_token, expires_at, display_name, updated_at)
-    VALUES (${userId}, ${tokenData.access_token}, ${tokenData.refresh_token}, ${expiresAt}, ${profile.display_name || ''}, datetime('now', 'localtime'))
+    VALUES (${userId}, ${tokenData.access_token}, ${tokenData.refresh_token}, ${expiresAt}, ${profile.display_name || ''}, ${nowUtcSql()})
     ON CONFLICT(user_email) DO UPDATE SET
       access_token = excluded.access_token,
       refresh_token = excluded.refresh_token,
@@ -146,10 +147,10 @@ export async function GET(request: NextRequest) {
   try {
     await db.run(sql`
       INSERT OR IGNORE INTO users (id, display_name, created_at, updated_at)
-      VALUES (${userId}, ${profile.display_name || ''}, datetime('now', 'localtime'), datetime('now', 'localtime'))
+      VALUES (${userId}, ${profile.display_name || ''}, ${nowUtcSql()}, ${nowUtcSql()})
     `);
     await db.run(sql`
-      UPDATE users SET display_name = ${profile.display_name || ''}, updated_at = datetime('now', 'localtime')
+      UPDATE users SET display_name = ${profile.display_name || ''}, updated_at = ${nowUtcSql()}
       WHERE id = ${userId}
     `);
 

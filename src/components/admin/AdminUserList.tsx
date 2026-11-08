@@ -3,6 +3,7 @@
 import { Ban, ChevronLeft, ChevronRight, Search, Shield, ShieldOff, Trash2, Users, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { localeToBCP47, type AdminUser } from './admin-types';
+import { formatDbDate } from '@/lib/db-time';
 
 export type UserRoleFilter = 'all' | 'admin' | 'user';
 export type UserStatusFilter = 'all' | 'active' | 'blocked';
@@ -126,7 +127,7 @@ export default function AdminUserList({
                       </div>
                     )}
                     <div className="text-[10px] text-[var(--muted-foreground)]/60 mt-1">
-                      {new Date(u.created_at).toLocaleDateString(bcp47)}
+                      {formatDbDate(u.created_at, bcp47)}
                       {typeof u.song_count === 'number' && (
                         <> · {t('admin.songCount', { count: String(u.song_count) })}
                           {typeof u.public_song_count === 'number' && u.public_song_count > 0 && (

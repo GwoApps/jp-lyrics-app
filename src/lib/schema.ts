@@ -1,5 +1,15 @@
 import { sqliteTable, text, integer, primaryKey, blob, index as sqliteIndex } from 'drizzle-orm/sqlite-core';
-import { sql } from 'drizzle-orm';
+import { nowUtcSql } from './db-time-sql.ts';
+
+/**
+ * Every `*_at` column stores an absolute UTC instant (`YYYY-MM-DDTHH:MM:SS.sssZ`),
+ * the same shape `new Date().toISOString()` produces — read them through
+ * `parseDbTimestamp()` in `@/lib/db-time` (ISSUE #364).
+ *
+ * Drizzle inlines `nowUtcSql()` into every INSERT that omits the column, so new
+ * rows are correct even on databases whose table-level DEFAULT was created by an
+ * older migration.
+ */
 
 export const songs = sqliteTable('songs', {
   id: text('id').primaryKey(),
@@ -36,8 +46,8 @@ export const songs = sqliteTable('songs', {
   createdByName: text('created_by_name').notNull().default(''),
   isPublic: integer('is_public').notNull().default(0),
   publicRequested: integer('public_requested').notNull().default(0),
-  createdAt: text('created_at').notNull().default(sql`(datetime('now', 'localtime'))`),
-  updatedAt: text('updated_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+  createdAt: text('created_at').notNull().default(nowUtcSql()),
+  updatedAt: text('updated_at').notNull().default(nowUtcSql()),
 });
 
 export const spotifyAuth = sqliteTable('spotify_auth', {
@@ -46,7 +56,7 @@ export const spotifyAuth = sqliteTable('spotify_auth', {
   refreshToken: text('refresh_token').notNull().default(''),
   expiresAt: integer('expires_at').notNull().default(0),
   displayName: text('display_name').notNull().default(''),
-  updatedAt: text('updated_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+  updatedAt: text('updated_at').notNull().default(nowUtcSql()),
 });
 
 export const favorites = sqliteTable('favorites', {
@@ -54,7 +64,7 @@ export const favorites = sqliteTable('favorites', {
   songId: text('song_id').notNull().references(() => songs.id, { onDelete: 'cascade' }),
   // Existing favorites belong to the default category until explicitly changed.
   inUnclassified: integer('in_unclassified').notNull().default(1),
-  createdAt: text('created_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+  createdAt: text('created_at').notNull().default(nowUtcSql()),
 }, (t) => [
   primaryKey({ columns: [t.userEmail, t.songId] }),
 ]);
@@ -63,7 +73,7 @@ export const collections = sqliteTable('collections', {
   id: text('id').primaryKey(),
   userEmail: text('user_email').notNull(),
   name: text('name').notNull(),
-  createdAt: text('created_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+  createdAt: text('created_at').notNull().default(nowUtcSql()),
 });
 
 export const collectionSongs = sqliteTable('collection_songs', {
@@ -80,8 +90,8 @@ export const users = sqliteTable('users', {
   isAdmin: integer('is_admin').notNull().default(0),
   isBlocked: integer('is_blocked').notNull().default(0),
   blockedReason: text('blocked_reason').notNull().default(''),
-  createdAt: text('created_at').notNull().default(sql`(datetime('now', 'localtime'))`),
-  updatedAt: text('updated_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+  createdAt: text('created_at').notNull().default(nowUtcSql()),
+  updatedAt: text('updated_at').notNull().default(nowUtcSql()),
 });
 
 // Key-value store for admin-managed settings (e.g. translation service overrides).
@@ -123,8 +133,8 @@ export const lyricsProviderConfigs = sqliteTable('lyrics_provider_configs', {
   lastCheckCode: text('last_check_code'),
   lastCheckLatencyMs: integer('last_check_latency_ms'),
   checkedAt: text('checked_at'),
-  createdAt: text('created_at').notNull().default(sql`(datetime('now', 'localtime'))`),
-  updatedAt: text('updated_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+  createdAt: text('created_at').notNull().default(nowUtcSql()),
+  updatedAt: text('updated_at').notNull().default(nowUtcSql()),
 });
 
 // Per-user personal settings (non-admin preferences: theme, locale, font size,
@@ -136,7 +146,7 @@ export const userSettings = sqliteTable('user_settings', {
   userId: text('user_id').notNull(),
   key: text('key').notNull(),
   value: text('value').notNull(),
-  updatedAt: text('updated_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+  updatedAt: text('updated_at').notNull().default(nowUtcSql()),
 }, (t) => [
   primaryKey({ columns: [t.userId, t.key] }),
 ]);
@@ -148,7 +158,7 @@ export const songCovers = sqliteTable('song_covers', {
   songId: text('song_id').primaryKey().references(() => songs.id, { onDelete: 'cascade' }),
   mime: text('mime').notNull(),
   data: blob('data').notNull(),
-  updatedAt: text('updated_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+  updatedAt: text('updated_at').notNull().default(nowUtcSql()),
 });
 
 // Daily Workers AI usage counter — a hard cap so the free Neurons
@@ -189,8 +199,8 @@ export const playlistImportJobs = sqliteTable('playlist_import_jobs', {
   imported: integer('imported').notNull().default(0),
   skipped: integer('skipped').notNull().default(0),
   failed: integer('failed').notNull().default(0),
-  createdAt: text('created_at').notNull().default(sql`(datetime('now', 'localtime'))`),
-  updatedAt: text('updated_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+  createdAt: text('created_at').notNull().default(nowUtcSql()),
+  updatedAt: text('updated_at').notNull().default(nowUtcSql()),
 });
 
 /**
@@ -214,7 +224,7 @@ export const adminAuditLog = sqliteTable('admin_audit_log', {
   afterJson: text('after_json'),
   reason: text('reason').notNull().default(''),
   result: text('result').notNull().default('success'), // success | failure
-  occurredAt: text('occurred_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+  occurredAt: text('occurred_at').notNull().default(nowUtcSql()),
 }, (t) => [
   sqliteIndex('admin_audit_log_occurred_at_idx').on(t.occurredAt),
   sqliteIndex('admin_audit_log_actor_occurred_idx').on(t.actorUserId, t.occurredAt),
@@ -248,7 +258,7 @@ export const playlistImportTrackResults = sqliteTable('playlist_import_track_res
   artist: text('artist').notNull(),
   status: text('status').notNull(), // imported | skipped | failed
   needsReview: integer('needs_review').notNull().default(0),
-  createdAt: text('created_at').notNull().default(sql`(datetime('now', 'localtime'))`),
+  createdAt: text('created_at').notNull().default(nowUtcSql()),
 }, (t) => [
   sqliteIndex('playlist_import_track_results_job_track_idx').on(t.jobId, t.trackIndex),
 ]);

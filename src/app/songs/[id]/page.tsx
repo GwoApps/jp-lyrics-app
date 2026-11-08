@@ -52,6 +52,7 @@ import type { SyncRefs } from '@/hooks/useSpotifySync';
 import { LYRICS_SOURCE_KEYS } from '@/lib/lyrics-source';
 import { copyToClipboard } from '@/lib/clipboard';
 import { getPiPCapabilities } from '@/lib/pip-support';
+import { formatDbDateTime } from '@/lib/db-time';
 
 /** Reusable button class builder */
 function btnCls(active?: boolean, variant?: 'danger') {
@@ -1253,10 +1254,10 @@ export default function SongViewPage() {
 
             <div className="grid gap-2 p-4 text-xs sm:p-5">
               <div className="rounded-lg bg-[var(--accent)] px-3 py-2.5 text-[var(--muted-foreground)]">
-                {t('common.created')}{new Date(song.created_at).toLocaleString(bcp47)}
+                {t('common.created')}{formatDbDateTime(song.created_at, bcp47)}
               </div>
               <div className="rounded-lg bg-[var(--accent)] px-3 py-2.5 text-[var(--muted-foreground)]">
-                {t('common.updated')}{new Date(song.updated_at).toLocaleString(bcp47)}
+                {t('common.updated')}{formatDbDateTime(song.updated_at, bcp47)}
               </div>
               {hasSyncData && (
                 <div className="rounded-lg bg-[var(--accent)] px-3 py-2.5 text-[var(--success)]">

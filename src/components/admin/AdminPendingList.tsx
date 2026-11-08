@@ -6,6 +6,7 @@ import { AlertTriangle, Check, Clock, Eye, X } from 'lucide-react';
 import Link from 'next/link';
 import { useI18n } from '@/lib/i18n';
 import { localeToBCP47, type AdminSong } from './admin-types';
+import { formatDbDate } from '@/lib/db-time';
 
 interface AdminPendingListProps {
   songs: AdminSong[];
@@ -58,7 +59,7 @@ export default function AdminPendingList({ songs, locale, onPreview, onApprove, 
                 <div className="text-[10px] text-[var(--muted-foreground)]/60 mt-0.5">{t('home.createdBy')}: {s.created_by_name}</div>
               )}
               <div className="text-[10px] text-[var(--muted-foreground)]/60 mt-1">
-                {new Date(s.created_at).toLocaleDateString(bcp47)}
+                {formatDbDate(s.created_at, bcp47)}
               </div>
               <div className="flex flex-wrap items-center gap-1.5 mt-2">
                 <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--muted)] text-[var(--muted-foreground)]">

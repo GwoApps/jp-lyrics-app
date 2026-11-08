@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDB, schema, sql } from '@/lib/db';
+import { getDB, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import { getAuthUser } from '@/lib/auth';
 import { deleteCover, putCover } from '@/lib/cover-store';
+import { nowUtcSql } from '@/lib/db-time-sql';
 
 // POST /api/songs/[id]/cover — upload a custom album cover (multipart form-data, field "file").
 // The image is stored via cover-store: R2 on Cloudflare Workers, SQLite BLOB
@@ -63,7 +64,7 @@ export async function POST(
   await db.update(schema.songs).set({
     coverUrl: `/api/songs/${id}/cover-image?v=${Date.now()}`,
     coverPalette: null,
-    updatedAt: sql`(datetime('now', 'localtime'))`,
+    updatedAt: nowUtcSql(),
   }).where(eq(schema.songs.id, id)).run();
 
   const updated = await db.select({ coverUrl: schema.songs.coverUrl }).from(schema.songs).where(eq(schema.songs.id, id)).get();
@@ -100,7 +101,7 @@ export async function DELETE(
   await db.update(schema.songs).set({
     coverUrl: null,
     coverPalette: null,
-    updatedAt: sql`(datetime('now', 'localtime'))`,
+    updatedAt: nowUtcSql(),
   }).where(eq(schema.songs.id, id)).run();
 
   return NextResponse.json({ cover_url: null });

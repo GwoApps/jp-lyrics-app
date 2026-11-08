@@ -1,4 +1,5 @@
 import { groupArtistAlbums, splitArtists } from '@/lib/artists';
+import { formatDbDate, parseDbTimestamp } from '@/lib/db-time';
 import type { SongItem } from '@/lib/types';
 
 // The artist-detail endpoint supplies these optional, normalized summary fields.
@@ -34,17 +35,7 @@ export function defaultLibraryView(): LibraryView {
   return { tab: 'songs', query: '', filtersOpen: false, sort: 'name', credit: 'all', review: 'all', lyrics: 'all', timeline: 'all', furigana: 'all', translation: 'all', expandedAlbumKeys: [] };
 }
 const normalize = (value: string) => value.normalize('NFKC').toLocaleLowerCase().trim();
-function parseSongTimestamp(value: string | null | undefined): { date: Date; wallClock: boolean } | null {
-  if (!value) return null;
-  // Naive database dates are calendar/wall-clock values. A fixed reference
-  // keeps both sorting and rendering independent of the browser's timezone;
-  // it does not assert that the server's local timestamp was a UTC instant.
-  const wallClock = /^\d{4}-\d\d-\d\d(?:[ T]\d\d:\d\d:\d\d(?:\.\d{1,3})?)?$/.test(value);
-  const normalized = wallClock ? (value.length === 10 ? `${value}T00:00:00Z` : value.replace(' ', 'T') + 'Z') : value;
-  const date = new Date(normalized);
-  return Number.isFinite(date.getTime()) ? { date, wallClock } : null;
-}
-const timestamp = (value: string) => parseSongTimestamp(value)?.date.getTime() ?? -Infinity;
+const timestamp = (value: string | null | undefined) => parseDbTimestamp(value)?.getTime() ?? -Infinity;
 
 export function filterArtistSongs(songs: readonly ArtistLibrarySong[], view: LibraryView, locale: string): ArtistLibrarySong[] {
   const terms = normalize(view.query).split(/\s+/).filter(Boolean);
@@ -97,8 +88,7 @@ export function formatSongDuration(ms: number | null | undefined, locale: string
     : `${number.format(Math.floor(seconds / 60))}:${padded.format(seconds % 60)}`;
 }
 export function formatSongDate(value: string | null | undefined, locale: string): string | null {
-  const parsed = parseSongTimestamp(value);
-  return parsed ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium', ...(parsed.wallClock ? { timeZone: 'UTC' } : {}) }).format(parsed.date) : null;
+  return formatDbDate(value, locale, { dateStyle: 'medium' });
 }
 export function spotifyTrackHref(id: string | null | undefined): string | null {
   return typeof id === 'string' && /^[A-Za-z0-9]{22}$/.test(id) ? `https://open.spotify.com/track/${id}` : null;

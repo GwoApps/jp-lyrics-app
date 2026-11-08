@@ -182,7 +182,7 @@ async function repairPlaylistImportSlotIdentity(
     artist text NOT NULL,
     status text NOT NULL,
     needs_review integer DEFAULT 0 NOT NULL,
-    created_at text DEFAULT (datetime('now', 'localtime')) NOT NULL
+    created_at text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL
   )`);
   const LEGACY_ROWS = `rowid IN (
     SELECT rowid FROM playlist_import_track_results AS dup

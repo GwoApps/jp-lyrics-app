@@ -1,4 +1,5 @@
-import { getDB, schema, sql, eq } from './db';
+import { getDB, schema, eq } from './db';
+import { nowUtcSql } from './db-time-sql.ts';
 
 export const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID || '';
 export const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || '';
@@ -40,7 +41,7 @@ export async function getSpotifyTokenForUser(userEmail: string): Promise<string 
     await db.update(schema.spotifyAuth).set({
       accessToken: data.access_token,
       expiresAt,
-      updatedAt: sql`(datetime('now', 'localtime'))`,
+      updatedAt: nowUtcSql(),
     }).where(eq(schema.spotifyAuth.userEmail, userEmail));
     return data.access_token;
   }

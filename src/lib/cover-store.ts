@@ -1,5 +1,6 @@
-import { getDB, schema, sql } from '@/lib/db';
+import { getDB, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
+import { nowUtcSql } from './db-time-sql.ts';
 
 /**
  * Cover artwork storage, abstracted across backends:
@@ -60,13 +61,13 @@ export async function putCover(songId: string, mime: string, bytes: ArrayBuffer)
     songId,
     mime,
     data: bytes,
-    updatedAt: sql`(datetime('now', 'localtime'))`,
+    updatedAt: nowUtcSql(),
   }).onConflictDoUpdate({
     target: schema.songCovers.songId,
     set: {
       mime,
       data: bytes,
-      updatedAt: sql`(datetime('now', 'localtime'))`,
+      updatedAt: nowUtcSql(),
     },
   }).run();
 }

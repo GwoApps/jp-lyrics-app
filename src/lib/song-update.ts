@@ -1,6 +1,7 @@
 import { or, sql } from 'drizzle-orm';
 import type { CoverPaletteJson } from '@/lib/types';
 import { resolveLrcTextUpdate } from '@/lib/lrc';
+import { nowUtcSql } from './db-time-sql.ts';
 
 /**
  * Build the minimal UPDATE set for a songs PUT (issue #211).
@@ -130,7 +131,7 @@ export function buildSongUpdateSet(
   }
 
   // Always bump the timestamp on any successful write.
-  set.updatedAt = sql`(datetime('now', 'localtime'))`;
+  set.updatedAt = nowUtcSql();
 
   return set;
 }

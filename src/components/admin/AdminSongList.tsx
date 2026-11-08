@@ -5,6 +5,7 @@ import ArtistLinks from '@/components/ArtistLinks';
 import { AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, Eye, ListMusic, Search, Trash2, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { localeToBCP47, type AdminSong } from './admin-types';
+import { formatDbDate } from '@/lib/db-time';
 
 export type SongStatusFilter = 'all' | 'public' | 'private';
 export type SongReviewFilter = 'all' | 'needs';
@@ -161,7 +162,7 @@ export default function AdminSongList({
                     </div>
                   )}
                   <div className="text-[10px] text-[var(--muted-foreground)]/60 mt-1">
-                    {t('admin.updatedAt', { date: new Date(s.updated_at).toLocaleDateString(bcp47) })}
+                    {t('admin.updatedAt', { date: formatDbDate(s.updated_at, bcp47) ?? '' })}
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">

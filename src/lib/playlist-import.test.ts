@@ -48,8 +48,8 @@ async function createTables(t: TestDb) {
     imported INTEGER NOT NULL DEFAULT 0,
     skipped INTEGER NOT NULL DEFAULT 0,
     failed INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
   )`);
   // Mirrors migrations 0022/0023: rows are identified by playlist slot, and
   // (job_id, track_index) is unique.
@@ -61,7 +61,7 @@ async function createTables(t: TestDb) {
     artist TEXT NOT NULL,
     status TEXT NOT NULL,
     needs_review INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
   )`);
   await t.db.run(sql`CREATE UNIQUE INDEX playlist_import_track_results_job_track_idx
     ON playlist_import_track_results (job_id, track_index)`);

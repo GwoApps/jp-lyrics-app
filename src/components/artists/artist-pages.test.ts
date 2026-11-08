@@ -9,6 +9,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import { artistHref, artistKey, groupArtistAlbums, splitArtists } from '@/lib/artists';
+import { formatDbDate, formatDbDateTime, parseDbTimestamp } from '@/lib/db-time';
 import type { ArtistLibrary } from './types';
 
 const require = createRequire(import.meta.url);
@@ -46,6 +47,7 @@ function renderPage(file: string, resource: object, props: object = {}) {
         if (specifier === '@/components/home/FavoriteCategoriesDialog') return { __esModule: true, default: () => null };
         if (specifier === '@/components/SpotifyLoginButton') return { __esModule: true, default: (props: Record<string, unknown>) => React.createElement('button', props) };
         if (specifier === './ArtistProfileHeader') return { __esModule: true, default: ({ name }: { name: string }) => React.createElement('header', null, React.createElement('h1', null, name)) };
+        if (specifier === '@/lib/db-time') return { formatDbDate, formatDbDateTime, parseDbTimestamp };
         if (specifier === '@/lib/artists') return { artistHref, artistKey, groupArtistAlbums, splitArtists };
         if (specifier === './useArtistResource') return { useArtistResource: () => ({ state: resource, retry: () => {} }) };
         if (specifier.endsWith('.css')) return {};

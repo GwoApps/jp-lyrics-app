@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { and, asc, eq, gte, lt, or, sql } from 'drizzle-orm';
 import { getDB, schema } from '@/lib/db';
+import { nowUtcSql } from './db-time-sql.ts';
 import { fetchLyricsWithChain } from '@/lib/lyrics-provider';
 import { classifyLyricsHit } from '@/lib/lyrics-hit';
 import { getSpotifyTokenForUser } from '@/lib/spotify';
@@ -342,7 +343,7 @@ export async function saveTrackResult(
         skipped = skipped + ${inc.skipped},
         failed = failed + ${inc.failed},
         status = 'running',
-        updated_at = datetime('now', 'localtime')
+        updated_at = ${nowUtcSql()}
     WHERE id = ${jobId}
   `);
 }
@@ -377,7 +378,7 @@ export async function finishJob(
   const db = getDB();
   await db.run(sql`
     UPDATE playlist_import_jobs
-    SET status = ${status}, updated_at = datetime('now', 'localtime')
+    SET status = ${status}, updated_at = ${nowUtcSql()}
     WHERE id = ${jobId}
   `);
 }

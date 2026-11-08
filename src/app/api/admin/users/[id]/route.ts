@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB, sql } from '@/lib/db';
+import { nowUtcSql } from '@/lib/db-time-sql';
 import { getAuthUser } from '@/lib/auth';
 import {
   USER_ACTIONS,
@@ -86,20 +87,20 @@ export async function PUT(
     const run = (tx as { run: (q: unknown) => Promise<unknown> }).run;
     let sqlUpdate: ReturnType<typeof sql>;
     if (action === 'promote') {
-      sqlUpdate = sql`UPDATE users SET is_admin = 1, updated_at = datetime('now', 'localtime') WHERE id = ${id} ${lockSql}`;
+      sqlUpdate = sql`UPDATE users SET is_admin = 1, updated_at = ${nowUtcSql()} WHERE id = ${id} ${lockSql}`;
     } else if (action === 'demote') {
       // Atomic last-admin guard: only demote when another admin remains.
       sqlUpdate = sql`UPDATE users
-          SET is_admin = 0, updated_at = datetime('now', 'localtime')
+          SET is_admin = 0, updated_at = ${nowUtcSql()}
           WHERE id = ${id} ${lockSql}
             AND (SELECT COUNT(*) FROM users WHERE id <> ${id} AND is_admin = 1) >= 1`;
     } else if (action === 'block') {
       sqlUpdate = sql`UPDATE users
-          SET is_blocked = 1, blocked_reason = ${reason.reason}, updated_at = datetime('now', 'localtime')
+          SET is_blocked = 1, blocked_reason = ${reason.reason}, updated_at = ${nowUtcSql()}
           WHERE id = ${id} ${lockSql}`;
     } else {
       sqlUpdate = sql`UPDATE users
-          SET is_blocked = 0, blocked_reason = '', updated_at = datetime('now', 'localtime')
+          SET is_blocked = 0, blocked_reason = '', updated_at = ${nowUtcSql()}
           WHERE id = ${id} ${lockSql}`;
     }
 

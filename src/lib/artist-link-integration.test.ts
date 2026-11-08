@@ -9,6 +9,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import { artistHref, splitArtists } from './artists';
+import { formatDbDate, formatDbDateTime, parseDbTimestamp } from './db-time';
 
 const require = createRequire(import.meta.url);
 const src = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -72,6 +73,7 @@ function load(file: string): Record<string, unknown> {
       if (specifier === '@/components/CoverImage') return { __esModule: true, default: () => React.createElement('span', { 'data-cover': true }) };
       if (specifier === '@/components/ui/dialog') return { __esModule: true, default: ({ children }: { children: React.ReactNode }) => React.createElement('div', {}, children) };
       if (specifier === '@/hooks/useCoverPalette') return { useCoverPalette: () => null };
+      if (specifier === '@/lib/db-time') return { formatDbDate, formatDbDateTime, parseDbTimestamp };
       if (specifier === '@/lib/artists') return { artistHref, splitArtists };
       if (specifier === '@/lib/i18n') return { useI18n: () => ({ t }) };
       if (specifier === './admin-types') return load('components/admin/admin-types.ts');

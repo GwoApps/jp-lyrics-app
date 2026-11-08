@@ -436,6 +436,25 @@ table/column list or run ad-hoc `ALTER TABLE` statements from an old guide.
   database before deploying the Worker. Do not replay old migrations against
   a database initialized with the latest schema.
 
+### Time columns are UTC
+
+Every `*_at` column stores an absolute UTC instant
+(`2026-09-26T12:00:00.000Z`), written by `nowUtcSql()` in
+[`src/lib/db-time-sql.ts`](src/lib/db-time-sql.ts) or by
+`new Date().toISOString()` from the app. Nothing in the deployment sets `TZ`,
+and none is needed: the value no longer depends on the server's time zone.
+
+Read them through `parseDbTimestamp()` / `formatDbDate()` /
+`formatDbDateTime()` in [`src/lib/db-time.ts`](src/lib/db-time.ts), which render
+in the visitor's own time zone. Rows written before migration `0024` hold a
+bare `YYYY-MM-DD HH:MM:SS` wall clock; that migration rewrites them as the UTC
+instant they always were, and the helper reads any leftover naive value the same
+way, so no manual data fix is required.
+
+- **Cloudflare D1:** apply `drizzle/0024_normalize_timestamps_to_utc.sql` with
+  the other pending migrations before deploying. It only touches values that
+  still look like a naive wall clock, so it is safe to re-run.
+
 ---
 
 ## Troubleshooting

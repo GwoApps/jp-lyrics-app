@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { defaultLibraryView, filterArtistSongs, groupMatchingAlbums, formatTranslationLanguage, formatSongDuration, formatSongDate, spotifyTrackHref, readFavoriteStatus, type ArtistLibrarySong } from './artist-library-model.ts';
 import { groupArtistAlbums } from '@/lib/artists';
+import { parseDbTimestamp } from '@/lib/db-time';
 
 const makeSong = (id: string, extras: Partial<ArtistLibrarySong> = {}): ArtistLibrarySong => ({ id, title: id, artist: 'Aimer', spotify_album: 'Album', created_by: 'test', created_by_name: 'Test', is_public: 1, public_requested: 0, created_at: '2026-01-01', updated_at: '2026-01-02', ...extras });
 const songs = [
@@ -12,23 +13,25 @@ const songs = [
 ];
 const ids = (items: ArtistLibrarySong[]) => items.map((song) => song.id);
 
-test('SQLite local wall-clock dates are not shifted into a fabricated next day', () => {
-  const previous = process.env.TZ;
-  process.env.TZ = 'Asia/Shanghai';
-  try { assert.equal(formatSongDate('2026-11-02 16:25:33', 'en'), 'Nov 2, 2026'); }
-  finally { if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous; }
+test('the stored instant is read as UTC and rendered in the visitor time zone', () => {
+  // A naive value is UTC (ISSUE #364): 2026-11-02T16:25:33Z is already Nov 3 in
+  // Shanghai and still Nov 2 in UTC. Reading it as local time instead would
+  // render Shanghai's own wall clock back as "Nov 2".
+  const naive = parseDbTimestamp('2026-11-02 16:25:33');
+  assert.equal(naive?.toISOString(), '2026-11-02T16:25:33.000Z');
+  assert.equal(new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeZone: 'Asia/Shanghai' }).format(naive!), 'Nov 3, 2026');
+  assert.equal(new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeZone: 'UTC' }).format(naive!), 'Nov 2, 2026');
+  assert.equal(formatSongDate('2026-11-02 16:25:33', 'en'), formatSongDate('2026-11-02T16:25:33Z', 'en'));
 });
 
-test('mixed SQLite and ISO ordering is deterministic across browser time zones', () => {
-  const previous = process.env.TZ;
-  try {
-    for (const zone of ['Asia/Shanghai', 'America/Los_Angeles']) {
-      process.env.TZ = zone;
-      const mixed = [makeSong('sqlite', { created_at: '2026-01-02 00:30:00' }), makeSong('iso', { created_at: '2026-01-01T20:00:00Z' })];
-      assert.deepEqual(ids(filterArtistSongs(mixed, { ...defaultLibraryView(), sort: 'created' }, 'en')), ['sqlite', 'iso']);
-      assert.equal(formatSongDate('2026-01-02', 'en'), 'Jan 2, 2026');
-    }
-  } finally { if (previous === undefined) delete process.env.TZ; else process.env.TZ = previous; }
+test('mixed naive and ISO timestamps sort on the same absolute timeline', () => {
+  // '2026-01-01 20:00:00' (UTC) is older than '2026-01-02 00:30:00' regardless
+  // of the browser zone — the old "bare string means local time" reading could
+  // invert this ordering once the visitor's offset exceeded four hours.
+  const mixed = [makeSong('sqlite', { created_at: '2026-01-02 00:30:00' }), makeSong('iso', { created_at: '2026-01-01T20:00:00Z' })];
+  assert.deepEqual(ids(filterArtistSongs(mixed, { ...defaultLibraryView(), sort: 'created' }, 'en')), ['sqlite', 'iso']);
+  assert.deepEqual(ids(filterArtistSongs(mixed, { ...defaultLibraryView(), sort: 'created' }, 'en')), ['sqlite', 'iso']);
+  assert.equal(formatSongDate('2026-01-02', 'en'), 'Jan 2, 2026');
 });
 
 test('translation language uses the stored tag, never the UI locale or an invented default', () => {

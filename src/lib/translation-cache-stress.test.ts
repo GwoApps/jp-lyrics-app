@@ -32,7 +32,7 @@ test('20 concurrent single-line slice merges converge to a complete cache', asyn
     lyrics_confidence INTEGER NOT NULL DEFAULT 100, lyrics_needs_review INTEGER NOT NULL DEFAULT 0,
     lyrics_fetched_at TEXT, created_by TEXT NOT NULL DEFAULT '', created_by_name TEXT NOT NULL DEFAULT '',
     is_public INTEGER NOT NULL DEFAULT 0, public_requested INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')), updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')), updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
   )`);
   const LYRICS = Array.from({ length: 20 }, (_, i) => `L${i}`).join('\n');
   await db.run(sql`INSERT INTO songs (id, title, artist, lyrics_raw) VALUES ('s', 't', 'a', ${LYRICS})`);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB, sql } from '@/lib/db';
+import { nowUtcSql } from '@/lib/db-time-sql';
 import { getAuthUser } from '@/lib/auth';
 
 // POST /api/songs/[id]/request-public — request public visibility (song owner only)
@@ -38,7 +39,7 @@ export async function POST(
     return NextResponse.json({ error: 'already_requested' }, { status: 400 });
   }
 
-  await db.run(sql`UPDATE songs SET public_requested = 1, updated_at = datetime('now', 'localtime') WHERE id = ${id}`);
+  await db.run(sql`UPDATE songs SET public_requested = 1, updated_at = ${nowUtcSql()} WHERE id = ${id}`);
   return NextResponse.json({ success: true, public_requested: 1 });
 }
 
@@ -67,6 +68,6 @@ export async function DELETE(
     return NextResponse.json({ error: 'not_owner' }, { status: 403 });
   }
 
-  await db.run(sql`UPDATE songs SET public_requested = 0, updated_at = datetime('now', 'localtime') WHERE id = ${id}`);
+  await db.run(sql`UPDATE songs SET public_requested = 0, updated_at = ${nowUtcSql()} WHERE id = ${id}`);
   return NextResponse.json({ success: true, public_requested: 0 });
 }

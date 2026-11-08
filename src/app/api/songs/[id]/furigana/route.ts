@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDB, schema, sql } from '@/lib/db';
+import { getDB, schema } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { and, eq } from 'drizzle-orm';
 import { validateFuriganaPayload } from '@/lib/furigana-validation';
+import { nowUtcSql } from '@/lib/db-time-sql';
 
 // PUT /api/songs/[id]/furigana — save client-computed furigana to server
 export async function PUT(
@@ -55,7 +56,7 @@ export async function PUT(
 
   const updated = await db.update(schema.songs).set({
     lyricsFurigana: furiganaStr,
-    updatedAt: sql`(datetime('now', 'localtime'))`,
+    updatedAt: nowUtcSql(),
   }).where(and(
     eq(schema.songs.id, id),
     eq(schema.songs.readingScheme, reading_scheme),

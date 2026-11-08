@@ -9,6 +9,7 @@ import {
 import { getAiUsage } from '@/lib/ai-usage';
 import { dailyLimit } from '@/lib/ai-usage';
 import { listRecentAudit } from '@/lib/admin';
+import { nowUtcOffsetSql } from '@/lib/db-time-sql';
 
 // GET /api/admin/system — consolidated system status for the admin "System"
 // view (admin only). Returns translation service health, today's AI usage,
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
   const usage = await getAiUsage();
 
   // 3. Playlist-import jobs: running, failed, or stuck (long-unupdated).
-  const staleCutoff = sql`datetime('now', 'localtime', '-30 minutes')`;
+  const staleCutoff = nowUtcOffsetSql('-30 minutes');
   const jobs = await db.all(
     sql`SELECT id, user_email, status, total, processed, imported, skipped, failed, created_at, updated_at
         FROM playlist_import_jobs

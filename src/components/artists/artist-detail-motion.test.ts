@@ -9,6 +9,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import { groupArtistAlbums, splitArtists } from '@/lib/artists';
+import { formatDbDate, formatDbDateTime, parseDbTimestamp } from '@/lib/db-time';
 
 const require = createRequire(import.meta.url);
 const directory = dirname(fileURLToPath(import.meta.url));
@@ -28,6 +29,7 @@ function render(resource: object) {
         return React.createElement('a', attributes);
       } };
       if (specifier === '@/lib/i18n') return { useI18n: () => ({ t: (key: string) => key, locale: 'en' }) };
+      if (specifier === '@/lib/db-time') return { formatDbDate, formatDbDateTime, parseDbTimestamp };
       if (specifier === '@/lib/artists') return { groupArtistAlbums, splitArtists };
       if (specifier === '@/lib/auth-session') return { useAuthSession: () => ({ session: { user: null } }), refreshAuthSession: () => Promise.resolve() };
       if (specifier === '@/components/home/FavoriteCategoriesDialog') return { __esModule: true, default: () => null };

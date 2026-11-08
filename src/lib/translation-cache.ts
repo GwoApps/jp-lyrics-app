@@ -30,9 +30,10 @@
  * Turso, local SQLite — mirroring the ai-usage reservation guard).
  */
 
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import * as schema from './schema.ts';
 import { parseTranslationCache } from './translation/parse.ts';
+import { nowUtcSql } from './db-time-sql.ts';
 import { applyLineEdits, type LineEdit } from './translation-line-edits.ts';
 
 /** Max retries for the optimistic-lock merge loop (each retry re-reads the cache). */
@@ -127,7 +128,7 @@ async function mergeUnderOptimisticLock(
         // Stamp the language whenever a language is provided; otherwise keep
         // whatever is already stored (a resume into the same language).
         ...(opts.lang !== undefined ? { lyricsTranslationLang: opts.lang } : {}),
-        updatedAt: sql`(datetime('now', 'localtime'))`,
+        updatedAt: nowUtcSql(),
       })
       .where(and(
         eq(schema.songs.id, opts.id),
@@ -244,7 +245,7 @@ export async function writeSongField(
     };
   };
   const applied = await d.update(schema.songs)
-    .set({ ...opts.patch, updatedAt: sql`(datetime('now', 'localtime'))` })
+    .set({ ...opts.patch, updatedAt: nowUtcSql() })
     .where(and(
       eq(schema.songs.id, opts.id),
       eq(schema.songs.lyricsRaw, opts.sourceLyrics),

@@ -24,8 +24,9 @@
  * transaction), so it is deadlock-free on every backend (Cloudflare D1,
  * Turso, local SQLite).
  */
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import * as schema from './schema.ts';
+import { nowUtcSql } from './db-time-sql.ts';
 
 /** Result of checking a sync submission against the stored lyrics baseline. */
 export type SyncBaseline =
@@ -86,7 +87,7 @@ export async function applySyncWrite(
     };
   };
   const applied = await d.update(schema.songs)
-    .set({ ...opts.patch, updatedAt: sql`(datetime('now', 'localtime'))` })
+    .set({ ...opts.patch, updatedAt: nowUtcSql() })
     .where(and(
       eq(schema.songs.id, opts.id),
       eq(schema.songs.lyricsRaw, opts.sourceLyrics),

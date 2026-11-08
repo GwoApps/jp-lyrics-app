@@ -12,6 +12,7 @@ import { extractLrcMetadata } from '@/lib/lrc';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import type { SongData } from '@/lib/types';
 import { LYRICS_SOURCE_KEYS } from '@/lib/lyrics-source';
+import { formatDbDateTime } from '@/lib/db-time';
 
 type SubDataKey = 'furigana' | 'translation' | 'reasoning' | 'glossary';
 
@@ -258,11 +259,11 @@ export default function EditSongPage() {
           </div>
           <div className="rounded-md bg-[var(--accent)] px-3 py-2.5 text-xs text-[var(--muted-foreground)]">
             <dt className="mb-0.5 font-medium text-[var(--foreground)]">{t('common.created')}</dt>
-            <dd>{new Date(song.created_at).toLocaleString()}</dd>
+            <dd>{formatDbDateTime(song.created_at)}</dd>
           </div>
           <div className="rounded-md bg-[var(--accent)] px-3 py-2.5 text-xs text-[var(--muted-foreground)]">
             <dt className="mb-0.5 font-medium text-[var(--foreground)]">{t('common.updated')}</dt>
-            <dd>{new Date(song.updated_at).toLocaleString()}</dd>
+            <dd>{formatDbDateTime(song.updated_at)}</dd>
           </div>
           {song.lyrics_needs_review === 1 && (
             <div className="rounded-md bg-[var(--accent)] px-3 py-2.5 text-xs text-[var(--warning)]">

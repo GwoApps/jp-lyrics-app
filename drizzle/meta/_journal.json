@@ -183,6 +183,13 @@
       "when": 1792108800002,
       "tag": "0023_playlist_import_track_index_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1793520000000,
+      "tag": "0024_normalize_timestamps_to_utc",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB, sql } from '@/lib/db';
+import { nowUtcSql } from '@/lib/db-time-sql';
 import { getAuthUser } from '@/lib/auth';
 import {
   SONG_ACTIONS,
@@ -91,7 +92,7 @@ export async function PUT(
       sql`UPDATE songs
           SET is_public = ${nextIsPublic},
               public_requested = ${nextRequested},
-              updated_at = datetime('now', 'localtime')
+              updated_at = ${nowUtcSql()}
           WHERE id = ${id} ${lockSql}`
     );
     const changed = Number(
