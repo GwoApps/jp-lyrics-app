@@ -64,7 +64,9 @@
     "errorBody": "載入頁面時發生問題，請重試。",
     "backHome": "返回首頁",
     "goToSongList": "前往歌曲列表",
-    "reload": "重試"
+    "reload": "重試",
+    "updateAvailable": "有新版本可用",
+    "updateNow": "更新"
   },
   "loginGate": {
     "title": "Spotify 登入受限",

@@ -64,7 +64,9 @@
     "errorBody": "A problem occurred while loading this page. Please try again.",
     "backHome": "Back to home",
     "goToSongList": "Go to song list",
-    "reload": "Try again"
+    "reload": "Try again",
+    "updateAvailable": "A new version is available",
+    "updateNow": "Update"
   },
   "loginGate": {
     "title": "Spotify login is restricted",

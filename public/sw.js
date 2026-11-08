@@ -1,4 +1,6 @@
-const CACHE_NAME = 'jplrc-v6';
+// v7: refreshed precache so existing installs pick up the language-neutral
+// manifest name (issue #273) instead of the cached Chinese one.
+const CACHE_NAME = 'jplrc-v7';
 const IMMUTABLE_CACHE = 'jplrc-immutable-v1';
 const KUROMOJI_CACHE = 'jplrc-kuromoji-v1';
 // Keep in sync with src/lib/app-icon.ts and public/manifest.json.

@@ -3,15 +3,23 @@ import './globals.css';
 import { ViewTransitions } from '@/components/navigation/ViewTransitions';
 import AppShell from '@/components/AppShell';
 import { APP_ICON_REVISION } from '@/lib/app-icon';
+import { APP_NAME_NEUTRAL, APP_NAME_SHORT, APP_DESCRIPTION } from '@/lib/app-identity';
 
+/**
+ * Language-neutral shell metadata. The active locale lives in `localStorage`,
+ * which the server never sees, so naming the app in one language here would
+ * show that language to everyone. `AppMetadataSync` swaps in `common.appName`
+ * right after hydration (issue #273); `public/manifest.json` carries the same
+ * neutral name for install surfaces.
+ */
 export const metadata: Metadata = {
-  title: '歌词笔记 — Lyrics Note',
-  description: 'Japanese lyrics management with furigana annotation and Spotify sync',
+  title: APP_NAME_NEUTRAL,
+  description: APP_DESCRIPTION,
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: '歌词笔记',
+    title: APP_NAME_SHORT,
   },
   icons: {
     icon: [
@@ -61,61 +69,6 @@ export default function RootLayout({
         <ViewTransitions>
           <AppShell>{children}</AppShell>
         </ViewTransitions>
-        <script dangerouslySetInnerHTML={{ __html: `
-          if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-              navigator.serviceWorker.register('/sw.js', { scope: '/' })
-                .then((reg) => {
-                  console.log('[SW] registered, scope:', reg.scope);
-                  // Check for updates periodically
-                  reg.update();
-                  setInterval(() => reg.update(), 60 * 60 * 1000); // hourly
-                  // Listen for new SW installing
-                  reg.addEventListener('updatefound', () => {
-                    const newWorker = reg.installing;
-                    if (!newWorker) return;
-                    newWorker.addEventListener('statechange', () => {
-                      if (newWorker.state === 'activated') {
-                        // Show update toast
-                        const toast = document.createElement('div');
-                        toast.className = 'toast toast-success';
-                        toast.setAttribute('role', 'alert');
-                        toast.setAttribute('aria-live', 'polite');
-                        const icon = document.createElement('span');
-                        icon.className = 'toast-icon';
-                        icon.setAttribute('aria-hidden', 'true');
-                        icon.textContent = '↻';
-                        const description = document.createElement('div');
-                        description.className = 'toast-description';
-                        const savedLocale = localStorage.getItem('jplrc-locale');
-                        const browserLanguage = navigator.language || '';
-                        const locale = savedLocale || (browserLanguage.startsWith('ja')
-                          ? 'ja'
-                          : browserLanguage.startsWith('en')
-                            ? 'en'
-                            : browserLanguage.includes('TW') || browserLanguage.includes('HK') || browserLanguage.includes('Hant')
-                              ? 'zh-TW'
-                              : 'zh-CN');
-                        const updateMessages = {
-                          ja: '新しいバージョンがあります — タップして更新',
-                          en: 'New version available — tap to refresh',
-                          'zh-CN': '有新版本可用 — 点击刷新',
-                          'zh-TW': '有新版本可用 — 點擊重新整理',
-                        };
-                        description.textContent = updateMessages[locale] || updateMessages['zh-CN'];
-                        toast.append(icon, description);
-                        toast.style.cursor = 'pointer';
-                        toast.onclick = () => { toast.remove(); window.location.reload(); };
-                        document.body.appendChild(toast);
-                        setTimeout(() => toast.remove(), 15000);
-                      }
-                    });
-                  });
-                })
-                .catch((err) => { console.warn('[SW] registration failed:', err); });
-            });
-          }
-        `}} />
       </body>
     </html>
   );

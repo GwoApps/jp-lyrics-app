@@ -64,7 +64,9 @@
     "errorBody": "加载页面时出现问题，请重试。",
     "backHome": "返回首页",
     "goToSongList": "去歌曲列表",
-    "reload": "重试"
+    "reload": "重试",
+    "updateAvailable": "有新版本可用",
+    "updateNow": "更新"
   },
   "loginGate": {
     "title": "Spotify 登录受限",

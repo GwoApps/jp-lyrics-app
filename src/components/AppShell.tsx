@@ -13,6 +13,8 @@ import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { APP_REPO_URL } from '@/lib/app-links';
 import { Sun, Moon, Settings } from 'lucide-react';
 import AppIcon from '@/components/AppIcon';
+import AppMetadataSync from '@/components/AppMetadataSync';
+import ServiceWorkerUpdate from '@/components/ServiceWorkerUpdate';
 
 function Nav() {
   const { t } = useI18n();
@@ -135,7 +137,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
       <I18nProvider>
+        <AppMetadataSync />
         <BootstrapSettingsSync />
+        <ServiceWorkerUpdate />
         <Nav />
         <main className={isSharePage ? '' : 'mx-auto max-w-[860px] px-4 py-6 sm:px-6 sm:py-8'}>
           {children}

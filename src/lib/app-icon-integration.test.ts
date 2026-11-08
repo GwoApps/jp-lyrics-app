@@ -4,6 +4,7 @@ import test from 'node:test';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import { APP_ICON_REVISION } from '@/lib/app-icon';
+import { APP_NAME_NEUTRAL, APP_NAME_SHORT, APP_DESCRIPTION } from '@/lib/app-identity';
 
 const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 const layoutSource = read('src/app/layout.tsx');
@@ -16,6 +17,11 @@ const manifest = JSON.parse(read('public/manifest.json')) as {
   icons: { src: string; sizes: string; type: string; purpose: string }[];
 };
 const versioned = (path: string) => `${path}?v=${APP_ICON_REVISION}`;
+// Derived from the worker so bumping the cache version needs no test edit.
+const cacheName = /const CACHE_NAME = '([^']+)'/.exec(swSource)?.[1];
+assert.ok(cacheName, 'sw.js must declare CACHE_NAME');
+const [cachePrefix, cacheVersion] = [cacheName.replace(/v\d+$/, ''), Number(/(\d+)$/.exec(cacheName)?.[1])];
+const previousCaches = [cacheVersion - 2, cacheVersion - 1].map((version) => `${cachePrefix}v${version}`);
 const baseIcons = [
   '/icon.svg', '/favicon.ico', '/icon-16x16.png', '/icon-32x32.png',
   '/icon-192x192.png', '/icon-512x512.png', '/icon-maskable-512x512.png', '/apple-touch-icon.png',
@@ -29,7 +35,8 @@ const metadataDeclaration = layoutAst.statements
   .find((declaration) => declaration.name.getText(layoutAst) === 'metadata');
 assert.ok(metadataDeclaration?.initializer);
 const metadata = JSON.parse(JSON.stringify(runInNewContext(
-  `(${metadataDeclaration.initializer.getText(layoutAst)})`, { APP_ICON_REVISION },
+  `(${metadataDeclaration.initializer.getText(layoutAst)})`,
+  { APP_ICON_REVISION, APP_NAME_NEUTRAL, APP_NAME_SHORT, APP_DESCRIPTION },
 ))) as {
   manifest: string;
   icons: {
@@ -147,7 +154,7 @@ test('SW precaches base icons, favicon and every versioned integration URL', asy
   const sw = worker();
   await sw.lifecycle('install');
   assert.equal(sw.skipped, true);
-  assert.deepEqual(sw.opened, ['jplrc-v6']);
+  assert.deepEqual(sw.opened, [cacheName]);
   assert.deepEqual(new Set(sw.added), new Set([...baseIcons, ...baseIcons.map(versioned), '/manifest.json']));
   const usedUrls = [
     ...metadata.icons.icon.map((icon) => icon.url),
@@ -165,10 +172,10 @@ test('one missing precache asset does not prevent installing the remaining icons
   assert.ok(sw.added.includes(versioned('/apple-touch-icon.png')));
 });
 
-test('SW v6 activation removes old general caches but preserves immutable and kuromoji data', async () => {
-  const sw = worker({ cacheKeys: ['jplrc-v4', 'jplrc-v5', 'jplrc-v6', 'jplrc-immutable-v1', 'jplrc-kuromoji-v1'] });
+test('SW activation removes old general caches but preserves immutable and kuromoji data', async () => {
+  const sw = worker({ cacheKeys: [...previousCaches, cacheName, 'jplrc-immutable-v1', 'jplrc-kuromoji-v1'] });
   await sw.lifecycle('activate');
-  assert.deepEqual(sw.deleted, ['jplrc-v4', 'jplrc-v5']);
+  assert.deepEqual(sw.deleted, previousCaches);
   assert.equal(sw.claimed, true);
 });
 
@@ -190,7 +197,7 @@ test('SW retains song offline fallback, network-only other APIs and long-lived a
   for (const [path, cache] of [
     ['/_next/static/chunk.js', 'jplrc-immutable-v1'],
     ['https://code4fukui.github.io/kuromoji-es/dict.dat', 'jplrc-kuromoji-v1'],
-    ['/api/songs/song-1', 'jplrc-v6'],
+    ['/api/songs/song-1', cacheName],
   ]) {
     const sw = worker();
     assert.equal(await (await sw.fetch(path))?.text(), 'network');
