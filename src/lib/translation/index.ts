@@ -68,6 +68,26 @@ export {
 } from './config.ts';
 
 /**
+ * Extra options accepted by every translation entry point.
+ *
+ * Callers pass their own parameters (lyrics/config/context) only — never an
+ * endpoint or header set. The transport stays injectable so tests can stub it
+ * and routes can rely on the default.
+ */
+export interface TranslationRequestOptions {
+  /** Transport override; defaults to the global fetch. */
+  fetchImpl?: typeof fetch;
+  /** Slice context: full-song reference lines + target indices. */
+  ctx?: TranslationContext;
+  /**
+   * Optional cancel signal — pass the request's `signal` so a client cancel /
+   * page close aborts the in-flight model call instead of burning provider
+   * quota for a caller that is already gone (issue #359).
+   */
+  signal?: AbortSignal;
+}
+
+/**
  * Minimal connectivity check against the configured provider: send a tiny
  * request and report status + latency. Used by the admin "Test" button.
  */
@@ -85,7 +105,7 @@ export {
  */
 export async function discoverTranslationModels(
   config: TranslationConfig,
-  fetchImpl: typeof fetch = fetch,
+  { fetchImpl = fetch }: TranslationRequestOptions = {},
 ): Promise<string[] | null> {
   if (config.provider === 'workers-ai') {
     return WORKERS_AI_MODELS.length > 0 ? [...WORKERS_AI_MODELS].sort() : null;
@@ -495,16 +515,9 @@ export async function extractLyricsGlossary(
   artist: string,
   lines: string[],
   cfg: TranslationConfig,
-  fetchImpl: typeof fetch = fetch,
-  /**
-   * Optional cancel signal. Pass the request's `signal` so a client cancel /
-   * page close aborts THIS model call too — otherwise the preparation stage
-   * keeps burning provider quota after the user is already gone (issue #359).
-   * Optional on purpose: omitting it keeps the previous behaviour, and the
-   * hard `GLOSSARY_TIMEOUT_MS` deadline (see below) still applies.
-   */
-  signal?: AbortSignal,
+  options: TranslationRequestOptions = {},
 ): Promise<GlossaryEntry[] | null> {
+  const { fetchImpl = fetch, signal } = options;
   const input = JSON.stringify({ title, artist, lyrics: lines });
   try {
     const text = await withRetry(async () => {
@@ -513,7 +526,7 @@ export async function extractLyricsGlossary(
         { role: 'user', content: input },
       ];
       if (cfg.provider === 'anthropic') {
-        return await requestAnthropicRaw(messages, cfg, signal);
+        return await requestAnthropicRaw(messages, cfg, fetchImpl, signal);
       }
       if (cfg.provider === 'workers-ai') {
         const { estimateTokens, neuronsForTokens } = await import('@/lib/ai-usage');
@@ -580,6 +593,7 @@ export async function extractLyricsGlossary(
 async function requestAnthropicRaw(
   messages: { role: string; content: string }[],
   cfg: TranslationConfig,
+  fetchImpl: typeof fetch,
   signal?: AbortSignal,
 ): Promise<string> {
   const base = cfg.baseUrl.replace(/\/+$/, '');
@@ -588,7 +602,7 @@ async function requestAnthropicRaw(
   // 30s here only) and now also cancellable by the caller (issue #359).
   const { signal: requestSignal, timer } = composeAbortBudget(signal, GLOSSARY_TIMEOUT_MS);
   try {
-    const res = await fetch(url, {
+    const res = await fetchImpl(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -618,10 +632,9 @@ export async function streamTranslateLyricLines(
   lines: string[],
   cfg: TranslationConfig,
   onDelta: (chunk: { type: 'reasoning' | 'translation'; text: string }) => void,
-  fetchImpl: typeof fetch = fetch,
-  ctx?: TranslationContext,
-  signal?: AbortSignal,
+  options: TranslationRequestOptions = {},
 ): Promise<string[]> {
+  const { fetchImpl = fetch, ctx, signal } = options;
   let text: string;
   if (cfg.provider === 'workers-ai') {
     const { estimateTokens, neuronsForTokens } = await import('@/lib/ai-usage');
@@ -826,9 +839,9 @@ async function streamAnthropic(
 export async function translateLyricLines(
   lines: string[],
   cfg: TranslationConfig,
-  fetchImpl: typeof fetch = fetch,
-  ctx?: TranslationContext,
+  options: TranslationRequestOptions = {},
 ): Promise<string[]> {
+  const { fetchImpl = fetch, ctx } = options;
   const text = await withRetry(async () => {
     if (cfg.provider === 'anthropic') {
       return await requestAnthropic(lines, cfg, fetchImpl, ctx);

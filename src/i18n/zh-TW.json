@@ -536,6 +536,7 @@
     "lyricsNotFound": "未找到歌詞",
     "lyricsRateLimited": "歌詞來源已限流，請稍候片刻再重試。",
     "lyricsTimeout": "歌詞搜尋逾時，請稍候片刻再重試。",
+    "spotifyTimeout": "Spotify 沒有及時回應，請稍後重試。",
     "forbidden": "你沒有權限編輯這首歌曲",
     "loginRequired": "請先登入再繼續"
   },

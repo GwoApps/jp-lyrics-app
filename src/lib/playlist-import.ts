@@ -5,6 +5,8 @@ import { nowUtcSql } from './db-time-sql.ts';
 import { fetchLyricsWithChain } from '@/lib/lyrics-provider';
 import { classifyLyricsHit } from '@/lib/lyrics-hit';
 import { getSpotifyTokenForUser } from '@/lib/spotify';
+import { isFetchTimeoutError } from '@/lib/fetch-timeout';
+import { createSpotifyClient, type SpotifyResult } from '@/lib/spotify-api';
 import type { AuthUser } from '@/lib/auth';
 
 /**
@@ -180,22 +182,31 @@ export async function fetchPlaylistTrackPage(
   let rawItems = 0;
   let reportedTotal: number | null = null;
   let nextUrl: string | null =
-    `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=total,items(track(id,uri,name,duration_ms,artists(name),album(name,images(url,width)))),next`;
+    `/playlists/${playlistId}/tracks?limit=100&fields=total,items(track(id,uri,name,duration_ms,artists(name),album(name,images(url,width)))),next`;
+  // One client for every page: the bearer header and the #370 budget live there,
+  // and Spotify's `next` links are absolute URLs, hence `requestUrl`.
+  const spotify = createSpotifyClient({ accessToken });
 
   while (nextUrl && tracks.length < PLAYLIST_MAX_TRACKS) {
-    const spotifyRes = await fetch(nextUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (!spotifyRes.ok) {
-      const error = new Error('playlist_fetch_failed') as Error & { status?: number };
-      error.status = spotifyRes.status;
+    // Bounded, including the body: a stalled playlist page otherwise keeps the
+    // chunked import pending until the platform's own request timeout, with no
+    // resumable state produced in the meantime (issue #370).
+    type PlaylistPage = { items: { track: SpotifyApiTrack | null }[]; total?: number | null; next: string | null };
+    let page: SpotifyResult<PlaylistPage>;
+    try {
+      page = nextUrl.startsWith('http')
+        ? await spotify.requestUrl(nextUrl)
+        : await spotify.request(nextUrl);
+    } catch (error) {
+      if (isFetchTimeoutError(error)) throw spotifyUpstreamError(SPOTIFY_TIMEOUT_ERROR, 503);
       throw error;
     }
-    const data = (await spotifyRes.json()) as {
-      items: { track: SpotifyApiTrack | null }[];
-      total?: number | null;
-      next: string | null;
-    };
+    if (!page.ok) {
+      const error = new Error('playlist_fetch_failed') as Error & { status?: number };
+      error.status = page.failure.status;
+      throw error;
+    }
+    const data: PlaylistPage = page.data;
     // `total` counts every playlist item, including ones we filter out below
     // (removed tracks, local files, episodes) — that is exactly why it has to
     // come from the API instead of being derived from `tracks.length`.
@@ -383,9 +394,44 @@ export async function finishJob(
   `);
 }
 
-/** Ensure the access token for a user, throwing a typed error when unavailable. */
+/** Retryable "Spotify did not answer in time"; distinct from "not connected". */
+export const SPOTIFY_TIMEOUT_ERROR = 'spotify_timeout';
+
+/** Typed upstream failure carrying the HTTP status a route should answer with. */
+function spotifyUpstreamError(message: string, status: number): Error & { status: number } {
+  return Object.assign(new Error(message), { status });
+}
+
+/**
+ * Map a thrown Spotify failure to the JSON error a route should serve, or `null`
+ * when the error is something else (the caller keeps its old fallback). Keeps
+ * "temporary upstream stall" out of the `playlist_fetch_failed` bucket so the
+ * client can show a retryable message instead of a generic failure (issue #370).
+ */
+export function spotifyUpstreamFailure(error: unknown): { error: string; status: number } | null {
+  if (!(error instanceof Error)) return null;
+  if (error.message === SPOTIFY_TIMEOUT_ERROR) return { error: SPOTIFY_TIMEOUT_ERROR, status: 503 };
+  // `requireSpotifyToken`'s "no token" used to escape the route unhandled (500).
+  if (error.message === 'spotify_not_connected') return { error: 'spotify_not_connected', status: 401 };
+  return null;
+}
+
+/**
+ * Ensure the access token for a user, throwing a typed error when unavailable.
+ *
+ * A token refresh that exceeds its budget is NOT "not connected" — that would
+ * tell the user to reconnect an account that is fine. It becomes a retryable
+ * 503 instead, so a stalled refresh fails fast rather than hanging the import
+ * (issue #370).
+ */
 export async function requireSpotifyToken(userEmail: string): Promise<string> {
-  const accessToken = await getSpotifyTokenForUser(userEmail);
+  let accessToken: string | null;
+  try {
+    accessToken = await getSpotifyTokenForUser(userEmail);
+  } catch (error) {
+    if (isFetchTimeoutError(error)) throw spotifyUpstreamError(SPOTIFY_TIMEOUT_ERROR, 503);
+    throw error;
+  }
   if (!accessToken) {
     throw new Error('spotify_not_connected');
   }

@@ -245,7 +245,7 @@ export async function POST(
   // (issue #359).
   const ensureGlossary = async (signal?: AbortSignal): Promise<[boolean, string | null, number | null]> => {
     if (glossary !== null) return [true, null, null];
-    const extracted = await extractLyricsGlossary(existing.title, existing.artist, lines, config, fetch, signal);
+    const extracted = await extractLyricsGlossary(existing.title, existing.artist, lines, config, { signal });
     if (extracted !== null) {
       // Only persist a SUCCESSFUL extraction. A failure returns null and is
       // left unwritten, so the next whole-song translation retries it instead
@@ -445,7 +445,7 @@ export async function POST(
                 reasoningBuffer += chunk.text;
                 send(chunk.type, { text: chunk.text });
               }
-            }, fetch, ctx, request.signal)
+            }, { ctx, signal: request.signal })
             : [];
           const { finalSlice, result, coverage } = await expandAndMerge(translations);
           const requestDone = Math.min(translations.length, requestTotal);
@@ -602,7 +602,7 @@ export async function POST(
   let translations: string[];
   try {
     translations = uniqueLines.length > 0
-      ? await translateLyricLines(uniqueLines, config, fetch, ctx)
+      ? await translateLyricLines(uniqueLines, config, { ctx })
       : [];
   } catch (error) {
     if (error instanceof TranslationError) {

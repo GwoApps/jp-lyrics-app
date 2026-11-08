@@ -536,6 +536,7 @@
     "lyricsNotFound": "No lyrics were found",
     "lyricsRateLimited": "The lyrics source is rate-limited. Please wait a moment and try again.",
     "lyricsTimeout": "The lyrics search timed out. Please wait a moment and try again.",
+    "spotifyTimeout": "Spotify did not respond in time. Please try again in a moment.",
     "forbidden": "You do not have permission to edit this song",
     "loginRequired": "Please sign in before continuing"
   },

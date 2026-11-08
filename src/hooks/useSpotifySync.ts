@@ -140,6 +140,10 @@ export function useSpotifySync(
   const rafEligibleRef = useRef(false);
   // Mirror of `isSameSong` for the visibilitychange handler (runs outside render).
   const isSameSongRef = useRef(isSameSong);
+  // True while sync is degraded (retrying/stopped). The interpolation loop reads
+  // it to stop projecting forward from a stale anchor (issue #370).
+  const syncDegradedRef = useRef(syncState !== 'connected');
+  useEffect(() => { syncDegradedRef.current = syncState !== 'connected'; }, [syncState]);
   // Tiny identity memo so the loop doesn't re-run NFKC/normalize scoring on the
   // identical (song, track) pair on every frame (issue #244).
   const matchCacheRef = useRef<Map<string, boolean>>(new Map());
@@ -270,8 +274,13 @@ export function useSpotifySync(
         return;
       }
 
-      // Interpolate progress since last poll
-      const elapsed = performance.now() - pollTime;
+      // Interpolate progress since last poll. While sync is degraded (the poller
+      // is retrying / stopped) the anchor is stale, so the clock FREEZES at the
+      // last confirmed position instead of extrapolating: otherwise the lyrics
+      // keep scrolling on their own and hide the fact that nothing is being
+      // observed — "sync still moving" was exactly the illusion that made a
+      // stalled upstream invisible (issue #370).
+      const elapsed = syncDegradedRef.current ? 0 : performance.now() - pollTime;
       const currentMs = Math.min(progressMs + (isPlaying ? Math.max(0, elapsed) : 0), interpRef.current.durationMs || Infinity);
       const previousMs = playbackMsRef.current;
       // Publish the smooth position for per-frame readers (time axis clock).

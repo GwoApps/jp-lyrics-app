@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDB, sql } from '@/lib/db';
 import { nowUtcSql } from '@/lib/db-time-sql';
-import { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI, base64Encode } from '@/lib/spotify';
+import { SPOTIFY_REDIRECT_URI } from '@/lib/spotify';
+import { createSpotifyClient } from '@/lib/spotify-api';
 import { signSession } from '@/lib/auth';
+import { isFetchTimeoutError } from '@/lib/fetch-timeout';
 import {
   OAUTH_STATE_COOKIE,
   OAUTH_STATE_PATH,
@@ -48,33 +50,36 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Exchange code for tokens
-  const tokenRes = await fetch('https://accounts.spotify.com/api/token', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Basic ${base64Encode(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`)}`,
-    },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: SPOTIFY_REDIRECT_URI,
-    }),
-  });
+  // Exchange the code for tokens. Bounded like every other Spotify call (issue
+  // #370): a stalled exchange used to leave the user staring at a pending login
+  // redirect with no error and no way forward. A deadline is the same dead end
+  // as a rejected exchange, so both answer `token_failed`.
+  // The token/profile legs are the only Spotify calls this route makes, so it
+  // builds one client for the whole flow (issue #370).
+  const spotify = createSpotifyClient();
+  let tokenData: { access_token: string; refresh_token?: string; expires_in: number } | null = null;
+  try {
+    const exchanged = await spotify.exchangeAuthorizationCode(code);
+    tokenData = exchanged.ok ? exchanged.data : null;
+  } catch (exchangeError) {
+    if (!isFetchTimeoutError(exchangeError)) throw exchangeError;
+  }
 
-  if (!tokenRes.ok) {
+  if (!tokenData) {
     return clearOAuthStateCookie(
       NextResponse.redirect(`${APP_ORIGIN}/?spotify_error=token_failed`),
     );
   }
 
-  const tokenData = await tokenRes.json();
-
   // Get user profile from Spotify (has email)
-  const profileRes = await fetch('https://api.spotify.com/v1/me', {
-    headers: { Authorization: `Bearer ${tokenData.access_token}` },
-  });
-  const profile = profileRes.ok ? await profileRes.json() : {};
+  let profile: { account_id?: string; id?: string; email?: string; display_name?: string } = {};
+  try {
+    profile = await spotify.withAccessToken(tokenData.access_token).fetchProfile() ?? {};
+  } catch (profileError) {
+    // A stalled profile read is the same as a missing one: no identity, so the
+    // login fails fast with `invalid_profile` instead of hanging.
+    if (!isFetchTimeoutError(profileError)) throw profileError;
+  }
   console.log('[spotify-auth] /me profile:', JSON.stringify(profile, null, 2));
 
   // Reject if we couldn't get a valid profile — token is likely scoped wrong

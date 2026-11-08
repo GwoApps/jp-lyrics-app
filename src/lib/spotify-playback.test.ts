@@ -11,11 +11,16 @@ function request(body: unknown = { action: 'play' }): Request {
   });
 }
 
-function harness(responses: (Response | Error)[] = [new Response(null, { status: 204 })]) {
+function harness(responses: (Response | Error | 'hang')[] = [new Response(null, { status: 204 })]) {
   const calls: { url: string; init?: RequestInit }[] = [];
   const authRequests: Request[] = [];
   const tokenEmails: string[] = [];
-  const dependencies = {
+  const dependencies: {
+    getAuthUser: (input: Request) => Promise<{ email: string } | null>;
+    getSpotifyTokenForUser: (email: string) => Promise<string | null>;
+    fetch: typeof fetch;
+    timeoutMs?: number;
+  } = {
     getAuthUser: async (input: Request): Promise<{ email: string } | null> => {
       authRequests.push(input);
       return { email: 'spotify:current-user' };
@@ -27,6 +32,7 @@ function harness(responses: (Response | Error)[] = [new Response(null, { status:
     fetch: (async (input, init) => {
       calls.push({ url: String(input), init });
       const response = responses.shift();
+      if (response === 'hang') return await new Promise<Response>(() => {});
       if (response instanceof Error) throw response;
       assert.ok(response, 'unexpected Spotify request');
       return response;
@@ -121,10 +127,13 @@ for (const action of ['play', 'pause']) {
     const response = await handleSpotifyPlayback(request({ action }), h.dependencies);
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { ok: true });
-    assert.deepEqual(h.calls, [{
-      url: `https://api.spotify.com/v1/me/player/${action}`,
-      init: { method: 'PUT', headers: { Authorization: 'Bearer user-token' }, cache: 'no-store' },
-    }]);
+    assert.equal(h.calls.length, 1);
+    assert.equal(h.calls[0].url, `https://api.spotify.com/v1/me/player/${action}`);
+    // Every Spotify call is bounded (issue #370): the deadline is passed as a
+    // signal instead of leaving the request unbounded.
+    const { signal, ...init } = h.calls[0].init!;
+    assert.deepEqual(init, { method: 'PUT', headers: { Authorization: 'Bearer user-token' }, cache: 'no-store' });
+    assert.ok(signal instanceof AbortSignal, 'the Spotify call carries an abort signal');
   });
 
   test(`${action} checks expected track before mutating and does not require a readback`, async () => {
@@ -132,10 +141,10 @@ for (const action of ['play', 'pause']) {
     const response = await handleSpotifyPlayback(request({ action, expected_track_id: trackId }), h.dependencies);
     assert.deepEqual(await response.json(), { ok: true });
     assert.equal(h.calls.length, 2);
-    assert.deepEqual(h.calls[0], {
-      url: 'https://api.spotify.com/v1/me/player/currently-playing',
-      init: { headers: { Authorization: 'Bearer user-token' }, cache: 'no-store' },
-    });
+    assert.equal(h.calls[0].url, 'https://api.spotify.com/v1/me/player/currently-playing');
+    const { signal: guardSignal, ...guardInit } = h.calls[0].init!;
+    assert.deepEqual(guardInit, { headers: { Authorization: 'Bearer user-token' }, cache: 'no-store' });
+    assert.ok(guardSignal instanceof AbortSignal, 'the guard read is bounded too');
     assert.equal(h.calls[1].url, `https://api.spotify.com/v1/me/player/${action}`);
     assert.equal(h.calls[1].init?.body, undefined);
   });
@@ -207,3 +216,32 @@ for (const retryAfter of ['30', 'not-a-delay']) {
     assert.equal(response.headers.get('Retry-After'), retryAfter === '30' ? '30' : null);
   });
 }
+
+/**
+ * Issue #370 — a Spotify call that accepts the connection and then never answers
+ * must fail (as a retryable 503) instead of leaving the command pending forever.
+ */
+async function expectBoundedFailure(
+  responses: (Response | Error | 'hang')[],
+  expected: { status: number; error: string },
+) {
+  const h = harness(responses);
+  // Compressed budget so the test proves the bound without waiting 6s.
+  h.dependencies.timeoutMs = 10;
+  const started = Date.now();
+  const response = await handleSpotifyPlayback(request({ action: 'play', expected_track_id: trackId }), h.dependencies);
+  assert.equal(response.status, expected.status);
+  assert.deepEqual(await response.json(), { error: expected.error });
+  assert.ok(Date.now() - started < 2000, 'the request was abandoned, not left pending');
+}
+
+test('a hung track guard answers a retryable 503 instead of hanging', async () => {
+  await expectBoundedFailure(['hang'], { status: 503, error: 'playback_state_unavailable' });
+});
+
+test('a hung play/pause mutation answers a retryable 503 instead of hanging', async () => {
+  await expectBoundedFailure([Response.json({ item: { id: trackId } }), 'hang'], {
+    status: 503,
+    error: 'spotify_unavailable',
+  });
+});

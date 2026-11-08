@@ -10,6 +10,7 @@ const importErrorKeyMap: Record<string, string> = {
   login_required: 'home.importLoginRequired',
   invalid_playlist_url: 'home.importInvalidPlaylistUrl',
   spotify_not_connected: 'home.importSpotifyNotConnected',
+  spotify_timeout: 'apiErrors.spotifyTimeout',
   playlist_fetch_failed: 'home.importPlaylistFetchFailed',
   playlist_empty: 'home.importPlaylistEmpty',
   invalid_job: 'home.playlistImportInvalidJob',

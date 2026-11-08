@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MAX_CONSECUTIVE_ERRORS, backoffDelay } from '@/lib/retry-backoff';
-import { isSpotifyTransientError } from '@/lib/spotify-error';
+import { MAX_CONSECUTIVE_ERRORS, backoffDelay, decidePollFailure } from '@/lib/retry-backoff';
+import { SPOTIFY_CLIENT_POLL_TIMEOUT_MS, createTimeoutBudget } from '@/lib/fetch-timeout';
+import { isSpotifyTimeoutError, isSpotifyTransientError } from '@/lib/spotify-error';
 import { reconcileSeek, trackIdentity, type SeekOverride, type SeekObservation } from '@/lib/spotify-seek-override';
 
 export interface NowPlayingData {
@@ -16,10 +17,13 @@ export interface NowPlayingData {
 
 export type SyncState = 'connected' | 'retrying' | 'stopped';
 
+/** Changed fields only; `error: null` means "the previous error cleared". */
+type PlaybackDiff = Partial<NowPlayingData> & { error?: number | null };
+
 interface DiffMessage {
   seq: number;
   c: number;   // checksum of full data
-  d: Partial<NowPlayingData>; // changed fields only
+  d: PlaybackDiff; // changed fields only
   _full?: boolean; // true when server sends full data
   _sync?: SyncState; // degraded-state flag pushed by the server poller
   _observedAt?: number; // when Spotify GET began, before its response arrived
@@ -38,14 +42,15 @@ function computeChecksum(data: NowPlayingData): number {
 }
 
 /** Apply diff to base, return new object (immutable) */
-function applyDiff(base: NowPlayingData, diff: Partial<NowPlayingData>): NowPlayingData {
+export function applyDiff(base: NowPlayingData, diff: PlaybackDiff): NowPlayingData {
   return {
     connected: diff.connected ?? base.connected,
     is_playing: diff.is_playing ?? base.is_playing,
     progress_ms: diff.progress_ms ?? base.progress_ms,
     duration_ms: diff.duration_ms ?? base.duration_ms,
     track: diff.track !== undefined ? diff.track : base.track,
-    error: diff.error !== undefined ? diff.error : base.error,
+    // `null` (sent to clear a recovered error) maps back to "no error".
+    error: diff.error === undefined ? base.error : (diff.error ?? undefined),
   };
 }
 
@@ -69,6 +74,9 @@ export function useNowPlaying(enabled = true) {
   const [pollMode, setPollMode] = useState<string | null>(null); // null = loading config
   const esRef = useRef<EventSource | null>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // In-flight poll controller: every poll is bounded and cancellable, so a
+  // request that never answers can never leave the loop without a next round.
+  const pollAbortRef = useRef<AbortController | null>(null);
   const gotMessageRef = useRef(false);
   const localDataRef = useRef<NowPlayingData>(EMPTY);
   const mountedRef = useRef(true);
@@ -119,6 +127,10 @@ export function useNowPlaying(enabled = true) {
       clearTimeout(pollRef.current);
       pollRef.current = null;
     }
+    // Cancel the in-flight request too — otherwise a slow response from a
+    // previous round could still publish stale playback after we stopped.
+    pollAbortRef.current?.abort();
+    pollAbortRef.current = null;
   }, []);
 
   /** A successful fetch/poll resets the failure counter and the degraded state. */
@@ -140,21 +152,46 @@ export function useNowPlaying(enabled = true) {
     const run = async () => {
       if (!mountedRef.current) return;
       const clientFetchStart = Date.now(); // fallback for older servers without observation headers
+      // Bounded request + body read. `await fetch()` on its own could stay
+      // pending forever on a stalled upstream; the poll loop is only rescheduled
+      // from the success/error branches, so a pending request froze sync
+      // silently — `syncState` stayed 'connected' and the interpolated clock kept
+      // projecting forward (issue #370).
+      // The previous round is cancelled rather than left behind: its response
+      // would otherwise publish stale playback over newer state.
+      pollAbortRef.current?.abort();
+      const controller = new AbortController();
+      pollAbortRef.current = controller;
+      const budget = createTimeoutBudget(SPOTIFY_CLIENT_POLL_TIMEOUT_MS, controller.signal);
       try {
-        const res = await fetch('/api/spotify/now-playing');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const res = await fetch('/api/spotify/now-playing', { signal: budget.signal, cache: 'no-store' });
+        // The body is read inside the same budget: a stalled body is the same
+        // hang as a stalled response, and a failed read must not be mistaken for
+        // "no playback" (which would publish empty data as a success).
+        let d: NowPlayingData;
+        try {
+          d = await res.json() as NowPlayingData;
+        } catch {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        // A server-side deadline answers 504 + `error: 504`; keeping the payload
+        // lets the transient branch below back off instead of treating it as
+        // fatal.
+        if (!res.ok && typeof d?.error !== 'number') throw new Error(`HTTP ${res.status}`);
         const serverObservedAt = Number(res.headers.get('X-Spotify-Observed-At'));
         const observed = Number.isFinite(serverObservedAt) && serverObservedAt > 0
           ? { source: 'server' as const, startedAt: serverObservedAt }
           : { source: 'client' as const, startedAt: clientFetchStart };
-        const d = await res.json();
         // Transient Spotify fault (429/5xx): auto-retry with backoff instead of
         // the normal cadence, but never count toward a permanent stop — these
         // recover without user action (issue #117).
         if (d && d.error && isSpotifyTransientError(d.error)) {
           clientErrorsRef.current = 0;
           setSyncState('retrying');
-          publishData(d, observed);
+          // A timeout carries no observation at all, so it must not overwrite the
+          // last confirmed playback with empty fields — keep what we know and
+          // only surface the degraded state (issue #370).
+          if (!isSpotifyTimeoutError(d.error)) publishData(d, observed);
           lastMessageTimeRef.current = Date.now();
           scheduleClientPollRef.current(backoffDelay(1));
           return;
@@ -163,14 +200,25 @@ export function useNowPlaying(enabled = true) {
         // Success → back to the normal poll cadence.
         scheduleClientPollRef.current(CLIENT_POLL_INTERVAL_MS);
       } catch {
-        const count = ++clientErrorsRef.current;
-        if (count >= MAX_CONSECUTIVE_ERRORS) {
-          // Permanently stop — sync can only resume via user action (resumeSync).
-          setSyncState('stopped');
-          return;
-        }
-        setSyncState('retrying');
-        scheduleClientPollRef.current(backoffDelay(count));
+        if (!mountedRef.current) return;
+        // Deliberately cancelled (mode switch / unmount / resume): the caller
+        // owns the next round, so do not resurrect this loop.
+        if (controller.signal.aborted && !budget.timedOut()) return;
+        // Our own deadline means the request never answered. `decidePollFailure`
+        // keeps that backing off instead of counting toward "sync stopped" —
+        // the server's 504 is already handled by the transient branch above,
+        // which sees `error: 504` in the body.
+        const decision = decidePollFailure({
+          timedOut: budget.timedOut(),
+          consecutiveErrors: clientErrorsRef.current + 1,
+        });
+        clientErrorsRef.current = decision.consecutiveErrors;
+        setSyncState(decision.state);
+        // `stopped` is terminal until the user resumes (resumeSync).
+        if (decision.state === 'retrying') scheduleClientPollRef.current(decision.delayMs);
+      } finally {
+        budget.dispose();
+        if (pollAbortRef.current === controller) pollAbortRef.current = null;
       }
     };
     // Delay 0 → run immediately; otherwise schedule with backoff.
@@ -380,10 +428,22 @@ export function useNowPlaying(enabled = true) {
   const refreshPlayback = useCallback(async () => {
     if (!enabled) return;
     const startedAt = Date.now();
-    const response = await fetch('/api/spotify/now-playing', { cache: 'no-store' });
-    if (!response.ok) throw new Error('playback_state_unavailable');
-    const observedAt = Number(response.headers.get('X-Spotify-Observed-At'));
-    const observation = await response.json() as NowPlayingData;
+    // Bounded like the poll: a read-back that never answers must fail (the
+    // caller shows its toast) instead of leaving the queue of Spotify commands
+    // blocked behind a pending promise.
+    const budget = createTimeoutBudget(SPOTIFY_CLIENT_POLL_TIMEOUT_MS);
+    let observation: NowPlayingData;
+    let observedAt = NaN;
+    try {
+      const response = await fetch('/api/spotify/now-playing', { cache: 'no-store', signal: budget.signal });
+      if (!response.ok) throw new Error('playback_state_unavailable');
+      observedAt = Number(response.headers.get('X-Spotify-Observed-At'));
+      // The budget stays armed through the body read: a stalled body is the same
+      // hang as a stalled response.
+      observation = await response.json() as NowPlayingData;
+    } finally {
+      budget.dispose();
+    }
     if (mountedRef.current) publishData(observation, Number.isFinite(observedAt) && observedAt > 0
       ? { source: 'server', startedAt: observedAt } : { source: 'client', startedAt });
   }, [enabled, publishData]);

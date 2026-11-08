@@ -121,7 +121,7 @@ test('translates via OpenAI-compatible API and preserves line structure', async 
   const out = await translateLyricLines(
     ['こんにちは', '世界', ''],
     CFG,
-    captureFetch(mockFetch(200, { choices: [{ message: { content: '["你好","世界",""]' } }] }), captured),
+    { fetchImpl: captureFetch(mockFetch(200, { choices: [{ message: { content: '["你好","世界",""]' } }] }), captured) },
   );
   assert.deepEqual(out, ['你好', '世界', '']);
   assert.ok(captured.current);
@@ -140,12 +140,14 @@ test('slice requests embed full-song context but keep the target list as the par
   const out = await translateLyricLines(
     ['そのまま'],
     CFG,
-    captureFetch(mockFetch(200, { choices: [{ message: { content: '["就这样"]' } }] }), captured),
     {
-      title: '夜',
-      artist: 'AAA',
-      fullLyrics: ['風が', '吹いて', '君の', 'そのまま', '君の', '声を'],
-      targetIndices: [3],
+      fetchImpl: captureFetch(mockFetch(200, { choices: [{ message: { content: '["就这样"]' } }] }), captured),
+      ctx: {
+        title: '夜',
+        artist: 'AAA',
+        fullLyrics: ['風が', '吹いて', '君の', 'そのまま', '君の', '声を'],
+        targetIndices: [3],
+      },
     },
   );
   assert.deepEqual(out, ['就这样']);
@@ -168,7 +170,7 @@ test('falls back to newline-separated text when JSON parsing fails', async () =>
   const out = await translateLyricLines(
     ['line one', 'line two', ''],
     CFG,
-    mockFetch(200, { choices: [{ message: { content: '第一行\n第二行\n' } }] }),
+    { fetchImpl: mockFetch(200, { choices: [{ message: { content: '第一行\n第二行\n' } }] }) },
   );
   assert.deepEqual(out, ['第一行', '第二行', '']);
 });
@@ -179,7 +181,7 @@ test('plain-text fallback aligns against non-blank source lines (issue #271)', a
   const out = await translateLyricLines(
     ['風が', '', '吹く'],
     CFG,
-    mockFetch(200, { choices: [{ message: { content: '风\n吹' } }] }),
+    { fetchImpl: mockFetch(200, { choices: [{ message: { content: '风\n吹' } }] }) },
   );
   assert.deepEqual(out, ['风', '', '吹']);
 });
@@ -191,7 +193,7 @@ test('plain-text fallback with extra lines is rejected instead of shifting trans
     translateLyricLines(
       ['a', 'b'],
       CFG,
-      mockFetch(200, { choices: [{ message: { content: 'Here are the translations:\n第一\n第二' } }] }),
+      { fetchImpl: mockFetch(200, { choices: [{ message: { content: 'Here are the translations:\n第一\n第二' } }] }) },
     ),
     (error: unknown) => error instanceof TranslationError && error.code === 'translation_invalid_response',
   );
@@ -199,9 +201,15 @@ test('plain-text fallback with extra lines is rejected instead of shifting trans
 
 test('plain-text fallback with missing lines is rejected (issue #271)', async () => {
   await assert.rejects(
-    translateLyricLines(['a', 'b', 'c'], CFG, mockFetch(200, {
-      choices: [{ message: { content: '只有一行' } }],
-    })),
+    translateLyricLines(
+      ['a', 'b', 'c'],
+      CFG,
+      {
+        fetchImpl: mockFetch(200, {
+          choices: [{ message: { content: '只有一行' } }],
+        })
+      },
+    ),
     (error: unknown) => error instanceof TranslationError && error.code === 'translation_invalid_response',
   );
 });
@@ -210,7 +218,7 @@ test('salvages complete items from a max_tokens-truncated JSON array (issue #271
   const out = await translateLyricLines(
     ['一つ', '二つ', '三つ'],
     CFG,
-    mockFetch(200, { choices: [{ message: { content: '["第一","第二",' } }] }),
+    { fetchImpl: mockFetch(200, { choices: [{ message: { content: '["第一","第二",' } }] }) },
   );
   // Complete items are kept; the cut-off line stays empty so it can be
   // re-translated instead of receiving `["第一","第二",` as its translation.
@@ -222,7 +230,7 @@ test('salvages a JSON array with a trailing comma instead of line-splitting it (
   const out = await translateLyricLines(
     ['一つ', '二つ'],
     CFG,
-    mockFetch(200, { choices: [{ message: { content: '["第一","第二",]' } }] }),
+    { fetchImpl: mockFetch(200, { choices: [{ message: { content: '["第一","第二",]' } }] }) },
   );
   assert.deepEqual(out, ['第一', '第二']);
 });
@@ -231,34 +239,56 @@ test('uses only the first array when the model restates two arrays (issue #271)'
   const out = await translateLyricLines(
     ['一つ', '二つ'],
     CFG,
-    mockFetch(200, { choices: [{ message: { content: '["第一","第二"],["第三","第四"]' } }] }),
+    { fetchImpl: mockFetch(200, { choices: [{ message: { content: '["第一","第二"],["第三","第四"]' } }] }) },
   );
   assert.deepEqual(out, ['第一', '第二']);
 });
 
 test('rejects a JSON-shaped response that yields no complete item (issue #271)', async () => {
   await assert.rejects(
-    translateLyricLines(['a'], CFG, mockFetch(200, { choices: [{ message: { content: '[' } }] })),
+    translateLyricLines(
+      ['a'],
+      CFG,
+      { fetchImpl: mockFetch(200, { choices: [{ message: { content: '[' } }] }) },
+    ),
     (error: unknown) => error instanceof TranslationError && error.code === 'translation_invalid_response',
   );
   // A fenced JSON array is a JSON attempt too — never split by newline.
-  const fenced = await translateLyricLines(['a', 'b'], CFG, mockFetch(200, {
-    choices: [{ message: { content: '```json\n["第一",' } }],
-  }));
+  const fenced = await translateLyricLines(
+    ['a', 'b'],
+    CFG,
+    {
+      fetchImpl: mockFetch(200, {
+        choices: [{ message: { content: '```json\n["第一",' } }],
+      })
+    },
+  );
   assert.deepEqual(fenced, ['第一', '']);
 });
 
 test('rejects a translation array whose items are JSON structures, not strings (issue #271)', async () => {
   await assert.rejects(
-    translateLyricLines(['a', 'b'], CFG, mockFetch(200, {
-      choices: [{ message: { content: '[{"translation":"第一"},{"translation":"第二"}]' } }],
-    })),
+    translateLyricLines(
+      ['a', 'b'],
+      CFG,
+      {
+        fetchImpl: mockFetch(200, {
+          choices: [{ message: { content: '[{"translation":"第一"},{"translation":"第二"}]' } }],
+        })
+      },
+    ),
     (error: unknown) => error instanceof TranslationError && error.code === 'translation_invalid_response',
   );
   await assert.rejects(
-    translateLyricLines(['a'], CFG, mockFetch(200, {
-      choices: [{ message: { content: '[["第一","第二"]]' } }],
-    })),
+    translateLyricLines(
+      ['a'],
+      CFG,
+      {
+        fetchImpl: mockFetch(200, {
+          choices: [{ message: { content: '[["第一","第二"]]' } }],
+        })
+      },
+    ),
     (error: unknown) => error instanceof TranslationError && error.code === 'translation_invalid_response',
   );
 });
@@ -266,35 +296,59 @@ test('rejects a translation array whose items are JSON structures, not strings (
 test('prose followed by a truncated JSON array is salvaged, never line-split (issue #271)', async () => {
   // The preamble must never become line 1's translation, and the JSON fragment
   // must never become line 2's.
-  const out = await translateLyricLines(['a', 'b', 'c'], CFG, mockFetch(200, {
-    choices: [{ message: { content: 'Here are the translations:\n["第一","第二",' } }],
-  }));
+  const out = await translateLyricLines(
+    ['a', 'b', 'c'],
+    CFG,
+    {
+      fetchImpl: mockFetch(200, {
+        choices: [{ message: { content: 'Here are the translations:\n["第一","第二",' } }],
+      })
+    },
+  );
   assert.deepEqual(out, ['第一', '第二', '']);
 });
 
 test('normalises mismatched response length', async () => {
-  const short = await translateLyricLines(['a', 'b', 'c'], CFG, mockFetch(200, {
-    choices: [{ message: { content: '["一"]' } }],
-  }));
+  const short = await translateLyricLines(
+    ['a', 'b', 'c'],
+    CFG,
+    {
+      fetchImpl: mockFetch(200, {
+        choices: [{ message: { content: '["一"]' } }],
+      })
+    },
+  );
   assert.deepEqual(short, ['一', '', '']);
 
-  const long = await translateLyricLines(['a', 'b'], CFG, mockFetch(200, {
-    choices: [{ message: { content: '["一","二","三"]' } }],
-  }));
+  const long = await translateLyricLines(
+    ['a', 'b'],
+    CFG,
+    {
+      fetchImpl: mockFetch(200, {
+        choices: [{ message: { content: '["一","二","三"]' } }],
+      })
+    },
+  );
   assert.deepEqual(long, ['一', '二']);
 });
 
 test('empty source lines force empty translations even when the model returns text', async () => {
-  const out = await translateLyricLines(['', '歌'], CFG, mockFetch(200, {
-    choices: [{ message: { content: '["空","歌曲"]' } }],
-  }));
+  const out = await translateLyricLines(
+    ['', '歌'],
+    CFG,
+    {
+      fetchImpl: mockFetch(200, {
+        choices: [{ message: { content: '["空","歌曲"]' } }],
+      })
+    },
+  );
   assert.deepEqual(out, ['', '歌曲']);
 });
 
 test('throws translation_failed on non-2xx upstream status', async (t) => {
   const waits = skipRetryWait(t);
   await assert.rejects(
-    translateLyricLines(['a'], CFG, mockFetch(429, { error: { message: 'rate limited' } })),
+    translateLyricLines(['a'], CFG, { fetchImpl: mockFetch(429, { error: { message: 'rate limited' } }) }),
     (error: unknown) => error instanceof TranslationError && error.code === 'translation_failed',
   );
   assert.deepEqual(waits, [1000, 2000], 'three attempts retain exponential backoff');
@@ -302,7 +356,11 @@ test('throws translation_failed on non-2xx upstream status', async (t) => {
 
 test('throws translation_invalid_response on empty model content', async () => {
   await assert.rejects(
-    translateLyricLines(['a'], CFG, mockFetch(200, { choices: [{ message: { content: '' } }] })),
+    translateLyricLines(
+      ['a'],
+      CFG,
+      { fetchImpl: mockFetch(200, { choices: [{ message: { content: '' } }] }) },
+    ),
     (error: unknown) => error instanceof TranslationError && error.code === 'translation_invalid_response',
   );
 });
@@ -312,7 +370,7 @@ test('translates via Anthropic Messages API', async () => {
   const out = await translateLyricLines(
     ['one', 'two'],
     { ...CFG, provider: 'anthropic', baseUrl: 'https://api.anthropic.com' },
-    captureFetch(mockFetch(200, { content: [{ type: 'text', text: '["翻译一","翻译二"]' }] }), captured),
+    { fetchImpl: captureFetch(mockFetch(200, { content: [{ type: 'text', text: '["翻译一","翻译二"]' }] }), captured) },
   );
   assert.deepEqual(out, ['翻译一', '翻译二']);
   assert.ok(captured.current);
@@ -330,7 +388,7 @@ test('does not duplicate /v1 when base URL already ends with it', async () => {
   await translateLyricLines(
     ['a'],
     { ...CFG, provider: 'anthropic', baseUrl: 'https://api.anthropic.com/v1' },
-    captureFetch(mockFetch(200, { content: [{ type: 'text', text: '[]' }] }), captured),
+    { fetchImpl: captureFetch(mockFetch(200, { content: [{ type: 'text', text: '[]' }] }), captured) },
   );
   assert.ok(captured.current);
   assert.equal(String(captured.current.input), 'https://api.anthropic.com/v1/messages');
@@ -412,7 +470,7 @@ test('admin-overridden system prompt replaces the default template', async () =>
   await translateLyricLines(
     ['a'],
     { ...CFG, systemPrompt: custom },
-    captureFetch(mockFetch(200, { choices: [{ message: { content: '["译"]' } }] }), captured),
+    { fetchImpl: captureFetch(mockFetch(200, { choices: [{ message: { content: '["译"]' } }] }), captured) },
   );
   assert.ok(captured.current);
   const body = openAIBody(captured.current);
@@ -427,7 +485,7 @@ test('OpenAI payload requests low reasoning effort', async () => {
   await translateLyricLines(
     ['a'],
     CFG,
-    captureFetch(mockFetch(200, { choices: [{ message: { content: '["译"]' } }] }), captured),
+    { fetchImpl: captureFetch(mockFetch(200, { choices: [{ message: { content: '["译"]' } }] }), captured) },
   );
   assert.ok(captured.current);
   const body = openAIBody(captured.current);
@@ -436,14 +494,30 @@ test('OpenAI payload requests low reasoning effort', async () => {
 
 test('glossary extraction returns an array on success (possibly empty = genuinely no terms)', async () => {
   const { extractLyricsGlossary } = await import('./translation/index.ts');
-  const found = await extractLyricsGlossary('花火', 'AAA', ['花火'], CFG, mockFetch(200, {
-    choices: [{ message: { content: '[{"original":"花火","translation":"烟花"}]' } }],
-  }));
+  const found = await extractLyricsGlossary(
+    '花火',
+    'AAA',
+    ['花火'],
+    CFG,
+    {
+      fetchImpl: mockFetch(200, {
+        choices: [{ message: { content: '[{"original":"花火","translation":"烟花"}]' } }],
+      })
+    },
+  );
   assert.deepEqual(found, [{ original: '花火', translation: '烟花' }]);
 
-  const none = await extractLyricsGlossary('花火', 'AAA', ['花火'], CFG, mockFetch(200, {
-    choices: [{ message: { content: '[]' } }],
-  }));
+  const none = await extractLyricsGlossary(
+    '花火',
+    'AAA',
+    ['花火'],
+    CFG,
+    {
+      fetchImpl: mockFetch(200, {
+        choices: [{ message: { content: '[]' } }],
+      })
+    },
+  );
   assert.deepEqual(none, []); // empty array: extraction succeeded, no terms
 });
 
@@ -451,16 +525,24 @@ test('glossary extraction returns null on upstream failure so callers retry inst
   const waits = skipRetryWait(t);
   const { extractLyricsGlossary } = await import('./translation/index.ts');
   // 5xx upstream → null (never retried internally once RETRY_ATTEMPTS exhausted).
-  const failed = await extractLyricsGlossary('花火', 'AAA', ['花火'], CFG, mockFetch(503, { error: 'boom' }));
+  const failed = await extractLyricsGlossary('花火', 'AAA', ['花火'], CFG, { fetchImpl: mockFetch(503, { error: 'boom' }) });
   assert.equal(failed, null);
   assert.deepEqual(waits, [1000, 2000]);
 });
 
 test('glossary extraction returns null on a malformed (non-array) response', async () => {
   const { extractLyricsGlossary } = await import('./translation/index.ts');
-  const malformed = await extractLyricsGlossary('花火', 'AAA', ['花火'], CFG, mockFetch(200, {
-    choices: [{ message: { content: 'no json array here' } }],
-  }));
+  const malformed = await extractLyricsGlossary(
+    '花火',
+    'AAA',
+    ['花火'],
+    CFG,
+    {
+      fetchImpl: mockFetch(200, {
+        choices: [{ message: { content: 'no json array here' } }],
+      })
+    },
+  );
   assert.equal(malformed, null);
 });
 
@@ -483,7 +565,16 @@ test('glossary extraction receives a caller signal and aborts the upstream fetch
     });
   }) as typeof fetch;
 
-  const run = extractLyricsGlossary('花火', 'AAA', ['花火'], CFG, hangingFetch, controller.signal);
+  const run = extractLyricsGlossary(
+    '花火',
+    'AAA',
+    ['花火'],
+    CFG,
+    {
+      fetchImpl: hangingFetch,
+      signal: controller.signal
+    },
+  );
   await started; // no arbitrary sleep: ensure fetch registered its abort listener
   assert.ok(!signalSeen!.aborted, 'upstream not aborted yet');
   controller.abort(); // client cancels the preparation stage
@@ -501,7 +592,16 @@ test('glossary extraction resolves to null immediately when the caller signal is
   let calls = 0;
   const countingFetch = (async () => { calls += 1; return new Response('{}', { status: 200 }); }) as typeof fetch;
   // Already-cancelled caller must not issue (or retry) any request.
-  assert.equal(await extractLyricsGlossary('花火', 'AAA', ['花火'], CFG, countingFetch, controller.signal), null);
+  assert.equal(await extractLyricsGlossary(
+    '花火',
+    'AAA',
+    ['花火'],
+    CFG,
+    {
+      fetchImpl: countingFetch,
+      signal: controller.signal
+    },
+  ), null);
   assert.equal(calls, 0);
   assert.deepEqual(waits, [], 'already-cancelled request must not enter backoff');
 });
@@ -552,7 +652,15 @@ test('streaming translation aborts the upstream fetch when the external signal f
     return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
   }) as typeof fetch;
 
-  const run = streamTranslateLyricLines(['a'], CFG, () => {}, streamFetch, undefined, controller.signal);
+  const run = streamTranslateLyricLines(
+    ['a'],
+    CFG,
+    () => {},
+    {
+      fetchImpl: streamFetch,
+      signal: controller.signal
+    },
+  );
   await issued; // upstream request is in flight
   assert.ok(signalSeen, 'upstream fetch received a signal');
   assert.ok(!signalSeen!.aborted, 'upstream not aborted yet');
@@ -567,7 +675,7 @@ test('streamed translation salvages a truncated JSON array instead of line-split
     ['一つ', '二つ', '三つ'],
     CFG,
     () => {},
-    openAIStreamFetch(['["第一",', '"第二",']),
+    { fetchImpl: openAIStreamFetch(['["第一",', '"第二",']) },
   );
   assert.deepEqual(out, ['第一', '第二', '']);
 });
@@ -575,7 +683,7 @@ test('streamed translation salvages a truncated JSON array instead of line-split
 test('streamed translation rejects a JSON fragment with no complete item (issue #271)', async () => {
   const { streamTranslateLyricLines } = await import('./translation/index.ts');
   await assert.rejects(
-    streamTranslateLyricLines(['a'], CFG, () => {}, openAIStreamFetch(['['])),
+    streamTranslateLyricLines(['a'], CFG, () => {}, { fetchImpl: openAIStreamFetch(['[']) }),
     (error: unknown) => error instanceof TranslationError && error.code === 'translation_invalid_response',
   );
 });
@@ -586,7 +694,7 @@ test('streamed translation keeps null items index-aligned (issue #278)', async (
     ['一つ', '二つ', '三つ', '四つ'],
     CFG,
     () => {},
-    openAIStreamFetch(['["第一行"', ', null, "第三行", "第四行"]']),
+    { fetchImpl: openAIStreamFetch(['["第一行"', ', null, "第三行", "第四行"]']) },
   );
   // The null line stays empty at ITS index — the later translations must not
   // shift up into it (that is what corrupted the resume path).
@@ -598,7 +706,7 @@ test('discovers and sorts models from an OpenAI-compatible /models endpoint', as
   const captured: { current?: CapturedCall } = {};
   const models = await discoverTranslationModels(
     { ...CFG, baseUrl: 'https://api.deepseek.com/v1' },
-    captureFetch(mockFetch(200, { data: [{ id: 'deepseek-v4-flash' }, { id: 'deepseek-reasoner' }, { id: 'deepseek-chat' }] }), captured),
+    { fetchImpl: captureFetch(mockFetch(200, { data: [{ id: 'deepseek-v4-flash' }, { id: 'deepseek-reasoner' }, { id: 'deepseek-chat' }] }), captured) },
   );
   assert.deepEqual(models, ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v4-flash']);
   assert.ok(captured.current);
@@ -612,7 +720,7 @@ test('discovers Anthropic models via /v1/models without duplicating /v1', async 
   const captured: { current?: CapturedCall } = {};
   const models = await discoverTranslationModels(
     { ...CFG, provider: 'anthropic', baseUrl: 'https://api.anthropic.com/v1' },
-    captureFetch(mockFetch(200, { data: [{ id: 'claude-sonnet-4-5' }, { id: 'claude-opus-4-1' }] }), captured),
+    { fetchImpl: captureFetch(mockFetch(200, { data: [{ id: 'claude-sonnet-4-5' }, { id: 'claude-opus-4-1' }] }), captured) },
   );
   assert.deepEqual(models, ['claude-opus-4-1', 'claude-sonnet-4-5']);
   assert.ok(captured.current);
@@ -626,12 +734,12 @@ test('model discovery returns null on non-2xx or malformed data', async () => {
   const { discoverTranslationModels } = await import('./translation/index.ts');
   // Non-2xx response.
   assert.equal(
-    await discoverTranslationModels(CFG, mockFetch(401, { error: 'bad key' })),
+    await discoverTranslationModels(CFG, { fetchImpl: mockFetch(401, { error: 'bad key' }) }),
     null,
   );
   // Malformed body (no data array).
   assert.equal(
-    await discoverTranslationModels(CFG, mockFetch(200, { nope: true })),
+    await discoverTranslationModels(CFG, { fetchImpl: mockFetch(200, { nope: true }) }),
     null,
   );
 });

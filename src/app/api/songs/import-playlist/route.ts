@@ -5,6 +5,7 @@ import { getAuthUser } from '@/lib/auth';
 import { parseJsonBody } from '@/lib/admin';
 import {
   PLAYLIST_CHUNK_SIZE,
+  spotifyUpstreamFailure,
   PLAYLIST_MAX_TRACKS,
   createJob,
   existingResultsForChunk,
@@ -96,11 +97,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'invalid_playlist_url' }, { status: 400 });
   }
 
-  const accessToken = await requireSpotifyToken(user.email);
   let playlist: PlaylistFetch;
   try {
+    const accessToken = await requireSpotifyToken(user.email);
     playlist = await fetchPlaylistTrackPage(playlistId, accessToken);
   } catch (error) {
+    // A stalled Spotify (token refresh or playlist page) now fails fast with a
+    // retryable code instead of leaving the request pending (issue #370).
+    const failure = spotifyUpstreamFailure(error);
+    if (failure) return NextResponse.json({ error: failure.error }, { status: failure.status });
     const status = (error as Error & { status?: number }).status;
     if (status && status !== 200) {
       return NextResponse.json({ error: 'playlist_fetch_failed' }, { status });
@@ -166,14 +171,16 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'job_failed' }, { status: 409 });
   }
 
-  const accessToken = await requireSpotifyToken(user.email);
-
   // Resolve the playlist again on each chunk — a token refresh mid-import must
   // not lose the track list, and D1 rows are cheap.
   let tracks: PlaylistTrack[];
   try {
+    const accessToken = await requireSpotifyToken(user.email);
     ({ tracks } = await fetchPlaylistTrackPage(job.playlistId, accessToken));
-  } catch {
+  } catch (error) {
+    // Keep the chunk resumable: nothing was written, so a retry replays it.
+    const failure = spotifyUpstreamFailure(error);
+    if (failure) return NextResponse.json({ error: failure.error }, { status: failure.status });
     return NextResponse.json({ error: 'playlist_fetch_failed' }, { status: 502 });
   }
 

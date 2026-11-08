@@ -1,45 +1,64 @@
 import { parseJsonBody } from './admin';
+import {
+  createSpotifyClient,
+  type SpotifyApiClient,
+  type SpotifyFailure,
+  type SpotifyPlaybackAction,
+} from './spotify-api';
 
 interface PlaybackDependencies<T extends Request> {
   getAuthUser: (request: T) => Promise<{ email: string } | null>;
+  /** Token lookup — the route passes the DB-backed implementation. */
   getSpotifyTokenForUser: (email: string) => Promise<string | null>;
-  fetch: typeof fetch;
+  /** Transport override for tests; production uses the global fetch. */
+  fetch?: typeof fetch;
+  /** Per-request budget; injected by the tests so they need no real waiting. */
+  timeoutMs?: number;
 }
 
 function failure(error: string, status: number, headers?: HeadersInit): Response {
   return Response.json({ error }, { status, headers });
 }
 
+function upstreamMessage(body: unknown): { reason?: unknown; message: string } {
+  const error = (body as { error?: { reason?: unknown; message?: unknown } } | null)?.error;
+  return {
+    reason: error?.reason,
+    message: typeof error?.message === 'string' ? error.message : '',
+  };
+}
+
 /** Translate Spotify failures to stable codes, never forwarding provider text. */
-async function spotifyFailure(response: Response): Promise<Response> {
-  switch (response.status) {
+function spotifyFailure(body: SpotifyFailure): Response {
+  switch (body.status) {
     case 401: return failure('spotify_unauthorized', 401);
     case 403: {
-      let error: { reason?: unknown; message?: unknown } | undefined;
-      try {
-        const body = await response.json();
-        error = body?.error;
-      } catch { /* Empty/non-JSON errors still have a safe fallback. */ }
-      const message = typeof error?.message === 'string' ? error.message : '';
-      if (error?.reason === 'PREMIUM_REQUIRED' || /premium required/i.test(message)) {
+      const { reason, message } = upstreamMessage(body.body);
+      if (reason === 'PREMIUM_REQUIRED' || /premium required/i.test(message)) {
         return failure('premium_required', 403);
       }
-      if (error?.reason === 'INSUFFICIENT_SCOPE' || /insufficient (?:client )?scope/i.test(message)) {
+      if (reason === 'INSUFFICIENT_SCOPE' || /insufficient (?:client )?scope/i.test(message)) {
         return failure('insufficient_scope', 403);
       }
       return failure('playback_forbidden', 403);
     }
     case 404: return failure('no_active_device', 404);
-    case 429: {
-      const retryAfter = response.headers.get('Retry-After');
-      return failure('rate_limited', 429,
-        retryAfter && /^\d+$/.test(retryAfter) ? { 'Retry-After': retryAfter } : undefined);
-    }
+    case 429: return failure('rate_limited', 429,
+      body.retryAfter ? { 'Retry-After': body.retryAfter } : undefined);
     default:
-      return response.status >= 500
+      return body.status >= 500
         ? failure('spotify_unavailable', 503)
         : failure('playback_failed', 502);
   }
+}
+
+/** One client per request: token, endpoint base and the #370 budget live in it. */
+function clientFor<T extends Request>(token: string, dependencies: PlaybackDependencies<T>): SpotifyApiClient {
+  return createSpotifyClient({
+    accessToken: token,
+    fetchImpl: dependencies.fetch,
+    timeoutMs: dependencies.timeoutMs,
+  });
 }
 
 /**
@@ -52,6 +71,8 @@ export async function handleSpotifyPlayback<T extends Request>(
   request: T,
   dependencies: PlaybackDependencies<T>,
 ): Promise<Response> {
+  const tokenForUser = dependencies.getSpotifyTokenForUser;
+
   let user: { email: string } | null;
   try {
     user = await dependencies.getAuthUser(request);
@@ -74,35 +95,34 @@ export async function handleSpotifyPlayback<T extends Request>(
 
   let token: string | null;
   try {
-    token = await dependencies.getSpotifyTokenForUser(user.email);
+    token = await tokenForUser(user.email);
   } catch {
     return failure('spotify_unavailable', 503);
   }
   if (!token) return failure('spotify_not_connected', 401);
 
-  const headers = { Authorization: 'Bearer ' + token };
+  // One deadline for the whole command: an upstream that accepts the connection
+  // and then stalls surfaces as a retryable failure, never an indefinitely
+  // pending command (issue #370).
+  const spotify = clientFor(token, dependencies);
+
   if (expectedTrackId !== undefined) {
     try {
-      const response = await dependencies.fetch('https://api.spotify.com/v1/me/player/currently-playing', {
-        headers, cache: 'no-store',
-      });
-      if (response.status === 204 || response.status === 202) return failure('track_changed', 409);
-      if (!response.ok) return await spotifyFailure(response);
-      const playback = await response.json();
-      if (!playback || typeof playback !== 'object' || Array.isArray(playback)) {
-        return failure('playback_state_unavailable', 503);
+      const current = await spotify.readNowPlaying();
+      if (current.kind === 'failed') {
+        // A 2xx body we cannot read is "state unavailable", not a command failure.
+        if (current.failure.unparsable) return failure('playback_state_unavailable', 503);
+        return spotifyFailure(current.failure);
       }
-      if (playback.item?.id !== expectedTrackId) return failure('track_changed', 409);
+      if (current.kind === 'idle' || current.trackId !== expectedTrackId) return failure('track_changed', 409);
     } catch {
       return failure('playback_state_unavailable', 503);
     }
   }
 
   try {
-    const response = await dependencies.fetch(`https://api.spotify.com/v1/me/player/${action}`, {
-      method: 'PUT', headers, cache: 'no-store',
-    });
-    if (!response.ok) return await spotifyFailure(response);
+    const result = await spotify.sendPlaybackCommand(action as SpotifyPlaybackAction);
+    if (!result.ok) return spotifyFailure(result.failure);
     // Spotify returns 204; don't parse it or turn an optional readback failure
     // into a failed command. The client refreshes its authoritative now-playing.
     return Response.json({ ok: true });
