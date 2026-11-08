@@ -27,6 +27,8 @@ interface PlaylistTrackResult {
   status: 'imported' | 'skipped' | 'failed';
   needsReview?: boolean;
   rateLimited?: boolean;
+  /** Playlist slot this outcome belongs to — the server's own row identity. */
+  trackIndex?: number;
 }
 
 /**
@@ -34,12 +36,12 @@ interface PlaylistTrackResult {
  *
  * A playlist may legitimately contain the same song twice (ISSUE #347), so the
  * Spotify track id is NOT a usable identity here — merging by it dropped the
- * second occurrence from the review / rate-limit lists. The slot key is the
- * request offset plus the track's position inside that chunk, which is the same
- * identity the server persists.
+ * second occurrence from the review / rate-limit lists. Every result now carries
+ * its `trackIndex` (ISSUE #325), so the slot comes from the server instead of
+ * being re-derived from the request offset on the client.
  */
-function slotKey(offset: number, indexInChunk: number): string {
-  return `${offset}:${indexInChunk}`;
+function slotOf(track: PlaylistTrackResult, fallback: number): number {
+  return typeof track.trackIndex === 'number' ? track.trackIndex : fallback;
 }
 
 interface JobSummary {
@@ -55,9 +57,16 @@ interface JobSummary {
 interface ChunkResponse {
   job: JobSummary;
   tracks: PlaylistTrackResult[];
-  nextOffset: number;
+  nextOffset?: number;
   done: boolean;
+  /** Retry replies only: how many slots this round re-ran / are left. */
+  retried?: number;
+  remaining?: number;
+  retryAfter?: number;
 }
+
+/** Upper bound on retry rounds, so a persistently limited source cannot loop forever. */
+const RETRY_MAX_ROUNDS = 20;
 
 /** Local-storage key so a page refresh can resume an unfinished import. */
 const RESUME_KEY = 'jplrc-playlist-import-resume';
@@ -105,6 +114,7 @@ export default function PlaylistImportDialog({ open, onImported, onClose }: Play
   const [resumeState, setResumeState] = useState<ResumeState | null>(readResumeState);
   const [alert, setAlert] = useState<{ message: string } | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [retrying, setRetrying] = useState(false);
   const cancelRef = useRef(false);
   const hintId = useId();
   const urlInputRef = useRef<HTMLInputElement>(null);
@@ -121,6 +131,7 @@ export default function PlaylistImportDialog({ open, onImported, onClose }: Play
       setCurrentTitle('');
       setAlert(null);
       setToast(null);
+      setRetrying(false);
       setResumeState(readResumeState());
     }
   }
@@ -134,9 +145,9 @@ export default function PlaylistImportDialog({ open, onImported, onClose }: Play
    * the user cancels it explicitly — so backdrop click and Escape do nothing.
    */
   const handleClose = useCallback(() => {
-    if (importing) return;
+    if (importing || retrying) return;
     onClose();
-  }, [importing, onClose]);
+  }, [importing, retrying, onClose]);
 
   // The import summary toast is transient, matching the other copy/import paths.
   useEffect(() => {
@@ -183,9 +194,11 @@ export default function PlaylistImportDialog({ open, onImported, onClose }: Play
     let offset = startOffset;
     const accumulated: PlaylistTrackResult[] = [...seedResults];
     // Slot → track map for de-duplication. Seed rows come from a resumed job
-    // (GET) ordered by slot, covering everything before the resume cursor.
+    // (GET) ordered by slot, covering everything before the resume cursor, and
+    // carry their own `trackIndex` — so a rate-limited seed row keeps its flag
+    // and the summary still explains *why* it failed (ISSUE #325).
     const accumulatedBySlot: Record<string, PlaylistTrackResult> = {};
-    seedResults.forEach((tr, i) => { accumulatedBySlot[slotKey(i, i)] = tr; });
+    seedResults.forEach((tr, i) => { accumulatedBySlot[String(slotOf(tr, i))] = tr; });
     let lastSummary: JobSummary | null = null;
     let retries = 0;
     let finished = false;
@@ -247,7 +260,7 @@ export default function PlaylistImportDialog({ open, onImported, onClose }: Play
         // tracks, so pushing blindly would double-count them on the client.
         // Keying on the slot (not the Spotify id) keeps legitimate duplicates.
         for (let i = 0; i < chunk.tracks.length; i += 1) {
-          const key = slotKey(requestOffset, i);
+          const key = String(slotOf(chunk.tracks[i], requestOffset + i));
           if (accumulatedBySlot[key]) continue;
           accumulatedBySlot[key] = chunk.tracks[i];
           accumulated.push(chunk.tracks[i]);
@@ -332,9 +345,73 @@ export default function PlaylistImportDialog({ open, onImported, onClose }: Play
     void runImport(resumeState.jobId, resumeState.total, resumeState.offset, seeded);
   };
 
+  /**
+   * Re-run the slots that failed because the lyrics source was rate-limited.
+   *
+   * This is the path the note promises (ISSUE #325): the server walks the
+   * *persisted* rate-limited failures in slot order, one bounded batch per
+   * request, so a refresh or a resume cannot lose them and a long list cannot
+   * blow the request budget. Slots that still come back rate-limited after a
+   * round simply stay in the list — hence the round cap.
+   */
+  const handleRetryRateLimited = async () => {
+    if (!job || importing || retrying) return;
+    setRetrying(true);
+    cancelRef.current = false;
+    const bySlot: Record<string, PlaylistTrackResult> = {};
+    const order: string[] = [];
+    result.forEach((tr, i) => {
+      const key = String(slotOf(tr, i));
+      bySlot[key] = tr;
+      order.push(key);
+    });
+    let retryAfter = -1;
+    try {
+      for (let round = 0; round < RETRY_MAX_ROUNDS; round += 1) {
+        if (cancelRef.current) break;
+        const res = await fetch('/api/songs/import-playlist', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jobId: job.id, retryFailed: true, retryAfter }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || data.error) {
+          setAlert({ message: importErrorMsg(t, data?.error, 'home.playlistImportError') });
+          break;
+        }
+        const chunk = data as ChunkResponse;
+        if (cancelRef.current) break; // stopped while this request was in flight
+        if (chunk.job) setJob(chunk.job);
+        // Retried slots are UPDATED in place — replace, never append (the same
+        // slot must not appear twice in the review / rate-limit lists).
+        for (const tr of chunk.tracks) {
+          const key = String(slotOf(tr, -1));
+          if (key === '-1') continue;
+          if (!(key in bySlot)) order.push(key);
+          bySlot[key] = tr;
+        }
+        setResult(order.filter((key) => bySlot[key]).map((key) => bySlot[key]));
+        if (typeof chunk.retryAfter === 'number') retryAfter = chunk.retryAfter;
+        // `done` comes from the server's own remaining count — an empty batch
+        // (e.g. the playlist shrank) must not stop a retry that still has work.
+        if (chunk.done) break;
+      }
+      // Some retried tracks may now have lyrics — the library list is stale.
+      await refreshSongList();
+    } catch {
+      setAlert({ message: t('home.playlistImportNetworkError') });
+    } finally {
+      cancelRef.current = false;
+      setRetrying(false);
+    }
+  };
+
   const handleCancel = async () => {
     if (!job) return;
     cancelRef.current = true;
+    // While retrying, Cancel means "stop retrying" — the job itself already
+    // finished, so firing DELETE would needlessly mark it cancelled.
+    if (retrying) return;
     try {
       await fetch(`/api/songs/import-playlist?jobId=${encodeURIComponent(job.id)}`, { method: 'DELETE' });
       persistResume(null);
@@ -358,7 +435,7 @@ export default function PlaylistImportDialog({ open, onImported, onClose }: Play
   return (
     <>
       <Dialog open={open} onClose={handleClose} title={t('home.playlistImportTitle')}
-        className="import-dialog" initialFocusRef={urlInputRef} dismissible={!importing && !alert}>
+        className="import-dialog" initialFocusRef={urlInputRef} dismissible={!importing && !retrying && !alert}>
             <div className="import-dialog-title">
               {t('home.playlistImportTitle')}
             </div>
@@ -491,12 +568,23 @@ export default function PlaylistImportDialog({ open, onImported, onClose }: Play
                   {isDone && rateLimitedTracks.length > 0 && (
                     <div className="import-dialog-note import-dialog-note--stacked">
                       <span className="import-dialog-note-text">{t('home.playlistImportRateLimited')}</span>
+                      <div className="import-dialog-note-actions">
+                        <button
+                          type="button"
+                          className="confirm-dialog-btn confirm-dialog-btn--confirm"
+                          onClick={() => void handleRetryRateLimited()}
+                          disabled={retrying}
+                        >
+                          {retrying && <Loader2 className="h-3 w-3 animate-spin" />}
+                          {t('home.playlistImportRetryRateLimited', { count: String(rateLimitedTracks.length) })}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
 
                 <div className="confirm-dialog-actions import-dialog-actions">
-                  {importing ? (
+                  {importing || retrying ? (
                     <button
                       type="button"
                       className="confirm-dialog-btn confirm-dialog-btn--cancel"

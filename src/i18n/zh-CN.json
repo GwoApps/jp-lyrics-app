@@ -191,7 +191,7 @@
     "importReviewMatchedAmbiguous": "\n前两名候选得分接近，请确认哪个才是目标曲目。",
     "playlistImportReviewHeader": "{count} 首曲目待审核",
     "playlistImportReviewHint": "这些曲目以低可信度歌词匹配导入。请在歌曲列表中打开它们，核对后重新同步。",
-    "playlistImportRateLimited": "部分曲目的歌词源被限流。这些曲目已跳过 — 请稍候再继续导入以重试。",
+    "playlistImportRateLimited": "部分曲目的歌词源被限流，这些曲目本次已跳过 — 请稍候片刻后重试。",
     "loadFailed": "歌曲列表加载失败，请检查网络后重试",
     "retry": "重试",
     "cachedData": "当前显示缓存数据，刷新失败",
@@ -231,7 +231,8 @@
     "deleteCollectionConfirmTitle": "确定删除收藏夹「{name}」？",
     "deleteCollectionConfirmBody": "此操作不可撤销。",
     "disconnectConfirmTitle": "确定断开 Spotify？",
-    "disconnectConfirmBody": "断开等于退出登录。在重新授权 Spotify 之前，播放同步和歌曲导入都将无法使用。"
+    "disconnectConfirmBody": "断开等于退出登录。在重新授权 Spotify 之前，播放同步和歌曲导入都将无法使用。",
+    "playlistImportRetryRateLimited": "重试 {count} 首"
   },
   "song": {
     "notFound": "找不到歌曲",

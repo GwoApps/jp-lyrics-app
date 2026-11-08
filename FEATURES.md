@@ -39,7 +39,9 @@ and [DEPLOYMENT.md](DEPLOYMENT.md).
 - **One-Click Import** — Import lyrics for the currently playing Spotify
   track instantly.
 - **Playlist Batch Import** — Import all tracks from a Spotify playlist at
-  once, with per-track result reporting.
+  once, with per-track result reporting. Tracks whose lyrics source was
+  rate-limited are remembered across refresh / resume and can be retried in
+  place, so a throttled source is never mistaken for "no lyrics".
 
 ## Timeline Annotation Workspace
 

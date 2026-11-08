@@ -96,6 +96,14 @@ test('fresh DB applying full journal yields all required tables/columns', async 
     for (const col of requiredSongColumns) {
       assert.ok(songColNames.has(col), `missing songs.${col} column`);
     }
+    // ISSUE #325: a rate-limited slot keeps that reason in the DB, not only in
+    // one HTTP response, so a resume can still tell it apart from "no lyrics".
+    const trackResultCols = await client.execute('PRAGMA table_info(`playlist_import_track_results`)');
+    const rateLimited = trackResultCols.rows.find(row => row.name === 'rate_limited');
+    assert.ok(rateLimited, 'playlist_import_track_results.rate_limited must persist the failure reason');
+    assert.equal(rateLimited.notnull, 1);
+    assert.equal(rateLimited.dflt_value, '0');
+
     const favoritesCols = await client.execute('PRAGMA table_info(`favorites`)');
     const defaultCategory = favoritesCols.rows.find(row => row.name === 'in_unclassified');
     assert.ok(defaultCategory, 'favorites.in_unclassified must persist multi-select independently');

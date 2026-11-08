@@ -3,7 +3,13 @@ import assert from 'node:assert/strict';
 import type { TestContext } from 'node:test';
 import { createTestDb, prepareTestDb } from './test-db.ts';
 import { sql } from 'drizzle-orm';
-import { saveTrackResult } from './playlist-import.ts';
+import {
+  existingResultsForChunk,
+  getPersistedTrackResults,
+  listFailedTrackSlots,
+  listTrackResults,
+  saveTrackResult,
+} from './playlist-import.ts';
 import {
   playlistImportJobs,
   playlistImportTrackResults,
@@ -53,6 +59,8 @@ async function createTables(t: TestDb) {
   )`);
   // Mirrors migrations 0022/0023: rows are identified by playlist slot, and
   // (job_id, track_index) is unique.
+  // Mirrors migrations 0022/0023/0025: slot identity, unique `(job_id, track_index)`
+  // and the persisted "why it failed" flag (ISSUE #325).
   await t.db.run(sql`CREATE TABLE playlist_import_track_results (
     job_id TEXT NOT NULL,
     spotify_track_id TEXT NOT NULL,
@@ -61,6 +69,7 @@ async function createTables(t: TestDb) {
     artist TEXT NOT NULL,
     status TEXT NOT NULL,
     needs_review INTEGER NOT NULL DEFAULT 0,
+    rate_limited INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
   )`);
   await t.db.run(sql`CREATE UNIQUE INDEX playlist_import_track_results_job_track_idx
@@ -235,4 +244,90 @@ test('an INSERT failure leaves the counters untouched (no counted-but-no-result)
   assert.equal(job.processed, 0);
   assert.equal(job.imported, 0);
   assert.equal(job.status, 'pending');
+});
+
+test('a rate-limited failure keeps its reason across a resume (ISSUE #325)', async (ctx) => {
+  const t = makeTestDb(ctx, 'pi-ratelimit');
+  await createTables(t);
+  await insertJob(t, 'j', 2);
+
+  await saveTrackResult('j', 0, track, { status: 'failed', rateLimited: true }, t.db);
+  await saveTrackResult('j', 1, { ...track, id: 'track-2' }, { status: 'failed' }, t.db);
+
+  // The replay read is what a resumed chunk and a refreshed page go through: a
+  // rate-limited slot must come back as rate-limited, not as a plain failure.
+  const chunk = await existingResultsForChunk('j', 0, 2, t.db);
+  assert.equal(chunk.get(0)?.rateLimited, true);
+  assert.equal(chunk.get(1)?.rateLimited, false);
+
+  const persisted = await getPersistedTrackResults('j', t.db);
+  assert.equal(persisted.results[0].rateLimited, true);
+  assert.equal(persisted.results[1].rateLimited, false);
+
+  const listed = await listTrackResults('j', t.db);
+  assert.equal(listed[0].rateLimited, true, 'GET rebuild must carry the flag');
+  assert.equal(listed[0].trackIndex, 0, 'each result carries its slot');
+  assert.equal(listed[1].rateLimited, undefined, 'a plain failure stays plain');
+});
+
+test('listFailedTrackSlots returns the recoverable failures in slot order (ISSUE #325)', async (ctx) => {
+  const t = makeTestDb(ctx, 'pi-failed-slots');
+  await createTables(t);
+  await insertJob(t, 'j', 4);
+
+  await saveTrackResult('j', 0, { ...track, id: 'a' }, { status: 'imported' }, t.db);
+  await saveTrackResult('j', 1, { ...track, id: 'b' }, { status: 'failed', rateLimited: true }, t.db);
+  await saveTrackResult('j', 2, { ...track, id: 'c' }, { status: 'failed' }, t.db);
+  await saveTrackResult('j', 3, { ...track, id: 'd' }, { status: 'failed', rateLimited: true }, t.db);
+
+  const failed = await listFailedTrackSlots('j', t.db);
+  assert.deepEqual(failed, [
+    { trackIndex: 1, rateLimited: true },
+    { trackIndex: 2, rateLimited: false },
+    { trackIndex: 3, rateLimited: true },
+  ], 'failed slots only, in playlist order, with their reason');
+});
+
+test('an explicit retry overwrites the row and recounts the counters (ISSUE #325)', async (ctx) => {
+  const t = makeTestDb(ctx, 'pi-retry');
+  await createTables(t);
+  await insertJob(t, 'j', 2);
+
+  await saveTrackResult('j', 0, { ...track, id: 'a' }, { status: 'failed', rateLimited: true }, t.db);
+  await saveTrackResult('j', 1, { ...track, id: 'b' }, { status: 'imported' }, t.db);
+
+  // The retry re-processes slot 0 and succeeds: the row flips to imported and the
+  // counters are recounted from the result table, so the slot is never counted
+  // twice and `failed` drops back to 0.
+  await saveTrackResult('j', 0, { ...track, id: 'a' }, { status: 'imported' }, t.db, { overwrite: true });
+
+  const job = await getJob(t, 'j');
+  assert.equal(job.processed, 2, 'retry must not add a second processed count');
+  assert.equal(job.imported, 2);
+  assert.equal(job.failed, 0);
+  assert.equal(job.processed, job.total);
+
+  const rows = await t.db.select().from(playlistImportTrackResults).all();
+  assert.equal(rows.length, 2, 'the retried slot reuses its row');
+  const retried = rows.find((row) => row.trackIndex === 0);
+  assert.equal(retried?.status, 'imported');
+  assert.equal(retried?.rateLimited, 0, 'a success clears the stored reason');
+});
+
+test('a retry that is still rate-limited keeps the flag and the counters stable (ISSUE #325)', async (ctx) => {
+  const t = makeTestDb(ctx, 'pi-retry-still');
+  await createTables(t);
+  await insertJob(t, 'j', 1);
+
+  await saveTrackResult('j', 0, track, { status: 'failed', rateLimited: true }, t.db);
+  // Retry too early: the source is still limiting, so the slot stays failed.
+  await saveTrackResult('j', 0, track, { status: 'failed', rateLimited: true }, t.db, { overwrite: true });
+
+  const job = await getJob(t, 'j');
+  assert.equal(job.processed, 1);
+  assert.equal(job.failed, 1);
+
+  const rows = await t.db.select().from(playlistImportTrackResults).all();
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].rateLimited, 1, 'the reason survives a failed retry');
 });

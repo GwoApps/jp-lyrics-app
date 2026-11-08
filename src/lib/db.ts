@@ -154,6 +154,12 @@ async function repairPlaylistImportSlotIdentity(
   // repair. (It runs right after this check when it is part of the pending set.)
   const columns = (await execute(`PRAGMA table_info(playlist_import_track_results)`)) as Rows;
   if (!columns.rows.some((c) => c.name === 'track_index')) return;
+  // `rate_limited` (ISSUE #325) arrives in migration 0025, i.e. AFTER this
+  // repair runs (it is called right after 0022). A legacy table therefore may
+  // not have the column yet — the rebuild inserts a literal 0 for it instead of
+  // reading a column that does not exist yet.
+  const hasRateLimited = columns.rows.some((c) => c.name === 'rate_limited');
+  const legacyRateLimited = hasRateLimited ? 'rate_limited' : '0 AS rate_limited';
 
   const ambiguous = (await execute(`
     SELECT count(*) AS n FROM (
@@ -182,6 +188,7 @@ async function repairPlaylistImportSlotIdentity(
     artist text NOT NULL,
     status text NOT NULL,
     needs_review integer DEFAULT 0 NOT NULL,
+    rate_limited integer DEFAULT 0 NOT NULL,
     created_at text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL
   )`);
   const LEGACY_ROWS = `rowid IN (
@@ -191,16 +198,16 @@ async function repairPlaylistImportSlotIdentity(
   )`;
   await execute(`
     INSERT INTO playlist_import_track_results_rebuild
-      (job_id, spotify_track_id, track_index, title, artist, status, needs_review, created_at)
+      (job_id, spotify_track_id, track_index, title, artist, status, needs_review, rate_limited, created_at)
     SELECT job_id, spotify_track_id,
            -ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY created_at, rowid),
-           title, artist, status, needs_review, created_at
+           title, artist, status, needs_review, ${legacyRateLimited}, created_at
     FROM playlist_import_track_results WHERE ${LEGACY_ROWS}
   `);
   await execute(`
     INSERT INTO playlist_import_track_results_rebuild
-      (job_id, spotify_track_id, track_index, title, artist, status, needs_review, created_at)
-    SELECT job_id, spotify_track_id, track_index, title, artist, status, needs_review, created_at
+      (job_id, spotify_track_id, track_index, title, artist, status, needs_review, rate_limited, created_at)
+    SELECT job_id, spotify_track_id, track_index, title, artist, status, needs_review, ${legacyRateLimited}, created_at
     FROM playlist_import_track_results WHERE rowid NOT IN (
       SELECT rowid FROM playlist_import_track_results AS dup
       WHERE (SELECT count(*) FROM playlist_import_track_results AS x

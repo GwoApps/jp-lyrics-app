@@ -1,0 +1,14 @@
+-- ISSUE #325 — remember *why* a playlist slot failed.
+--
+-- `processTrack()` already distinguishes "the lyrics source was rate-limited"
+-- (recoverable: wait and retry) from "there really are no lyrics" (final), but
+-- the flag only lived in one HTTP response: `saveTrackResult()` wrote `status`
+-- and `needs_review` only, so after a refresh / resume the rate-limited list was
+-- empty and the UI showed a plain "no lyrics" failure.
+--
+-- `rate_limited` makes the distinction durable: the resume read (`GET`) and the
+-- chunk replay both carry it back, and a retry can pick the recoverable slots.
+--
+-- Additive only: existing rows default to 0 (unknown reason → treated as final),
+-- which keeps every previously persisted failure exactly as it behaved before.
+ALTER TABLE `playlist_import_track_results` ADD `rate_limited` integer DEFAULT 0 NOT NULL;

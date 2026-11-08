@@ -191,7 +191,7 @@
     "importReviewMatchedAmbiguous": "\nTwo candidates scored closely — please check which is the intended recording.",
     "playlistImportReviewHeader": "{count} track(s) need review",
     "playlistImportReviewHint": "These tracks were imported with a low-confidence lyrics match. Open them in the song list to verify and re-sync.",
-    "playlistImportRateLimited": "The lyrics source was rate-limited for some tracks. Those tracks were skipped — resume the import a little later to retry them.",
+    "playlistImportRateLimited": "The lyrics source was rate-limited for some tracks. They were skipped — wait a moment, then retry them.",
     "loadFailed": "Failed to load songs. Please check your connection and try again.",
     "retry": "Retry",
     "cachedData": "Showing cached data — refresh failed",
@@ -231,7 +231,8 @@
     "deleteCollectionConfirmTitle": "Delete collection \"{name}\"?",
     "deleteCollectionConfirmBody": "This action cannot be undone.",
     "disconnectConfirmTitle": "Disconnect Spotify?",
-    "disconnectConfirmBody": "Disconnecting signs you out: playback sync and imports stop working until you authorize Spotify again."
+    "disconnectConfirmBody": "Disconnecting signs you out: playback sync and imports stop working until you authorize Spotify again.",
+    "playlistImportRetryRateLimited": "Retry {count} track(s)"
   },
   "song": {
     "notFound": "Song not found",

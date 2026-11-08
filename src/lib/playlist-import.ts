@@ -60,12 +60,20 @@ export interface PlaylistTrackResult {
   needsReview?: boolean;
   /** True when every source failed because the lrclib source was rate-limited (HTTP 429). */
   rateLimited?: boolean;
+  /**
+   * Playlist slot this outcome belongs to (ISSUE #325). Sent with every result
+   * so the client can address an individual slot — that is what makes
+   * "retry the rate-limited tracks" a decidable operation instead of a guess.
+   */
+  trackIndex?: number;
 }
 
 /** Persisted outcome for a track (used to replay already-done tracks on resume). */
 export interface PersistedTrackResult {
   status: TrackStatus;
   needsReview: boolean;
+  /** Persisted "the sources were rate-limited" flag (ISSUE #325). */
+  rateLimited: boolean;
 }
 
 /**
@@ -85,8 +93,8 @@ export interface PersistedTrackResults {
 /** All persisted outcomes for a job, in playlist order (one row per slot). */
 export async function listTrackResults(
   jobId: string,
+  db: ReturnType<typeof getDB> = getDB(),
 ): Promise<PlaylistTrackResult[]> {
-  const db = getDB();
   const rows = await db.select({
     spotifyTrackId: schema.playlistImportTrackResults.spotifyTrackId,
     trackIndex: schema.playlistImportTrackResults.trackIndex,
@@ -94,17 +102,22 @@ export async function listTrackResults(
     artist: schema.playlistImportTrackResults.artist,
     status: schema.playlistImportTrackResults.status,
     needsReview: schema.playlistImportTrackResults.needsReview,
+    rateLimited: schema.playlistImportTrackResults.rateLimited,
   })
     .from(schema.playlistImportTrackResults)
     .where(eq(schema.playlistImportTrackResults.jobId, jobId))
     .orderBy(asc(schema.playlistImportTrackResults.trackIndex), asc(schema.playlistImportTrackResults.createdAt))
     .all();
-  return rows.map((row: { spotifyTrackId: string; trackIndex: number; title: string; artist: string; status: string; needsReview: number }) => ({
+  return rows.map((row: { spotifyTrackId: string; trackIndex: number; title: string; artist: string; status: string; needsReview: number; rateLimited: number }) => ({
     spotifyId: row.spotifyTrackId,
+    trackIndex: row.trackIndex,
     title: row.title,
     artist: row.artist,
     status: row.status as TrackStatus,
     ...(row.needsReview ? { needsReview: true } : {}),
+    // ISSUE #325: the reason survives the response — a rate-limited slot must
+    // not come back as a plain "no lyrics" failure after a refresh / resume.
+    ...(row.rateLimited ? { rateLimited: true } : {}),
   }));
 }
 
@@ -305,9 +318,48 @@ export async function saveTrackResult(
   jobId: string,
   trackIndex: number,
   track: PlaylistTrack,
-  result: Omit<PlaylistTrackResult, 'title' | 'artist'>,
+  result: Omit<PlaylistTrackResult, 'title' | 'artist' | 'trackIndex'>,
   db: ReturnType<typeof getDB> = getDB(),
+  options: { overwrite?: boolean } = {},
 ): Promise<void> {
+  const values = {
+    jobId,
+    spotifyTrackId: track.id,
+    trackIndex,
+    title: track.title,
+    artist: track.artist,
+    status: result.status,
+    needsReview: result.needsReview ? 1 : 0,
+    // ISSUE #325: persist *why* the slot failed, otherwise a recoverable
+    // rate-limited failure is indistinguishable from "no lyrics" after a
+    // refresh / resume.
+    rateLimited: result.rateLimited ? 1 : 0,
+  };
+
+  // Retry path (ISSUE #325): the user explicitly asked to re-run a failed slot,
+  // so the existing row must be UPDATED. Counters are then recomputed from the
+  // result table, which is the authoritative source — that keeps
+  // processed/imported/skipped/failed aligned with the rows even though the
+  // slot flips from failed to imported.
+  if (options.overwrite) {
+    await db.insert(schema.playlistImportTrackResults)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [schema.playlistImportTrackResults.jobId, schema.playlistImportTrackResults.trackIndex],
+        set: {
+          spotifyTrackId: values.spotifyTrackId,
+          title: values.title,
+          artist: values.artist,
+          status: values.status,
+          needsReview: values.needsReview,
+          rateLimited: values.rateLimited,
+        },
+      })
+      .run();
+    await recountJobProgress(db, jobId);
+    return;
+  }
+
   // The track-result row is the source of truth. We insert it FIRST and only
   // bump the job counters when the INSERT actually added a NEW row. A duplicate
   // `(jobId, trackIndex)` is a no-op for both the result table and the counters,
@@ -322,15 +374,10 @@ export async function saveTrackResult(
   //
   // `(jobId, trackIndex)` is unique via `playlist_import_track_results_job_track_idx`
   // (migration 0022 / `repairPlaylistImportSlotIdentity()`).
-  const inserted = await db.insert(schema.playlistImportTrackResults).values({
-    jobId,
-    spotifyTrackId: track.id,
-    trackIndex,
-    title: track.title,
-    artist: track.artist,
-    status: result.status,
-    needsReview: result.needsReview ? 1 : 0,
-  }).onConflictDoNothing().run();
+  const inserted = await db.insert(schema.playlistImportTrackResults)
+    .values(values)
+    .onConflictDoNothing()
+    .run();
 
   // rowsAffected: libsql · changes / meta.changes: D1 — all drivers expose the
   // affected-row count one way or another. 0 means the row already existed.
@@ -354,6 +401,29 @@ export async function saveTrackResult(
         skipped = skipped + ${inc.skipped},
         failed = failed + ${inc.failed},
         status = 'running',
+        updated_at = ${nowUtcSql()}
+    WHERE id = ${jobId}
+  `);
+}
+
+/**
+ * Rewrite a job's counters from its track-result table.
+ *
+ * Only used on the explicit retry path, where a slot's status legitimately
+ * changes (failed → imported / skipped) and incremental counters cannot follow.
+ * Recomputing one statement keeps the summary exactly equal to the rows, so the
+ * counters can never drift — and a recount also repairs any pre-existing drift.
+ */
+async function recountJobProgress(
+  db: ReturnType<typeof getDB>,
+  jobId: string,
+): Promise<void> {
+  await db.run(sql`
+    UPDATE playlist_import_jobs
+    SET processed = (SELECT count(*) FROM playlist_import_track_results WHERE job_id = ${jobId}),
+        imported = (SELECT count(*) FROM playlist_import_track_results WHERE job_id = ${jobId} AND status = 'imported'),
+        skipped = (SELECT count(*) FROM playlist_import_track_results WHERE job_id = ${jobId} AND status = 'skipped'),
+        failed = (SELECT count(*) FROM playlist_import_track_results WHERE job_id = ${jobId} AND status = 'failed'),
         updated_at = ${nowUtcSql()}
     WHERE id = ${jobId}
   `);
@@ -450,14 +520,15 @@ export async function existingResultsForChunk(
   jobId: string,
   offset: number,
   limit: number,
+  db: ReturnType<typeof getDB> = getDB(),
 ): Promise<Map<number, PersistedTrackResult>> {
   const results = new Map<number, PersistedTrackResult>();
   if (limit <= 0) return results;
-  const db = getDB();
   const rows = await db.select({
     trackIndex: schema.playlistImportTrackResults.trackIndex,
     status: schema.playlistImportTrackResults.status,
     needsReview: schema.playlistImportTrackResults.needsReview,
+    rateLimited: schema.playlistImportTrackResults.rateLimited,
   })
     .from(schema.playlistImportTrackResults)
     .where(and(
@@ -467,12 +538,50 @@ export async function existingResultsForChunk(
     ))
     .all();
   for (const row of rows) {
-    results.set(row.trackIndex, {
-      status: row.status as TrackStatus,
-      needsReview: !!row.needsReview,
-    });
+    results.set(row.trackIndex, toPersistedResult(row));
   }
   return results;
+}
+
+/** Read one persisted row into the replay shape (slot, status, reason). */
+function toPersistedResult(row: {
+  status: string;
+  needsReview: number;
+  rateLimited: number;
+}): PersistedTrackResult {
+  return {
+    status: row.status as TrackStatus,
+    needsReview: !!row.needsReview,
+    rateLimited: !!row.rateLimited,
+  };
+}
+
+/**
+ * Every slot of a job that ended as `failed`, in playlist order (ISSUE #325).
+ *
+ * This is what makes the retry decidable: the result table — not the in-memory
+ * response of some earlier request — says which slots are worth another attempt,
+ * and `rateLimited` says which of them failed for a *recoverable* reason.
+ */
+export async function listFailedTrackSlots(
+  jobId: string,
+  db: ReturnType<typeof getDB> = getDB(),
+): Promise<{ trackIndex: number; rateLimited: boolean }[]> {
+  const rows = await db.select({
+    trackIndex: schema.playlistImportTrackResults.trackIndex,
+    rateLimited: schema.playlistImportTrackResults.rateLimited,
+  })
+    .from(schema.playlistImportTrackResults)
+    .where(and(
+      eq(schema.playlistImportTrackResults.jobId, jobId),
+      eq(schema.playlistImportTrackResults.status, 'failed'),
+    ))
+    .orderBy(asc(schema.playlistImportTrackResults.trackIndex))
+    .all();
+  return rows.map((row: { trackIndex: number; rateLimited: number }) => ({
+    trackIndex: row.trackIndex,
+    rateLimited: !!row.rateLimited,
+  }));
 }
 
 /**
@@ -486,22 +595,22 @@ export async function existingResultsForChunk(
  */
 export async function getPersistedTrackResults(
   jobId: string,
+  db: ReturnType<typeof getDB> = getDB(),
 ): Promise<PersistedTrackResults> {
-  const db = getDB();
   const rows = await db.select({
     trackIndex: schema.playlistImportTrackResults.trackIndex,
     status: schema.playlistImportTrackResults.status,
     needsReview: schema.playlistImportTrackResults.needsReview,
+    rateLimited: schema.playlistImportTrackResults.rateLimited,
   })
     .from(schema.playlistImportTrackResults)
     .where(eq(schema.playlistImportTrackResults.jobId, jobId))
     .orderBy(asc(schema.playlistImportTrackResults.trackIndex), asc(schema.playlistImportTrackResults.createdAt))
     .all();
 
-  const results = rows.map((row: { status: string; needsReview: number }) => ({
-    status: row.status as TrackStatus,
-    needsReview: !!row.needsReview,
-  }));
+  // Negative slots are the legacy rows that could not be attributed to a slot;
+  // they stay in `results` (never resumed) but must not become the cursor.
+  const results = rows.map(toPersistedResult);
 
   let resumeOffset = 0;
   for (const row of rows) {

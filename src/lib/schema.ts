@@ -258,6 +258,13 @@ export const playlistImportTrackResults = sqliteTable('playlist_import_track_res
   artist: text('artist').notNull(),
   status: text('status').notNull(), // imported | skipped | failed
   needsReview: integer('needs_review').notNull().default(0),
+  /**
+   * Why a `failed` slot failed (ISSUE #325): 1 = every source was rate-limited
+   * (recoverable — retrying later can succeed), 0 = no lyrics found (final).
+   * Persisted so a refresh / resume does not turn a recoverable failure into a
+   * plain "no lyrics", and so the retry can pick exactly the recoverable slots.
+   */
+  rateLimited: integer('rate_limited').notNull().default(0),
   createdAt: text('created_at').notNull().default(nowUtcSql()),
 }, (t) => [
   sqliteIndex('playlist_import_track_results_job_track_idx').on(t.jobId, t.trackIndex),
