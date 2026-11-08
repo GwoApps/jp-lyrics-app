@@ -291,11 +291,10 @@
     "readingOriginal": "Original",
     "readingFurigana": "Annotations",
     "romanizeFurigana": "Romanized readings",
-    "translation": "Chinese translation",
+    "translation": "Translation",
     "translateTo": "Translate to {lang}",
     "translationTarget": "Target: {lang}",
     "translationTargetSection": "Target language",
-    "translationTargetDefault": "Use system default",
     "reTranslate": "Re-translate",
     "translating": "Translating…",
     "translationPreparing": "Preparing translation…",
@@ -349,7 +348,7 @@
     "exportReadingFuriganaHint": "Renders readings above the lyrics",
     "exportReadingRomaji": "Romanized readings",
     "exportReadingRomajiHint": "Transliterates kana / Jyutping into Latin script",
-    "exportTranslationLabel": "Include Chinese translation",
+    "exportTranslationLabel": "Include translation",
     "exportTranslationHint": "Pairs each lyric line with its translation below",
     "exportDownloadBtn": "Download",
     "exportLrcHint": "LRC is a timed format — synced lyrics with an optional translation per line; no readings",
@@ -448,7 +447,11 @@
     "resumeSync": "Resume sync",
     "seekFailed": "Couldn't jump to this line — please check your playback device and try again",
     "seekAuthFailed": "Couldn't jump to this line — Spotify connection expired",
-    "lyricsNeedsReview": "Pending review — this lyrics match was low-confidence"
+    "lyricsNeedsReview": "Pending review — this lyrics match was low-confidence",
+    "translationLangMismatchBanner": "This translation is in {current}, but your target language is {target} — click to re-translate",
+    "translationCurrentLang": "Current translation: {lang}",
+    "translationLanguageLabel": "Translation language: {lang}",
+    "exportTranslationLangMismatch": "This translation is in {current} while your target language is {target} — the export stays in the old language."
   },
   "timeline": {
     "title": "LRC Timeline Editor",
@@ -680,7 +683,8 @@
     "portrait": "Portrait",
     "showQrCode": "Show QR code",
     "showSourceText": "Show source text",
-    "includeTranslation": "Include translation"
+    "includeTranslation": "Include translation",
+    "translationLangMismatch": "The shared card and copied text use the {current} translation while your target language is {target} — re-translate on the song page to get the new language."
   },
   "admin": {
     "title": "Admin",

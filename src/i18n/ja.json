@@ -291,11 +291,10 @@
     "readingOriginal": "原文",
     "readingFurigana": "注音",
     "romanizeFurigana": "ローマ字ルビ",
-    "translation": "中文訳",
+    "translation": "翻訳",
     "translateTo": "{lang} に翻訳",
     "translationTarget": "目標：{lang}",
     "translationTargetSection": "翻訳先言語",
-    "translationTargetDefault": "システム既定に従う",
     "reTranslate": "再翻訳",
     "translating": "翻訳中…",
     "translationPreparing": "翻訳を準備しています…",
@@ -349,7 +348,7 @@
     "exportReadingFuriganaHint": "歌詞の上に読みを表示",
     "exportReadingRomaji": "ローマ字ルビ",
     "exportReadingRomajiHint": "かな / 粤拼をラテン文字に転写",
-    "exportTranslationLabel": "中国語訳を含める",
+    "exportTranslationLabel": "翻訳を含める",
     "exportTranslationHint": "各行の歌詞の下に翻訳を出力",
     "exportDownloadBtn": "ダウンロード",
     "exportLrcHint": "LRC はタイムスタンプ形式で、同期歌詞を含み、各行の翻訳を任意で追加できます（読みは含みません）",
@@ -448,7 +447,11 @@
     "resumeSync": "同期を再開",
     "seekFailed": "この行に移動できませんでした — 再生デバイスを確認してもう一度お試しください",
     "seekAuthFailed": "この行に移動できませんでした — Spotify の接続が切れています",
-    "lyricsNeedsReview": "要確認 — 歌詞のマッチ信頼度が低い"
+    "lyricsNeedsReview": "要確認 — 歌詞のマッチ信頼度が低い",
+    "translationLangMismatchBanner": "現在の訳文は {current}、翻訳先言語は {target} です — クリックで再翻訳",
+    "translationCurrentLang": "現在の訳文：{lang}",
+    "translationLanguageLabel": "訳文の言語：{lang}",
+    "exportTranslationLangMismatch": "この訳文は{current}です。翻訳先言語は{target}のため、書き出しは古い言語のままです。"
   },
   "timeline": {
     "title": "LRC タイムライン編集",
@@ -680,7 +683,8 @@
     "portrait": "縦向き",
     "showQrCode": "QRコードを表示",
     "showSourceText": "共有元テキストを表示",
-    "includeTranslation": "翻訳を含める"
+    "includeTranslation": "翻訳を含める",
+    "translationLangMismatch": "共有カードとコピーに含まれる訳文は{current}です。翻訳先言語は{target}のため、新しい言語が必要な場合は曲ページで再翻訳してください。"
   },
   "admin": {
     "title": "管理画面",

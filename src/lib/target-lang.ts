@@ -56,6 +56,18 @@ export const DEFAULT_TRANSLATION_LANG = 'zh-CN';
 const LANGUAGE_TAG_RE = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{1,8})*$/;
 
 /**
+ * Is this a well-formed language tag at all?
+ *
+ * Wider than {@link isKnownTargetLang} on purpose: admins can configure a
+ * custom target language (anything from `pt-BR` to `yue`), and the client must
+ * still be able to compare it against a stored `lyrics_translation_lang`
+ * (issue #281) instead of guessing it is "unknown" and skipping the check.
+ */
+export function isLanguageTag(code: string | null | undefined): boolean {
+  return !!code && LANGUAGE_TAG_RE.test(code.trim());
+}
+
+/**
  * Normalize a stored `songs.lyrics_translation_lang` into a tag that is safe to
  * put on an HTML `lang` attribute, with canonical BCP-47 casing
  * (`zh-cn` → `zh-CN`, `ZH-hant-tw` → `zh-Hant-TW`).

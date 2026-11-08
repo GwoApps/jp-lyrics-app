@@ -5,6 +5,7 @@ import { Download, FileText, FileClock, FileCode2, Check, X, AlertCircle, Ban, L
 import { useI18n } from '@/lib/i18n';
 import Dialog from '@/components/ui/dialog';
 import { exportErrorMsg } from '@/lib/export-errors';
+import { targetLangDisplay } from '@/lib/target-lang';
 import { exportFilename, extensionForFormat, fallbackFilename, saveBlob } from '@/lib/download';
 import type { ExportFormat, ExportReadingMode } from '@/lib/lyrics-export';
 
@@ -15,6 +16,17 @@ interface DownloadDialogProps {
   hasReadingData: boolean;
   /** True when the song has a stored translation that can be paired in exports. */
   hasTranslation: boolean;
+  /**
+   * True when that stored translation is in a recorded language other than the
+   * current target language (issue #281). The export still uses the stored
+   * lines — the dialog just stops pretending they match what the user asked
+   * for, which is how a wrong-language file used to slip through unnoticed.
+   */
+  translationLangMismatch?: boolean;
+  /** Language the stored translation is actually in (for the warning copy). */
+  storedTranslationLang?: string | null;
+  /** Current effective target language (for the warning copy). */
+  targetLang?: string | null;
   /** True when the song has a non-empty synced timeline (whitespace-insensitive). */
   hasSynced: boolean;
   /** Song metadata used for the client-side fallback filename. */
@@ -34,6 +46,9 @@ export default function DownloadDialog({
   songId,
   hasReadingData,
   hasTranslation,
+  translationLangMismatch = false,
+  storedTranslationLang = null,
+  targetLang = null,
   hasSynced,
   songTitle,
   songArtist,
@@ -261,7 +276,12 @@ export default function DownloadDialog({
               <span className="min-w-0">
                 <span className="block text-sm">{t('song.exportTranslationLabel')}</span>
                 <span className="mt-0.5 block text-xs leading-relaxed text-[var(--muted-foreground)]">
-                  {t('song.exportTranslationHint')}
+                  {translationLangMismatch
+                    ? t('song.exportTranslationLangMismatch', {
+                      current: targetLangDisplay(storedTranslationLang),
+                      target: targetLangDisplay(targetLang),
+                    })
+                    : t('song.exportTranslationHint')}
                 </span>
               </span>
               <input

@@ -40,10 +40,15 @@ export interface UseSongDataReturn {
   furiganaLines: FuriganaLine[];
   translations: string[];
   hasTranslation: boolean;
-  // Number of lyric lines still missing a translation (used to surface
-  // partial translations in the UI and offer a one-tap resume entry).
+  // The stored cache is in a recorded language other than the current target
+  // language (issue #281) — it is shown, but does not count as coverage.
+  translationLangMismatch: boolean;
+  /** Recorded language of the stored translation, or null when unrecorded. */
+  storedTranslationLang: string | null;
+  // Number of lyric lines still missing a translation in the current target
+  // language (used to surface partial translations and offer a resume entry).
   untranslatedCount: number;
-  // Number of lyric lines that have a non-empty translation.
+  // Number of lyric lines that have a non-empty translation in that language.
   translatedCount: number;
   showTranslation: boolean;
   setShowTranslation: React.Dispatch<React.SetStateAction<boolean>>;
@@ -241,7 +246,8 @@ export function useSongData(id: string): UseSongDataReturn {
 
   // ── Translation sub-hook ────────────────────────────────
   const {
-    translations, hasTranslation, untranslatedCount, translatedCount,
+    translations, hasTranslation, translationLangMismatch, storedTranslationLang,
+    untranslatedCount, translatedCount,
     translating, translationSaving, translationError, translationProgress,
     translationStage, translationReasoning, showTranslationReasoning,
     setShowTranslationReasoning, toggleTranslationReasoning, hasSavedReasoning,
@@ -261,7 +267,9 @@ export function useSongData(id: string): UseSongDataReturn {
     fontSize, theme, readingMode, romanizeFurigana, song, furiganaLines, lineTimestamps,
     disableVideoPiP,
     translationLines: showTranslation && hasTranslation ? translations : undefined,
-    showUntranslatedHint: untranslatedCount > 0,
+    // A wrong-language cache still renders its lines, so the "not translated"
+    // placeholder would contradict them (issue #281).
+    showUntranslatedHint: untranslatedCount > 0 && !translationLangMismatch,
     showToast, t,
   });
 
@@ -384,6 +392,8 @@ export function useSongData(id: string): UseSongDataReturn {
     furiganaLines,
     translations,
     hasTranslation,
+    translationLangMismatch,
+    storedTranslationLang,
     untranslatedCount,
     translatedCount,
     showTranslation,

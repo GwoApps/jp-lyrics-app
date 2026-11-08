@@ -291,11 +291,10 @@
     "readingOriginal": "原文",
     "readingFurigana": "假名",
     "romanizeFurigana": "罗马字注音",
-    "translation": "中文翻译",
+    "translation": "译文",
     "translateTo": "翻译成{lang}",
     "translationTarget": "目标：{lang}",
     "translationTargetSection": "目标语言",
-    "translationTargetDefault": "跟随系统默认",
     "reTranslate": "重新翻译",
     "translating": "翻译中…",
     "translationPreparing": "正在准备翻译…",
@@ -349,7 +348,7 @@
     "exportReadingFuriganaHint": "在歌词上方输出注音",
     "exportReadingRomaji": "罗马字注音",
     "exportReadingRomajiHint": "将假名 / 粤拼注音转写为拉丁字母",
-    "exportTranslationLabel": "包含中文翻译",
+    "exportTranslationLabel": "包含译文",
     "exportTranslationHint": "在每行歌词下方输出对应的翻译",
     "exportDownloadBtn": "下载",
     "exportLrcHint": "LRC 为时间轴格式，包含同步歌词，可选附加每行译文，不含注音",
@@ -448,7 +447,11 @@
     "resumeSync": "恢复同步",
     "seekFailed": "无法跳转到该行 — 请检查播放设备后重试",
     "seekAuthFailed": "无法跳转到该行 — Spotify 连接已过期",
-    "lyricsNeedsReview": "待审核 — 歌词匹配可信度较低"
+    "lyricsNeedsReview": "待审核 — 歌词匹配可信度较低",
+    "translationLangMismatchBanner": "当前译文为 {current}，目标语言为 {target}——点击重新翻译",
+    "translationCurrentLang": "当前译文：{lang}",
+    "translationLanguageLabel": "译文语言：{lang}",
+    "exportTranslationLangMismatch": "这份译文是{current}，你的目标语言是{target}；导出内容仍是旧语言。"
   },
   "timeline": {
     "title": "LRC 时间轴编辑",
@@ -680,7 +683,8 @@
     "portrait": "竖向",
     "showQrCode": "显示二维码",
     "showSourceText": "显示分享来源文本",
-    "includeTranslation": "包含中文翻译"
+    "includeTranslation": "包含译文",
+    "translationLangMismatch": "分享卡片与复制内容里的译文是{current}，你的目标语言是{target}；需要新语言请先在歌曲页重新翻译。"
   },
   "admin": {
     "title": "管理",

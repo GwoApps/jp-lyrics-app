@@ -34,6 +34,7 @@ import { isEmptyAfterTrim } from '@/lib/lyrics-export';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useI18n } from '@/lib/i18n';
 import { fmtMs, fmtTime, findActiveLine } from '@/lib/lrc';
+import { targetLangDisplay } from '@/lib/target-lang';
 import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
 import { useImmersiveLyrics } from '@/hooks/useImmersiveLyrics';
@@ -328,10 +329,19 @@ export default function SongViewPage() {
   // for that exact partial state; if the count changes (e.g. a resume adds a
   // few lines, or a new translate is interrupted midway) the banner reappears.
   const [partialBannerDismissedAt, setPartialBannerDismissedAt] = useState<number | null>(null);
+  // A wrong-language cache is its own state, not a "partial" one — the partial
+  // banner would read 「已翻译 0/N 行」, which explains nothing (issue #281).
   const showPartialBanner = data.hasTranslation
+    && !data.translationLangMismatch
     && data.untranslatedCount > 0
     && !data.translating
     && partialBannerDismissedAt !== data.untranslatedCount;
+  // Dismissal of the wrong-language banner, remembered per (stored, target) pair
+  // so it comes back if either language changes again.
+  const [langBannerDismissedAt, setLangBannerDismissedAt] = useState<string | null>(null);
+  const langBannerKey = `${data.storedTranslationLang ?? ''}>${data.targetLang ?? ''}`;
+  const showLangMismatchBanner = data.translationLangMismatch && !data.translating
+    && langBannerDismissedAt !== langBannerKey;
   const spectrum = useSpectrumCapture();
 
   const closeExperiments = useCallback(() => {
@@ -1033,7 +1043,7 @@ export default function SongViewPage() {
                     readingScheme={song.reading_scheme}
                     translation={data.showTranslation ? data.translations[i] ?? null : null}
                     translationLang={song.lyrics_translation_lang}
-                    showUntranslatedHint={data.showTranslation && data.hasTranslation && data.untranslatedCount > 0 && !(data.translations[i] ?? '').trim()}
+                    showUntranslatedHint={data.showTranslation && data.hasTranslation && !data.translationLangMismatch && data.untranslatedCount > 0 && !(data.translations[i] ?? '').trim()}
                   />
                 </div>
               ))
@@ -1140,6 +1150,9 @@ export default function SongViewPage() {
           songId={id}
           hasReadingData={furiganaLines.length > 0}
           hasTranslation={data.hasTranslation}
+          translationLangMismatch={data.translationLangMismatch}
+          storedTranslationLang={data.storedTranslationLang}
+          targetLang={data.targetLang}
           hasSynced={!isEmptyAfterTrim(data.song.lyrics_synced)}
           songTitle={data.song.title}
           songArtist={data.song.artist}
@@ -1169,6 +1182,40 @@ export default function SongViewPage() {
           each other's buttons). They are now children of one top-center
           container and stack vertically instead. */}
       <SongTopStatusStack>
+      {/* Wrong-language banner (issue #281): a target-language switch leaves the
+          old cache in place, so the page must say which language is on screen
+          and offer the one-tap re-translate instead of looking complete. */}
+      {showLangMismatchBanner && (
+        <StatusLayer>
+        <div className="flex items-center gap-2 rounded-full border border-[var(--warning)]/40 bg-[var(--card)]/95 px-3 py-1.5 text-xs shadow-sm backdrop-blur-sm">
+          <Languages className="h-3.5 w-3.5 shrink-0 text-[var(--warning)]" />
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={() => void data.handleTranslate(true)}
+              className="text-[var(--foreground)]"
+            >
+              {t('song.translationLangMismatchBanner', {
+                current: targetLangDisplay(data.storedTranslationLang),
+                target: targetLangDisplay(data.targetLang),
+              })}
+            </button>
+          ) : (
+            <span className="text-[var(--foreground)]">
+              {t('song.translationLanguageLabel', { lang: targetLangDisplay(data.storedTranslationLang) })}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setLangBannerDismissedAt(langBannerKey)}
+            aria-label={t('common.close')}
+            className="rounded-full p-0.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        </StatusLayer>
+      )}
       {/* Persistent "partial translation" banner (issue #100): once the error
           pill is dismissed there is no other常驻 reminder that the song is
           only partially translated. Show a dismissible "已翻译 X/Y 行，点击继续"

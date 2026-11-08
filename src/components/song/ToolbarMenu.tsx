@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { RefreshCw, Loader2, Languages, Brain } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { targetLangDisplay } from '@/lib/target-lang';
 import { useSongData } from '@/hooks/useSongData';
 
 
@@ -42,6 +43,51 @@ export function buildReadingMenuItems(
   t: ReturnType<typeof useI18n>['t'],
   canEdit: boolean,
 ): ToolbarMenuItem[] {
+  // The translation entry names the language it will produce — never a fixed
+  // 「中文翻译」: the target language is user/admin configurable (issue #281).
+  const targetLabel = data.targetLang ? targetLangDisplay(data.targetLang) : '';
+  const storedLabel = data.storedTranslationLang ? targetLangDisplay(data.storedTranslationLang) : '';
+  // Only an editor/owner can request a translation, so a wrong-language cache
+  // stays a plain display toggle for everyone else — no button that 403s.
+  const mismatchActionable = data.translationLangMismatch && canEdit;
+  // Clicking starts a translate request when there is nothing to show in the
+  // current target language; otherwise it only toggles the display.
+  const needsTranslate = !data.hasTranslation || mismatchActionable;
+  const togglesDisplay = data.hasTranslation && !needsTranslate;
+
+  const translationLabel = () => {
+    if (data.translating) return t('song.translating');
+    if (!data.hasTranslation) {
+      return targetLabel ? t('song.translateTo', { lang: targetLabel }) : t('song.translation');
+    }
+    if (mismatchActionable) {
+      // What the click produces, not what is stored.
+      return targetLabel ? t('song.translateTo', { lang: targetLabel }) : t('song.translation');
+    }
+    // Readers can still show/hide the stored lines; the status line above says
+    // which language they are in, so no "continue translating" here.
+    if (data.translationLangMismatch) return t('song.translation');
+    if (data.untranslatedCount > 0) {
+      return t('song.translationContinueRemain', { count: String(data.untranslatedCount) });
+    }
+    return t('song.translation');
+  };
+
+  const translationStatus = () => {
+    if (data.translating || !data.hasTranslation) return undefined;
+    if (data.translationLangMismatch) {
+      // Name the language the lines on screen are actually in.
+      return storedLabel ? t('song.translationCurrentLang', { lang: storedLabel }) : undefined;
+    }
+    if (data.untranslatedCount > 0) {
+      return t('song.translationPartial', {
+        done: String(data.translatedCount),
+        total: String(data.translatedCount + data.untranslatedCount),
+      });
+    }
+    return t(data.showTranslation ? 'common.on' : 'common.off');
+  };
+
   return [
     ...([
       ['original', 'song.readingOriginal'],
@@ -62,42 +108,33 @@ export function buildReadingMenuItems(
     }]),
     {
       icon: data.translating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Languages className="h-3.5 w-3.5" />,
-      label: data.translating
-        ? t('song.translating')
-        : !data.hasTranslation
-          ? t('song.translation')
-          : data.untranslatedCount > 0
-            ? t('song.translationContinueRemain', { count: String(data.untranslatedCount) })
-            : t('song.translation'),
-      status: data.translating
-        ? undefined
-        : !data.hasTranslation
-          ? undefined
-          : data.untranslatedCount > 0
-            ? t('song.translationPartial', { done: String(data.translatedCount), total: String(data.translatedCount + data.untranslatedCount) })
-            : t(data.showTranslation ? 'common.on' : 'common.off'),
+      label: translationLabel(),
+      status: translationStatus(),
       onClick: () => {
-        // Fully translated → toggle display. Untranslated / partial → start
-        // (or resume) the translation, which the server continues from the
-        // already-cached lines.
-        if (data.hasTranslation && data.untranslatedCount === 0) {
-          data.setShowTranslation(!data.showTranslation);
+        // Fully translated into the current target language → toggle display.
+        // Untranslated / partial → start (or resume) from the cached lines.
+        // Wrong language → a forced re-translate: the stored cache is in a
+        // language this user no longer wants, so it must not be reused.
+        if (needsTranslate) {
+          void data.handleTranslate(data.translationLangMismatch);
         } else {
-          void data.handleTranslate();
+          data.setShowTranslation(!data.showTranslation);
         }
       },
       disabled: data.translating || (!canEdit && !data.hasTranslation),
       // A translation request can outlive the menu; close the Radix modal so
       // the completion toast (and its review action) remains focusable/clickable.
       // A plain display-mode toggle may keep the menu open.
-      keepOpen: data.hasTranslation && data.untranslatedCount === 0,
+      keepOpen: togglesDisplay,
     },
     // Force re-translate entry — after the user changes their target language
     // (or wants fresh output) the cache is no longer trusted; `force: true`
-    // bypasses the server cache short-circuit entirely (issue #93).
+    // bypasses the server cache short-circuit entirely (issue #93). Its status
+    // names the language that run would produce, so the choice is not blind.
     ...(data.hasTranslation && !data.translating ? [{
       icon: <RefreshCw className="h-3.5 w-3.5" />,
       label: t('song.reTranslate'),
+      status: targetLabel ? t('song.translationTarget', { lang: targetLabel }) : undefined,
       onClick: () => void data.handleTranslate(true),
       keepOpen: false,
     } as ToolbarMenuItem] : []),

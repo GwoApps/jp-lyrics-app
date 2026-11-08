@@ -4,11 +4,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import QRCode from 'qrcode';
-import { ArrowLeft, ClipboardCopy, Download, Link2, Loader2, Check, Smartphone, Monitor, RefreshCw } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ClipboardCopy, Download, Link2, Loader2, Check, Smartphone, Monitor, RefreshCw } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { drawCard, getLyricLines, type Orientation, type ShareSong } from '@/lib/share-card';
-import { resolveTranslationLang } from '@/lib/target-lang';
+import { resolveTranslationLang, targetLangDisplay } from '@/lib/target-lang';
+import { translationLangState } from '@/lib/translation-lang-match';
 import { copyToClipboard } from '@/lib/clipboard';
 import { buildShareCopyText } from '@/lib/share-card-copy';
 import Toast from '@/components/Toast';
@@ -44,6 +45,22 @@ export default function SharePage() {
   const [showQrCode, setShowQrCode] = useState(true);
   const [showSourceText, setShowSourceText] = useState(true);
   const [includeTranslation, setIncludeTranslation] = useState(true);
+  // Effective target language, so the page can tell the user when the card's
+  // translation is in a different language than the one they asked for
+  // (issue #281). Best-effort: an anonymous visitor has no settings, and an
+  // unknown target simply means "no warning".
+  const [targetLang, setTargetLang] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/me/settings', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { effective_target_lang?: string } | null) => {
+        if (!cancelled && data?.effective_target_lang) setTargetLang(data.effective_target_lang);
+      })
+      .catch(() => { /* no target language → no mismatch badge */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const pageUrl = typeof window !== 'undefined' ? `${window.location.origin}/songs/${id}` : '';
   const coverTheme = useCoverTheme(song?.cover_url);
@@ -262,6 +279,10 @@ export default function SharePage() {
   const hasLyrics = lyricLines.length > 0;
   // Only offer the translation copy when at least one line actually has one.
   const hasTranslation = lyricLines.some((line) => line.translation);
+  // Issue #281: the card and the copy buttons use whatever translation is
+  // stored, so the page must say so when that is not the current target
+  // language — otherwise a shared image silently ships the old language.
+  const translationLang = translationLangState(song?.lyrics_translation_lang, targetLang, hasTranslation);
 
   return (
     <div className={`song-view song-editor-page min-h-screen text-[var(--foreground)]${coverTheme.isThemed ? ' song-view--accented' : ''}`} style={coverTheme.style}>
@@ -338,6 +359,18 @@ export default function SharePage() {
             </label>
           )}
         </div>
+
+        {hasTranslation && translationLang.mismatch && (
+          <p className="mb-3 flex items-start gap-1.5 text-xs text-[var(--warning)] sm:mb-4">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>
+              {t('share.translationLangMismatch', {
+                current: targetLangDisplay(translationLang.storedLang),
+                target: targetLangDisplay(translationLang.targetLang),
+              })}
+            </span>
+          </p>
+        )}
 
         <ShareCardPreview
           key={id}

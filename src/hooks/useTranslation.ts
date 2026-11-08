@@ -5,7 +5,8 @@ import { readTranslationStream, type TranslationProgress } from '@/lib/translati
 import { TRANSLATION_ERROR_KEYS } from '@/lib/translation-errors';
 import { parseTranslationCache } from '@/lib/translation/parse';
 import { copyToClipboard } from '@/lib/clipboard';
-import { isKnownTargetLang, targetLangDisplay } from '@/lib/target-lang';
+import { isLanguageTag, targetLangDisplay } from '@/lib/target-lang';
+import { translationLangState } from '@/lib/translation-lang-match';
 import type { SongData } from '@/lib/types';
 
 
@@ -27,6 +28,15 @@ interface UseTranslationDeps {
 export interface UseTranslationReturn {
   translations: string[];
   hasTranslation: boolean;
+  /**
+   * The stored cache is in a recorded language other than the current target
+   * language (issue #281). Its lines are still rendered — they are real
+   * translations, just not in the language the user asked for — but they do not
+   * count as coverage and the UI must say so instead of showing 「已翻译 N/N」.
+   */
+  translationLangMismatch: boolean;
+  /** Recorded language of the stored cache (`lyrics_translation_lang`), or null. */
+  storedTranslationLang: string | null;
   untranslatedCount: number;
   translatedCount: number;
   translating: boolean;
@@ -85,10 +95,14 @@ export function useTranslation(deps: UseTranslationDeps): UseTranslationReturn {
   const [targetLang, setTargetLangState] = useState<string | null>(null);
   const [targetLangOverride, setTargetLangOverride] = useState('');
 
+  // Any well-formed BCP-47 tag is accepted, not just the presets: an admin can
+  // configure a custom target language (`pt-BR`, `yue`, …) and the mismatch
+  // check below must still be able to compare it (issue #281). Malformed values
+  // are rejected so nothing arbitrary reaches `lang` attributes or labels.
   const applyEffectiveLang = useCallback((code: string | undefined) => {
-    if (typeof code !== 'string' || !code.trim()) return;
+    if (typeof code !== 'string') return;
     const trimmed = code.trim();
-    if (isKnownTargetLang(trimmed)) setTargetLangState(trimmed);
+    if (isLanguageTag(trimmed)) setTargetLangState(trimmed);
   }, []);
 
   // ── Derived translation arrays ──────────────────────────
@@ -103,6 +117,15 @@ export function useTranslation(deps: UseTranslationDeps): UseTranslationReturn {
     [translations],
   );
 
+  // Issue #281: the stored cache is stamped with the language it was generated
+  // in. Comparing that stamp with the effective target language is the only way
+  // the client can tell "translated" from "translated into the language you no
+  // longer want" — the server has always enforced it, the UI never did.
+  const { mismatch: translationLangMismatch, storedLang: storedTranslationLang } = useMemo(
+    () => translationLangState(song?.lyrics_translation_lang, targetLang, hasTranslation),
+    [song?.lyrics_translation_lang, targetLang, hasTranslation],
+  );
+
   const { translatedCount, untranslatedCount } = useMemo(() => {
     const rawLines = song?.lyrics_raw ? song.lyrics_raw.split('\n') : [];
     let translated = 0;
@@ -112,8 +135,12 @@ export function useTranslation(deps: UseTranslationDeps): UseTranslationReturn {
       total += 1;
       if ((translations[i] ?? '').trim() !== '') translated += 1;
     });
+    // Coverage is measured in the *current* target language: a cache written for
+    // another language covers none of it, so status/partial-banner/resume counts
+    // all read 0/N instead of claiming a finished song.
+    if (translationLangMismatch) return { translatedCount: 0, untranslatedCount: total };
     return { translatedCount: translated, untranslatedCount: total - translated };
-  }, [song, translations]);
+  }, [song, translations, translationLangMismatch]);
 
   // ── Coverage helper ─────────────────────────────────────
   const coverageOf = useCallback((rawLyrics: string | undefined, translationCache: string | undefined) => {
@@ -443,6 +470,8 @@ export function useTranslation(deps: UseTranslationDeps): UseTranslationReturn {
     translations,
 
     hasTranslation,
+    translationLangMismatch,
+    storedTranslationLang: storedTranslationLang || null,
     untranslatedCount,
     translatedCount,
     translating,
