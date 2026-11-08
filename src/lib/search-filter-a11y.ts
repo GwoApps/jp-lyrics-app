@@ -28,14 +28,19 @@ export function clearSearchLabel(query: string, t: TranslateFn): string {
 /**
  * Empty-state copy. With a query applied it names the query, so an empty list
  * reads as "this search matched nothing", not "the library has no songs".
+ * A category filter is the same kind of invisible filter (#392): when it is the
+ * only reason the list is empty, name the collection instead of reusing the
+ * search-empty copy — the user never searched anything.
  */
 export function noResultsMessage(
   listKind: SearchListKind,
   query: string,
   t: TranslateFn,
+  collectionName?: string | null,
 ): string {
   if (query) {
     return t(listKind === 'albums' ? 'home.noAlbumResultsFor' : 'home.noResultsFor', { query });
   }
+  if (collectionName) return t('home.collectionEmpty', { name: collectionName });
   return t(listKind === 'albums' ? 'home.noAlbumResults' : 'home.noResults');
 }

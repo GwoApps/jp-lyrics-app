@@ -36,6 +36,16 @@ export function deleteCollectionLabel(name: string, t: TranslateFn): string {
 }
 
 /**
+ * Accessible name for a collection's rename button. Renaming an existing
+ * collection is not destructive, but the name still has to identify which row
+ * the inline editor will open — the row text alone is ambiguous to a screen
+ * reader tabbing through icon-only controls.
+ */
+export function renameCollectionLabel(name: string, t: TranslateFn): string {
+  return t('home.renameCollection', { name });
+}
+
+/**
  * Accessible name for the applied-filter chip. As a button its only visible
  * content is the collection name plus a bare ✕ icon, so the name spells out
  * that activating it clears the filter.

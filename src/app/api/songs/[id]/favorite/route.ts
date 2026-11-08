@@ -98,10 +98,10 @@ export async function PUT(request: NextRequest, { params }: Params) {
           .where(eq(schema.collections.userEmail, user.email))),
     )),
     ...ids.map((collectionId) => db.insert(schema.collectionSongs)
-      .values({ collectionId, songId: id, sortOrder: 0 })),
+      .values({ collectionId, songId: id })),
     ...newCollections.flatMap((collection) => [
       db.insert(schema.collections).values(collection),
-      db.insert(schema.collectionSongs).values({ collectionId: collection.id, songId: id, sortOrder: 0 }),
+      db.insert(schema.collectionSongs).values({ collectionId: collection.id, songId: id }),
     ]),
   ];
   await db.batch(writes);

@@ -150,7 +150,10 @@ export default function SongItemCard({
       <div className="song-item-card__actions relative z-10 flex items-center gap-0.5 shrink-0">
         {spotifyConnected && (
           <>
-            <button onClick={onToggleFavorite} disabled={favoritePending} aria-label={favoriteAccessibleName(song.title, isFavorite)} aria-pressed={isFavorite} className={`rounded p-1.5 sm:p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] disabled:opacity-50 ${isFavorite ? 'text-[var(--warning)]' : 'text-[var(--muted-foreground)] hover:text-[var(--warning)]'}`}>
+            {/* A filled star stays clickable on purpose: it reopens the category
+                dialog, which is the only durable way back into category
+                management from the list (#392). The hover title says so. */}
+            <button onClick={onToggleFavorite} disabled={favoritePending} aria-label={favoriteAccessibleName(song.title, isFavorite)} aria-pressed={isFavorite} title={favoriteAccessibleName(song.title, isFavorite)} className={`rounded p-1.5 sm:p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] disabled:opacity-50 ${isFavorite ? 'text-[var(--warning)]' : 'text-[var(--muted-foreground)] hover:text-[var(--warning)]'}`}>
               <Star className={`h-3.5 w-3.5 ${isFavorite ? 'fill-current' : ''}`} />
             </button>
             <button onClick={onShare} title={shareLabel} aria-label={shareLabel} className="rounded p-1.5 sm:p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)]/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]">

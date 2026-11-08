@@ -10,7 +10,7 @@ A web reader for Japanese and Cantonese lyrics, with furigana/Jyutping, AI trans
 - Spotify playback sync, playlist import, timestamp editing, share cards, and picture-in-picture lyrics (browser support varies).
 - Whole-song and per-line AI translation via OpenAI-compatible, Anthropic, or Cloudflare Workers AI. SSE reports stages and completion progress; the final `done` event contains the translated lines. Reasoning is displayed only when the provider supplies it.
 - Configurable lyrics-source chain: built-in sources including LRCLIB and administrator-managed HTTP providers. The bundled [YouTube Music sidecar](yt-sidecar/README.md) is one provider-plugin example.
-- Four UI languages (ja, en, zh-CN, zh-TW), favorites/collections, PWA, and dark/light themes.
+- Four UI languages (ja, en, zh-CN, zh-TW), favorites and named collections, PWA, and dark/light themes.
 
 See [FEATURES.md](FEATURES.md) for the walkthrough and [the provider protocol](examples/provider-plugin/README.md) for custom lyrics sources. Administrators configure global lyrics sources under **Admin → System → Lyrics Providers**.
 

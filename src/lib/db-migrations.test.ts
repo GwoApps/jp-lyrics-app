@@ -104,6 +104,14 @@ test('fresh DB applying full journal yields all required tables/columns', async 
     assert.equal(rateLimited.notnull, 1);
     assert.equal(rateLimited.dflt_value, '0');
 
+    // ISSUE #392: `collection_songs.sort_order` had no writer left after the
+    // incremental POST/DELETE route was deleted, so it was dropped. Membership is
+    // a set; the GET endpoint orders by title.
+    const collectionSongCols = await client.execute('PRAGMA table_info(`collection_songs`)');
+    const collectionSongColNames = collectionSongCols.rows.map(r => r.name as string);
+    assert.ok(!collectionSongColNames.includes('sort_order'), 'collection_songs.sort_order must be dropped');
+    assert.deepEqual([...collectionSongColNames].sort(), ['collection_id', 'song_id']);
+
     const favoritesCols = await client.execute('PRAGMA table_info(`favorites`)');
     const defaultCategory = favoritesCols.rows.find(row => row.name === 'in_unclassified');
     assert.ok(defaultCategory, 'favorites.in_unclassified must persist multi-select independently');

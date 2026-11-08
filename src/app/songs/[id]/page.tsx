@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useCallback
 import { useRouter, useParams } from 'next/navigation';
 import { useTransitionRouter } from '@/components/navigation/ViewTransitions';
 import Link from 'next/link';
-import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Download, Loader2, ExternalLink, PictureInPicture, Maximize2, Repeat, Copy, Check, Languages, ChevronDown, Share2, Info, X, Palette, SlidersHorizontal, FlaskConical } from 'lucide-react';
+import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Download, Loader2, ExternalLink, PictureInPicture, Maximize2, Repeat, Copy, Check, Languages, ChevronDown, Share2, Info, X, Palette, SlidersHorizontal, FlaskConical, Tags } from 'lucide-react';
 import ConfirmDialog, { ARTIST_LINK_MARKER, artistLinkedDialogBody } from '@/components/ConfirmDialog';
 import CoverImage from '@/components/CoverImage';
 import FuriganaLineView from '@/components/FuriganaLine';
@@ -20,6 +20,7 @@ import SyncStatusOverlay from '@/components/SyncStatusOverlay';
 import SongTopStatusStack, { StatusLayer } from '@/components/SongTopStatusStack';
 import { ToolbarMenu, buildReadingMenuItems } from '@/components/song/ToolbarMenu';
 import { MobileMenu } from '@/components/song/MobileMenu';
+import FavoriteCategoriesDialog from '@/components/home/FavoriteCategoriesDialog';
 import DownloadDialog from '@/components/song/DownloadDialog';
 import ImmersiveLyricsControls from '@/components/song/ImmersiveLyricsControls';
 import LyricTimeAxis from '@/components/song/LyricTimeAxis';
@@ -322,6 +323,9 @@ export default function SongViewPage() {
   const [fallbackCoverUrl, setFallbackCoverUrl] = useState<string | null>(() => getCachedSongCover(id));
   const [showSongInfo, setShowSongInfo] = useState(false);
   const [showDownloadDialog, setShowDownloadDialog] = useState(false);
+  // The favorite is otherwise only reachable from the home list's star; the
+  // detail page had no favorites/category entry at all (#392).
+  const [showFavoriteCategories, setShowFavoriteCategories] = useState(false);
   const [coverRefresh, setCoverRefresh] = useState(0);
   const [showDotParams, setShowDotParams] = useState(false);
   const [showExperiments, setShowExperiments] = useState(false);
@@ -811,6 +815,14 @@ export default function SongViewPage() {
               <Share2 className="h-4 w-4" />
             </Link>
 
+            {/* Favorites are per-account, so a guest gets no entry that could only 401. */}
+            {currentUserEmail && (
+              <button type="button" onClick={() => setShowFavoriteCategories(true)}
+                className={btnCls()} aria-label={t('home.favoriteCategoriesAction')} title={t('home.favoriteCategoriesAction')}>
+                <Tags className="h-4 w-4" />
+              </button>
+            )}
+
             <ToolbarMenu
               label={<span className="inline-flex items-center gap-1"><Languages className="h-3.5 w-3.5" /> {t(data.readingMode === 'original' ? 'song.readingOriginal' : song.reading_scheme === 'yue-jyutping' ? 'song.readingJyutping' : 'song.readingFurigana')} <ChevronDown className="h-3 w-3 opacity-60" /></span>}
               items={buildReadingMenuItems(data, song, t, canEdit)}
@@ -1144,7 +1156,15 @@ export default function SongViewPage() {
         onOpenPiP={handleOpenPiP} onRecolorCover={() => {
           clearCachedSongPalette(id);
           setCoverRefresh((n) => n + 1);
-        }} onToggleDotParams={() => setShowDotParams((v) => !v)} onOpenExperiments={() => setShowExperiments(true)} onOpenDownload={() => setShowDownloadDialog(true)} canEdit={canEdit}
+        }} onToggleDotParams={() => setShowDotParams((v) => !v)} onOpenExperiments={() => setShowExperiments(true)} onOpenDownload={() => setShowDownloadDialog(true)} onOpenCategories={currentUserEmail ? () => setShowFavoriteCategories(true) : undefined} canEdit={canEdit}
+      />
+
+      <FavoriteCategoriesDialog
+        open={showFavoriteCategories}
+        song={song ? { id, title: song.title } : null}
+        onCreated={() => {}}
+        onChanged={(favorited) => data.showToast('success', t(favorited ? 'home.favoriteSaved' : 'home.favoriteRemoved'))}
+        onClose={() => setShowFavoriteCategories(false)}
       />
 
       {/* Download dialog — replaces the previous three export menu items. */}

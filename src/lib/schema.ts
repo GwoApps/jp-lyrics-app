@@ -76,10 +76,11 @@ export const collections = sqliteTable('collections', {
   createdAt: text('created_at').notNull().default(nowUtcSql()),
 });
 
+// Membership is a set, not a sequence (#392): the dropped `sort_order` column
+// had no writer outside a dead route and never affected the visible order.
 export const collectionSongs = sqliteTable('collection_songs', {
   collectionId: text('collection_id').notNull().references(() => collections.id, { onDelete: 'cascade' }),
   songId: text('song_id').notNull().references(() => songs.id, { onDelete: 'cascade' }),
-  sortOrder: integer('sort_order').notNull().default(0),
 }, (t) => [
   primaryKey({ columns: [t.collectionId, t.songId] }),
 ]);

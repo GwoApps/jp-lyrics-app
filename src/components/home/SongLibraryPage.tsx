@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Music, Plus, Unlink, Download, ExternalLink, Loader2, Search, Disc3, RefreshCw, ChevronRight, X } from 'lucide-react';
+import { Music, Plus, Unlink, Download, ExternalLink, Loader2, Search, Disc3, RefreshCw, ChevronRight, Tags, X } from 'lucide-react';
 import ConfirmDialog, { ARTIST_LINK_MARKER, artistLinkedDialogBody } from '@/components/ConfirmDialog';
 import ArtistLinks from '@/components/ArtistLinks';
 import SongItemCard from '@/components/SongItemCard';
@@ -26,6 +26,7 @@ import { getCachedSongs, setCachedSongs } from '@/lib/song-list-cache';
 import { requestSongList } from '@/lib/song-list-fetch';
 import { groupSongsByAlbum } from '@/lib/song-albums';
 import { noResultsMessage } from '@/lib/search-filter-a11y';
+import { clearCollectionFilterLabel } from '@/lib/song-card-a11y';
 
 type ToastState = { type: 'success' | 'error'; msg: string; actionSong?: { id: string; title: string } } | null;
 const EMPTY_SONG_IDS = new Set<string>();
@@ -179,7 +180,10 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
 
   useEffect(() => {
     if (!toast) return;
-    const timer = window.setTimeout(() => setToast(null), 3000);
+    // An action toast is the only path into category management right after a
+    // first-time favorite, so it must outlive a glance (#392). Plain notices
+    // keep the shorter dwell.
+    const timer = window.setTimeout(() => setToast(null), toast.actionSong ? 8000 : 3000);
     return () => window.clearTimeout(timer);
   }, [toast]);
 
@@ -390,12 +394,100 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
     showToast('success', t(favorited ? 'home.favoriteSaved' : 'home.favoriteRemoved'));
   };
 
+  // Category management lives in CollectionsPanel (#392). Each handler returns
+  // whether the server acknowledged the write so the panel can keep the typed
+  // name / inline editor open on failure instead of silently discarding input.
+  const handleCreateCollection = async (name: string): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/collections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        showToast('error', writeErrorMsg(data?.error, 'home.collectionCreateFailed'));
+        return false;
+      }
+      setCollections((prev) => [...prev, { id: data.id, name: data.name, songCount: 0 }]);
+      showToast('success', t('home.collectionCreated'));
+      return true;
+    } catch {
+      showToast('error', t('home.collectionCreateFailed'));
+      return false;
+    }
+  };
+
+  const handleRenameCollection = async (collectionId: string, name: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/collections/${encodeURIComponent(collectionId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const code = await readErrorCode(res);
+        showToast('error', writeErrorMsg(code, 'home.collectionRenameFailed'));
+        // A 404 means the row is already gone server-side; drop the stale chip
+        // instead of offering a rename that can never succeed.
+        if (code === 'collection_not_found') {
+          setCollections((prev) => prev.filter((collection) => collection.id !== collectionId));
+          if (filterCollection === collectionId) setFilterCollection(null);
+        }
+        // `false` keeps the panel's inline editor open with the typed name.
+        return false;
+      }
+      setCollections((prev) => prev.map((collection) => collection.id === collectionId
+        ? { ...collection, name } : collection));
+      showToast('success', t('home.collectionRenamed'));
+      return true;
+    } catch {
+      // Network failure: the row keeps its old name and the inline editor stays
+      // open, so a rejected rename never looks like a success.
+      showToast('error', t('home.collectionRenameFailed'));
+      return false;
+    }
+  };
+
+  const handleDeleteCollection = async (collectionId: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/collections/${encodeURIComponent(collectionId)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        // Only drop the row when the server actually deleted it; a failed DELETE
+        // followed by a refresh would otherwise resurrect the collection.
+        const code = await readErrorCode(res);
+        showToast('error', writeErrorMsg(code, 'home.collectionDeleteFailed'));
+        if (code === 'collection_not_found') {
+          setCollections((prev) => prev.filter((collection) => collection.id !== collectionId));
+          if (filterCollection === collectionId) setFilterCollection(null);
+        }
+        return false;
+      }
+      // Favorites are untouched: deleting a category only drops the grouping.
+      setCollections((prev) => prev.filter((collection) => collection.id !== collectionId));
+      if (filterCollection === collectionId) setFilterCollection(null);
+      return true;
+    } catch {
+      showToast('error', t('home.collectionDeleteFailed'));
+      return false;
+    }
+  };
+
   // Find matching song in DB for currently playing track (uses title + artist scoring)
   const matchedSong = findBestMatch(songs, nowPlaying?.track, currentUser?.email);
   const visibleFavorites = currentUser ? favorites : EMPTY_SONG_IDS;
   const visibleCollection = currentUser && favoritesOnly ? filterCollection : null;
   const visibleCollectionSongs = visibleCollection && collectionSongs?.id === visibleCollection
     ? collectionSongs.ids : EMPTY_SONG_IDS;
+  // Name of the applied category filter, once its membership has actually
+  // loaded — an in-flight fetch also yields 0 visible songs and must not claim
+  // the collection is empty (#392).
+  const collectionSongsLoaded = !!visibleCollection && collectionSongs?.id === visibleCollection;
+  const activeCollectionName = collectionSongsLoaded
+    ? (visibleCollection === UNCLASSIFIED_COLLECTION_FILTER
+      ? t('home.favoriteUnclassified')
+      : collections.find((collection) => collection.id === visibleCollection)?.name ?? null)
+    : null;
 
   // Filter songs by search query (mySongsOnly is handled server-side via ?mine=1).
   // Whitespace-only input is not a filter: the toolbar hides its chip for it, so
@@ -586,6 +678,9 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
           collections={collections}
           filterCollection={filterCollection}
           onFilterChange={setFilterCollection}
+          onCreate={handleCreateCollection}
+          onRename={handleRenameCollection}
+          onDelete={handleDeleteCollection}
         />
       )}
 
@@ -695,13 +790,26 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
         </div>
       ) : (listKind === 'albums' ? albumGroups.length === 0 : filteredSongs.length === 0) ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <Search className="h-8 w-8 mb-3 text-[var(--muted-foreground)] opacity-20" />
-          <p className="text-sm text-[var(--muted-foreground)]">{noResultsMessage(listKind, appliedSearch, t)}</p>
-          {appliedSearch && (
-            <button onClick={() => setSearchQuery('')} className="mt-5 inline-flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-4 py-2 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
-              <X className="h-3.5 w-3.5" /> {t('home.clearSearch')}
-            </button>
-          )}
+          {/* The magnifier only fits a search; a filtered-empty category is not a
+              failed search, so it gets its own icon, copy and exit (#392). */}
+          {activeCollectionName && !appliedSearch
+            ? <Tags className="h-8 w-8 mb-3 text-[var(--muted-foreground)] opacity-20" />
+            : <Search className="h-8 w-8 mb-3 text-[var(--muted-foreground)] opacity-20" />}
+          <p className="text-sm text-[var(--muted-foreground)]">{noResultsMessage(listKind, appliedSearch, t, activeCollectionName)}</p>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+            {activeCollectionName && (
+              <button onClick={() => setFilterCollection(null)}
+                aria-label={clearCollectionFilterLabel(activeCollectionName, t)}
+                className="inline-flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-4 py-2 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
+                <Tags className="h-3.5 w-3.5" /> {t('home.showAllFavorites')}
+              </button>
+            )}
+            {appliedSearch && (
+              <button onClick={() => setSearchQuery('')} className="inline-flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-4 py-2 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
+                <X className="h-3.5 w-3.5" /> {t('home.clearSearch')}
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <div id="songs" ref={songListRef} className={listKind === 'albums'

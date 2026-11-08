@@ -65,7 +65,31 @@ test('list filtering and the empty state both key off the trimmed query', () => 
   const page = read('components/home/SongLibraryPage.tsx');
   assert.ok(page.includes('const appliedSearch = searchQuery.trim();'));
   assert.match(page, /if \(appliedSearch\) \{\s*const q = appliedSearch\.toLowerCase\(\);/);
-  assert.ok(page.includes('noResultsMessage(listKind, appliedSearch, t)'));
+  // The applied category filter is handed to the empty state as well (#392).
+  assert.ok(page.includes('noResultsMessage(listKind, appliedSearch, t, activeCollectionName)'));
   // Empty state offers a clear action next to the explanation.
   assert.match(page, /\{appliedSearch && \([\s\S]*?setSearchQuery\(''\)/);
+});
+
+test('an empty category filter gets its own copy and an exit, not the search-empty state', () => {
+  assert.equal(
+    noResultsMessage('songs', '', (key, vars) => `${key}:${vars?.name}`, 'Road Trip'),
+    'home.collectionEmpty:Road Trip',
+  );
+  // A live search still wins: the query is what emptied the list.
+  assert.equal(
+    noResultsMessage('songs', '夜', (key) => key, 'Road Trip'),
+    'home.noResultsFor',
+  );
+  // Nothing filtered at all keeps the plain library copy.
+  assert.equal(noResultsMessage('songs', '', (key) => key, null), 'home.noResults');
+
+  const page = read('components/home/SongLibraryPage.tsx');
+  // The exit resets the category filter and is labelled with the collection it drops.
+  assert.match(page, /activeCollectionName && \(\s*<button onClick=\{\(\) => setFilterCollection\(null\)\}/);
+  assert.ok(page.includes('clearCollectionFilterLabel(activeCollectionName, t)'));
+  // Membership must be loaded before the copy can claim the collection is empty:
+  // an in-flight fetch also yields 0 visible songs.
+  assert.match(page, /collectionSongsLoaded = !!visibleCollection && collectionSongs\?\.id === visibleCollection/);
+  assert.match(page, /const activeCollectionName = collectionSongsLoaded/);
 });

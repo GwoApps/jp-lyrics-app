@@ -135,7 +135,9 @@ Open a song page → **More** menu (desktop toolbar or mobile overflow) →
   When enabled, the app fetches the server-persisted settings on boot so the
   first screen already reflects them; when disabled, preferences stay local to
   the current browser only. Off by default for guests (localStorage-only).
-- **Favorites & Collections** — Star songs, organize into collections,
-  filter by favorites, bulk-manage from the home page.
+- **Favorites & Collections** — Star songs, organize into collections, and
+  filter the library by favorite / by collection. Collections can be created,
+  renamed and deleted from the favorites filter row; the same category dialog
+  opens from a song's star, its card, or the song detail page.
 - **Responsive** — Mobile-optimized bottom bar with a 3-dot overflow menu;
   desktop toolbar menu for the same actions.

@@ -10,7 +10,7 @@
 - Spotify 播放同步、歌单导入、逐行时间轴标注、分享卡片，以及画中画歌词（视浏览器支持情况而定）。
 - OpenAI 兼容、Anthropic 或 Cloudflare Workers AI 驱动的整曲／逐行翻译；SSE 报告准备阶段和完成进度，最终 `done` 事件返回译文；只有 Provider 提供推理内容时才显示思考过程。
 - 可配置的歌词源链：内置 LRCLIB 等来源及管理员管理的 HTTP 歌词源；附带的 [YouTube Music sidecar](yt-sidecar/README.md) 是插件示例。
-- 四种界面语言（ja、en、zh-CN、zh-TW）、收藏与合集、PWA、深浅主题。
+- 四种界面语言（ja、en、zh-CN、zh-TW）、收藏与收藏夹、PWA、深浅主题。
 
 完整功能见 [FEATURES.md](FEATURES.md)，自定义歌词源见[插件协议](examples/provider-plugin/README.md)。管理员可在**管理后台 → 系统 → 歌词源 Provider**配置全局来源。
 

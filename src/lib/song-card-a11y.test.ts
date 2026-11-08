@@ -6,6 +6,7 @@ import {
   deleteCollectionLabel,
   deleteSongLabel,
   favoriteLabel,
+  renameCollectionLabel,
   type TranslateFn,
 } from './song-card-a11y.ts';
 
@@ -35,6 +36,11 @@ test('deleteSongLabel includes the song title for destructive-action confirmatio
 test('deleteCollectionLabel includes the collection name for destructive-action confirmation', () => {
   const label = deleteCollectionLabel('My List', (key, vars) => `${key}:${vars?.name ?? ''}`);
   assert.equal(label, 'home.deleteCollectionLabel:My List');
+});
+
+test('renameCollectionLabel names the collection whose inline editor it opens', () => {
+  const label = renameCollectionLabel('My List', (key, vars) => `${key}:${vars?.name ?? ''}`);
+  assert.equal(label, 'home.renameCollection:My List');
 });
 
 test('clearCollectionFilterLabel names the target collection so the chip is not an unlabelled X', () => {

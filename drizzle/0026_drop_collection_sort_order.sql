@@ -1,0 +1,11 @@
+-- ISSUE #392 — `collection_songs.sort_order` was a nominal column.
+--
+-- The only writer of a non-zero value was `POST /api/collections/[id]/songs`,
+-- which had no caller; every write path that actually ran (the favorite PUT)
+-- stored `sort_order = 0`. Reads still sorted by it first, so the in-collection
+-- order was silently just "by title" while the column promised user ordering.
+--
+-- With the incremental write route deleted, the column has no producer left.
+-- Drop it rather than keep a placeholder that no UI can ever populate; a future
+-- ordering feature can add its own column with an explicit meaning.
+ALTER TABLE `collection_songs` DROP COLUMN `sort_order`;
