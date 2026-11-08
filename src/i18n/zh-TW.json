@@ -712,6 +712,10 @@
     "showQrCode": "顯示 QR Code",
     "showSourceText": "顯示分享來源文字",
     "includeTranslation": "包含譯文",
+    "selectedCount": "已選 {selected} 行",
+    "cardTruncated": "{orientation}卡片最多放得下 {rendered}/{total} 行，其餘行不會出現在圖片裡。",
+    "tryLandscape": "改用橫版",
+    "notInCard": "不會出現在圖片裡",
     "translationLangMismatch": "分享卡片與複製內容裡的譯文是{current}，你的目標語言是{target}；需要新語言請先在歌曲頁重新翻譯。"
   },
   "admin": {

@@ -712,6 +712,10 @@
     "showQrCode": "QRコードを表示",
     "showSourceText": "共有元テキストを表示",
     "includeTranslation": "翻訳を含める",
+    "selectedCount": "{selected} 行を選択",
+    "cardTruncated": "{orientation}のカードには {total} 行のうち {rendered} 行までしか入りません。残りの行は画像に含まれません。",
+    "tryLandscape": "横向きにする",
+    "notInCard": "画像には含まれません",
     "translationLangMismatch": "共有カードとコピーに含まれる訳文は{current}です。翻訳先言語は{target}のため、新しい言語が必要な場合は曲ページで再翻訳してください。"
   },
   "admin": {

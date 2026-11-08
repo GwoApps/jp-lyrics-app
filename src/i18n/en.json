@@ -712,6 +712,10 @@
     "showQrCode": "Show QR code",
     "showSourceText": "Show source text",
     "includeTranslation": "Include translation",
+    "selectedCount": "{selected} selected",
+    "cardTruncated": "The {orientation} card fits {rendered} of {total} selected lines — the rest will not appear in the image.",
+    "tryLandscape": "Use landscape",
+    "notInCard": "Not included in the image",
     "translationLangMismatch": "The shared card and copied text use the {current} translation while your target language is {target} — re-translate on the song page to get the new language."
   },
   "admin": {

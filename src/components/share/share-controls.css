@@ -21,6 +21,17 @@
   transform: scale(1);
 }
 
+/* Issue #285: a selected row the card could not fit is dimmed and struck
+   through, so the loss is visible while choosing instead of after export. */
+.share-lyric-item[data-dropped="true"] .line-clamp-2 {
+  text-decoration: line-through;
+  opacity: .6;
+}
+.share-lyric-item[data-dropped="true"] .share-lyric-item__checkbox {
+  border-style: dashed;
+  opacity: .7;
+}
+
 /* Shared grid cell reserves the larger localized label so adjacent buttons do not jump. */
 .share-copy-feedback { display: inline-grid; vertical-align: middle; }
 .share-copy-feedback__state {

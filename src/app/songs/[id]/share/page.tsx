@@ -7,7 +7,7 @@ import QRCode from 'qrcode';
 import { AlertCircle, ArrowLeft, ClipboardCopy, Download, Link2, Loader2, Check, Smartphone, Monitor, RefreshCw } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
-import { drawCard, getLyricLines, type Orientation, type ShareSong } from '@/lib/share-card';
+import { drawCard, getLyricLines, type Orientation, type ShareCardFit, type ShareSong } from '@/lib/share-card';
 import { resolveTranslationLang, targetLangDisplay } from '@/lib/target-lang';
 import { translationLangState } from '@/lib/translation-lang-match';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -50,6 +50,9 @@ export default function SharePage() {
   // (issue #281). Best-effort: an anonymous visitor has no settings, and an
   // unknown target simply means "no warning".
   const [targetLang, setTargetLang] = useState<string | null>(null);
+  // Issue #285: what actually fit into the last drawn frame, tagged with the
+  // selection it was drawn for, so a stale frame never marks the wrong rows.
+  const [cardFit, setCardFit] = useState<{ key: string; fit: ShareCardFit } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,17 +123,18 @@ export default function SharePage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => {
-    if (defaultLine !== null && lyricLines.length > 0) {
-      const idx = parseInt(defaultLine, 10);
-      // `line` refers to the source-line index on the detail page; match it via
-      // each lyric block's original index (skips empty source lines correctly).
-      if (!Number.isNaN(idx) && idx >= 0) {
-        const match = lyricLines.find((line) => line.index === idx);
-        if (match) setSelected(new Set([lyricLines.indexOf(match)]));
-      }
-    }
+  // `?line=` refers to a source-line index on the detail page; match it via each
+  // lyric block's original index (skips empty source lines correctly).
+  const sharedLine = useMemo(() => {
+    if (defaultLine === null) return -1;
+    const idx = parseInt(defaultLine, 10);
+    if (Number.isNaN(idx) || idx < 0) return -1;
+    return lyricLines.findIndex((line) => line.index === idx);
   }, [defaultLine, lyricLines]);
+
+  useEffect(() => {
+    if (sharedLine >= 0) setSelected(new Set([sharedLine]));
+  }, [sharedLine]);
 
   useEffect(() => {
     if (!pageUrl) return;
@@ -143,10 +147,32 @@ export default function SharePage() {
     return () => { cancelled = true; };
   }, [pageUrl]);
 
+  // Identifies the frame's inputs: a fit measured for a different selection or
+  // layout must never mark the rows the user is looking at right now.
+  const selectionKey = useMemo(
+    () => `${[...selected].sort((a, b) => a - b).join(',')}|${orientation}|${includeTranslation}`,
+    [selected, orientation, includeTranslation],
+  );
+
+  // Issue #285: only trust the fit drawn for the current selection/layout.
+  const fit = cardFit?.key === selectionKey ? cardFit.fit : null;
+  // Selected rows that the last frame left out (a contiguous window is kept, so
+  // this also covers rows before the window when a shared line slid it down).
+  const droppedIdx = useMemo(() => {
+    if (!fit) return new Set<number>();
+    const dropped = new Set(fit.dropped.map((line) => line.index));
+    return new Set(lyricLines.flatMap((line, i) => (selected.has(i) && dropped.has(line.index) ? [i] : [])));
+  }, [fit, lyricLines, selected]);
+
   const renderCard = useCallback(async (canvas: HTMLCanvasElement) => {
     if (!song) return;
     const selectedLines = lyricLines.filter((_, i) => selected.has(i));
-    await drawCard(
+    // The shared line is pinned inside the selection, so a lyric window that has
+    // to slide still contains the line the link asked for (issue #285).
+    const pinned = sharedLine >= 0 && selected.has(sharedLine)
+      ? [...selected].filter((i) => i < sharedLine).length
+      : -1;
+    const fit = await drawCard(
       canvas,
       song,
       qrDataUrl || '',
@@ -160,8 +186,19 @@ export default function SharePage() {
       // Issue #336: the card's canvas does not inherit CSS, so the UI-owned
       // strings (title, artist, scan hint, site) need the UI language here.
       uiLanguage,
+      { pinned },
     );
-  }, [song, qrDataUrl, t, uiLanguage, selected, lyricLines, orientation, showQrCode, showSourceText, includeTranslation]);
+    // Redraws repeat the same measurement; only publish a real change.
+    if (fit) {
+      setCardFit((prev) => (prev
+        && prev.key === selectionKey
+        && prev.fit.rendered === fit.rendered
+        && prev.fit.total === fit.total
+        && prev.fit.dropped.length === fit.dropped.length
+        ? prev
+        : { key: selectionKey, fit }));
+    }
+  }, [song, qrDataUrl, t, uiLanguage, selected, lyricLines, orientation, showQrCode, showSourceText, includeTranslation, selectionKey, sharedLine]);
 
   const handlePreviewReady = useCallback((value: boolean) => {
     setReady(value);
@@ -384,6 +421,28 @@ export default function SharePage() {
           {t('share.hint')}
         </p>
 
+        {fit && fit.dropped.length > 0 && (
+          <div className="share-card-fit-warning mt-2 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-xs text-[var(--warning)] sm:mt-3" role="status">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>
+              {t('share.cardTruncated', {
+                rendered: fit.rendered,
+                total: fit.total,
+                orientation: orientation === 'portrait' ? t('share.portrait') : t('share.landscape'),
+              })}
+            </span>
+            {/* Portrait holds the fewest lines, so offer the wider layout right here. */}
+            {orientation === 'portrait' && (
+              <button
+                onClick={() => setOrientation('landscape')}
+                className="font-medium underline underline-offset-2 hover:no-underline"
+              >
+                {t('share.tryLandscape')}
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2 sm:mt-6 sm:gap-3">
           <button
             onClick={handleDownload}
@@ -426,6 +485,11 @@ export default function SharePage() {
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-medium text-[var(--muted-foreground)]">
                 {t('share.selectLyrics')}
+                {selected.size > 0 && (
+                  <span className="ml-2 font-normal text-[var(--muted-foreground)]">
+                    {t('share.selectedCount', { selected: selected.size })}
+                  </span>
+                )}
               </h2>
               {selected.size > 0 && (
                 <button
@@ -437,36 +501,53 @@ export default function SharePage() {
               )}
             </div>
             <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-              {lyricLines.map((line, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => toggleLine(idx)}
-                  aria-pressed={selected.has(idx)}
-                  data-selected={selected.has(idx)}
-                  className={`share-lyric-item flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left ${
-                    selected.has(idx)
-                      ? 'song-editor-choice--active'
-                      : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
-                  }`}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`share-lyric-item__checkbox mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
+              {lyricLines.map((line, idx) => {
+                // Issue #285: a selected row the last frame could not fit is
+                // marked here, so the gap is visible before exporting.
+                const isDropped = droppedIdx.has(idx);
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => toggleLine(idx)}
+                    aria-pressed={selected.has(idx)}
+                    data-selected={selected.has(idx)}
+                    data-dropped={isDropped || undefined}
+                    className={`share-lyric-item flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left ${
                       selected.has(idx)
-                        ? 'border-[var(--song-accent)] song-editor-primary-button'
-                        : 'border-[var(--border)] bg-[var(--background)]'
+                        ? 'song-editor-choice--active'
+                        : 'bg-[var(--accent)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
                     }`}
                   >
-                    <Check className="share-lyric-item__check h-3.5 w-3.5" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="line-clamp-2 block text-sm">{line.text}</span>
-                    {includeTranslation && line.translation && (
-                      <span lang={translationLanguage} className="line-clamp-2 mt-0.5 block text-xs text-[var(--muted-foreground)]">{line.translation}</span>
-                    )}
-                  </span>
-                </button>
-              ))}
+                    <span
+                      aria-hidden="true"
+                      className={`share-lyric-item__checkbox mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${
+                        selected.has(idx)
+                          ? 'border-[var(--song-accent)] song-editor-primary-button'
+                          : 'border-[var(--border)] bg-[var(--background)]'
+                      }`}
+                    >
+                      <Check className="share-lyric-item__check h-3.5 w-3.5" />
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      className="share-lyric-item__index mt-0.5 w-6 shrink-0 text-right text-xs tabular-nums text-[var(--muted-foreground)]"
+                    >
+                      {idx + 1}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="line-clamp-2 block text-sm">{line.text}</span>
+                      {includeTranslation && line.translation && (
+                        <span lang={translationLanguage} className="line-clamp-2 mt-0.5 block text-xs text-[var(--muted-foreground)]">{line.translation}</span>
+                      )}
+                      {isDropped && (
+                        <span className="share-lyric-item__dropped-note mt-1 block text-xs text-[var(--warning)]">
+                          {t('share.notInCard')}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

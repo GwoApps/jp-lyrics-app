@@ -50,6 +50,18 @@ test('repeat copies restart the success lifetime and stale or unmounted completi
   assert.match(page, /if \(!ok\) \{\s*setToast\([\s\S]*?return;/);
 });
 
+test('lines the card cannot fit are marked before export and the shortfall is announced', () => {
+  // Issue #285: a silent truncation shipped an image missing half the selection.
+  assert.match(page, /data-dropped=\{isDropped \|\| undefined\}/);
+  assert.match(page, /share-lyric-item__dropped-note[\s\S]*?t\('share\.notInCard'\)/);
+  assert.match(page, /role="status"/);
+  assert.match(page, /t\('share\.cardTruncated', \{\s*rendered: fit\.rendered,\s*total: fit\.total/);
+  assert.match(page, /t\('share\.selectedCount', \{ selected: selected\.size \}\)/);
+  assert.match(page, /const fit = cardFit\?\.key === selectionKey \? cardFit\.fit : null/);
+  assert.match(page, /\{ pinned \}/);
+  assert.match(css, /\[data-dropped="true"\] \.line-clamp-2 \{\s*text-decoration:\s*line-through/);
+});
+
 test('responsive column width follows completed preview orientation rather than a pending draw', () => {
   assert.match(page, /data-orientation=\{previewOrientation\}/);
   assert.match(page, /if \(value\) setPreviewOrientation\(orientation\)/);

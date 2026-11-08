@@ -260,11 +260,110 @@ function drawCaption(
   }
 }
 
+/** Vertical rhythm of a lyric block, shared by the measuring and drawing passes. */
+const LYRIC_TEXT_H = 44;
+const LYRIC_TRANS_H = 26;
+const LYRIC_TEXT_SIZE = 28;
+const LYRIC_TRANS_SIZE = 20;
+const LYRIC_TEXT_COLOR = '#e2e8f0';
+const LYRIC_TRANS_COLOR = '#94a3b8';
+// Baseline offsets (alphabetic): the translation hugs its source line
+// (27px ≈ source descent 7 + 5px gap + translation ascent 15), while the
+// next source line keeps a normal gap (40px ≈ translation descent 5 +
+// 14px gap + source ascent 21) instead of the old cramped 26px step.
+const TRANS_OFFSET = 27;
+const NEXT_SOURCE_OFFSET = 40;
+
+interface LyricBlockLayout {
+  /** Wrapped source lines (1 when a translation follows, up to 2 otherwise). */
+  textLines: string[];
+  /** Wrapped translation lines (0 when the block has no translation to draw). */
+  transLines: string[];
+  /** Vertical space this block consumes, including the gap to the next block. */
+  height: number;
+}
+
+/**
+ * Measure one lyric block. Wrapping depends on `ctx.font`, so the language
+ * specific family is set here instead of relying on whatever the previous
+ * block left behind — Issue #336.
+ */
+function measureLyricBlock(
+  ctx: CanvasRenderingContext2D,
+  block: LyricLine,
+  maxWidth: number,
+  includeTranslation: boolean,
+): LyricBlockLayout {
+  const translation = includeTranslation ? block.translation : null;
+  ctx.font = canvasFont(block.lang, LYRIC_TEXT_SIZE);
+  const textLines = wrapText(ctx, block.text, maxWidth, translation ? 1 : 2);
+  let transLines: string[] = [];
+  if (translation) {
+    ctx.font = canvasFont(block.translationLang, LYRIC_TRANS_SIZE);
+    transLines = wrapText(ctx, translation, maxWidth, 1);
+  }
+  const textH = textLines.length * LYRIC_TEXT_H;
+  const height = translation
+    ? textH - LYRIC_TEXT_H + TRANS_OFFSET + NEXT_SOURCE_OFFSET
+    : textH;
+  return { textLines, transLines, height };
+}
+
+/**
+ * Index of the first block worth drawing inside `maxHeight`.
+ *
+ * Blocks are never re-ordered: the card keeps lyric order and shows a
+ * contiguous window. The window normally starts at the first selected line,
+ * but when the caller pins a line (a `?line=` share link points at it) that
+ * would otherwise fall outside the window, the window starts there instead, so
+ * the line the user asked to share is never the one that gets dropped.
+ *
+ * @param heights measured height of each block, in lyric order
+ * @param pinned index of the block that must stay visible, or -1
+ */
+export function lyricWindowStart(heights: readonly number[], maxHeight: number, pinned = -1): number {
+  const limit = Math.max(maxHeight, 0);
+  let cursor = 0;
+  // Number of leading blocks that fit without moving the window.
+  let naturalEnd = heights.length;
+  for (let i = 0; i < heights.length; i += 1) {
+    if (cursor + heights[i] > limit) {
+      naturalEnd = i;
+      break;
+    }
+    cursor += heights[i];
+  }
+  if (pinned <= 0 || pinned < naturalEnd) return 0;
+  // The pinned line would be cut off: slide the window down to the last run of
+  // blocks that still ends at (and therefore contains) it.
+  let start = pinned;
+  let tail = 0;
+  for (let i = pinned; i >= 0; i -= 1) {
+    if (tail + heights[i] > limit) {
+      start = i + 1;
+      break;
+    }
+    tail += heights[i];
+    start = i;
+  }
+  return Math.min(start, pinned);
+}
+
+/** What a rendered card actually contains: Issue #285 made the silent drop visible. */
+export interface ShareCardFit {
+  /** Selected lyric blocks that made it into the image. */
+  rendered: number;
+  /** Selected lyric blocks, i.e. the size of the list handed to the card. */
+  total: number;
+  /** Selected blocks that were left out (a contiguous window is kept), in lyric order. */
+  dropped: LyricLine[];
+}
+
 /**
  * Render lyric blocks (source line + optional translation below) inside a
  * bounded area. Translation lines use a smaller, dimmer font so the pair stays
- * visually aligned. Returns the number of blocks rendered (blocks that do not
- * fit are dropped).
+ * visually aligned. Returns what fit, so callers can tell the user instead of
+ * silently shipping a truncated image.
  */
 function renderLyricBlocks(
   ctx: CanvasRenderingContext2D,
@@ -276,61 +375,50 @@ function renderLyricBlocks(
     maxHeight: number;
     align: 'left' | 'center';
     includeTranslation: boolean;
+    /** Block index that must stay visible even when the window has to slide (or -1). */
+    pinned?: number;
   },
-): number {
-  const { x, y, maxWidth, maxHeight, align, includeTranslation } = opts;
-  const textH = 44;
-  const transH = 26;
-  const textColor = '#e2e8f0';
-  const transColor = '#94a3b8';
-  // Baseline offsets (alphabetic): the translation hugs its source line
-  // (27px ≈ source descent 7 + 5px gap + translation ascent 15), while the
-  // next source line keeps a normal gap (40px ≈ translation descent 5 +
-  // 14px gap + source ascent 21) instead of the old cramped 26px step.
-  const TRANS_OFFSET = 27;
-  const NEXT_SOURCE_OFFSET = 40;
+): ShareCardFit {
+  const { x, y, maxWidth, maxHeight, align, includeTranslation, pinned = -1 } = opts;
+  // Measuring sets `ctx.font` per language, so it runs before the drawing pass.
+  const layouts = blocks.map((block) => measureLyricBlock(ctx, block, maxWidth, includeTranslation));
+  const start = lyricWindowStart(layouts.map((layout) => layout.height), maxHeight, pinned);
 
   ctx.textAlign = align;
   ctx.textBaseline = 'alphabetic';
   let cursorY = y;
-  let rendered = 0;
-  for (const block of blocks) {
-    // Source lines (1 line when a translation follows, 2 otherwise) are wrapped
-    // below, after the language-specific font is set — `measureText` depends on
-    // `ctx.font`, so wrapping with the wrong family would mis-place line breaks.
-    const textLinesLimit = includeTranslation ? 1 : 2;
-    const translation = includeTranslation ? block.translation : null;
+  let visibleEnd = start;
+  for (let i = start; i < blocks.length; i += 1) {
+    const block = blocks[i];
+    const layout = layouts[i];
+    if (cursorY + layout.height > y + maxHeight) break;
 
-    ctx.fillStyle = textColor;
-    ctx.font = canvasFont(block.lang, 28);
-    const textLines = wrapText(ctx, block.text, maxWidth, textLinesLimit);
-    const blockH = translation
-      ? (textLines.length - 1) * textH + TRANS_OFFSET + NEXT_SOURCE_OFFSET
-      : textLines.length * textH;
-    if (cursorY + blockH > y + maxHeight) break;
-
-    for (const line of textLines) {
+    ctx.fillStyle = LYRIC_TEXT_COLOR;
+    ctx.font = canvasFont(block.lang, LYRIC_TEXT_SIZE);
+    for (const line of layout.textLines) {
       ctx.fillText(line, x, cursorY);
-      cursorY += textH;
+      cursorY += LYRIC_TEXT_H;
     }
-    if (translation) {
+    if (layout.transLines.length > 0) {
       // Translation baseline sits just below the LAST source baseline.
-      // Issue #336: the source line keeps its own family, so re-measure the
-      // translation with its own font before wrapping it.
-      ctx.font = canvasFont(block.translationLang, 20);
-      const transLines = wrapText(ctx, translation, maxWidth, 1);
-      let baseline = cursorY - textH + TRANS_OFFSET;
-      ctx.fillStyle = transColor;
-      for (const line of transLines) {
+      ctx.fillStyle = LYRIC_TRANS_COLOR;
+      ctx.font = canvasFont(block.translationLang, LYRIC_TRANS_SIZE);
+      let baseline = cursorY - LYRIC_TEXT_H + TRANS_OFFSET;
+      for (const line of layout.transLines) {
         ctx.fillText(line, x, baseline);
-        baseline += transH;
+        baseline += LYRIC_TRANS_H;
       }
       // Next block's first source baseline keeps a normal gap after the translation.
-      cursorY = baseline - transH + NEXT_SOURCE_OFFSET;
+      cursorY = baseline - LYRIC_TRANS_H + NEXT_SOURCE_OFFSET;
     }
-    rendered += 1;
+    visibleEnd = i + 1;
   }
-  return rendered;
+
+  return {
+    rendered: visibleEnd - start,
+    total: blocks.length,
+    dropped: blocks.filter((_, i) => i < start || i >= visibleEnd),
+  };
 }
 
 async function drawLandscape(
@@ -346,7 +434,9 @@ async function drawLandscape(
   showSourceText: boolean,
   includeTranslation: boolean,
   uiTag: string | null | undefined,
-) {
+  /** Selected block that must stay visible (a `?line=` share target), or -1. */
+  pinned: number,
+): Promise<ShareCardFit> {
   drawCardBackground(ctx, LANDSCAPE_W, LANDSCAPE_H, palette);
 
   drawCover(ctx, song, coverImg, 60, 60, 240);
@@ -382,13 +472,14 @@ async function drawLandscape(
   const lyricsX = textX;
   const lyricsY = dividerY + 40;
   const lyricsW = 560;
-  renderLyricBlocks(ctx, selectedLyrics, {
+  const fit = renderLyricBlocks(ctx, selectedLyrics, {
     x: lyricsX,
     y: lyricsY,
     maxWidth: lyricsW,
     maxHeight: LANDSCAPE_H - lyricsY - 10,
     align: 'left',
     includeTranslation,
+    pinned,
   });
 
   // QR
@@ -404,6 +495,7 @@ async function drawLandscape(
     ctx.restore();
   }
   drawCaption(ctx, scanText, siteText, qrX + qrSize / 2, qrY + qrSize + 52, showQrCode, showSourceText, uiTag);
+  return fit;
 }
 
 async function drawPortrait(
@@ -419,7 +511,9 @@ async function drawPortrait(
   showSourceText: boolean,
   includeTranslation: boolean,
   uiTag: string | null | undefined,
-) {
+  /** Selected block that must stay visible (a `?line=` share target), or -1. */
+  pinned: number,
+): Promise<ShareCardFit> {
   drawCardBackground(ctx, PORTRAIT_W, PORTRAIT_H, palette);
 
   const pad = 60;
@@ -464,13 +558,14 @@ async function drawPortrait(
   // Lyrics — translations (when enabled) add a compact line under each source
   // line, so the block area stops just above the QR code.
   const lyricsY = textY + 76;
-  renderLyricBlocks(ctx, selectedLyrics, {
+  const fit = renderLyricBlocks(ctx, selectedLyrics, {
     x: centerX,
     y: lyricsY,
     maxWidth: contentW,
     maxHeight: qrY - lyricsY - 10,
     align: 'center',
     includeTranslation,
+    pinned,
   });
 
   const qrImg = showQrCode ? await loadImage(qrDataUrl) : null;
@@ -483,6 +578,7 @@ async function drawPortrait(
   }
 
   drawCaption(ctx, scanText, siteText, centerX, qrY + qrSize + 52, showQrCode, showSourceText, uiTag);
+  return fit;
 }
 
 export async function drawCard(
@@ -504,9 +600,15 @@ export async function drawCard(
    * default (the untagged fallback stack).
    */
   uiTag?: string | null,
-) {
+  /**
+   * Issue #285: the card keeps a contiguous lyric window, and a `?line=` share
+   * link must stay inside it, so the caller can pin that line (`pinned` is its
+   * index in `selectedLyrics`).
+   */
+  opts?: { pinned?: number },
+): Promise<ShareCardFit | null> {
   const ctx = canvas.getContext('2d');
-  if (!ctx) return;
+  if (!ctx) return null;
 
   if (typeof document !== 'undefined' && 'fonts' in document) {
     await document.fonts.ready;
@@ -515,13 +617,13 @@ export async function drawCard(
   const coverImg = await loadImage(song.cover_url);
   const palette = coverImg ? extractMaterialCoverPalette(coverImg) : null;
 
+  const pinned = opts?.pinned ?? -1;
   if (orientation === 'portrait') {
     canvas.width = PORTRAIT_W;
     canvas.height = PORTRAIT_H;
-    await drawPortrait(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics, coverImg, palette, showQrCode, showSourceText, includeTranslation, uiTag);
-  } else {
-    canvas.width = LANDSCAPE_W;
-    canvas.height = LANDSCAPE_H;
-    await drawLandscape(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics, coverImg, palette, showQrCode, showSourceText, includeTranslation, uiTag);
+    return drawPortrait(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics, coverImg, palette, showQrCode, showSourceText, includeTranslation, uiTag, pinned);
   }
+  canvas.width = LANDSCAPE_W;
+  canvas.height = LANDSCAPE_H;
+  return drawLandscape(ctx, song, qrDataUrl, scanText, siteText, selectedLyrics, coverImg, palette, showQrCode, showSourceText, includeTranslation, uiTag, pinned);
 }
