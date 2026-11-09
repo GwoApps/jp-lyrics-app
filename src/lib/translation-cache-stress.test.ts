@@ -26,6 +26,7 @@ test('20 concurrent single-line slice merges converge to a complete cache', asyn
     lyrics_raw TEXT NOT NULL DEFAULT '', lyrics_furigana TEXT NOT NULL DEFAULT '[]',
     reading_scheme TEXT NOT NULL DEFAULT 'ja-kana', reading_scheme_confirmed INTEGER NOT NULL DEFAULT 0,
     lyrics_synced TEXT NOT NULL DEFAULT '', lyrics_translation TEXT NOT NULL DEFAULT '[]',
+    lyrics_translation_lang TEXT,
     lyrics_translation_reasoning TEXT, lyrics_glossary TEXT, cover_url TEXT, cover_palette TEXT,
     spotify_track_id TEXT, spotify_uri TEXT, spotify_album TEXT, spotify_duration_ms INTEGER,
     spotify_canonical_title TEXT, spotify_canonical_artist TEXT, lyrics_source TEXT NOT NULL DEFAULT 'manual',

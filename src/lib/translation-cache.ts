@@ -35,6 +35,11 @@ import * as schema from './schema.ts';
 import { parseTranslationCache } from './translation/parse.ts';
 import { nowUtcSql } from './db-time-sql.ts';
 import { applyLineEdits, type LineEdit } from './translation-line-edits.ts';
+import {
+  decideTranslationLangStamp,
+  editedLineIndices,
+  type TranslationLangStampDecision,
+} from './translation-cache-lang.ts';
 
 /** Max retries for the optimistic-lock merge loop (each retry re-reads the cache). */
 const MAX_MERGE_ATTEMPTS = 8;
@@ -44,7 +49,17 @@ export type CasWriteResult =
   | { ok: false; reason: 'stale_source' };
 
 export type MergeResult =
-  | { ok: true; cache: string[] }
+  | {
+    ok: true;
+    cache: string[];
+    /**
+     * Language stamp the merge committed. `undefined` = the stored stamp was
+     * left untouched (the cache may still hold lines of an older language —
+     * see `decideTranslationLangStamp`, issue #394). `null` = the cache is now
+     * empty, so no language is recorded.
+     */
+    lang?: string | null;
+  }
   | { ok: false; reason: 'stale_source' | 'not_found' | 'contention' };
 
 /**
@@ -92,12 +107,25 @@ async function mergeUnderOptimisticLock(
     lang?: string;
     /** Extra columns written together with the merged cache (e.g. reasoning). */
     patch?: Record<string, unknown>;
+    /**
+     * Decide the language stamp from the cache this attempt is about to write,
+     * instead of stamping `lang` unconditionally (issue #394: a partial save
+     * must not relabel lines it never touched). Runs INSIDE the optimistic-lock
+     * attempt so the decision sees the same cache the CAS is based on.
+     */
+    resolveStamp?: (ctx: { merged: string[]; storedLang: string | null }) => TranslationLangStampDecision;
   },
 ): Promise<MergeResult> {
   const d = db as {
     select: (cols: unknown) => {
       from: (t: unknown) => {
-        where: (w: unknown) => { get: () => Promise<{ lyricsRaw: string; lyricsTranslation: string } | undefined> };
+        where: (w: unknown) => {
+          get: () => Promise<{
+            lyricsRaw: string;
+            lyricsTranslation: string;
+            lyricsTranslationLang?: string | null;
+          } | undefined>;
+        };
       };
     };
     update: (t: unknown) => {
@@ -113,21 +141,29 @@ async function mergeUnderOptimisticLock(
     const latest = await d.select({
       lyricsRaw: schema.songs.lyricsRaw,
       lyricsTranslation: schema.songs.lyricsTranslation,
+      lyricsTranslationLang: schema.songs.lyricsTranslationLang,
     }).from(schema.songs).where(eq(schema.songs.id, opts.id)).get();
     if (!latest) return { ok: false, reason: 'not_found' };
     // The song's source lyrics moved on — this request's output is stale.
     if (latest.lyricsRaw !== opts.sourceLyrics) return { ok: false, reason: 'stale_source' };
 
     const merged = opts.apply(parseCache(latest.lyricsTranslation, opts.totalLines));
+    // Language stamp: either the caller's per-attempt decision (which sees the
+    // cache actually being written, issue #394) or the previous unconditional
+    // "stamp whenever a language is provided" (keeps an existing stamp when
+    // none is — a resume into the same language).
+    const decision = opts.resolveStamp
+      ? opts.resolveStamp({ merged, storedLang: latest.lyricsTranslationLang ?? null })
+      : null;
+    // `stamp: false` keeps whatever the row already carries (a mixed cache).
+    const stampedLang = decision ? (decision.stamp === false ? undefined : decision.stamp) : opts.lang;
     // CAS on the exact cache value we read: if a concurrent writer committed
     // in between, this UPDATE matches no row and we retry against its cache.
     const applied = await d.update(schema.songs)
       .set({
         ...(opts.patch ?? {}),
         lyricsTranslation: JSON.stringify(merged),
-        // Stamp the language whenever a language is provided; otherwise keep
-        // whatever is already stored (a resume into the same language).
-        ...(opts.lang !== undefined ? { lyricsTranslationLang: opts.lang } : {}),
+        ...(stampedLang !== undefined ? { lyricsTranslationLang: stampedLang } : {}),
         updatedAt: nowUtcSql(),
       })
       .where(and(
@@ -137,7 +173,9 @@ async function mergeUnderOptimisticLock(
       ))
       .returning({ id: schema.songs.id })
       .get();
-    if (applied) return { ok: true, cache: merged };
+    if (applied) {
+      return { ok: true, cache: merged, ...(stampedLang !== undefined ? { lang: stampedLang } : {}) };
+    }
     // Lost the race — loop re-reads and merges on top of the winner's cache.
   }
   // Retries exhausted (pathological contention). Refuse rather than guess —
@@ -195,6 +233,13 @@ export async function mergeSliceIntoCache(
  * concurrent AI slice (or another editor) keeps its lines instead of being
  * rolled back by a whole-snapshot write, and vice versa.
  *
+ * The language stamp is decided from the cache the merge is about to write, not
+ * from the target language alone (issue #394): a manual save refreshes the
+ * stamp (issue #189) only when the resulting cache really is all in `lang`.
+ * Old-language lines the user merely scrolled past must keep the old stamp
+ * visible, otherwise the mismatch banner and the coverage counter start
+ * vouching for translations nobody re-translated.
+ *
  * Returns the merged cache so the client can adopt lines written elsewhere
  * while still showing its own saved edits.
  */
@@ -211,13 +256,24 @@ export async function mergeLineEditsIntoCache(
     patch?: Record<string, unknown>;
   },
 ): Promise<MergeResult> {
+  const edited = editedLineIndices(opts.edits);
   return mergeUnderOptimisticLock(db, {
     id: opts.id,
     sourceLyrics: opts.sourceLyrics,
     totalLines: opts.totalLines,
-    lang: opts.lang,
     patch: opts.patch,
     apply: (latest) => applyLineEdits(latest, opts.edits, opts.totalLines),
+    // A user-driven save: the untouched lines are on screen and editable, so
+    // the stored stamp speaks for them. An unrecorded stamp (legacy rows /
+    // earlier manual corrections) is trusted as "the language shown is the
+    // language the user just confirmed", or row #189's fix would never apply.
+    resolveStamp: ({ merged, storedLang }) => decideTranslationLangStamp({
+      merged,
+      editedIndices: edited,
+      targetLang: opts.lang,
+      storedLang,
+      assumeStoredLang: true,
+    }),
   });
 }
 

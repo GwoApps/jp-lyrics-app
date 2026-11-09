@@ -6,6 +6,7 @@ import { getEffectiveTargetLang } from '@/lib/translation-settings';
 import { mergeLineEditsIntoCache } from '@/lib/translation-cache';
 import { parseLineEdits } from '@/lib/translation-line-edits';
 import { parseTranslationCache } from '@/lib/translation/parse';
+import { isMixedTranslationLang } from '@/lib/translation-cache-lang';
 
 // PUT /api/songs/[id]/translation — save manually corrected line-level translations.
 // Body: { changes: [{ index, translation }], source_lyrics: string }
@@ -48,6 +49,7 @@ export async function PUT(
     createdBy: schema.songs.createdBy,
     lyricsRaw: schema.songs.lyricsRaw,
     lyricsTranslation: schema.songs.lyricsTranslation,
+    lyricsTranslationLang: schema.songs.lyricsTranslationLang,
   }).from(schema.songs).where(eq(schema.songs.id, id)).get();
   if (!existing) {
     return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
@@ -74,7 +76,17 @@ export async function PUT(
   // expired stamp marks the user's confirmed work as invalid and triggers a
   // whole-song re-translation (#189 / #93). When no config exists we leave the
   // stamp untouched (nothing to compare against anyway).
+  //
+  // That refresh is only truthful while the whole cache is in `targetLang`
+  // (issue #394). The editor loads whatever is stored — including a cache
+  // written for a *previous* target language — and sends only the lines it
+  // changed, so untouched lines of the old language survive the merge.
+  // Relabelling them as `targetLang` would make the mismatch banner disappear,
+  // count them as coverage and let the whole-song cache short-circuit serve
+  // them as current. `mergeLineEditsIntoCache` therefore decides the stamp from
+  // the merged cache itself: preserved while old-language lines remain.
   const targetLang = await getEffectiveTargetLang(user.id);
+  const storedLang = existing.lyricsTranslationLang ?? null;
 
   const result = await mergeLineEditsIntoCache(db, {
     id,
@@ -101,8 +113,20 @@ export async function PUT(
     return NextResponse.json({ error: 'write_contention' }, { status: 409 });
   }
 
+  // Did this save leave the cache mixed by language? The stamp the merge
+  // committed is authoritative (`undefined` = preserved), so the flag covers
+  // both "the old stamp was kept" and a pre-existing mismatch this save did not
+  // fix. OPTIONAL response field: existing clients ignore it, and it changes no
+  // status/signature for them.
+  const effectiveLang = 'lang' in result ? result.lang : storedLang;
+  const mixedTranslationLang = isMixedTranslationLang(effectiveLang, targetLang);
+
   // The merged cache (not the submitted change-set) is authoritative: it may
   // contain lines another session wrote while the editor was open, and the
   // client adopts them so the user sees what is actually stored.
-  return NextResponse.json({ ok: true, translations: result.cache });
+  return NextResponse.json({
+    ok: true,
+    translations: result.cache,
+    ...(mixedTranslationLang ? { mixed_translation_lang: true } : {}),
+  });
 }

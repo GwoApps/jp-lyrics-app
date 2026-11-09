@@ -345,7 +345,7 @@ test('manual line edits keep the lines an AI slice wrote while the editor was op
     edits: [{ index: 0, translation: '我的翻译' }],
     lang: 'zh-CN',
   });
-  assert.deepEqual(manual, { ok: true, cache: ['我的翻译', '', '三', '四'] });
+  assert.deepEqual(manual, { ok: true, cache: ['我的翻译', '', '三', '四'], lang: 'zh-CN' });
 
   // The AI's lines survive — before the fix they were rolled back to ''.
   const row = await readSong(t);
@@ -420,7 +420,10 @@ test('manual line edits normalise to the current line count and can clear a line
 test('manual line edits drop the stale AI reasoning and refresh the language stamp', async (ctx) => {
   const t = makeTestDb(ctx, 'translation-cache-manual-patch');
   await createSongsTable(t.client);
-  await seedSong(t, { cache: '["一","","",""]' });
+  // Line 0 is blank, so line 1 is the last translated line: once it is edited in
+  // `zh-CN` the cache is homogeneous and the stamp may follow (#189). Line 0
+  // carrying text would be the #394 case covered below.
+  await seedSong(t, { cache: '["","","",""]' });
   await t.db.update(songs).set({
     lyricsTranslationReasoning: 'old thinking…',
     lyricsTranslationLang: 'ja',
@@ -440,7 +443,7 @@ test('manual line edits drop the stale AI reasoning and refresh the language sta
     lyricsTranslationLang: songs.lyricsTranslationLang,
     lyricsTranslationReasoning: songs.lyricsTranslationReasoning,
   }).from(songs).where(sql`id = ${SONG_ID}`).get();
-  assert.equal(row?.lyricsTranslation, '["一","二","",""]');
+  assert.equal(row?.lyricsTranslation, '["","二","",""]');
   assert.equal(row?.lyricsTranslationLang, 'zh-CN');
   assert.equal(row?.lyricsTranslationReasoning, null);
 });
@@ -478,4 +481,81 @@ test('concurrent manual saves of different lines both survive (optimistic lock)'
     own1.close();
     own2.close();
   }
+});
+
+// ── issue #394: a partial manual save must not relabel untouched lines ──────
+//
+// The proofreading editor loads whatever is stored (including a cache written
+// for a previous target language) and sends only the lines the user changed.
+// Stamping the whole cache with the current target language relabels the lines
+// nobody re-translated, which silently disables the mismatch banner and the
+// coverage counter downstream.
+function readLang(t: TestDb): Promise<string | null | undefined> {
+  return t.db.select({ lyricsTranslationLang: songs.lyricsTranslationLang })
+    .from(songs).where(sql`id = ${SONG_ID}`).get()
+    .then((row) => (row as { lyricsTranslationLang: string | null } | undefined)?.lyricsTranslationLang);
+}
+
+test('a manual save that leaves old-language lines keeps the stored stamp and reports it', async (ctx) => {
+  const t = makeTestDb(ctx, 'translation-cache-mixed-lang');
+  await createSongsTable(t.client);
+  await seedSong(t, { cache: '["中文一","中文二","中文三","中文四"]' });
+  await t.db.update(songs).set({ lyricsTranslationLang: 'zh-CN' }).where(sql`id = ${SONG_ID}`).run();
+
+  // Target language is now `en`; the user fixed one line and saved.
+  const result = await mergeLineEditsIntoCache(t.db, {
+    id: SONG_ID,
+    sourceLyrics: LYRICS,
+    totalLines: 4,
+    edits: [{ index: 3, translation: 'four' }],
+    lang: 'en',
+  });
+  assert.equal(result.ok, true);
+  // The write itself happened…
+  const row = await readSong(t);
+  assert.equal(row?.lyricsTranslation, '["中文一","中文二","中文三","four"]');
+  // …but the stamp still names the language of the three untouched lines.
+  assert.equal(await readLang(t), 'zh-CN');
+  assert.equal((result as { lang?: string | null }).lang, undefined);
+});
+
+test('a manual save that covers every non-empty line refreshes the stamp (#189)', async (ctx) => {
+  const t = makeTestDb(ctx, 'translation-cache-all-lines-lang');
+  await createSongsTable(t.client);
+  await seedSong(t, { cache: '["中文一","中文二","",""]' });
+  await t.db.update(songs).set({ lyricsTranslationLang: 'zh-CN' }).where(sql`id = ${SONG_ID}`).run();
+
+  // AI fill + manual edits turned both translated lines into English; the two
+  // remaining lines have no translation at all (nothing left to re-translate).
+  const result = await mergeLineEditsIntoCache(t.db, {
+    id: SONG_ID,
+    sourceLyrics: LYRICS,
+    totalLines: 4,
+    edits: [{ index: 0, translation: 'one' }, { index: 1, translation: 'two' }],
+    lang: 'en',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(await readLang(t), 'en');
+  assert.equal((result as { lang?: string | null }).lang, 'en');
+});
+
+test('an AI slice still stamps its language on top of an old-language cache', async (ctx) => {
+  const t = makeTestDb(ctx, 'translation-cache-slice-lang');
+  await createSongsTable(t.client);
+  await seedSong(t, { cache: '["中文一","","中文三",""]' });
+  await t.db.update(songs).set({ lyricsTranslationLang: 'zh-CN' }).where(sql`id = ${SONG_ID}`).run();
+
+  // The translate route treats a wrong-language cache as empty and re-translates
+  // the requested slice; stamping is unchanged there (the merge is the source of
+  // truth for the lines it carries, and the route's own contract owns it).
+  const result = await mergeSliceIntoCache(t.db, {
+    id: SONG_ID,
+    sourceLyrics: LYRICS,
+    totalLines: 4,
+    start: 0,
+    resolved: makeResolved(['one', null, null, null]),
+    lang: 'en',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(await readLang(t), 'en');
 });
