@@ -439,6 +439,22 @@ textarea {
 .confirm-dialog-btn--confirm:hover { opacity: 0.9; }
 .confirm-dialog-btn--danger { background: var(--destructive); color: var(--destructive-foreground); border-color: var(--destructive); }
 .confirm-dialog-btn--danger:hover { opacity: 0.9; }
+/* In-flight confirm (pending): both actions are inert; the spinner shares the
+   existing icon gap so the label does not shift. */
+.confirm-dialog-btn:disabled { cursor: default; opacity: 0.6; }
+.confirm-dialog-btn:disabled:hover { opacity: 0.6; }
+.confirm-dialog-spinner {
+  width: 12px; height: 12px; flex: none; border-radius: 9999px;
+  border: 2px solid currentColor; border-top-color: transparent;
+  animation: confirm-dialog-spin 0.7s linear infinite;
+}
+@keyframes confirm-dialog-spin { to { transform: rotate(360deg); } }
+/* An indeterminate spinner still communicates "working" without motion:
+   slow it down instead of stopping it. */
+@media (prefers-reduced-motion: reduce) {
+  .confirm-dialog-btn { transition: none; }
+  .confirm-dialog-spinner { animation-duration: 1.6s; }
+}
 
 /* Playlist Import Dialog — modal confirm form plus live import progress. */
 .import-dialog {

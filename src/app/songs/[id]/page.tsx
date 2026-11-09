@@ -1469,7 +1469,19 @@ export default function SongViewPage() {
             </footer>
       </Dialog>
 
-      <ConfirmDialog open={data.deleteConfirm} title={t('dialog.deleteConfirmTitle', { title: song?.title || '' })} body={t('dialog.deleteConfirmBody')} confirmLabel={t('common.delete')} cancelLabel={t('common.cancel')} variant="danger" onConfirm={data.confirmDelete} onCancel={() => data.setDeleteConfirm(false)} />
+      <ConfirmDialog
+        open={data.deleteConfirm}
+        title={t('dialog.deleteConfirmTitle', { title: song?.title || '' })}
+        /* A failed delete keeps the dialog open and appends the localized
+           reason here instead of closing as if it had succeeded (issue #395). */
+        body={data.deleteError ? `${t('dialog.deleteConfirmBody')}\n${data.deleteError}` : t('dialog.deleteConfirmBody')}
+        confirmLabel={t('common.delete')}
+        cancelLabel={t('common.cancel')}
+        variant="danger"
+        pending={data.deleting}
+        onConfirm={() => void data.confirmDelete()}
+        onCancel={() => data.setDeleteConfirm(false)}
+      />
       <ConfirmDialog
         open={showSyncConfirm}
         title={t('song.syncConfirmTitle')}

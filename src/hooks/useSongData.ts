@@ -23,6 +23,30 @@ import { usePiP } from './usePiP';
 import { useFurigana } from './useFurigana';
 import type { ImportAlertState, ImportReviewState } from './models';
 
+// Extract the language-independent error code from a failed write response.
+// Network errors and non-JSON bodies surface as `undefined`.
+const readErrorCode = async (res: Response): Promise<string | undefined> => {
+  try {
+    const body = await res.json();
+    return typeof body?.error === 'string' ? body.error : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+// Map a `DELETE /api/songs/[id]` error code to an existing dictionary key.
+// Everything unmapped falls back to the generic delete failure — raw error
+// strings are never surfaced.
+const deleteFailureMessageKey = (code: string | undefined): string => {
+  const keyMap: Record<string, string> = {
+    login_required: 'home.errorLoginRequired',
+    unauthorized: 'home.errorLoginRequired',
+    forbidden: 'home.errorForbidden',
+    song_not_found: 'song.notFound',
+  };
+  return (code ? keyMap[code] : undefined) ?? 'home.deleteFailed';
+};
+
 interface ToastState {
   type: 'success' | 'error' | 'info';
   msg: string;
@@ -103,6 +127,10 @@ export interface UseSongDataReturn {
   setDebug: React.Dispatch<React.SetStateAction<boolean>>;
   deleteConfirm: boolean;
   setDeleteConfirm: React.Dispatch<React.SetStateAction<boolean>>;
+  /** A DELETE request is in flight — disables the confirm dialog actions. */
+  deleting: boolean;
+  /** Localized reason the last delete attempt failed, shown inside the dialog. */
+  deleteError: string | null;
   importAlert: ImportAlertState | null;
   setImportAlert: React.Dispatch<React.SetStateAction<ImportAlertState | null>>;
   importReview: ImportReviewState | null;
@@ -186,6 +214,8 @@ export function useSongData(id: string): UseSongDataReturn {
   } = useImport({ showToast, t });
 
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   // Persist font size
@@ -347,15 +377,33 @@ export function useSongData(id: string): UseSongDataReturn {
 
   const handleDelete = useCallback(() => {
     if (!song) return;
+    setDeleteError(null);
     setDeleteConfirm(true);
   }, [song]);
 
+  // Destructive and irreversible: a failed DELETE must never look like a
+  // success. The dialog stays open with an inline, localized reason
+  // (issue #395) so the user can retry instead of being bounced home.
   const confirmDelete = useCallback(async () => {
-    if (!song) return;
-    const res = await fetch(`/api/songs/${id}`, { method: 'DELETE' });
-    if (res.ok) { showToast('success', t('home.deleted')); setTimeout(() => router.push('/'), 800); }
-    setDeleteConfirm(false);
-  }, [id, song, router, t, showToast]);
+    if (!song || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/songs/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setDeleteConfirm(false);
+        showToast('success', t('home.deleted'));
+        setTimeout(() => router.push('/'), 800);
+        return;
+      }
+      setDeleteError(t(deleteFailureMessageKey(await readErrorCode(res))));
+    } catch {
+      // Network failure / timeout / connection reset — retryable as-is.
+      setDeleteError(t('song.networkErrorAlert'));
+    } finally {
+      setDeleting(false);
+    }
+  }, [id, song, deleting, router, t, showToast]);
 
   const handleCopy = useCallback(async (mode: 'original' | 'translation' = 'original') => {
     if (!song) return;
@@ -439,6 +487,8 @@ export function useSongData(id: string): UseSongDataReturn {
     setDebug,
     deleteConfirm,
     setDeleteConfirm,
+    deleting,
+    deleteError,
     importAlert,
     setImportAlert,
     importReview,
