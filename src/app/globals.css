@@ -1624,20 +1624,37 @@ textarea {
   font-size: 14px;
 }
 .immersive-resume:hover { background: var(--accent); }
+/* Mobile: the credit is a full-bleed bar. It touches both edges, and the text keeps
+   out of the notch / rounded corners / home indicator via the safe-area insets.
+   Desktop keeps the floating card (see the min-width: 640px block below). */
 .immersive-song-info {
   --immersive-cover-size: clamp(52px, 5vw, 64px);
   position: absolute;
   z-index: 5;
-  left: max(16px, env(safe-area-inset-left, 0px));
-  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
-  gap: 14px;
-  max-width: min(90vw, 480px);
+  gap: 12px;
+  width: 100%;
+  max-width: none;
   min-width: 0;
-  padding: 8px 14px 8px 8px;
-  border-radius: 10px;
+  padding-block: 10px calc(10px + env(safe-area-inset-bottom, 0px));
+  padding-inline: max(14px, env(safe-area-inset-left, 0px)) max(14px, env(safe-area-inset-right, 0px));
+  border-radius: 0;
   background: color-mix(in srgb, var(--background) 58%, transparent);
+}
+@media (min-width: 640px) {
+  .immersive-song-info {
+    left: max(16px, env(safe-area-inset-left, 0px));
+    right: auto;
+    bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    width: auto;
+    max-width: min(90vw, 480px);
+    padding: 8px 14px 8px 8px;
+    border-radius: 10px;
+  }
 }
 .immersive-song-artist {
   color: var(--foreground);
