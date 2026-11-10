@@ -1539,7 +1539,10 @@ textarea {
   mask-image: linear-gradient(to bottom, transparent, #000 96px, #000 calc(100% - 120px), transparent);
 }
 .lyrics-immersive-active .lyrics-scroll::-webkit-scrollbar { display: none; }
-.lyrics-immersive-active .lyrics-scroll > div { max-width: 960px; margin-inline: auto; overflow-wrap: anywhere; }
+/* Long JP lines are the reason desktop full-screen exists: allow up to 1200px of
+   measure instead of 960px so a 25-character line stays on one visual line at the
+   44px default size on a 1440px screen. */
+.lyrics-immersive-active .lyrics-scroll > div { max-width: min(100%, 1200px); margin-inline: auto; overflow-wrap: anywhere; }
 /* Fade the entire original/reading/translation pair together. Untimed lyrics
    and manual browsing retain normal reading contrast. */
 .lyrics-immersive-active .lyrics-scroll > div { transition: opacity 300ms ease; }
@@ -1568,7 +1571,7 @@ textarea {
 .lyrics-immersive-active .lyric-translation-placeholder { opacity: 0.6; }
 @media (min-width: 640px) {
   .lyrics-immersive-active .lyrics-scroll {
-    padding-inline: clamp(20px, 9vw, 128px);
+    padding-inline: clamp(20px, 4vw, 72px);
     font-size: var(--immersive-font-desktop, 44px);
   }
 }
