@@ -51,12 +51,45 @@ test('buildTextExport emits original text by default and pairs translations', ()
   assert.equal(withTranslation, '桜が舞う\nCherry blossoms dance\n\n明日へ\nToward tomorrow');
 });
 
-test('buildTextExport substitutes furigana and romanized readings', () => {
+test('buildTextExport annotates the original text with furigana and romanizes for romaji', () => {
+  // Issue #400: `.txt` "furigana" keeps the source kanji and appends the
+  // reading, matching the `.html`/PiP ruby rendering (`<ruby>桜<rt>さくら</rt>`)
+  // instead of replacing the line with kana only.
+  // Segments are normalized the same way as the ruby rendering, so the saved
+  // `舞う` token is split into `舞(ま)` + `う` there as well.
   const furigana = buildTextExport(SONG, false, 'furigana');
-  assert.equal(furigana, 'さくらがまう\n\nあしたへ');
+  assert.equal(furigana, '桜(さくら)が舞(ま)う\n\n明日(あした)へ');
+  // The source kanji survive the annotation (the bug in #400 was kana-only).
+  assert.equal(furigana.replace(/\([^)]*\)/g, ''), SONG.lyrics_raw);
 
   const romaji = buildTextExport(SONG, false, 'romaji');
   assert.equal(romaji, 'sakura ga mau\n\nashita he');
+});
+
+test('buildTextExport furigana keeps every source character of the line', () => {
+  // #400: the exported line must stay re-readable as the original lyric —
+  // stripping the `(reading)` groups has to reproduce `lyrics_raw` exactly.
+  const song = {
+    ...SONG,
+    lyrics_raw: '夜に駆ける\n\n今日も',
+    lyrics_furigana: JSON.stringify([
+      {
+        segments: [
+          { text: '夜', reading: 'よる' }, { text: 'に', reading: '' },
+          { text: '駆', reading: 'か' }, { text: 'ける', reading: '', joinPrev: true },
+        ],
+      },
+      { segments: [] },
+      { segments: [{ text: '今日', reading: 'きょう' }, { text: 'も', reading: '', joinPrev: true }] },
+    ]),
+  };
+  const furigana = buildTextExport(song, false, 'furigana');
+  assert.equal(furigana, '夜(よる)に駆(か)ける\n\n今日(きょう)も');
+  assert.equal(furigana.replace(/\([^)]*\)/g, ''), song.lyrics_raw);
+  // Both the kanji and their readings survive, unlike the old kana-only output.
+  for (const part of ['夜', 'よる', '駆', 'か', '今日', 'きょう']) {
+    assert.ok(furigana.includes(part), `missing ${part}`);
+  }
 });
 
 test('buildTextExport falls back to raw text when no furigana line exists', () => {
@@ -98,13 +131,19 @@ const YUE_SONG = {
   reading_scheme: 'yue-jyutping' as const,
 };
 
-test('buildTextExport space-separates jyutping readings in BOTH reading modes', () => {
+test('buildTextExport space-separates jyutping syllables in BOTH reading modes', () => {
+  // Issue #400: the furigana mode now annotates the original characters, so
+  // the syllables are separated inside the parentheses instead of forming the
+  // bare latin line the mode used to emit.
   const furigana = buildTextExport(YUE_SONG, false, 'furigana');
-  assert.equal(furigana, 'gam1 tin1 tin1 hei3 han2 hou2\n\nngo5 dei6 heoi3 zo2 gung1 jyun2');
-  // Byte-identical to the romaji mode: jyutping readings are already latin, so
-  // the two modes differ in wording only, never in layout.
+  assert.equal(
+    furigana,
+    '今(gam1)天(tin1)天(tin1)氣(hei3)很(han2)好(hou2)\n\n我(ngo5)哋(dei6)去(heoi3)咗(zo2)公(gung1)園(jyun2)',
+  );
+  // Same syllable boundaries as the romaji mode (issue #311), which still
+  // emits readings only — the two modes now differ in wording AND layout.
   const romaji = buildTextExport(YUE_SONG, false, 'romaji');
-  assert.equal(romaji, furigana);
+  assert.equal(romaji, 'gam1 tin1 tin1 hei3 han2 hou2\n\nngo5 dei6 heoi3 zo2 gung1 jyun2');
 });
 
 test('buildTextExport still glues punctuation to jyutping readings', () => {
@@ -115,20 +154,24 @@ test('buildTextExport still glues punctuation to jyutping readings', () => {
       { segments: [{ text: '好', reading: 'hou2' }, { text: '！', reading: '！' }] },
     ]),
   };
-  assert.equal(buildTextExport(song, false, 'furigana'), 'hou2！');
+  assert.equal(buildTextExport(song, false, 'furigana'), '好(hou2)！');
   assert.equal(buildTextExport(song, false, 'romaji'), 'hou2！');
 });
 
-test('joinReadingParts keeps kana furigana concatenated and splits latin readings', () => {
-  const parts = ['さくら', 'が', 'まう'];
-  // kana furigana: unchanged concatenation
-  assert.equal(joinReadingParts(parts, 'ja-kana', 'furigana'), 'さくらがまう');
+test('joinReadingParts keeps annotated parts concatenated and splits latin readings', () => {
+  const parts = ['桜(さくら)', 'が', '舞(ま)う'];
+  // Issue #400: furigana parts carry the original text, so the line stays
+  // continuous — no word separators are introduced between segments.
+  assert.equal(joinReadingParts(parts, 'ja-kana', 'furigana'), '桜(さくら)が舞(ま)う');
   // romaji mode always splits
   assert.equal(joinReadingParts(['sakura', 'ga', 'mau'], 'ja-kana', 'romaji'), 'sakura ga mau');
-  // jyutping scheme splits in furigana mode too
-  assert.equal(joinReadingParts(['gam1', 'tin1'], 'yue-jyutping', 'furigana'), 'gam1 tin1');
+  // jyutping syllables are separated inside the parentheses (issue #311) while
+  // the surrounding line stays glued to the source characters.
+  assert.equal(joinReadingParts(['今(gam1 tin1)', '天(tin1)'], 'yue-jyutping', 'furigana'), '今(gam1tin1)天(tin1)');
+  // A space that belongs to the original text is never swallowed.
+  assert.equal(joinReadingParts(['hello ', 'world(わーるど)'], 'ja-kana', 'furigana'), 'hello world(わーるど)');
   // 'none' mode never reaches the splitter, but must stay a plain join
-  assert.equal(joinReadingParts(parts, 'yue-jyutping', 'none'), 'さくらがまう');
+  assert.equal(joinReadingParts(parts, 'yue-jyutping', 'none'), '桜(さくら)が舞(ま)う');
 });
 
 test('renderFuriganaLineToHtml honours reading mode', () => {

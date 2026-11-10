@@ -7,7 +7,7 @@
  * translation alignment from `share-card.ts`.
  */
 
-import type { FuriganaLine, ReadingScheme } from './types.ts';
+import type { FuriganaLine, FuriganaSegment, ReadingScheme } from './types.ts';
 import { normalizeFuriganaSegments, resolveFuriganaReading } from './romaji.ts';
 import { parseTranslationCache } from './translation/parse.ts';
 import { LRC_LEADING_TIMESTAMPS_REGEX, extractLrcMetadata, isLrcMetadataLine, stripLrcTimestampsFromLine } from './lrc.ts';
@@ -154,31 +154,55 @@ function appendLrcTranslations(lyrics: string, translations: string[], rawLyrics
 /**
  * Join per-segment reading parts into one plain-text line.
  *
- * Latin readings carry no inter-word separators of their own, so they are
- * space-separated word by word with the punctuation glued to the preceding
- * word. This applies to the `romaji` mode (kana → Latin) and to the
- * `yue-jyutping` scheme, whose readings are already Latin syllables (issue
- * #311): without it `gam1tin1tin1hei3han2hou2` had no syllable boundary, while
- * the `.html`/PiP ruby rendering and the `romaji` mode both showed the parts
- * apart. Non-Latin readings (kana furigana) keep the plain concatenation so
- * their output is unchanged.
+ * `romaji` emits readings only, and latin readings carry no inter-word
+ * separators of their own: they are space-separated word by word with the
+ * punctuation glued to the preceding word. This applies to the kana → Latin
+ * romanization and to the `yue-jyutping` scheme, whose readings are already
+ * latin syllables (issue #311): without it `gam1tin1tin1hei3han2hou2` had no
+ * syllable boundary.
+ *
+ * `furigana` keeps the original text of every segment (issue #400), so the
+ * line must read as one continuous lyric: latin syllables inside the
+ * parentheses (`今(gam1 tin1)`) are glued back together, while any space that
+ * belongs to the original text is preserved — only the reading is normalized.
  */
 export function joinReadingParts(
   parts: readonly string[],
   scheme: ReadingScheme,
   readingMode: ExportReadingMode,
 ): string {
-  // 'none' emits the original text, so it is never split (the caller skips the
-  // splitter entirely, but the contract stays explicit).
+  // The original text is never split: both 'none' and 'furigana' keep the
+  // source characters, so only whitespace inside `原文(读音)` is collapsed.
   if (readingMode === 'none') return parts.join('');
-  const latinReadings = readingMode === 'romaji' || scheme === 'yue-jyutping';
-  if (!latinReadings) return parts.join('');
+  if (readingMode === 'furigana') return parts.join('').replace(/\s+(?=[^()]*\))/gu, '');
   // Space-separate latin syllables for readability while keeping punctuation
   // glued to the preceding word.
   return parts
     .join(' ')
     .replace(/\s+([\p{P}\p{S}])/gu, '$1')
     .trim();
+}
+
+/**
+ * One plain-text part per segment: the original text, with the reading
+ * appended in parentheses only when the segment has one.
+ *
+ * `.txt` "furigana" must mean the same thing as the `.html`/PiP ruby
+ * rendering — the source lyrics stay readable and the reading is an
+ * annotation on top (issue #400). Emitting `seg.reading` alone turned the
+ * whole file into kana and made the original unrecoverable.
+ */
+export function segmentToAnnotatedText(
+  segment: FuriganaSegment,
+  reading: string,
+  scheme: ReadingScheme,
+): string {
+  if (!reading || reading === segment.text) return segment.text;
+  // Jyutping syllables are latin words: keep them apart inside the
+  // parentheses, otherwise the reading is one unreadable run (issue #311).
+  // `joinReadingParts` collapses the surrounding whitespace again.
+  const written = scheme === 'yue-jyutping' ? [...reading].join(' ') : reading;
+  return `${segment.text}(${written})`;
 }
 
 /** Emit a `.txt` document (original / furigana / romaji with optional translations). */
@@ -197,9 +221,18 @@ export function buildTextExport(
     const source = furiganaLine && furiganaLine.segments.length > 0 && readingMode !== 'none'
       ? (() => {
           const parts: string[] = [];
-          for (const seg of furiganaLine.segments) {
+          // Furigana annotates the original segments, so it follows the same
+          // normalized segmentation as the `.html`/PiP ruby rendering.
+          const segments: FuriganaSegment[] = readingMode === 'furigana'
+            ? normalizeFuriganaSegments(furiganaLine.segments, song.reading_scheme)
+            : furiganaLine.segments;
+          for (const seg of segments) {
             const part = readingMode === 'furigana'
-              ? seg.reading || seg.text
+              ? segmentToAnnotatedText(
+                  seg,
+                  resolveFuriganaReading(seg.text, seg.reading, false, song.reading_scheme, seg),
+                  song.reading_scheme,
+                )
               : resolveFuriganaReading(seg.text, seg.reading, true, song.reading_scheme, seg) || seg.text;
             // A kanji token split into ruby/plain okurigana is still one word.
             // Keep its romanization together without changing the existing
