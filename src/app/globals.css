@@ -1528,7 +1528,9 @@ textarea {
 .lyrics-immersive-active .lyrics-scroll {
   height: 100%;
   max-height: none;
-  padding: 50dvh clamp(20px, 9vw, 128px);
+  /* Phones give the lyrics nearly the full width; a wrapped line loses far more
+     reading space than a wide gutter is worth on a 390px viewport. */
+  padding: 50dvh clamp(8px, 2.5vw, 20px);
   font-size: var(--immersive-font-mobile, 34px);
   text-align: center;
   overscroll-behavior: contain;
@@ -1566,6 +1568,7 @@ textarea {
 .lyrics-immersive-active .lyric-translation-placeholder { opacity: 0.6; }
 @media (min-width: 640px) {
   .lyrics-immersive-active .lyrics-scroll {
+    padding-inline: clamp(20px, 9vw, 128px);
     font-size: var(--immersive-font-desktop, 44px);
   }
 }

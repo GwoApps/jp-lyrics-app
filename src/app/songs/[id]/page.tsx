@@ -762,10 +762,11 @@ export default function SongViewPage() {
             </div>
           </div>
           {furiganaLines.length > 0 && (
+            /* Icon-only so the entry control does not push the title aside on a phone. */
             <button type="button" onClick={enterImmersive}
-              className="sm:hidden ml-auto inline-flex h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-md border border-[var(--border)] bg-[var(--card)] px-3 text-sm font-medium text-[var(--foreground)]"
-              aria-label={t('song.immersiveEnter')}>
-              <Maximize2 className="h-4 w-4" /><span className={oddDiceMap ? 'sr-only' : undefined}>{t('song.immersiveEnter')}</span>
+              className="sm:hidden ml-auto inline-flex h-10 w-10 shrink-0 self-start items-center justify-center rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]"
+              aria-label={t('song.immersiveEnter')} title={t('song.immersiveEnter')}>
+              <Maximize2 className="h-4 w-4" />
             </button>
           )}
           {/* Desktop toolbar */}
