@@ -200,6 +200,8 @@ export default function SongViewPage() {
   const spotifyConnected = session ? session.spotify.connected : null;
 
   const [playerExpanded, setPlayerExpanded] = useState(false);
+  // Admin publish/unpublish runs inline on the detail header (see setSongVisibility).
+  const [visibilityBusy, setVisibilityBusy] = useState(false);
   const preview = useMemo(() => previewTimeline(data.lineTimestamps, data.furiganaLines, data.song?.spotify_duration_ms),
     [data.lineTimestamps, data.furiganaLines, data.song?.spotify_duration_ms]);
   const simulated = spotifyConnected === false;
@@ -664,6 +666,37 @@ export default function SongViewPage() {
     return key ? t(key) : t(fallbackKey);
   };
 
+  // Admins publish directly through the audited moderation API; songs they own are
+  // covered by this path too, so the queue stays for non-admin owners only.
+  const setSongVisibility = async (nextPublic: boolean) => {
+    if (!song || visibilityBusy) return;
+    setVisibilityBusy(true);
+    try {
+      const res = await fetch(`/api/admin/songs/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: nextPublic ? 'publish' : 'unpublish',
+          expected_updated_at: song.updated_at,
+        }),
+      });
+      if (res.ok) {
+        data.refreshSong();
+        data.showToast('success', t(nextPublic ? 'song.setPublicSuccess' : 'song.setPrivateSuccess'));
+        return;
+      }
+      const body = await res.json().catch(() => null) as { error?: string } | null;
+      // A stale optimistic lock is recoverable: reload the row so the next click carries a fresh stamp.
+      if (body?.error === 'stale_resource') data.refreshSong();
+      data.showToast('error', t('song.setVisibilityFailed'));
+    } catch (error) {
+      console.error('更新公开状态失败', error);
+      data.showToast('error', t('song.setVisibilityFailed'));
+    } finally {
+      setVisibilityBusy(false);
+    }
+  };
+
   return (
     <div className={`song-view fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-visible sm:block sm:h-auto sm:pb-0${coverColor ? ' song-view--accented' : ''}${immersive.active ? ' lyrics-immersive-active' : ''}`} style={{ ...songThemeStyle, ['--immersive-font-mobile' as string]: `${immersive.fontSize.mobile}px`, ['--immersive-font-desktop' as string]: `${immersive.fontSize.desktop}px` }} data-player-expanded={playerExpanded} role={immersive.active ? 'region' : undefined} aria-label={immersive.active ? t('song.immersiveEnter') : undefined}>
       {/* Breadcrumb */}
@@ -701,7 +734,12 @@ export default function SongViewPage() {
               <h1 className="text-base sm:text-xl font-semibold tracking-tight break-words">{song.title}</h1>
               {song.artist && <p className="text-xs sm:text-sm text-[var(--muted-foreground)]"><ArtistLinks artist={song.artist} /></p>}
               {/* Visibility badge + request/cancel public actions */}
-              <div className="flex items-center gap-2 mt-1">
+              <div
+                className="flex items-center gap-2 mt-1"
+                data-song-visibility=""
+                data-public={song.is_public === 1 ? '1' : '0'}
+                data-requested={song.public_requested === 1 ? '1' : '0'}
+              >
               {song.is_public === 1 ? (
                 <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--success)]/20 text-[var(--success)]">{t('admin.public')}</span>
               ) : (
@@ -711,6 +749,17 @@ export default function SongViewPage() {
               )}
               {song.is_public === 0 && song.public_requested === 1 && (
                 <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--warning)]/20 text-[var(--warning)]">{t('song.requestPublicPending')}</span>
+              )}
+              {/* Admin moderation from the header: private songs get 设为公开, public ones 设为私密. */}
+              {isAdmin && canEdit && (
+                <button
+                  type="button"
+                  onClick={() => setSongVisibility(song.is_public !== 1)}
+                  disabled={visibilityBusy}
+                  className="text-[10px] text-[var(--song-accent)] hover:text-[var(--song-accent)]/80 underline transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                >
+                  {song.is_public === 1 ? t('song.setPrivate') : t('song.setPublic')}
+                </button>
               )}
               {canEdit && !isAdmin && song.is_public === 0 && (
                 song.public_requested === 1 ? (
