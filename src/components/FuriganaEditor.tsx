@@ -20,6 +20,11 @@ interface FuriganaEditorProps {
    * whole-song payload intact on save.
    */
   visibleLines?: number[];
+  /**
+   * Render line cards without their own border/background frame. The single-line
+   * dialog already provides the card surface, so the nested frame doubled it.
+   */
+  embedded?: boolean;
 }
 
 type EditTarget = { lineIndex: number; segIndex: number } | null;
@@ -51,7 +56,7 @@ function groupEditorDisplaySegments(segments: FuriganaSegment[]): EditorDisplayP
   return parts;
 }
 
-export default function FuriganaEditor({ lines, rawLines, onChange, readingScheme = 'ja-kana', focusLine, visibleLines }: FuriganaEditorProps) {
+export default function FuriganaEditor({ lines, rawLines, onChange, readingScheme = 'ja-kana', focusLine, visibleLines, embedded = false }: FuriganaEditorProps) {
   const { t } = useI18n();
   const [active, setActive] = useState<EditTarget>(null);
   const [draft, setDraft] = useState('');
@@ -334,7 +339,11 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
           <div
             key={li}
             ref={(el) => { lineRefs.current[li] = el; }}
-            className={`rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 sm:p-4 transition-colors ${
+            className={`${
+              embedded
+                ? 'rounded-lg p-0'
+                : 'rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 sm:p-4'
+            } transition-colors ${
               isActiveLine ? 'ring-1 ring-[var(--song-accent)]/30' : ''
             }`}
           >

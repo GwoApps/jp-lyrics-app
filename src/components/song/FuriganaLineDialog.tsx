@@ -153,6 +153,7 @@ export default function FuriganaLineDialog({
               readingScheme={readingScheme}
               focusLine={lineIndex}
               visibleLines={[lineIndex]}
+              embedded
             />
           ) : (
             <p className="text-sm text-[var(--muted-foreground)]">{t('furigana.lineDialogStale')}</p>
