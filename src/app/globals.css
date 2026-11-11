@@ -1298,12 +1298,11 @@ textarea {
   background: transparent;
   border: 0;
 }
-/* The bottom toolbar paints the same surface as the lyric panel (its parent container),
-   so the toolbar reads as part of the card instead of a separate darker band. Keep the
-   expression identical to .lyrics-panel; --lyric-accent is published on the page root
-   because the toolbar is a sibling of .lyrics-panel-shell. */
+/* The mobile toolbar sits on the page surface (not the lyric card surface), so it uses the
+   page background at full opacity — matching the main content area instead of showing a
+   translucent/blurred band over it. */
 .song-mobile-bar {
-  background: color-mix(in srgb, var(--card) 90%, var(--lyric-accent, var(--border)));
+  background: var(--background);
 }
 .song-mobile-text-button {
   color: var(--muted-foreground);

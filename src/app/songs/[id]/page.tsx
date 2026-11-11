@@ -635,15 +635,6 @@ export default function SongViewPage() {
       }
     : undefined;
 
-  // The mobile toolbar is a sibling of the lyric panel shell, so it cannot inherit the
-  // panel's accent from there. Publish the same value at the page root to let the bar
-  // paint the identical surface (see .song-mobile-bar in globals.css).
-  const lyricAccentStyle = {
-    ['--lyric-accent' as string]: coverColor
-      ? `rgb(${coverColor.primary.r} ${coverColor.primary.g} ${coverColor.primary.b})`
-      : 'var(--border)',
-  };
-
   const copyLyricLine = async (line: FuriganaLine) => {
     const text = line.segments.map((segment) => segment.text).join('');
     if (!text) return;
@@ -707,7 +698,7 @@ export default function SongViewPage() {
   };
 
   return (
-    <div className={`song-view fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-visible sm:block sm:h-auto sm:pb-0${coverColor ? ' song-view--accented' : ''}${immersive.active ? ' lyrics-immersive-active' : ''}`} style={{ ...songThemeStyle, ...lyricAccentStyle, ['--immersive-font-mobile' as string]: `${immersive.fontSize.mobile}px`, ['--immersive-font-desktop' as string]: `${immersive.fontSize.desktop}px` }} data-player-expanded={playerExpanded} role={immersive.active ? 'region' : undefined} aria-label={immersive.active ? t('song.immersiveEnter') : undefined}>
+    <div className={`song-view fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-visible sm:block sm:h-auto sm:pb-0${coverColor ? ' song-view--accented' : ''}${immersive.active ? ' lyrics-immersive-active' : ''}`} style={{ ...songThemeStyle, ['--immersive-font-mobile' as string]: `${immersive.fontSize.mobile}px`, ['--immersive-font-desktop' as string]: `${immersive.fontSize.desktop}px` }} data-player-expanded={playerExpanded} role={immersive.active ? 'region' : undefined} aria-label={immersive.active ? t('song.immersiveEnter') : undefined}>
       {/* Breadcrumb */}
       <div className="shrink-0 mb-3 sm:mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
         <button onClick={() => transitionRouter.push('/')} className="hover:text-[var(--foreground)] transition-colors inline-flex items-center gap-1">
