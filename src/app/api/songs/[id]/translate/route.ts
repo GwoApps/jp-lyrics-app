@@ -15,7 +15,10 @@ import {
   mergeGlossaryEntries,
   needsGlossaryExtraction,
   parseLyricsGlossary,
+  parseReusedGlossary,
+  reusableGlossary,
   serializeLyricsGlossary,
+  type GlossarySource,
 } from '@/lib/lyrics-glossary';
 
 const SSE_HEADERS = {
@@ -25,7 +28,8 @@ const SSE_HEADERS = {
   'X-Accel-Buffering': 'no',
 };
 // POST /api/songs/[id]/translate — translate lyrics via the configured LLM provider and cache the result.
-// Body: { force?: boolean, start?: number, count?: number, stream?: boolean, persist?: boolean }
+// Body: { force?: boolean, start?: number, count?: number, stream?: boolean, persist?: boolean,
+//         glossary?: { original, translation }[] }
 //   - Without `start`: translate the whole song (cache hit short-circuits unless `force`).
 //   - With `start`: translate only lines [start, start + count); the result is MERGED into the
 //     stored cache so partial translations survive failures (resume/continue support).
@@ -40,7 +44,14 @@ const SSE_HEADERS = {
 //     cache (and without persisting glossary/reasoning). Used by the editor's AI fill /
 //     single-line re-translate so results stay inside the「草稿 + 保存/放弃」boundary — the
 //     user persists the whole draft via PUT /translation on save. Defaults to `true`.
-// Response (non-stream): { start, count, translations } — the translated slice, aligned to lyric lines.
+//   - `glossary`: a terminology table the client is handing back for REUSE (issue #405). It
+//     is validated with the same rules as a stored one; a valid table short-circuits glossary
+//     extraction for this request, an invalid one is ignored (falls back to extraction) —
+//     the request never fails on it. Comes from the `glossary` field of an earlier response.
+// Response (stream `done` and non-stream JSON alike): { start, count, translations, lang,
+//   glossary, glossary_source, glossary_failed } — `glossary` is the table this run used
+//   (null when there was none) so the client can hand it back on the next request, and
+//   `glossary_source` says where it came from ('stored' | 'extracted' | 'reused' | 'none').
 //
 // Optimization: repeated lines (choruses) are translated once per distinct
 // content — copies reuse the first occurrence's translation from the cache
@@ -67,7 +78,10 @@ export async function POST(
     return NextResponse.json({ error: 'login_required' }, { status: 401 });
   }
 
-  let body: { force?: boolean; start?: number; count?: number; stream?: boolean; persist?: boolean } = {};
+  let body: {
+    force?: boolean; start?: number; count?: number; stream?: boolean; persist?: boolean;
+    glossary?: unknown;
+  } = {};
   try {
     body = await request.json();
   } catch { /* empty body is fine */ }
@@ -224,8 +238,24 @@ export async function POST(
   const storedGlossary = parseLyricsGlossary(existing.lyricsGlossary);
   const preservedManual = manualGlossaryEntries(existing.lyricsGlossary);
   let glossary: GlossaryEntry[] | null = null;
+  // Where the table this run uses came from — reported to the client (#405).
+  let glossarySource: GlossarySource = 'none';
+  // A table the client cached from an earlier response and handed back (#405).
+  // Validated with the stored-table rules; an invalid/stale reply is treated
+  // as "not provided" and falls through to extraction — it never fails the
+  // request. Only consulted when the stored column has nothing usable, so the
+  // database stays authoritative for a non-draft flow.
+  const reusedGlossary = parseReusedGlossary(body.glossary);
   if (!needsGlossaryExtraction(storedGlossary)) {
     glossary = storedGlossary.entries;
+    glossarySource = 'stored';
+  } else if (reusedGlossary !== null) {
+    // Draft-only flows (#251) must not write the column, so the table they
+    // extract would otherwise be thrown away and re-extracted per request.
+    // The client hands it back instead — no extraction, same terms.
+    // Hand-pinned terms still win, exactly like after an extraction.
+    glossary = mergeGlossaryEntries(preservedManual, reusedGlossary);
+    glossarySource = 'reused';
   } else if (storedGlossary.state === 'failed') {
     console.warn(`[translate] retrying glossary extraction for "${existing.title}" (previous attempt failed)`);
   } else if (storedGlossary.state === 'damaged') {
@@ -255,6 +285,13 @@ export async function POST(
   // checked" instead of silently inheriting the same untraceable mistranslation
   // (issue #341).
   let glossaryExtractionFailed = false;
+  // The table this run actually used, validated for reuse, so a client can cache
+  // and hand it back (issue #405). Read AFTER the glossary is resolved (inside
+  // the SSE stream for streaming requests), hence a function not a constant.
+  const glossaryReport = () => ({
+    glossary: reusableGlossary(glossary),
+    glossary_source: glossarySource,
+  });
   const ensureGlossary = async (signal?: AbortSignal): Promise<[boolean, string | null, number | null]> => {
     if (glossary !== null) return [true, null, null];
     const extracted = await extractLyricsGlossary(existing.title, existing.artist, lines, config, { signal });
@@ -267,6 +304,7 @@ export async function POST(
       // Hand-pinned terms always win over the freshly extracted ones: the
       // model must learn the user's correction, never overwrite it (#341).
       glossary = mergeGlossaryEntries(preservedManual, extracted);
+      glossarySource = 'extracted';
       // With `persist: false` we use the freshly-extracted glossary for THIS
       // request's prompt but do NOT write it back — the caller is a draft-only
       // editor flow and must not mutate the stored glossary either (#251).
@@ -523,7 +561,7 @@ export async function POST(
               return;
             }
           }
-          send('done', { start, count: finalSlice.length, translations: finalSlice, cached: false, lang: config.targetLang, glossary_failed: glossaryExtractionFailed, ...progressPayload(requestDone, coverage) });
+          send('done', { start, count: finalSlice.length, translations: finalSlice, cached: false, lang: config.targetLang, glossary_failed: glossaryExtractionFailed, ...glossaryReport(), ...progressPayload(requestDone, coverage) });
         } catch (error) {
           // Client cancelled (cancel button or closed the page): the upstream
           // fetch was aborted via request.signal, so no AI quota is wasted.
@@ -617,7 +655,7 @@ export async function POST(
               }
             }
           }
-          send('error', { error: code, ...progressPayload(partialDone, coverage) });
+          send('error', { error: code, glossary_failed: glossaryExtractionFailed, ...glossaryReport(), ...progressPayload(partialDone, coverage) });
         } finally {
           // After a client disconnect (or a normal close) the stream may
           // already be closed — closing again throws, so swallow it.
@@ -679,5 +717,6 @@ export async function POST(
     cached: false,
     lang: config.targetLang,
     glossary_failed: glossaryExtractionFailed,
+    ...glossaryReport(),
   });
 }

@@ -104,3 +104,50 @@ test('a normal extraction result is not reported as a glossary failure', async (
   const result = await readTranslationStream(stream, () => {});
   assert.equal(result.glossaryFailed, false);
 });
+
+test('readTranslationStream surfaces the glossary a draft run used (issue #405)', async () => {
+  const stream = sseBody([
+    'event: stage\ndata: {"stage":"glossary_extraction"}\n\n',
+    'event: done\ndata: {"start":0,"count":1,"translations":["a"],'
+      + '"glossary":[{"original":"花火","translation":"烟花"}],"glossary_source":"extracted"}\n\n',
+  ]);
+  const result = await readTranslationStream(stream, () => {});
+
+  assert.deepEqual(result.glossary, [{ original: '花火', translation: '烟花' }]);
+  assert.equal(result.glossarySource, 'extracted');
+});
+
+test('a response without a glossary reports none instead of an empty table', async () => {
+  const stream = sseBody([
+    'event: done\ndata: {"start":0,"count":1,"translations":["a"],"glossary":[],"glossary_source":"none"}\n\n',
+  ]);
+  const result = await readTranslationStream(stream, () => {});
+
+  assert.equal(result.glossary, null);
+  assert.equal(result.glossarySource, 'none');
+});
+
+test('an unrecognized glossary payload is dropped, never cached', async () => {
+  for (const glossary of ['not-an-array', [null], [{ original: 1, translation: 'x' }], [{ original: 'x' }]]) {
+    const stream = sseBody([
+      `event: done\ndata: ${JSON.stringify({ translations: ['a'], glossary, glossary_source: 'bogus' })}\n\n`,
+    ]);
+    const result = await readTranslationStream(stream, () => {});
+    assert.equal(result.glossary, null, `should drop ${JSON.stringify(glossary)}`);
+    // An unknown source label must not leak through as a claim about the run.
+    assert.equal(result.glossarySource, 'none');
+  }
+});
+
+test('the error event carries the glossary too, so a failed run stays reusable', async () => {
+  const stream = sseBody([
+    'event: error\ndata: {"error":"ai_quota_exceeded","glossary_failed":true,'
+      + '"glossary":[{"original":"花火","translation":"烟花"}],"glossary_source":"reused"}\n\n',
+  ]);
+  const result = await readTranslationStream(stream, () => {});
+
+  assert.equal(result.error, 'ai_quota_exceeded');
+  assert.equal(result.glossaryFailed, true);
+  assert.deepEqual(result.glossary, [{ original: '花火', translation: '烟花' }]);
+  assert.equal(result.glossarySource, 'reused');
+});

@@ -195,3 +195,52 @@ test('a lyrics change only counts as "losing caches" when auto terms actually di
   assert.equal(hasDerivedLyricsCaches({ glossary: pinned }), false);
   assert.equal(hasDerivedLyricsCaches({ glossary: auto }), true);
 });
+
+// ── Round-tripping a table back for reuse (issue #405) ──────────────
+import { parseReusedGlossary, reusableGlossary } from './lyrics-glossary.ts';
+
+const SESSION_TERMS = [
+  { original: '花火', translation: '烟花' },
+  { original: '東京', translation: '东京' },
+];
+
+test('a client-supplied glossary is validated with the stored-table rules', () => {
+  assert.deepEqual(parseReusedGlossary(SESSION_TERMS), SESSION_TERMS);
+  // Trimming and the entry cap come from the same validator.
+  assert.deepEqual(
+    parseReusedGlossary([{ original: '  花火 ', translation: ' 烟花  ' }]),
+    [{ original: '花火', translation: '烟花' }],
+  );
+});
+
+test('an invalid client-supplied glossary is treated as not provided', () => {
+  // Not an error: the caller must fall back to extraction, never fail the run.
+  for (const bad of [
+    null,
+    undefined,
+    'not-an-array',
+    {},
+    [null],
+    [{ original: '花火' }],
+    [{ original: '', translation: '烟花' }],
+    [{ original: '花火', translation: '' }],
+    [{ original: '花火', translation: '烟花' }, { original: '花火', translation: '焰火' }],
+    Array.from({ length: GLOSSARY_MAX_ENTRIES + 1 }, (_, i) => ({ original: `t${i}`, translation: `v${i}` })),
+    [{ original: 'x'.repeat(GLOSSARY_MAX_LENGTH + 1), translation: 'y' }],
+  ]) {
+    assert.equal(parseReusedGlossary(bad), null, `should reject ${JSON.stringify(bad)}`);
+  }
+});
+
+test('only a non-empty, valid table is reported back for reuse', () => {
+  assert.deepEqual(reusableGlossary(SESSION_TERMS), SESSION_TERMS);
+  // Nothing to reuse → null, so the next request carries no field at all.
+  assert.equal(reusableGlossary(null), null);
+  assert.equal(reusableGlossary([]), null);
+  // Hand-pinned flags never leave the server: the reported shape is the same
+  // one a client is allowed to send back.
+  assert.deepEqual(
+    reusableGlossary([{ original: '花火', translation: '烟花', manual: true }]),
+    [{ original: '花火', translation: '烟花' }],
+  );
+});

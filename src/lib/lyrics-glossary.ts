@@ -207,3 +207,45 @@ export function validateGlossaryInput(value: unknown): GlossaryValidation {
   }
   return { ok: true, entries };
 }
+
+/**
+ * Which terminology table a translate response actually used (issue #405).
+ *
+ * - `stored`    — the table was already in the column and reused verbatim.
+ * - `extracted` — this request extracted it from the lyrics.
+ * - `reused`    — a DRAFT-only request (`persist: false`) supplied the table it
+ *   had cached from an earlier response in the same editing session, so no
+ *   extraction ran (the column is untouched: #251 boundary).
+ * - `none`      — no terminology constraint was applied (no terms, or the
+ *   extraction failed — see `glossary_failed`).
+ */
+export type GlossarySource = 'stored' | 'extracted' | 'reused' | 'none';
+
+/**
+ * Validate a glossary a CLIENT sends back to be reused for one draft request
+ * (issue #405). Same shape/count/length/duplicate rules as
+ * `validateGlossaryInput`, so a round-tripped table can never carry anything
+ * the stored column would reject.
+ *
+ * Invalid input is NOT an error: the caller falls back to extracting, exactly
+ * as if the field had been omitted — a stale or hand-edited reply must never
+ * break a translation run.
+ */
+export function parseReusedGlossary(value: unknown): GlossaryEntry[] | null {
+  const validation = validateGlossaryInput(value);
+  return validation.ok ? validation.entries : null;
+}
+
+/**
+ * The slice of a glossary worth sending back to a client for reuse: shape
+ * validation applies (nothing unvalidatable leaves the server) and a table
+ * with no entries is reported as `null` — nothing to reuse, so the next request
+ * has nothing to carry.
+ */
+export function reusableGlossary(entries: GlossaryEntry[] | null | undefined): GlossaryEntry[] | null {
+  if (!entries || entries.length === 0) return null;
+  const validation = validateGlossaryInput(
+    entries.map((entry) => ({ original: entry.original, translation: entry.translation })),
+  );
+  return validation.ok ? validation.entries : null;
+}

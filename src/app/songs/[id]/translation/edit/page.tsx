@@ -19,6 +19,7 @@ import { translationLineInputId, translationLineLabel, translationSourceLineId }
 import { mergeTranslatedSlice, shouldConfirmRetranslate } from '@/lib/translation-draft';
 import { isImeComposing } from '@/lib/ime';
 import { TRANSLATION_ERROR_KEYS } from '@/lib/translation-errors';
+import type { GlossaryEntry } from '@/lib/lyrics-glossary';
 import type { SongData } from '@/lib/types';
 
 interface AuthState {
@@ -38,6 +39,24 @@ function groupConsecutiveRuns(indices: number[]): { start: number; length: numbe
     else runs.push({ start: idx, length: 1 });
   }
   return runs;
+}
+
+/**
+ * Shape-check a `glossary` field from a translate response before caching it
+ * (issue #405). Only `{ original, translation }` pairs are kept; anything else
+ * (an older server, a partially shaped entry) degrades to "no table" so the
+ * next request simply falls back to a server-side extraction.
+ */
+function sessionGlossaryOf(value: unknown): GlossaryEntry[] | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const entries: GlossaryEntry[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') return null;
+    const { original, translation } = item as Partial<GlossaryEntry>;
+    if (typeof original !== 'string' || typeof translation !== 'string') return null;
+    entries.push({ original, translation });
+  }
+  return entries;
 }
 
 export default function TranslationEditPage() {
@@ -62,6 +81,15 @@ export default function TranslationEditPage() {
   const coverTheme = useCoverTheme(song?.cover_url);
   const coverColor = coverTheme.palette;
   const inputRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
+  // Terminology table this editing session already paid for (issue #405).
+  // The first draft request of a song whose glossary is empty runs a
+  // whole-song extraction the server must NOT persist (`persist: false`, #251),
+  // so without this cache every later slice —「AI 补全缺失行」sends one request
+  // per contiguous run,「重新翻译此行」one per click — would re-extract the same
+  // table (extra model calls, quota, latency, drifting proper-noun renderings).
+  // The server hands the table back on each response; we keep the latest and
+  // send it along, and the server reuses it instead of extracting again.
+  const sessionGlossaryRef = useRef<GlossaryEntry[] | null>(null);
   const auth: AuthState | null = session === null ? null : {
     authenticated: session.user !== null,
     isAdmin: session.user?.isAdmin === true,
@@ -212,12 +240,21 @@ export default function TranslationEditPage() {
    * so the editor's AI fill / re-translate stays inside the draft
    * 「保存/放弃」boundary — the user persists the whole draft via PUT
    * /translation on save (issue #251).
+   * `glossary` carries the session's table back (issue #405) so only the FIRST
+   * slice of the session can trigger an extraction; the response refreshes the
+   * cache for the next one.
    */
   const runAiSlice = useCallback(async (start: number, count: number): Promise<string[]> => {
     const res = await fetch(`/api/songs/${id}/translate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ start, count, force: true, persist: false }),
+      body: JSON.stringify({
+        start,
+        count,
+        force: true,
+        persist: false,
+        ...(sessionGlossaryRef.current ? { glossary: sessionGlossaryRef.current } : {}),
+      }),
     });
     if (!res.ok) {
       // Surface the same localized error codes as the song page (quota,
@@ -227,7 +264,11 @@ export default function TranslationEditPage() {
       const key = TRANSLATION_ERROR_KEYS[code];
       throw new Error(key ? t(key) : t('song.translationFailed'));
     }
-    const data = (await res.json()) as { translations?: string[] };
+    const data = (await res.json()) as { translations?: string[]; glossary?: unknown };
+    // Cache whatever table the run used (extracted now, or the stored one) —
+    // the next slice hands it straight back. A run with no terms caches the
+    // empty state as null, so nothing useless is sent.
+    sessionGlossaryRef.current = sessionGlossaryOf(data.glossary);
     return Array.isArray(data.translations) ? data.translations : [];
   }, [id, t]);
 
