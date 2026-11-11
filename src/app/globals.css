@@ -139,7 +139,11 @@ body {
 }
 /* Applied only while a song detail has a successfully extracted cover color. */
 body.song-page-themed {
-  background: color-mix(in srgb, var(--background) 96%, var(--song-page-accent));
+  /* Single source of truth for the page surface: any large surface that must sit on the
+     page background (e.g. the mobile song toolbar) reads --page-surface instead of
+     re-deriving the mix, so the cover tint can never drift between them. */
+  --page-surface: color-mix(in srgb, var(--background) 96%, var(--song-page-accent));
+  background: var(--page-surface);
 }
 
 /* Scrollbar */
@@ -1298,12 +1302,10 @@ textarea {
   background: transparent;
   border: 0;
 }
-/* The mobile toolbar is a large surface like the page itself, so it uses the exact same
-   expression as body.song-page-themed: page background mixed with the cover accent
-   (--song-page-accent is published on body by useCoverTheme). The fallback keeps a plain
-   background for songs without a resolved cover palette. */
+/* The mobile toolbar is a large surface like the page itself, so it paints the page
+   surface (cover-tinted when the song has a resolved palette, plain background otherwise). */
 .song-mobile-bar {
-  background: color-mix(in srgb, var(--background) 96%, var(--song-page-accent, var(--background)));
+  background: var(--page-surface, var(--background));
 }
 .song-mobile-text-button {
   color: var(--muted-foreground);
