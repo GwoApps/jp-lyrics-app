@@ -6,7 +6,11 @@ import {
   centeredLyricScrollTop, isLyricsView, lyricsViewUrl,
   LYRIC_FOLLOW_RESUME_MS, shouldFollowImmersiveLyrics,
   IMMERSIVE_FONT_SIZES, IMMERSIVE_FONT_STORAGE_KEY, parseImmersiveFontStep,
+  shouldExitImmersiveOnEscape,
 } from '@/lib/immersive-lyrics';
+
+/** Layers opened above the lyrics view: their own Escape handling owns the key. */
+const OVERLAY_SELECTOR = '[role="dialog"], [role="menu"], [role="listbox"], [data-state="open"]';
 
 /** The native browser fullscreen and the lyric-reading view are intentionally independent. */
 export function useImmersiveLyrics(
@@ -15,6 +19,8 @@ export function useImmersiveLyrics(
   activeLine: number,
   debug: boolean,
   followEnabled: boolean,
+  /** Element that opened the view; focus returns here when the view closes. */
+  triggerRef?: React.RefObject<HTMLElement | null>,
 ) {
   const [active, setActive] = useState(false);
   const [browserFullscreen, setBrowserFullscreen] = useState(false);
@@ -36,6 +42,9 @@ export function useImmersiveLyrics(
   const ownedFullscreen = useRef(false);
   const manualUntil = useRef(0);
   const returnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const trigger = useRef<HTMLElement | null>(null);
+  /** Whether this view still owns focus, so a user's own focus choice survives. */
+  const ownsFocus = useRef(false);
   const currentLine = useRef(activeLine);
   const debugRef = useRef(debug);
   const followEnabledRef = useRef(followEnabled);
@@ -122,11 +131,38 @@ export function useImmersiveLyrics(
   const enter = useCallback(() => {
     if (activeRef.current) return;
     activeRef.current = true;
+    // Snapshot before the click handler returns: once the view covers the page,
+    // the covered header (which holds the trigger) is display:none and the
+    // browser would already have dropped focus to <body>.
+    if (!trigger.current) {
+      const active = document.activeElement;
+      trigger.current = triggerRef?.current
+        ?? (active instanceof HTMLElement && active !== document.body ? active : null);
+    }
+    ownsFocus.current = true;
     requestBrowserFullscreen();
     window.history.pushState(null, '', lyricsViewUrl(window.location.href, true));
     clearManualScroll();
     setActive(true);
-  }, [clearManualScroll, requestBrowserFullscreen]);
+    // The lyrics container only becomes focusable in the immersive state, so
+    // wait for that commit instead of focusing a still uninhabitable element.
+    requestAnimationFrame(() => {
+      if (!activeRef.current) return;
+      const active = document.activeElement;
+      if (active && active !== document.body && active !== lyricsRef.current) return;
+      lyricsRef.current?.focus({ preventScroll: true });
+    });
+  // triggerRef is read once at entry; re-running enter() on its identity is meaningless.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clearManualScroll, lyricsRef, requestBrowserFullscreen]);
+
+  const handBackFocus = useCallback(() => {
+    if (!ownsFocus.current) return;
+    ownsFocus.current = false;
+    const target = trigger.current;
+    trigger.current = null;
+    if (target?.isConnected) target.focus({ preventScroll: true });
+  }, []);
 
   const leave = useCallback(() => {
     if (!activeRef.current) return;
@@ -139,7 +175,11 @@ export function useImmersiveLyrics(
     // replaces the view address: history.back() can suspend the resumed page's
     // animation frames, leaving normal lyric follow frozen.
     window.history.replaceState(null, '', lyricsViewUrl(window.location.href, false));
-  }, [clearManualScroll, leaveBrowserFullscreen, lyricsRef]);
+    handBackFocus();
+  }, [clearManualScroll, handBackFocus, leaveBrowserFullscreen, lyricsRef]);
+
+  const leaveRef = useRef(leave);
+  useEffect(() => { leaveRef.current = leave; }, [leave]);
 
   useEffect(() => {
     const updateFromUrl = () => {
@@ -149,6 +189,7 @@ export function useImmersiveLyrics(
       if (!enabled) {
         clearManualScroll();
         leaveBrowserFullscreen();
+        handBackFocus();
       }
     };
     const updateBrowserFullscreen = () => {
@@ -167,7 +208,7 @@ export function useImmersiveLyrics(
       clearManualScroll();
       leaveBrowserFullscreen();
     };
-  }, [centerCurrent, clearManualScroll, leaveBrowserFullscreen]);
+  }, [centerCurrent, clearManualScroll, handBackFocus, leaveBrowserFullscreen]);
 
   useEffect(() => {
     if (!active) return;
@@ -178,11 +219,20 @@ export function useImmersiveLyrics(
     const priorNavInert = nav?.inert;
     if (nav) { nav.inert = true; nav.style.visibility = 'hidden'; }
     const onResize = () => requestAnimationFrame(centerCurrent);
+    // Esc closes full-screen reading, but only when no layer above it (dialog,
+    // menu) already claimed the key. Native fullscreen keeps its own Esc.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!shouldExitImmersiveOnEscape(event.key, event.defaultPrevented, !!document.querySelector(OVERLAY_SELECTOR))) return;
+      event.preventDefault();
+      leaveRef.current();
+    };
     window.addEventListener('resize', onResize);
+    document.addEventListener('keydown', onKeyDown);
     return () => {
       document.body.style.overflow = prior;
       if (nav) { nav.inert = priorNavInert ?? false; nav.style.visibility = priorNavVisibility ?? ''; }
       window.removeEventListener('resize', onResize);
+      document.removeEventListener('keydown', onKeyDown);
     };
   }, [active, centerCurrent]);
 

@@ -221,8 +221,10 @@ export default function SongViewPage() {
     seekContextRef.current.songId = id;
     seekContextRef.current.trackKey = sync.spotify?.connected ? trackIdentity(sync.spotify.track) : '';
   }, [id, sync.spotify?.connected, sync.spotify?.track]);
+  // Focus returns to whichever entry control the current viewport shows.
+  const immersiveTriggerRef = useRef<HTMLButtonElement>(null);
   const immersive = useImmersiveLyrics(lyricsRef, lineRefs, sync.activeLine,
-    data.debug, !!sync.isSameSong);
+    data.debug, !!sync.isSameSong, immersiveTriggerRef);
   useEffect(() => {
     syncRefs.current.immersiveLyrics = immersive.active;
     syncRefs.current.shouldFollowLyrics = immersive.shouldFollow;
@@ -815,7 +817,7 @@ export default function SongViewPage() {
           </div>
           {furiganaLines.length > 0 && (
             /* Icon-only so the entry control does not push the title aside on a phone. */
-            <button type="button" onClick={enterImmersive}
+            <button type="button" onClick={enterImmersive} ref={immersiveTriggerRef}
               className="sm:hidden ml-auto inline-flex h-10 w-10 shrink-0 self-start items-center justify-center rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]"
               aria-label={t('song.immersiveEnter')} title={t('song.immersiveEnter')}>
               <Maximize2 className="h-4 w-4" />
@@ -842,7 +844,7 @@ export default function SongViewPage() {
               ]}
             />
             {furiganaLines.length > 0 && (
-              <button type="button" onClick={enterImmersive} className={btnCls()}
+              <button type="button" onClick={enterImmersive} ref={immersiveTriggerRef} className={btnCls()}
                 aria-label={t('song.immersiveEnter')} title={t('song.immersiveEnter')}>
                 <Maximize2 className="h-4 w-4" />
               </button>

@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import {
   centeredLyricScrollTop, isLyricsView, lyricsViewUrl,
-  LYRIC_FOLLOW_RESUME_MS, shouldFollowImmersiveLyrics,
+  LYRIC_FOLLOW_RESUME_MS, shouldFollowImmersiveLyrics, shouldExitImmersiveOnEscape,
   IMMERSIVE_FONT_SIZES, parseImmersiveFontStep,
 } from './immersive-lyrics.ts';
+
+const hook = readFileSync(new URL('../hooks/useImmersiveLyrics.ts', import.meta.url), 'utf8');
+const page = readFileSync(new URL('../app/songs/[id]/page.tsx', import.meta.url), 'utf8');
 
 test('lyrics view URLs retain other query parameters and hashes', () => {
   const source = 'https://example.test/songs/abc?source=list#lyrics';
@@ -40,4 +44,34 @@ test('stored fullscreen size is independent, bounded, and every step changes the
       assert.ok(IMMERSIVE_FONT_SIZES[step].desktop > IMMERSIVE_FONT_SIZES[step - 1].desktop);
     }
   }
+});
+
+test('Escape closes the view only when no layer above it claimed the key', () => {
+  assert.equal(shouldExitImmersiveOnEscape('Escape', false, false), true);
+  assert.equal(shouldExitImmersiveOnEscape('Escape', true, false), false);
+  assert.equal(shouldExitImmersiveOnEscape('Escape', false, true), false);
+  assert.equal(shouldExitImmersiveOnEscape('Enter', false, false), false);
+  assert.equal(shouldExitImmersiveOnEscape('Esc', false, false), false);
+});
+
+test('the hook owns Escape, entry focus and trigger focus restore', () => {
+  // The listener lives in the active effect next to popstate/fullscreen.
+  assert.match(hook, /document\.addEventListener\('keydown', onKeyDown\)/);
+  assert.match(hook, /document\.removeEventListener\('keydown', onKeyDown\)/);
+  assert.match(hook, /shouldExitImmersiveOnEscape\(event\.key, event\.defaultPrevented/);
+  // Entry focus waits for the container to become focusable in the immersive state.
+  assert.match(hook, /requestAnimationFrame\(\(\) => \{[\s\S]*?lyricsRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
+  // Exit focus returns to the recorded trigger on every close path.
+  assert.match(hook, /target\?\.isConnected\) target\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(hook, /window\.history\.replaceState\(null, '', lyricsViewUrl\(window\.location\.href, false\)\);\s*handBackFocus\(\);/);
+  assert.match(hook, /if \(!enabled\) \{[\s\S]*?handBackFocus\(\);/);
+});
+
+test('the page only wires the entry controls, without duplicating the behaviour', () => {
+  const triggers = page.match(/ref=\{immersiveTriggerRef\}/g) ?? [];
+  assert.equal(triggers.length, 2);
+  assert.match(page, /useImmersiveLyrics\(lyricsRef, lineRefs, sync\.activeLine,\s*data\.debug, !!sync\.isSameSong, immersiveTriggerRef\)/);
+  // Behaviour stays in the hook: no page-level Escape handling or immersive focus call.
+  assert.doesNotMatch(page, /'Escape'/);
+  assert.doesNotMatch(page, /immersiveTriggerRef\.current\?\.focus/);
 });

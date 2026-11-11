@@ -40,3 +40,8 @@ export function centeredLyricScrollTop(
 export function shouldFollowImmersiveLyrics(now: number, manualUntil: number): boolean {
   return now >= manualUntil;
 }
+
+/** Escape the immersive view only when nothing opened above it consumed the key. */
+export function shouldExitImmersiveOnEscape(key: string, defaultPrevented: boolean, overlayOpen: boolean): boolean {
+  return key === 'Escape' && !defaultPrevented && !overlayOpen;
+}
