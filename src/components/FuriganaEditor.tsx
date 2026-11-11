@@ -344,7 +344,9 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
                 ? 'rounded-lg p-0'
                 : 'rounded-lg border border-[var(--border)] bg-[var(--card)] p-3 sm:p-4'
             } transition-colors ${
-              isActiveLine ? 'ring-1 ring-[var(--song-accent)]/30' : ''
+              // In the single-line dialog this card is the only line, so the
+              // active-line ring/frame would just read as a second border.
+              isActiveLine && !embedded ? 'ring-1 ring-[var(--song-accent)]/30' : ''
             }`}
           >
             <div className="mb-2 flex items-center justify-between gap-3">
