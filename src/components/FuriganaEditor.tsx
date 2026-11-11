@@ -14,6 +14,12 @@ interface FuriganaEditorProps {
   readingScheme?: ReadingScheme;
   /** Optional source-line index to auto-locate on mount (from `?line=N`). */
   focusLine?: number;
+  /**
+   * Optional subset of line indexes to render. The single-line dialog passes one
+   * index while still holding the complete array, so splitting/merging keeps the
+   * whole-song payload intact on save.
+   */
+  visibleLines?: number[];
 }
 
 type EditTarget = { lineIndex: number; segIndex: number } | null;
@@ -45,7 +51,7 @@ function groupEditorDisplaySegments(segments: FuriganaSegment[]): EditorDisplayP
   return parts;
 }
 
-export default function FuriganaEditor({ lines, rawLines, onChange, readingScheme = 'ja-kana', focusLine }: FuriganaEditorProps) {
+export default function FuriganaEditor({ lines, rawLines, onChange, readingScheme = 'ja-kana', focusLine, visibleLines }: FuriganaEditorProps) {
   const { t } = useI18n();
   const [active, setActive] = useState<EditTarget>(null);
   const [draft, setDraft] = useState('');
@@ -321,6 +327,7 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
         // Whitespace-only source rows still need a segment for exact-source
         // validation, but should not become editable blank cards.
         if (line.segments.length === 0 || (raw !== undefined && !raw.trim())) return null;
+        if (visibleLines && !visibleLines.includes(li)) return null;
 
         const isActiveLine = active?.lineIndex === li;
         return (

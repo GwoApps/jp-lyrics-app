@@ -20,6 +20,7 @@ import SyncStatusOverlay from '@/components/SyncStatusOverlay';
 import SongTopStatusStack, { StatusLayer } from '@/components/SongTopStatusStack';
 import { ToolbarMenu, buildReadingMenuItems } from '@/components/song/ToolbarMenu';
 import { MobileMenu } from '@/components/song/MobileMenu';
+import FuriganaLineDialog from '@/components/song/FuriganaLineDialog';
 import FavoriteCategoriesDialog from '@/components/home/FavoriteCategoriesDialog';
 import DownloadDialog from '@/components/song/DownloadDialog';
 import ImmersiveLyricsControls from '@/components/song/ImmersiveLyricsControls';
@@ -202,6 +203,8 @@ export default function SongViewPage() {
   const [playerExpanded, setPlayerExpanded] = useState(false);
   // Admin publish/unpublish runs inline on the detail header (see setSongVisibility).
   const [visibilityBusy, setVisibilityBusy] = useState(false);
+  // Line index whose reading is being corrected in the single-line dialog (null = closed).
+  const [correctLine, setCorrectLine] = useState<number | null>(null);
   const preview = useMemo(() => previewTimeline(data.lineTimestamps, data.furiganaLines, data.song?.spotify_duration_ms),
     [data.lineTimestamps, data.furiganaLines, data.song?.spotify_duration_ms]);
   const simulated = spotifyConnected === false;
@@ -1098,7 +1101,7 @@ export default function SongViewPage() {
                     onCopyLine={immersive.active ? undefined : () => copyLyricLine(line)}
                     onCopyTranslation={immersive.active ? undefined : () => copyLyricTranslation(i)}
                     onShareLine={immersive.active ? undefined : () => router.push(`/songs/${id}/share?line=${i}`)}
-                    onCorrectFurigana={immersive.active ? undefined : () => router.push(`/songs/${id}/furigana/edit?line=${i}`)}
+                    onCorrectFurigana={immersive.active ? undefined : () => setCorrectLine(i)}
                     canCorrectFurigana={canEdit}
                     readingMode={data.readingMode}
                     romanizeFurigana={data.romanizeFurigana}
@@ -1206,6 +1209,29 @@ export default function SongViewPage() {
           setCoverRefresh((n) => n + 1);
         }} onToggleDotParams={() => setShowDotParams((v) => !v)} onOpenExperiments={() => setShowExperiments(true)} onOpenDownload={() => setShowDownloadDialog(true)} onOpenCategories={currentUserEmail ? () => setShowFavoriteCategories(true) : undefined} canEdit={canEdit}
       />
+
+      {/* Single-line reading correction from the lyric context menu. Keyed per line so
+          every opening starts from the saved annotations. */}
+      {song && (
+        <FuriganaLineDialog
+          key={`furigana-line-${correctLine ?? 'closed'}`}
+          open={correctLine !== null}
+          songId={id}
+          song={song}
+          lineIndex={correctLine ?? 0}
+          onClose={() => setCorrectLine(null)}
+          onOpenWholeSong={() => {
+            const line = correctLine;
+            setCorrectLine(null);
+            router.push(`/songs/${id}/furigana/edit${line === null ? '' : `?line=${line}`}`);
+          }}
+          onSaved={() => {
+            setCorrectLine(null);
+            data.showToast('success', t('furigana.saved'));
+            void data.refreshSong();
+          }}
+        />
+      )}
 
       <FavoriteCategoriesDialog
         open={showFavoriteCategories}

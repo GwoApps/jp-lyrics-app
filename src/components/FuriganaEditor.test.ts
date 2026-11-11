@@ -15,11 +15,11 @@ function nodes(root: React.ReactNode): Element[] {
   const node = root as Element;
   return [node, ...React.Children.toArray(node.props.children as React.ReactNode).flatMap(nodes)];
 }
-function editor(lines: FuriganaLine[], segIndex: number, candidates: string[] = []) {
+function editor(lines: FuriganaLine[], segIndex: number, candidates: string[] = [], extraProps: Record<string, unknown> = {}, activeLine = 0) {
   const exports: Record<string, unknown> = {};
   let index = 0;
   let changed: FuriganaLine[] | null = null;
-  const values: unknown[] = [{ lineIndex: 0, segIndex }, '', candidates, false, false, 0, false];
+  const values: unknown[] = [{ lineIndex: activeLine, segIndex }, '', candidates, false, false, 0, false];
   const hooks = {
     useState: () => [values[index++], () => {}],
     useRef: () => ({ current: null }),
@@ -39,7 +39,7 @@ function editor(lines: FuriganaLine[], segIndex: number, candidates: string[] = 
     return require(name);
   } });
   const component = exports.default as (props: object) => React.ReactNode;
-  const tree = component({ lines, onChange: (next: FuriganaLine[]) => { changed = next; } });
+  const tree = component({ lines, onChange: (next: FuriganaLine[]) => { changed = next; }, ...extraProps });
   return { tree, changed: () => changed, click: (key: string) => {
     const button = nodes(tree).find(node => node.type === 'button' && node.props.children === key);
     assert.ok(button, key);
@@ -73,6 +73,32 @@ test('splitting retains the original word boundary and supplementary characters'
   const rare = editor([{ segments: [{ text: '𠮷田', reading: 'よしだ' }] }], 0);
   rare.click('furigana.split');
   assert.equal(JSON.stringify(rare.changed()![0].segments.map(s => s.text)), JSON.stringify(['𠮷', '田']));
+});
+
+test('visibleLines renders only the requested lines while keeping full-array edits intact', () => {
+  const lines: FuriganaLine[] = [
+    { segments: [{ text: '空', reading: 'そら' }] },
+    { segments: [{ text: '星雲', reading: 'せいうん' }] },
+    { segments: [{ text: '海', reading: 'うみ' }] },
+  ];
+  const h = editor(lines, 0, [], { visibleLines: [1] }, 1);
+  // Tile buttons render their surface text in a `className="block"` span; the
+  // edit-panel buttons (save/cancel/split…) render a bare label instead.
+  const texts = nodes(h.tree)
+    .filter(node => node.type === 'button' && Array.isArray(node.props.children))
+    .map(node => (node.props.children as Element[])[0])
+    .filter(child => child?.props?.className === 'block')
+    .map(child => child.props.children);
+  // Only the second line's tile is mounted, labelled with its absolute line number.
+  assert.equal(JSON.stringify(texts), JSON.stringify(['星雲']));
+  // Exactly one line card is mounted, so the row label appears once.
+  assert.equal(nodes(h.tree).filter(node => node.props.children === 'furigana.line').length, 1);
+  h.click('furigana.split');
+  // Split still writes into the same absolute index of the complete array.
+  assert.equal(h.changed()!.length, 3);
+  assert.equal(JSON.stringify(h.changed()![1].segments.map(segment => segment.text)), JSON.stringify(['星', '雲']));
+  assert.equal(h.changed()![0].segments[0].text, '空');
+  assert.equal(h.changed()![2].segments[0].text, '海');
 });
 
 test('merging inherits joinPrev instead of silently dropping a kana prefix from lookup context', () => {
