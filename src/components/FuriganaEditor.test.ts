@@ -35,6 +35,7 @@ function editor(lines: FuriganaLine[], segIndex: number, candidates: string[] = 
     if (name === '@/lib/i18n') return { useI18n: () => ({ t: (key: string) => key }) };
     if (name === '@/lib/japanese-reading-context') return { getJapaneseReadingContext };
     if (name === '@/lib/lyrics-reading') return { getCantoneseReadingCandidates: async () => [] };
+    if (name === '@/lib/ime') return { isImeComposing: (e: { nativeEvent?: { isComposing?: boolean }; keyCode?: number }) => e.nativeEvent?.isComposing === true || e.keyCode === 229 };
     if (name === '@/components/ConfirmDialog') return { default: () => null };
     return require(name);
   } });

@@ -6,6 +6,7 @@ import { useI18n } from '@/lib/i18n';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { getCantoneseReadingCandidates } from '@/lib/lyrics-reading';
 import { getJapaneseReadingContext } from '@/lib/japanese-reading-context';
+import { isImeComposing } from '@/lib/ime';
 
 interface FuriganaEditorProps {
   lines: FuriganaLine[];
@@ -194,6 +195,9 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
   }, [active, lines, updateSegment]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // 读音本来就要用假名/粤拼输入法打，组字期的 Enter（确认候选）与 Escape（取消候选）
+    // 必须留给输入法，否则确认候选会被当成「提交读音」并关闭整条编辑栏。
+    if (isImeComposing(e)) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       commitReading();

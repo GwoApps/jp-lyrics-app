@@ -17,6 +17,7 @@ import { parseTranslationCache } from '@/lib/translation/parse';
 import { computeLineEdits, countAdoptedLines, reconcileDraft } from '@/lib/translation-line-edits';
 import { translationLineInputId, translationLineLabel, translationSourceLineId } from '@/lib/translation-line-a11y';
 import { mergeTranslatedSlice, shouldConfirmRetranslate } from '@/lib/translation-draft';
+import { isImeComposing } from '@/lib/ime';
 import { TRANSLATION_ERROR_KEYS } from '@/lib/translation-errors';
 import type { SongData } from '@/lib/types';
 
@@ -459,6 +460,10 @@ export default function TranslationEditPage() {
                   setDraft(next);
                 }}
                 onKeyDown={(e) => {
+                  // 组字期（中日文输入法）的 Enter/Escape 属于输入法本身：Enter 确认候选、
+                  // Escape 取消候选，都不是本页的快捷键。这里挡在最前面，保证候选确认
+                  // 不会把焦点跳到下一行；组字结束后同一套 Enter / Shift+Enter 跳行照旧。
+                  if (isImeComposing(e)) return;
                   if (e.key === 'Enter') {
                     e.preventDefault();
                     if (e.shiftKey) {
