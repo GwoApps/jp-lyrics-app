@@ -84,7 +84,7 @@ export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSup
   );
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 sm:hidden z-50 bg-[var(--background)]/95 backdrop-blur-sm border-t border-[var(--border)]">
+    <div className="song-mobile-bar fixed bottom-0 left-0 right-0 sm:hidden z-50 border-t border-[var(--border)]">
       <div className="mx-auto max-w-[860px] flex items-center justify-between px-2" style={{ paddingTop: 8, paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}>
         {/* A-/A+ */}
         <div className="song-mobile-surface flex items-stretch rounded-lg overflow-hidden">
