@@ -1298,11 +1298,12 @@ textarea {
   background: transparent;
   border: 0;
 }
-/* The mobile toolbar sits on the page surface (not the lyric card surface), so it uses the
-   page background at full opacity — matching the main content area instead of showing a
-   translucent/blurred band over it. */
+/* The mobile toolbar is a large surface like the page itself, so it uses the exact same
+   expression as body.song-page-themed: page background mixed with the cover accent
+   (--song-page-accent is published on body by useCoverTheme). The fallback keeps a plain
+   background for songs without a resolved cover palette. */
 .song-mobile-bar {
-  background: var(--background);
+  background: color-mix(in srgb, var(--background) 96%, var(--song-page-accent, var(--background)));
 }
 .song-mobile-text-button {
   color: var(--muted-foreground);
