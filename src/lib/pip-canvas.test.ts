@@ -5,8 +5,10 @@ import {
   clusterRowTops,
   drawPipCanvasLine,
   drawPipCanvasText,
+  isVisibleLyricLine,
   mergeCharsIntoFragments,
   pairReadingRows,
+  resolveVisibleLineIndices,
   type PipCanvasCharBox,
   type PipCanvasContext,
   type PipCanvasFragment,
@@ -173,6 +175,49 @@ test('drawPipCanvasLine: scale follows the requested source font size', () => {
   assert.equal(base.font, '500 57px system-ui, -apple-system, sans-serif');
   // 1.5× scale: positions scale with the font so the frame can be up-scaled.
   assert.equal(base.y, 1 + 54 * 1.5);
+});
+
+const line = (text: string) => ({ segments: text.length > 0 ? [{ text }] : [] });
+
+test('isVisibleLyricLine: blank separator rows and empty lines are skipped', () => {
+  assert.equal(isVisibleLyricLine(line('季節は巡り')), true);
+  assert.equal(isVisibleLyricLine({ segments: [] }), false);
+  assert.equal(isVisibleLyricLine({ segments: [{ text: '   ' }] }), false);
+  assert.equal(isVisibleLyricLine({ segments: [{ text: '' }, { text: '夜' }] }), true);
+  assert.equal(isVisibleLyricLine(undefined), false);
+});
+
+test('resolveVisibleLineIndices: active line plus the next visible line', () => {
+  const lines = [line('一番'), line('二番'), line('三番')];
+  assert.deepEqual(resolveVisibleLineIndices(lines, 0), [0, 1]);
+  assert.deepEqual(resolveVisibleLineIndices(lines, 1), [1, 2]);
+  // Last line has no successor.
+  assert.deepEqual(resolveVisibleLineIndices(lines, 2), [2]);
+});
+
+test('resolveVisibleLineIndices: blank rows are skipped forward and between lines', () => {
+  // 演奏： [0] 歌詞 [1] 空行 [2] 空行 [3] 歌詞
+  const lines = [line('A'), line(''), { segments: [] }, line('B')];
+  // Active line is a separator → the frame must show the next visible line.
+  assert.deepEqual(resolveVisibleLineIndices(lines, 1), [3]);
+  assert.deepEqual(resolveVisibleLineIndices(lines, 2), [3]);
+  // The preview must also step over separators.
+  assert.deepEqual(resolveVisibleLineIndices(lines, 0), [0, 3]);
+});
+
+test('resolveVisibleLineIndices: trailing separators fall back to the previous line', () => {
+  const lines = [line('A'), line('B'), line(''), { segments: [] }];
+  assert.deepEqual(resolveVisibleLineIndices(lines, 2), [1]);
+  assert.deepEqual(resolveVisibleLineIndices(lines, 3), [1]);
+});
+
+test('resolveVisibleLineIndices: nothing to show, or a count of zero', () => {
+  assert.deepEqual(resolveVisibleLineIndices([line(''), { segments: [] }], 0), []);
+  assert.deepEqual(resolveVisibleLineIndices([], 0), []);
+  assert.deepEqual(resolveVisibleLineIndices([line('A'), line('B')], 0, 0), []);
+  // Out-of-range indices are clamped instead of throwing.
+  assert.deepEqual(resolveVisibleLineIndices([line('A')], 99), [0]);
+  assert.deepEqual(resolveVisibleLineIndices([line('A')], -5), [0]);
 });
 
 function close(actual: number, expected: number): void {

@@ -5,16 +5,15 @@ import type { FuriganaLine, ReadingMode, SongData } from '@/lib/types';
 import { escapeHtml } from '@/lib/escape-html';
 import { renderPipLyricsHtml } from '@/lib/pip-render';
 import {
-  PIP_CANVAS_TRANSLATION_FONT_PX,
   VIDEO_PIP_CURRENT_TOP,
   VIDEO_PIP_NEXT_GAP,
   VIDEO_PIP_TITLE_FONT_PX,
   VIDEO_PIP_TITLE_TOP,
-  VIDEO_PIP_TRANSLATION_GAP,
   drawPipCanvasLine,
   drawPipCanvasText,
   measurePipCanvasLines,
   resetPipCanvasMeasureHost,
+  resolveVisibleLineIndices,
 } from '@/lib/pip-canvas';
 import { getPiPCapabilities } from '@/lib/pip-support';
 import { PIP_PALETTES, PIP_THEME_EVENT, pipPaletteVars, readStoredPipTheme } from '@/lib/pip-theme';
@@ -126,13 +125,15 @@ export function usePiP(deps: UsePiPDeps) {
     context.fillRect(32, 66, width - 64, 1);
 
     const current = activeLine >= 0 ? activeLine : 0;
-    const next = current + 1;
+    // Blank separator rows render nothing on the detail page, so the canvas must
+    // skip them in both directions — otherwise the frame goes empty whenever
+    // playback crosses a separator (or the "next" preview is a blank row).
+    const lineIndices = resolveVisibleLineIndices(source.furiganaLines, current, 2);
     // The canvas has no ruby layout, so the lyrics are measured from the very
     // same markup the document PiP window renders (native wrapping, 禁則 breaks
     // and annotation centring) and then blitted row by row — see
     // `src/lib/pip-canvas.ts`. Flattening a line to its readings used to be the
     // only option here and silently dropped every kanji.
-    const lineIndices = [current, next].filter(index => index < source.furiganaLines.length);
     const measuredLines = measurePipCanvasLines(
       renderPipLyricsHtml(
         lineIndices.map(index => source.furiganaLines[index]),
@@ -143,10 +144,8 @@ export function usePiP(deps: UsePiPDeps) {
       width - 64,
     );
     const [currentMeasured, nextMeasured] = measuredLines;
-    // Everything below the header flows from the measured geometry: the
-    // translation hangs directly under the drawn source rows and the next-line
-    // preview follows it. Fixed slots were wrong — a one-row line left the
-    // translation suspended dozens of pixels below it.
+    // Source only: the floating window shows no translation, and the next-line
+    // preview flows a fixed gap under the drawn source rows.
     let cursor = VIDEO_PIP_CURRENT_TOP;
     if (currentMeasured) {
       cursor = drawPipCanvasLine(context, currentMeasured, {
@@ -155,17 +154,6 @@ export function usePiP(deps: UsePiPDeps) {
         maxRows: 2,
         color: '#ffffff',
         readingColor: '#a1a1aa',
-      });
-    }
-    const translation = source.translations[current]?.trim();
-    const hint = !translation && source.untranslatedHint ? source.untranslatedHint : '';
-    if (translation || hint) {
-      cursor = drawPipCanvasText(context, translation || hint, {
-        x: 32,
-        top: cursor + VIDEO_PIP_TRANSLATION_GAP,
-        fontPx: PIP_CANVAS_TRANSLATION_FONT_PX,
-        color: translation ? '#a1a1aa' : '#71717a',
-        maxWidth: width - 64,
       });
     }
 

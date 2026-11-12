@@ -24,26 +24,69 @@ export const PIP_CANVAS_FONT_FAMILY = 'system-ui, -apple-system, sans-serif';
 export const PIP_CANVAS_SOURCE_FONT_PX = 38;
 /** Ruby annotation size relative to the base run (mirrors `ruby rt { font-size: 0.5em }`). */
 export const PIP_CANVAS_READING_SCALE = 0.5;
-/** Translation size in canvas px. */
-export const PIP_CANVAS_TRANSLATION_FONT_PX = 24;
 /**
  * Vertical layout of the video PiP frame (640×360).
  *
  * `VIDEO_PIP_CURRENT_TOP` is an annotation top rather than a baseline: every
  * source row needs its ruby annotation above it, and a measured line reports
  * that overhang in `PipCanvasLine.top`. Everything below it **flows**: the
- * translation hangs directly under the drawn source rows and the next-line
- * preview follows the translation. Fixed slots were wrong because a one-row
- * line then left the translation suspended far below it.
+ * next-line preview sits a fixed gap under the drawn source rows. Fixed slots
+ * were wrong because a one-row line then left the next line far below it.
+ *
+ * The video PiP deliberately shows no translation — only the source line and a
+ * preview of the next one, both with their readings.
  */
 export const VIDEO_PIP_CURRENT_TOP = 96;
 /** Header band: title em top and size (the divider sits at y=66). */
 export const VIDEO_PIP_TITLE_TOP = 30;
 export const VIDEO_PIP_TITLE_FONT_PX = 18;
-/** Gap between the source block's bottom and the translation's em top. */
-export const VIDEO_PIP_TRANSLATION_GAP = 6;
-/** Gap between the translation (or source block) and the next-line preview. */
+/** Gap between the source block and the next-line preview. */
 export const VIDEO_PIP_NEXT_GAP = 16;
+
+/** Minimal shape of a lyric line needed to decide whether it renders anything. */
+export interface PipLyricLineLike {
+  segments: readonly { text: string }[];
+}
+
+/**
+ * A line is skippable when it has no segments (blank separator row) or when
+ * every segment is blank — those rows render as empty space on the detail page
+ * and must never become the PiP's current/next line.
+ */
+export function isVisibleLyricLine(line: PipLyricLineLike | undefined): boolean {
+  if (!line || line.segments.length === 0) return false;
+  return line.segments.some((segment) => segment.text.trim().length > 0);
+}
+
+/**
+ * Indices of the lines the video PiP should render: the active line when it has
+ * content, otherwise the closest visible line after it (falling back to the
+ * closest one before it), followed by up to `count - 1` visible lines. Blank
+ * rows are skipped in both directions so a separator never blanks the frame.
+ */
+export function resolveVisibleLineIndices(
+  lines: readonly PipLyricLineLike[],
+  activeIndex: number,
+  count = 2,
+): number[] {
+  if (lines.length === 0 || count <= 0) return [];
+  const from = Math.min(Math.max(activeIndex, 0), lines.length - 1);
+  let first = -1;
+  for (let index = from; index < lines.length; index += 1) {
+    if (isVisibleLyricLine(lines[index])) { first = index; break; }
+  }
+  if (first === -1) {
+    for (let index = from - 1; index >= 0; index -= 1) {
+      if (isVisibleLyricLine(lines[index])) { first = index; break; }
+    }
+  }
+  if (first === -1) return [];
+  const resolved = [first];
+  for (let index = first + 1; index < lines.length && resolved.length < count; index += 1) {
+    if (isVisibleLyricLine(lines[index])) resolved.push(index);
+  }
+  return resolved;
+}
 
 const MEASURE_HOST_CLASS = 'jplrc-pip-measure';
 const MEASURE_MARKER_CLASS = 'jplrc-pip-measure-marker';
