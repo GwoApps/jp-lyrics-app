@@ -27,13 +27,23 @@ export const PIP_CANVAS_READING_SCALE = 0.5;
 /** Translation size in canvas px. */
 export const PIP_CANVAS_TRANSLATION_FONT_PX = 24;
 /**
- * Vertical layout of the video PiP frame (640×360). The tops are annotation
- * tops rather than baselines: every source row needs its ruby annotation above
- * it, and a measured line reports that overhang in `PipCanvasLine.top`.
+ * Vertical layout of the video PiP frame (640×360).
+ *
+ * `VIDEO_PIP_CURRENT_TOP` is an annotation top rather than a baseline: every
+ * source row needs its ruby annotation above it, and a measured line reports
+ * that overhang in `PipCanvasLine.top`. Everything below it **flows**: the
+ * translation hangs directly under the drawn source rows and the next-line
+ * preview follows the translation. Fixed slots were wrong because a one-row
+ * line then left the translation suspended far below it.
  */
 export const VIDEO_PIP_CURRENT_TOP = 96;
-export const VIDEO_PIP_TRANSLATION_Y = 244;
-export const VIDEO_PIP_NEXT_TOP = 258;
+/** Header band: title em top and size (the divider sits at y=66). */
+export const VIDEO_PIP_TITLE_TOP = 30;
+export const VIDEO_PIP_TITLE_FONT_PX = 18;
+/** Gap between the source block's bottom and the translation's em top. */
+export const VIDEO_PIP_TRANSLATION_GAP = 6;
+/** Gap between the translation (or source block) and the next-line preview. */
+export const VIDEO_PIP_NEXT_GAP = 16;
 
 const MEASURE_HOST_CLASS = 'jplrc-pip-measure';
 const MEASURE_MARKER_CLASS = 'jplrc-pip-measure-marker';
@@ -83,7 +93,11 @@ export interface PipCanvasContext {
   textBaseline: string;
   fillStyle: string | CanvasGradient | CanvasPattern;
   fillText(text: string, x: number, y: number): void;
-  measureText(text: string): { width: number };
+  measureText(text: string): {
+    width: number;
+    fontBoundingBoxAscent?: number;
+    fontBoundingBoxDescent?: number;
+  };
 }
 
 export interface PipCanvasDrawOptions {
@@ -220,6 +234,66 @@ export function drawPipCanvasLine(
   }
   ctx.textBaseline = 'alphabetic';
   return drawnBottom;
+}
+
+export interface PipCanvasTextOptions {
+  /** Left edge, canvas px. */
+  x: number;
+  /** Em-box top, canvas px (not a baseline — the caller flows blocks by top). */
+  top: number;
+  /** Font size in canvas px; the weight is fixed at 400. */
+  fontPx: number;
+  weight?: number;
+  color: string;
+  /** Truncate with an ellipsis when the text is wider than this. */
+  maxWidth?: number;
+}
+
+/**
+ * Draw one plain (ruby-free) text line with its em top at `options.top`.
+ * Returns the em bottom, so callers can flow the next block.
+ */
+export function drawPipCanvasText(
+  ctx: PipCanvasContext,
+  text: string,
+  options: PipCanvasTextOptions,
+): number {
+  const { ascent, descent } = fontMetrics(ctx, options.fontPx, `${options.weight ?? 400} ${options.fontPx}px ${PIP_CANVAS_FONT_FAMILY}`, text);
+  ctx.font = `${options.weight ?? 400} ${options.fontPx}px ${PIP_CANVAS_FONT_FAMILY}`;
+  ctx.fillStyle = options.color;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  const content = options.maxWidth != null ? truncateToWidth(ctx, text, options.maxWidth) : text;
+  if (content.length > 0) ctx.fillText(content, options.x, options.top + ascent);
+  return options.top + ascent + descent;
+}
+
+/**
+ * Vertical metrics of the current font. `fontBoundingBox*` is what the engine
+ * uses for the em box; the 0.88/0.12 split only backs up engines that report no
+ * metrics at all (kept out of the layout critical path by the caller tests).
+ */
+function fontMetrics(
+  ctx: PipCanvasContext,
+  fontPx: number,
+  font: string,
+  text: string,
+): { ascent: number; descent: number } {
+  ctx.font = font;
+  const metrics = ctx.measureText(text || ' ');
+  const ascent = metrics.fontBoundingBoxAscent;
+  const descent = metrics.fontBoundingBoxDescent;
+  if (typeof ascent === 'number' && typeof descent === 'number' && ascent > 0) {
+    return { ascent, descent };
+  }
+  return { ascent: fontPx * 0.88, descent: fontPx * 0.12 };
+}
+
+function truncateToWidth(ctx: PipCanvasContext, text: string, maxWidth: number): string {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  const shortened = Array.from(text);
+  while (shortened.length > 1 && ctx.measureText(`${shortened.join('')}…`).width > maxWidth) shortened.pop();
+  return `${shortened.join('')}…`;
 }
 
 /* ------------------------------------------------------------------ */

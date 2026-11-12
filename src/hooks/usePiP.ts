@@ -5,12 +5,14 @@ import type { FuriganaLine, ReadingMode, SongData } from '@/lib/types';
 import { escapeHtml } from '@/lib/escape-html';
 import { renderPipLyricsHtml } from '@/lib/pip-render';
 import {
-  PIP_CANVAS_FONT_FAMILY,
   PIP_CANVAS_TRANSLATION_FONT_PX,
   VIDEO_PIP_CURRENT_TOP,
-  VIDEO_PIP_NEXT_TOP,
-  VIDEO_PIP_TRANSLATION_Y,
+  VIDEO_PIP_NEXT_GAP,
+  VIDEO_PIP_TITLE_FONT_PX,
+  VIDEO_PIP_TITLE_TOP,
+  VIDEO_PIP_TRANSLATION_GAP,
   drawPipCanvasLine,
+  drawPipCanvasText,
   measurePipCanvasLines,
   resetPipCanvasMeasureHost,
 } from '@/lib/pip-canvas';
@@ -107,20 +109,19 @@ export function usePiP(deps: UsePiPDeps) {
     const height = canvas.height;
     const activeLine = videoPipActiveLine.current;
     const { readingMode: currentReadingMode, romanizeFurigana: currentRomanize } = videoPipRenderConfig.current;
-    const fitText = (text: string, maxWidth: number, font: string) => {
-      context.font = font;
-      if (context.measureText(text).width <= maxWidth) return text;
-      let shortened = text;
-      while (shortened.length > 1 && context.measureText(`${shortened}…`).width > maxWidth) shortened = shortened.slice(0, -1);
-      return `${shortened}…`;
-    };
     context.clearRect(0, 0, width, height);
     context.fillStyle = '#09090b';
     context.fillRect(0, 0, width, height);
-    context.fillStyle = '#a1a1aa';
-    context.font = `500 18px ${PIP_CANVAS_FONT_FAMILY}`;
+
     const title = [source.song?.title, source.song?.artist].filter(Boolean).join(' · ');
-    context.fillText(fitText(title, width - 64, context.font), 32, 46);
+    drawPipCanvasText(context, title, {
+      x: 32,
+      top: VIDEO_PIP_TITLE_TOP,
+      fontPx: VIDEO_PIP_TITLE_FONT_PX,
+      weight: 500,
+      color: '#a1a1aa',
+      maxWidth: width - 64,
+    });
     context.fillStyle = '#3f3f46';
     context.fillRect(32, 66, width - 64, 1);
 
@@ -142,8 +143,13 @@ export function usePiP(deps: UsePiPDeps) {
       width - 64,
     );
     const [currentMeasured, nextMeasured] = measuredLines;
+    // Everything below the header flows from the measured geometry: the
+    // translation hangs directly under the drawn source rows and the next-line
+    // preview follows it. Fixed slots were wrong — a one-row line left the
+    // translation suspended dozens of pixels below it.
+    let cursor = VIDEO_PIP_CURRENT_TOP;
     if (currentMeasured) {
-      drawPipCanvasLine(context, currentMeasured, {
+      cursor = drawPipCanvasLine(context, currentMeasured, {
         x: 32,
         y: VIDEO_PIP_CURRENT_TOP,
         maxRows: 2,
@@ -154,15 +160,19 @@ export function usePiP(deps: UsePiPDeps) {
     const translation = source.translations[current]?.trim();
     const hint = !translation && source.untranslatedHint ? source.untranslatedHint : '';
     if (translation || hint) {
-      context.fillStyle = translation ? '#a1a1aa' : '#71717a';
-      context.font = `400 ${PIP_CANVAS_TRANSLATION_FONT_PX}px ${PIP_CANVAS_FONT_FAMILY}`;
-      context.fillText(fitText(translation || hint, width - 64, context.font), 32, VIDEO_PIP_TRANSLATION_Y);
+      cursor = drawPipCanvasText(context, translation || hint, {
+        x: 32,
+        top: cursor + VIDEO_PIP_TRANSLATION_GAP,
+        fontPx: PIP_CANVAS_TRANSLATION_FONT_PX,
+        color: translation ? '#a1a1aa' : '#71717a',
+        maxWidth: width - 64,
+      });
     }
 
     if (nextMeasured) {
       drawPipCanvasLine(context, nextMeasured, {
         x: 32,
-        y: VIDEO_PIP_NEXT_TOP,
+        y: cursor + VIDEO_PIP_NEXT_GAP,
         maxRows: 1,
         color: '#71717a',
         readingColor: '#52525b',

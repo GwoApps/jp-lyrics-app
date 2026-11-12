@@ -4,6 +4,7 @@ import {
   PIP_CANVAS_SOURCE_FONT_PX,
   clusterRowTops,
   drawPipCanvasLine,
+  drawPipCanvasText,
   mergeCharsIntoFragments,
   pairReadingRows,
   type PipCanvasCharBox,
@@ -97,7 +98,8 @@ function mockContext(): PipCanvasContext & {
       });
     },
     measureText(text: string) {
-      return { width: text.length * 38 };
+      const size = Number(/(\d+(?:\.\d+)?)px/.exec(this.font)?.[1] ?? 38);
+      return { width: text.length * size, fontBoundingBoxAscent: size * 0.9, fontBoundingBoxDescent: size * 0.1 };
     },
   };
   return ctx;
@@ -171,6 +173,36 @@ test('drawPipCanvasLine: scale follows the requested source font size', () => {
   assert.equal(base.font, '500 57px system-ui, -apple-system, sans-serif');
   // 1.5× scale: positions scale with the font so the frame can be up-scaled.
   assert.equal(base.y, 1 + 54 * 1.5);
+});
+
+function close(actual: number, expected: number): void {
+  assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} !== ${expected}`);
+}
+
+test('drawPipCanvasText: baseline follows the em top and the em bottom is returned', () => {
+  const ctx = mockContext();
+  const bottom = drawPipCanvasText(ctx, '即使季节轮回', { x: 32, top: 100, fontPx: 24, color: '#a1a1aa', maxWidth: 576 });
+  assert.equal(ctx.calls.length, 1);
+  // Mock metrics: ascent = 0.9em, descent = 0.1em → baseline at top + 21.6.
+  close(ctx.calls[0].y, 121.6);
+  assert.equal(ctx.calls[0].x, 32);
+  assert.equal(ctx.calls[0].fillStyle, '#a1a1aa');
+  assert.equal(ctx.calls[0].baseline, 'alphabetic');
+  close(bottom, 124);
+});
+
+test('drawPipCanvasText: truncates with an ellipsis instead of overflowing the frame', () => {
+  const ctx = mockContext();
+  drawPipCanvasText(ctx, 'abcdef', { x: 0, top: 0, fontPx: 24, color: '#fff', maxWidth: 72 });
+  // 24px mock advance per char: only three glyphs fit including the ellipsis.
+  assert.equal(ctx.calls[0].text, 'ab…');
+});
+
+test('drawPipCanvasText: empty text draws nothing but still reports its height', () => {
+  const ctx = mockContext();
+  const bottom = drawPipCanvasText(ctx, '', { x: 0, top: 50, fontPx: 20, color: '#fff' });
+  assert.equal(ctx.calls.length, 0);
+  close(bottom, 70);
 });
 
 test('drawPipCanvasLine: an empty line draws nothing and returns y unchanged', () => {
