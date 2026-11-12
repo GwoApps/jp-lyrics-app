@@ -4,8 +4,16 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { FuriganaLine, ReadingMode, SongData } from '@/lib/types';
 import { escapeHtml } from '@/lib/escape-html';
 import { renderPipLyricsHtml } from '@/lib/pip-render';
-import { normalizeFuriganaSegments, resolveFuriganaReading } from '@/lib/romaji';
-import { normalizeReadingScheme } from '@/lib/lyrics-reading';
+import {
+  PIP_CANVAS_FONT_FAMILY,
+  PIP_CANVAS_TRANSLATION_FONT_PX,
+  VIDEO_PIP_CURRENT_TOP,
+  VIDEO_PIP_NEXT_TOP,
+  VIDEO_PIP_TRANSLATION_Y,
+  drawPipCanvasLine,
+  measurePipCanvasLines,
+  resetPipCanvasMeasureHost,
+} from '@/lib/pip-canvas';
 import { getPiPCapabilities } from '@/lib/pip-support';
 import { PIP_PALETTES, PIP_THEME_EVENT, pipPaletteVars, readStoredPipTheme } from '@/lib/pip-theme';
 import { resolvePipTheme, type PipTheme } from '@/lib/settings-utils';
@@ -99,15 +107,6 @@ export function usePiP(deps: UsePiPDeps) {
     const height = canvas.height;
     const activeLine = videoPipActiveLine.current;
     const { readingMode: currentReadingMode, romanizeFurigana: currentRomanize } = videoPipRenderConfig.current;
-    const scheme = normalizeReadingScheme(source.song?.reading_scheme);
-    const lineText = (index: number) => {
-      const line = source.furiganaLines[index];
-      if (!line) return '';
-      return normalizeFuriganaSegments(line.segments, scheme).map(segment => {
-        if (currentReadingMode === 'original') return segment.text;
-        return resolveFuriganaReading(segment.text, segment.reading, currentRomanize, scheme, segment) || segment.text;
-      }).join('');
-    };
     const fitText = (text: string, maxWidth: number, font: string) => {
       context.font = font;
       if (context.measureText(text).width <= maxWidth) return text;
@@ -115,50 +114,59 @@ export function usePiP(deps: UsePiPDeps) {
       while (shortened.length > 1 && context.measureText(`${shortened}…`).width > maxWidth) shortened = shortened.slice(0, -1);
       return `${shortened}…`;
     };
-    const drawWrapped = (text: string, x: number, y: number, maxWidth: number, lineHeight: number, maxLines: number) => {
-      context.font = '500 38px system-ui, -apple-system, sans-serif';
-      const chars = Array.from(text || ' ');
-      let row = '';
-      let rows = 0;
-      for (const char of chars) {
-        const next = row + char;
-        if (row && context.measureText(next).width > maxWidth) {
-          context.fillText(row, x, y + rows * lineHeight, maxWidth);
-          rows += 1;
-          row = char;
-          if (rows >= maxLines) break;
-        } else {
-          row = next;
-        }
-      }
-      if (row && rows < maxLines) context.fillText(row, x, y + rows * lineHeight, maxWidth);
-    };
-
     context.clearRect(0, 0, width, height);
     context.fillStyle = '#09090b';
     context.fillRect(0, 0, width, height);
     context.fillStyle = '#a1a1aa';
-    context.font = '500 18px system-ui, -apple-system, sans-serif';
+    context.font = `500 18px ${PIP_CANVAS_FONT_FAMILY}`;
     const title = [source.song?.title, source.song?.artist].filter(Boolean).join(' · ');
     context.fillText(fitText(title, width - 64, context.font), 32, 46);
     context.fillStyle = '#3f3f46';
     context.fillRect(32, 66, width - 64, 1);
 
     const current = activeLine >= 0 ? activeLine : 0;
-    context.fillStyle = '#ffffff';
-    drawWrapped(lineText(current), 32, 145, width - 64, 48, 2);
+    const next = current + 1;
+    // The canvas has no ruby layout, so the lyrics are measured from the very
+    // same markup the document PiP window renders (native wrapping, 禁則 breaks
+    // and annotation centring) and then blitted row by row — see
+    // `src/lib/pip-canvas.ts`. Flattening a line to its readings used to be the
+    // only option here and silently dropped every kanji.
+    const lineIndices = [current, next].filter(index => index < source.furiganaLines.length);
+    const measuredLines = measurePipCanvasLines(
+      renderPipLyricsHtml(
+        lineIndices.map(index => source.furiganaLines[index]),
+        source.song?.reading_scheme,
+        currentReadingMode,
+        currentRomanize,
+      ),
+      width - 64,
+    );
+    const [currentMeasured, nextMeasured] = measuredLines;
+    if (currentMeasured) {
+      drawPipCanvasLine(context, currentMeasured, {
+        x: 32,
+        y: VIDEO_PIP_CURRENT_TOP,
+        maxRows: 2,
+        color: '#ffffff',
+        readingColor: '#a1a1aa',
+      });
+    }
     const translation = source.translations[current]?.trim();
     const hint = !translation && source.untranslatedHint ? source.untranslatedHint : '';
     if (translation || hint) {
       context.fillStyle = translation ? '#a1a1aa' : '#71717a';
-      context.font = '400 24px system-ui, -apple-system, sans-serif';
-      context.fillText(fitText(translation || hint, width - 64, context.font), 32, 250);
+      context.font = `400 ${PIP_CANVAS_TRANSLATION_FONT_PX}px ${PIP_CANVAS_FONT_FAMILY}`;
+      context.fillText(fitText(translation || hint, width - 64, context.font), 32, VIDEO_PIP_TRANSLATION_Y);
     }
 
-    const next = current + 1;
-    if (next < source.furiganaLines.length) {
-      context.fillStyle = '#71717a';
-      drawWrapped(lineText(next), 32, 315, width - 64, 38, 1);
+    if (nextMeasured) {
+      drawPipCanvasLine(context, nextMeasured, {
+        x: 32,
+        y: VIDEO_PIP_NEXT_TOP,
+        maxRows: 1,
+        color: '#71717a',
+        readingColor: '#52525b',
+      });
     }
   }, []);
 
@@ -203,6 +211,8 @@ export function usePiP(deps: UsePiPDeps) {
       video.srcObject = null;
       video.remove();
       videoPipElements.current = null;
+      // The hidden measurement container belongs to this renderer only.
+      resetPipCanvasMeasureHost();
     };
   }, [drawVideoPiP, disableVideoPiP]);
 
