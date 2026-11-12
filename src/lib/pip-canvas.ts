@@ -226,34 +226,59 @@ export function drawPipCanvasLine(
 /* Measurement (browser only)                                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The measurement markup lives in a **shadow root**: the app's global stylesheet
+ * carries per-language font rules (`[lang="ja"] { font-family: 'Noto Sans JP' }`
+ * in `globals.css`), and those attribute selectors would otherwise hit the
+ * hidden `lang="ja"` lyric markup. That gives the engine one font while the
+ * canvas draws with another, so every run lands at the wrong x/height (CJK
+ * advances hide it, Latin readings and vertical metrics do not — measured
+ * deltas of 2px ascent and 7.6px per romaji run). Shadow DOM keeps the layout
+ * engine's font identical to the canvas font; no `!important` arms race needed.
+ */
+let measureHostEl: HTMLElement | null = null;
+let measureBodyEl: HTMLElement | null = null;
+
 function ensureMeasureHost(widthPx: number): HTMLElement {
-  let host = document.querySelector<HTMLElement>(`.${MEASURE_HOST_CLASS}`);
-  if (!host) {
-    const style = document.createElement('style');
-    style.id = `${MEASURE_HOST_CLASS}-style`;
-    style.textContent = `
-      .${MEASURE_HOST_CLASS} { position: fixed; left: -20000px; top: 0; visibility: hidden; pointer-events: none; contain: layout style; }
-      .${MEASURE_HOST_CLASS} .line { font-size: ${PIP_CANVAS_SOURCE_FONT_PX}px; font-weight: 500; line-height: normal; font-family: ${PIP_CANVAS_FONT_FAMILY}; }
-      .${MEASURE_HOST_CLASS} .line-source { font-weight: 500; }
-      .${MEASURE_HOST_CLASS} ruby rt { font-size: ${PIP_CANVAS_READING_SCALE * 100}%; font-weight: 500; }
-      .${MEASURE_HOST_CLASS} .translation { display: none; }
-      .${MEASURE_HOST_CLASS} .${MEASURE_MARKER_CLASS} { display: inline-block; width: 0; height: 0; }
-    `;
-    document.head.appendChild(style);
-    host = document.createElement('div');
+  if (!measureHostEl || !measureBodyEl || !measureHostEl.isConnected) {
+    const host = document.createElement('div');
     host.className = MEASURE_HOST_CLASS;
     host.setAttribute('aria-hidden', 'true');
+    Object.assign(host.style, {
+      position: 'fixed',
+      left: '-20000px',
+      top: '0',
+      visibility: 'hidden',
+      pointerEvents: 'none',
+      contain: 'layout style',
+    });
+    const shadow = host.attachShadow({ mode: 'open' });
+    const style = document.createElement('style');
+    style.textContent = `
+      :host { all: initial; }
+      .body { font-family: ${PIP_CANVAS_FONT_FAMILY}; }
+      .line { font-size: ${PIP_CANVAS_SOURCE_FONT_PX}px; font-weight: 500; line-height: normal; font-family: ${PIP_CANVAS_FONT_FAMILY}; }
+      .line-source { font-weight: 500; font-family: ${PIP_CANVAS_FONT_FAMILY}; }
+      ruby rt { font-size: ${PIP_CANVAS_READING_SCALE * 100}%; font-weight: 500; font-family: ${PIP_CANVAS_FONT_FAMILY}; }
+      .translation { display: none; }
+      .${MEASURE_MARKER_CLASS} { display: inline-block; width: 0; height: 0; }
+    `;
+    shadow.appendChild(style);
+    measureBodyEl = document.createElement('div');
+    measureBodyEl.className = 'body';
+    shadow.appendChild(measureBodyEl);
     document.body.appendChild(host);
+    measureHostEl = host;
   }
-  host.style.width = `${widthPx}px`;
-  return host;
+  measureBodyEl.style.width = `${widthPx}px`;
+  return measureBodyEl;
 }
 
 /** Drop the hidden measurement container (called when the video PiP unmounts). */
 export function resetPipCanvasMeasureHost(): void {
-  if (typeof document === 'undefined') return;
-  document.querySelector(`.${MEASURE_HOST_CLASS}`)?.remove();
-  document.getElementById(`${MEASURE_HOST_CLASS}-style`)?.remove();
+  measureHostEl?.remove();
+  measureHostEl = null;
+  measureBodyEl = null;
 }
 
 function charBoxesForTextNode(node: Text, originLeft: number, originTop: number): PipCanvasCharBox[] {
