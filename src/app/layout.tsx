@@ -4,6 +4,7 @@ import { ViewTransitions } from '@/components/navigation/ViewTransitions';
 import AppShell from '@/components/AppShell';
 import { APP_ICON_REVISION } from '@/lib/app-icon';
 import { APP_NAME_NEUTRAL, APP_NAME_SHORT, APP_DESCRIPTION } from '@/lib/app-identity';
+import GoogleFontsStylesheet from '@/components/GoogleFontsStylesheet';
 
 /**
  * Language-neutral shell metadata. The active locale lives in `localStorage`,
@@ -60,10 +61,9 @@ export default function RootLayout({
             if (meta) meta.setAttribute('content', dark ? '#0a0a0a' : '#ffffff');
           })();
         `}} />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap"
-          rel="stylesheet"
-        />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <GoogleFontsStylesheet />
       </head>
       <body>
         <ViewTransitions>
