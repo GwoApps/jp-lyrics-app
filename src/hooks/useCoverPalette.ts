@@ -27,6 +27,11 @@ function rgb(color: CoverColor) {
  * colors" debug action, which also clears the localStorage entry). When a
  * fresh palette is extracted, `onExtracted` fires so the caller can persist
  * it server-side.
+ *
+ * `enabled` defaults to `true` and keeps the eager behaviour. List callers that
+ * only tint a card pass `false` until the card is near the viewport: nothing is
+ * downloaded or quantized before then, and the palette simply stays `null`
+ * (the same value it has while extraction is in flight).
  */
 export function useCoverPalette(
   coverUrl: string | null | undefined,
@@ -34,6 +39,7 @@ export function useCoverPalette(
   serverPalette: CoverPalette | null = null,
   cacheKey: string | null = null,
   onExtracted?: (palette: CoverPalette | null) => void,
+  enabled = true,
 ): CoverPalette | null {
   const [paletteState, setPaletteState] = useState<{
     url: string | null | undefined;
@@ -50,6 +56,7 @@ export function useCoverPalette(
   // palette exists (or refreshKey explicitly forces a fresh extraction).
   useEffect(() => {
     let cancelled = false;
+    if (!enabled) return undefined;
     if (!coverUrl) {
       queueMicrotask(() => {
         if (!cancelled) setPaletteState({ url: coverUrl, palette: null });
@@ -84,7 +91,7 @@ export function useCoverPalette(
     return () => {
       cancelled = true;
     };
-  }, [coverUrl, refreshKey, cacheKey, serverPalette]);
+  }, [enabled, coverUrl, refreshKey, cacheKey, serverPalette]);
 
   return palette;
 }
@@ -99,8 +106,9 @@ export function useCoverTheme(
   serverPalette: CoverPalette | null = null,
   cacheKey: string | null = null,
   onExtracted?: (palette: CoverPalette | null) => void,
+  enabled = true,
 ): CoverTheme {
-  const palette = useCoverPalette(coverUrl, refreshKey, serverPalette, cacheKey, onExtracted);
+  const palette = useCoverPalette(coverUrl, refreshKey, serverPalette, cacheKey, onExtracted, enabled);
   const style = useMemo<React.CSSProperties | undefined>(() => {
     if (!palette) return undefined;
     return {

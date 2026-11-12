@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Share2, Star, Trash2 } from 'lucide-react';
 import { Link } from '@/components/navigation/ViewTransitions';
 import CoverImage from '@/components/CoverImage';
@@ -64,7 +64,29 @@ export default function SongItemCard({
   onDelete,
 }: SongItemCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
-  const palette = useCoverPalette(song.cover_url);
+  // Issue #410: the palette only tints this card, so extraction waits until the
+  // card is near the viewport instead of downloading every cover up front. Same
+  // shape as ArtistAvatar: one-shot observer, 160px margin, and environments
+  // without IntersectionObserver load straight away so colors never regress.
+  // The result is cached per song, so re-entering the list costs nothing.
+  const [nearViewport, setNearViewport] = useState(false);
+  useEffect(() => {
+    if (nearViewport) return;
+    const element = cardRef.current;
+    if (!element || typeof IntersectionObserver === 'undefined') {
+      setNearViewport(true);
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        observer.disconnect();
+        setNearViewport(true);
+      }
+    }, { rootMargin: '160px' });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [nearViewport]);
+  const palette = useCoverPalette(song.cover_url, 0, null, song.id, undefined, nearViewport);
   const accent = palette
     ? `rgb(${palette.primary.r} ${palette.primary.g} ${palette.primary.b})`
     : 'var(--border)';
