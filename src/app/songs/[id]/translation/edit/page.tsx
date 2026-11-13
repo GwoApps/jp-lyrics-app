@@ -18,6 +18,7 @@ import { computeLineEdits, countAdoptedLines, reconcileDraft } from '@/lib/trans
 import { translationLineInputId, translationLineLabel, translationSourceLineId } from '@/lib/translation-line-a11y';
 import { mergeTranslatedSlice, shouldConfirmRetranslate } from '@/lib/translation-draft';
 import { isImeComposing } from '@/lib/ime';
+import { computeCoverage } from '@/lib/translation-progress';
 import { TRANSLATION_ERROR_KEYS } from '@/lib/translation-errors';
 import type { GlossaryEntry } from '@/lib/lyrics-glossary';
 import type { SongData } from '@/lib/types';
@@ -149,7 +150,14 @@ export default function TranslationEditPage() {
 
   const sourceLyrics = song?.lyrics_raw ?? '';
   const rawLines = useMemo(() => sourceLyrics.split('\n'), [sourceLyrics]);
-  const filledCount = useMemo(() => draft.filter((line) => line.trim()).length, [draft]);
+  // Issue #414: both halves of「已填 N / M 行」come from `computeCoverage`, the
+  // same NON-EMPTY-source-line measure as `missingLines` below and the server's
+  // `coverage.coverable`. Counting blank lines in the denominator made a fully
+  // translated song read "43 / 53" forever — blank lines are never translatable.
+  const { covered: filledCount, coverable: coverableCount } = useMemo(
+    () => computeCoverage(rawLines, draft),
+    [rawLines, draft],
+  );
   // Indices whose source line is non-empty but the draft translation is blank
   // — the targets for the one-click「AI 补全缺失行」action (issue #125).
   const missingLines = useMemo(
@@ -425,7 +433,7 @@ export default function TranslationEditPage() {
       <div className="sticky top-11 z-40 -mx-4 mb-6 flex flex-col gap-3 border-b border-[var(--border)] bg-[var(--background)]/95 px-4 py-3 backdrop-blur-sm sm:-mx-6 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">{t('translation.title')}</h1>
-          <p className="text-xs text-[var(--muted-foreground)]">{t('translation.lineSummary', { count: String(filledCount), total: String(rawLines.length) })}</p>
+          <p className="text-xs text-[var(--muted-foreground)]">{t('translation.lineSummary', { count: String(filledCount), total: String(coverableCount) })}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {missingLines.length > 0 && (
