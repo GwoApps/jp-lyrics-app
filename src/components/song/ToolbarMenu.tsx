@@ -208,10 +208,19 @@ export const MobileIconButton = React.forwardRef<
   );
 });
 
-export function ToolbarMenu({ label, items, triggerClassName }: { label: ReactNode; items: ToolbarMenuItem[]; triggerClassName?: string }) {
+export function ToolbarMenu({ label, triggerLabel, items, triggerClassName }: {
+  /** Visual trigger content — never used as an accessible name (it may be an icon). */
+  label: ReactNode;
+  /** Accessible name for icon-only triggers. Text triggers get their name from `label`. */
+  triggerLabel?: string;
+  items: ToolbarMenuItem[];
+  triggerClassName?: string;
+}) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
+        aria-label={triggerLabel}
+        title={triggerLabel}
         className={triggerClassName ?? `${btnTextCls(false)} song-menu-trigger`}
       >
         {label}

@@ -828,6 +828,7 @@ export default function SongViewPage() {
             <div className="flex flex-wrap items-center justify-end gap-2 [&>*]:shrink-0">
             <ToolbarMenu
               label={<span className="inline-flex items-center">{data.copied ? <Check className="h-4 w-4 text-[var(--success)]" /> : <Copy className="h-4 w-4" />}</span>}
+              triggerLabel={t('song.copyLyrics')}
               triggerClassName={btnCls(data.copied)}
               items={[
                 {
@@ -961,10 +962,15 @@ export default function SongViewPage() {
               ]}
             />
             </div>
-            <div className="song-detail-font-size song-accent-surface inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2" title={t('song.fontSize')}>
-              <button onClick={() => data.setFontSize(s => Math.max(14, s - 2))} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Minus className="h-3.5 w-3.5" /></button>
+            <div className="song-detail-font-size song-accent-surface inline-flex items-center justify-center gap-0.5 rounded-md px-1.5" title={t('song.fontSize')}>
+              {/* 24×32 hit areas (WCAG 2.5.8) matching the sibling buttons; the glyphs stay 14px. */}
+              <button type="button" onClick={() => data.setFontSize(s => Math.max(14, s - 2))}
+                className="inline-flex h-8 w-6 items-center justify-center text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                aria-label={t('song.fontSizeDecrease')} title={t('song.fontSizeDecrease')}><Minus className="h-3.5 w-3.5" /></button>
               <span className="w-5 text-center text-xs font-medium tabular-nums" style={{ color: 'color-mix(in srgb, var(--foreground) 90%, var(--song-accent))' }}>{data.fontSize}</span>
-              <button onClick={() => data.setFontSize(s => Math.min(32, s + 2))} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"><Plus className="h-3.5 w-3.5" /></button>
+              <button type="button" onClick={() => data.setFontSize(s => Math.min(32, s + 2))}
+                className="inline-flex h-8 w-6 items-center justify-center text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                aria-label={t('song.fontSizeIncrease')} title={t('song.fontSizeIncrease')}><Plus className="h-3.5 w-3.5" /></button>
             </div>
           </div>
           {oddDiceMap && (
