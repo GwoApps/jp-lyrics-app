@@ -62,3 +62,23 @@ export function groupSongsByAlbum<T extends AlbumSong & { title: string }>(
 
   return { entries: groups.map((group) => ({ type: 'group', group })), unclassified };
 }
+
+export interface AlbumList<T extends AlbumSong & { title: string }> {
+  groups: SongAlbumGroup<T>[];
+  /** Songs no album can own: no `spotify_album`, or a single whose title is the album. */
+  looseSongs: T[];
+  /** Every song the album view renders, grouped and loose alike (#425). */
+  trackCount: number;
+}
+
+/** Album view model: the groups plus the songs that stay ungrouped, counted once. */
+export function buildAlbumList<T extends AlbumSong & { title: string }>(songs: T[]): AlbumList<T> {
+  const { entries, unclassified } = groupSongsByAlbum(songs);
+  const groups = entries.flatMap((entry) => (entry.type === 'group' ? [entry.group] : []));
+  // Keep the incoming order for the flat run: grouping appends demoted singles
+  // after the albumless ones, which would look arbitrary in the list.
+  const looseIds = new Set(unclassified.map((song) => song.id));
+  const looseSongs = songs.filter((song) => looseIds.has(song.id));
+  const trackCount = groups.reduce((count, group) => count + group.songs.length, looseSongs.length);
+  return { groups, looseSongs, trackCount };
+}

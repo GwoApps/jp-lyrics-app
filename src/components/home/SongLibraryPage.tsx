@@ -25,12 +25,13 @@ import { buildManualCreateUrl } from '@/lib/song-prefill';
 import { setCachedSongs, useCachedSongs } from '@/lib/song-list-cache';
 import { useStoredPreference } from '@/lib/browser-storage';
 import { requestSongList } from '@/lib/song-list-fetch';
-import { groupSongsByAlbum } from '@/lib/song-albums';
+import { buildAlbumList, type AlbumList } from '@/lib/song-albums';
 import { noResultsMessage } from '@/lib/search-filter-a11y';
 import { clearCollectionFilterLabel } from '@/lib/song-card-a11y';
 
 type ToastState = { type: 'success' | 'error'; msg: string; actionSong?: { id: string; title: string } } | null;
 const EMPTY_SONG_IDS = new Set<string>();
+const EMPTY_ALBUM_VIEW: AlbumList<SongItem> = { groups: [], looseSongs: [], trackCount: 0 };
 
 export type SongLibraryKind = 'songs' | 'albums';
 const viewModeKey = (listKind: SongLibraryKind) => `jplrc:${listKind}:view-mode`;
@@ -518,9 +519,13 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
       return next;
     });
   }, []);
-  const albumView = listKind === 'albums' ? groupSongsByAlbum(filteredSongs) : { entries: [], unclassified: [] };
-  const albumGroups = albumView.entries.filter((e) => e.type === 'group').map((e) => e.group);
-  const albumTrackCount = albumGroups.reduce((count, group) => count + group.songs.length, 0);
+  // Songs without an album, and single-track albums whose title equals the track
+  // title, are not dropped: they are the album view's loose songs, rendered flat
+  // below the groups and counted in the header (#425).
+  const albumView = listKind === 'albums' ? buildAlbumList(filteredSongs) : EMPTY_ALBUM_VIEW;
+  const albumGroups = albumView.groups;
+  const albumLooseSongs = albumView.looseSongs;
+  const albumTrackCount = albumView.trackCount;
   const collapseAllAlbums = () => {
     setCollapsedAlbums(new Set(albumGroups.map((group) => group.key)));
   };
@@ -793,7 +798,9 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
             <Plus className="h-3.5 w-3.5" /> {t('home.addFirst')}
           </button>
         </div>
-      ) : (listKind === 'albums' ? albumGroups.length === 0 : filteredSongs.length === 0) ? (
+      ) : (listKind === 'albums'
+        ? albumGroups.length === 0 && albumLooseSongs.length === 0
+        : filteredSongs.length === 0) ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           {/* The magnifier only fits a search; a filtered-empty category is not a
               failed search, so it gets its own icon, copy and exit (#392). */}
@@ -821,7 +828,7 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
           ? songViewMode === 'grid' ? 'grid grid-cols-1 items-start gap-3 lg:grid-cols-2' : 'space-y-1.5 sm:space-y-2'
           : songViewMode === 'grid' ? 'song-grid grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4' : 'space-y-1.5 sm:space-y-2'}>
           {listKind === 'albums' ? (<>
-            {albumView.entries.length > 0 && (
+            {albumGroups.length > 0 && (
               <div className="col-span-full mb-1.5 flex justify-end gap-1.5 px-1">
                 <button type="button" onClick={collapseAllAlbums} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]" aria-label={t('home.collapseAll')} aria-pressed={allAlbumsCollapsed}>
                   <ChevronRight className="h-3 w-3 -rotate-90" /> {t('home.collapseAll')}
@@ -831,13 +838,9 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
                 </button>
               </div>
             )}
-            {albumView.entries.map((entry, albumGroupIndex) => {
-              if (entry.type !== 'group') return null;
-              const group = entry.group;
+            {albumGroups.map((group, albumGroupIndex) => {
               const coverUrl = group.songs.find((song) => song.cover_url)?.cover_url;
               const isCollapsed = collapsedAlbums.has(group.key);
-              // `albumGroupIndex` is the entry index, not the group index, so the
-              // ids stay unique and stable even when a non-group entry is interleaved.
               const headerId = `${albumGroupIdPrefix}-header-${albumGroupIndex}`;
               const contentId = `${albumGroupIdPrefix}-content-${albumGroupIndex}`;
               return (
@@ -888,6 +891,9 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
                 </section>
               );
             })}
+            {/* Ungrouped songs keep a flat run at the end, with no extra
+                heading: the album list has never had a label for them (#425). */}
+            {albumLooseSongs.map((song) => renderSongCard(song, songViewMode))}
           </>) : filteredSongs.map((song) => renderSongCard(song, songViewMode))}
         </div>
       )}

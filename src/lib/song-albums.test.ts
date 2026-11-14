@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { groupSongsByAlbum, type SongAlbumEntry, type SongAlbumGroup } from './song-albums.ts';
+import { buildAlbumList, groupSongsByAlbum, type SongAlbumEntry, type SongAlbumGroup } from './song-albums.ts';
 
 function extractGroups<T extends { id: string; artist: string; title: string }>(
   entries: SongAlbumEntry<T>[],
@@ -50,4 +50,31 @@ test('keeps a group when the album title matches only one of several track title
     { album: 'Same Title', ids: ['one', 'two'] },
   ]);
   assert.deepEqual(unclassified, []);
+});
+
+test('the album list keeps loose songs and counts them once (#425)', () => {
+  const songs = [
+    { id: 'one', title: 'Song One', artist: 'Artist A', spotify_album: 'Real Album' },
+    { id: 'two', title: 'Song Two', artist: 'Artist A', spotify_album: 'Real Album' },
+    { id: 'single', title: 'Lonely', artist: 'Artist B', spotify_album: 'Lonely' },
+    { id: 'albumless', title: 'No Album', artist: 'Artist C', spotify_album: null },
+  ];
+
+  const { groups, looseSongs, trackCount } = buildAlbumList(songs);
+
+  assert.deepEqual(groups.map((group) => group.album), ['Real Album']);
+  // Loose songs keep the incoming order, not the grouping order.
+  assert.deepEqual(looseSongs.map((song) => song.id), ['single', 'albumless']);
+  // 2 grouped + 2 loose: the header must match what the page renders.
+  assert.equal(trackCount, songs.length);
+});
+
+test('an album list made only of loose songs is not empty and has no groups', () => {
+  const { groups, looseSongs, trackCount } = buildAlbumList([
+    { id: 'albumless', title: 'No Album', artist: 'Artist C', spotify_album: null },
+  ]);
+
+  assert.deepEqual(groups, []);
+  assert.deepEqual(looseSongs.map((song) => song.id), ['albumless']);
+  assert.equal(trackCount, 1);
 });
