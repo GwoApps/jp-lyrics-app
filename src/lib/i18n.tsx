@@ -1,41 +1,21 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useEffect, useSyncExternalStore, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import ja from '@/i18n/ja.json';
 import en from '@/i18n/en.json';
 import zhCN from '@/i18n/zh-CN.json';
 import zhTW from '@/i18n/zh-TW.json';
+import {
+  DEFAULT_LOCALE, isLocale, LOCALE_COOKIE, LOCALE_STORAGE_KEY, localeCookieAttributes,
+  localeToBCP47, type Locale,
+} from './locale';
 
-export type Locale = 'ja' | 'en' | 'zh-CN' | 'zh-TW';
+export { LOCALE_META, localeToBCP47 } from './locale';
+export type { Locale } from './locale';
 
-const LOCALES: Record<Locale, Record<string, Record<string, string>>> = { ja, en, 'zh-CN': zhCN, 'zh-TW': zhTW };
-
-export const LOCALE_META: Record<Locale, { label: string }> = {
-  ja:    { label: '日本語' },
-  en:    { label: 'English' },
-  'zh-CN': { label: '简体中文' },
-  'zh-TW': { label: '繁體中文' },
+const DICTIONARIES: Record<Locale, Record<string, Record<string, string>>> = {
+  ja, en, 'zh-CN': zhCN, 'zh-TW': zhTW,
 };
-
-/** Locale → BCP-47 tag for date formatting. */
-export function localeToBCP47(locale: string): string {
-  const map: Record<string, string> = { ja: 'ja-JP', en: 'en-US', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW' };
-  return map[locale] ?? 'zh-CN';
-}
-
-function detectLocale(): Locale {
-  if (typeof window === 'undefined') return 'zh-CN';
-  const saved = localStorage.getItem('jplrc-locale') as Locale | null;
-  if (saved && LOCALES[saved]) return saved;
-  const nav = navigator.language;
-  if (nav.startsWith('zh')) {
-    if (nav.includes('TW') || nav.includes('HK') || nav.includes('Hant')) return 'zh-TW';
-    return 'zh-CN';
-  }
-  if (nav.startsWith('en')) return 'en';
-  if (nav.startsWith('ja')) return 'ja';
-  return 'zh-CN';
-}
 
 type I18nContextValue = {
   locale: Locale;
@@ -44,33 +24,83 @@ type I18nContextValue = {
   t: (key: string, vars?: Record<string, string | number>) => string;
 };
 
+/**
+ * The context default is the reference locale, so an out-of-provider `useI18n`
+ * (error boundaries, isolated unit renders) still yields readable text.
+ */
+const I18nContext = createContext<I18nContextValue>({
+  locale: DEFAULT_LOCALE,
+  bcp47: localeToBCP47(DEFAULT_LOCALE),
+  setLocale: () => {},
+  t: (k) => k,
+});
+
+/** Nothing ever changes, so React re-reads the snapshot once, after hydration. */
+const subscribeHydrated = () => () => {};
+
 /** Keys already reported as missing, so a re-render does not spam the console. */
 const warnedMissingKeys = new Set<string>();
 
-const I18nContext = createContext<I18nContextValue>({ locale: 'zh-CN', bcp47: 'zh-CN', setLocale: () => {}, t: (k) => k });
-const subscribeHydration = () => () => {};
+function readStoredLocale(): Locale | null {
+  try {
+    const saved = localStorage.getItem(LOCALE_STORAGE_KEY);
+    return isLocale(saved) ? saved : null;
+  } catch {
+    // Private mode / blocked storage: the server-resolved locale stands.
+    return null;
+  }
+}
 
-export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(detectLocale);
-  const ready = useSyncExternalStore(subscribeHydration, () => true, () => false);
+/**
+ * Mirror the choice into both stores. The cookie is what lets the *server*
+ * render in this language on the next request — without it the whole tree had
+ * to wait for hydration, which is what made every cold start blank (issue #419).
+ */
+function persistLocale(locale: Locale) {
+  try {
+    localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+  } catch {
+    // Storage may be unavailable; the cookie below still carries the choice.
+  }
+  document.cookie = `${LOCALE_COOKIE}=${locale}; ${localeCookieAttributes()}`;
+}
 
-  // Keep <html lang> in sync with the active locale, including on initial
-  // detection / persistence restore, so screen readers and language tools
-  // announce the UI in the correct language.
+export function I18nProvider({
+  children,
+  initialLocale = DEFAULT_LOCALE,
+}: {
+  children: ReactNode;
+  /** Locale the server rendered with, resolved from the cookie / Accept-Language. */
+  initialLocale?: Locale;
+}) {
+  const [switched, setSwitched] = useState<Locale | null>(null);
+  // `false` in the server render *and* in the hydration render, so both produce
+  // the locale the server resolved. Only afterwards may `localStorage` — the one
+  // store the server cannot see — contribute a newer choice.
+  const hydrated = useSyncExternalStore(subscribeHydrated, () => true, () => false);
+  const locale = switched ?? (hydrated ? readStoredLocale() ?? initialLocale : initialLocale);
+
+  // Keep <html lang> in sync with the active locale, including on an in-app
+  // switch, so screen readers and language tools announce the UI in the right
+  // language (and the locale-matched font cascade keeps applying).
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
 
+  useEffect(() => {
+    // Write both stores back so the next request renders in this language even
+    // if only one of them had it (a pre-cookie profile, or cleared cookies).
+    persistLocale(locale);
+  }, [locale]);
+
   const setLocale = useCallback((l: Locale) => {
-    setLocaleState(l);
-    localStorage.setItem('jplrc-locale', l);
-    document.documentElement.lang = l;
+    setSwitched(l);
   }, []);
 
   const t = useCallback((key: string, vars?: Record<string, string | number>): string => {
     const [ns, k] = key.split('.');
-    const dict = LOCALES[locale];
-    let val = dict?.[ns]?.[k] ?? LOCALES['zh-CN'][ns]?.[k] ?? key;
+    const dict = DICTIONARIES[locale];
+    let val = dict?.[ns]?.[k] ?? DICTIONARIES[DEFAULT_LOCALE][ns]?.[k] ?? key;
     // Falling back to the key itself means no dictionary has this entry, so the
     // UI is about to render an internal identifier. Dev builds shout about it;
     // `validate:i18n` is the CI-side counterpart that catches it before merge.
@@ -85,9 +115,6 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }
     return val;
   }, [locale]);
-
-  // Avoid hydration mismatch: render children only after locale is detected
-  if (!ready) return null;
 
   return <I18nContext.Provider value={{ locale, bcp47: localeToBCP47(locale), setLocale, t }}>{children}</I18nContext.Provider>;
 }

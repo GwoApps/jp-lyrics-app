@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from 'react';
+
 const SONG_COVER_CACHE_PREFIX = 'jplrc:song-cover:';
 
 function storageKey(songId: string) {
@@ -72,4 +74,22 @@ export function clearCachedSongPalette(songId: string | null | undefined) {
   try {
     window.localStorage.removeItem(paletteKey(songId));
   } catch { /* ignore */ }
+}
+
+/* ---- Hydration-safe readers ---- */
+
+/** Nothing ever changes, so React re-reads the snapshot once, after hydration. */
+const subscribe = () => () => {};
+
+/**
+ * The cached cover for a song as a render-safe value: `null` on the server and
+ * during the hydration render, then the cached URL. localStorage takes no part
+ * in the server render, so reading it there would break hydration (issue #419).
+ */
+export function useCachedSongCover(songId: string | null | undefined): string | null {
+  return useSyncExternalStore(
+    subscribe,
+    () => getCachedSongCover(songId),
+    () => null,
+  );
 }

@@ -6,6 +6,7 @@ import { isSameSpotifyTrack } from '@/lib/match';
 import { useNowPlaying, type SyncState } from './useNowPlaying';
 import { centeredLyricScrollTop, isLyricsView, lyricsViewUrl } from '@/lib/immersive-lyrics';
 import { animateSmoothScroll, earliestTimedLyricMs, shouldScrollLyricsToStart } from '@/lib/scroll-ease';
+import { useStoredPreference } from '@/lib/browser-storage';
 
 export interface SpotifyState {
   connected: boolean;
@@ -97,10 +98,9 @@ export function useSpotifySync(
   const spotify = observedPlayback as SpotifyState | null;
   const nowPlayingData = enabled ? observedPlayback : simulatedPlayback;
   const [activeLine, setActiveLine] = useState(-1);
-  const [followPlaying, setFollowPlaying] = useState(() => {
-    if (typeof window !== 'undefined') return localStorage.getItem('jplrc-follow-playing') !== 'false';
-    return true;
-  });
+  // Hydration-safe: the stored value is adopted after hydration, so the server
+  // and the first client render agree (issue #419).
+  const [followPlaying, setFollowPlaying] = useStoredPreference('jplrc-follow-playing', (raw) => raw !== 'false');
 
   // Derived identity: is the song rendered on this page the one currently
   // selected for playback? ID-authoritative when both sides have a Track ID;
@@ -157,9 +157,6 @@ export function useSpotifySync(
     return result;
   }, [syncRefs, matchCacheRef]);
   useEffect(() => { isSameSongRef.current = isSameSong; });
-
-  // Persist follow-playing preference
-  useEffect(() => { localStorage.setItem('jplrc-follow-playing', String(followPlaying)); }, [followPlaying]);
 
   // Close PiP on unmount
   useEffect(() => {

@@ -61,7 +61,13 @@ test('service worker update copy comes from the dictionaries, not an inline loca
   // Same self-dismiss as the old inline toast.
   assert.match(component, /TOAST_LIFETIME_MS = 15_000/);
   // The old inline script duplicated detectLocale() and its message table.
-  assert.doesNotMatch(layoutSource, /jplrc-locale/);
+  // The layout now resolves the locale server-side from the `jplrc-locale`
+  // cookie (issue #419), so the ban is on the *duplicated client-side*
+  // detection — reading `navigator.language` / `localStorage` inline — not on
+  // the cookie name itself.
+  assert.doesNotMatch(layoutSource, /localStorage\.getItem\('jplrc-locale'\)/);
+  // Only code counts: `navigator.languages` may be named in a comment.
+  assert.doesNotMatch(layoutSource, /navigator\.languages?\s*[?.[]/);
   assert.doesNotMatch(layoutSource, /updateMessages/);
   assert.doesNotMatch(layoutSource, /serviceWorker\.register/);
 });

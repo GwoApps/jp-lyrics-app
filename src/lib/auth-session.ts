@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
 export type SpotifyLoginStatus = {
   connected: boolean;
@@ -90,8 +90,19 @@ export function refreshAuthSession(): Promise<AuthSession> {
   return refreshInFlight;
 }
 
+/** Nothing ever changes, so React re-reads the snapshot once, after hydration. */
+const subscribeHydrated = () => () => {};
+
 export function useAuthSession() {
-  const [session, setSession] = useState<AuthSession | null>(() => getCachedAuthSession());
+  // The session cache lives in sessionStorage, which the server cannot see.
+  // Reading it during the hydration render would give the client extra nav
+  // entries the server never produced, so React throws the markup away and
+  // re-renders — the mismatch behind issue #419's follow-up. It is read on the
+  // first post-hydration render instead, exactly like a fresh fetch would be.
+  const hydrated = useSyncExternalStore(subscribeHydrated, () => true, () => false);
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const cached = hydrated ? getCachedAuthSession() : null;
+  const resolved = session ?? cached;
 
   useEffect(() => {
     const sync = (event: Event) => {
@@ -111,5 +122,5 @@ export function useAuthSession() {
     setSession((previous) => sessionsEqual(previous, next) ? previous : next);
   }, []);
 
-  return { session, updateSession };
+  return { session: resolved, updateSession };
 }

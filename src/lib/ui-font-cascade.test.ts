@@ -18,6 +18,8 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const css = readFileSync(join(here, '..', 'app', 'globals.css'), 'utf8');
 const i18nSource = readFileSync(join(here, 'i18n.tsx'), 'utf8');
+// The locale list moved to `locale.ts` in issue #419 so the server can use it too.
+const localeSource = readFileSync(join(here, 'locale.ts'), 'utf8');
 
 /**
  * Font stack declared for `selector`, using the *last* declaration so the test
@@ -43,7 +45,7 @@ function escapeRegExp(value: string): string {
 }
 
 test('every locale the switcher offers has a matching <html lang> font rule', () => {
-  const locales = [...i18nSource.matchAll(/^\s*'?(ja|en|zh-CN|zh-TW)'?:\s*\{\s*label/gm)].map((m) => m[1]);
+  const locales = [...localeSource.matchAll(/^\s*'?(ja|en|zh-CN|zh-TW)'?:\s*\{\s*label/gm)].map((m) => m[1]);
   assert.deepEqual([...new Set(locales)].sort(), ['en', 'ja', 'zh-CN', 'zh-TW']);
 
   for (const locale of locales) {

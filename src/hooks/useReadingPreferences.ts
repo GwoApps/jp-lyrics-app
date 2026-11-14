@@ -2,45 +2,42 @@
 
 import { useEffect, useState } from 'react';
 import type { ReadingMode } from '@/lib/types';
+import { useStoredPreference } from '@/lib/browser-storage';
 
 /**
  * User reading preferences persisted to localStorage. Self-contained: no
  * dependency on the loaded song, so it can be used by any component that needs
  * the same reading controls (detail page, PiP, etc.).
+ *
+ * Every preference goes through `useStoredPreference`, so the server render and
+ * the hydration render both use the defaults and the stored value is adopted
+ * on the first post-hydration render (issue #419).
  */
 export function useReadingPreferences() {
-  const [readingMode, setReadingMode] = useState<ReadingMode>(() => {
-    if (typeof window === 'undefined') return 'furigana';
-    const saved = localStorage.getItem('jplrc-reading-mode');
-    return saved === 'original' ? 'original' : 'furigana';
-  });
-  const [romanizeFurigana, setRomanizeFurigana] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('jplrc-romanize-furigana') === 'true'
-      || localStorage.getItem('jplrc-reading-mode') === 'romaji';
-  });
-  const [showTranslation, setShowTranslation] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('jplrc-show-translation') === 'true';
-  });
-  const [disableVideoPiP, setDisableVideoPiP] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('jplrc-disable-video-pip') === 'true';
-  });
+  const [readingMode, setReadingMode] = useStoredPreference<ReadingMode>(
+    'jplrc-reading-mode',
+    (raw) => (raw === 'original' ? 'original' : 'furigana'),
+  );
+  // Furigana romanization used to be a `jplrc-reading-mode=romaji` value; keep
+  // honouring it so an old profile still reads the way it did.
+  const [romanizeFurigana, setRomanizeFurigana] = useStoredPreference(
+    'jplrc-romanize-furigana',
+    (raw) => raw === 'true',
+  );
+  const [legacyRomaji] = useStoredPreference('jplrc-reading-mode', (raw) => raw === 'romaji');
+  const [showTranslation, setShowTranslation] = useStoredPreference('jplrc-show-translation', (raw) => raw === 'true');
+  const [disableVideoPiP, setDisableVideoPiP] = useStoredPreference('jplrc-disable-video-pip', (raw) => raw === 'true');
   const [debug, setDebug] = useState(false);
-  const [fontSize, setFontSize] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('jplrc-font-size');
-      if (saved) { const n = parseInt(saved); if (n >= 14 && n <= 32) return n; }
-    }
-    return 20;
-  });
+  const [fontSize, setFontSize] = useStoredPreference('jplrc-font-size', (raw) => {
+    const size = raw ? parseInt(raw, 10) : NaN;
+    return size >= 14 && size <= 32 ? size : 20;
+  }, String);
 
-  useEffect(() => { localStorage.setItem('jplrc-font-size', String(fontSize)); }, [fontSize]);
-  useEffect(() => { localStorage.setItem('jplrc-reading-mode', readingMode); }, [readingMode]);
-  useEffect(() => { localStorage.setItem('jplrc-romanize-furigana', String(romanizeFurigana)); }, [romanizeFurigana]);
-  useEffect(() => { localStorage.setItem('jplrc-show-translation', String(showTranslation)); }, [showTranslation]);
-  useEffect(() => { localStorage.setItem('jplrc-disable-video-pip', String(disableVideoPiP)); }, [disableVideoPiP]);
+  // A `romaji` reading mode is the pre-existing way to ask for romanization.
+  const romanized = romanizeFurigana || legacyRomaji;
+  useEffect(() => {
+    if (legacyRomaji) setRomanizeFurigana(true);
+  }, [legacyRomaji, setRomanizeFurigana]);
 
   useEffect(() => {
     const onSyncedSetting = (event: Event) => {
@@ -49,12 +46,12 @@ export function useReadingPreferences() {
     };
     window.addEventListener('jplrc-disable-video-pip-change', onSyncedSetting);
     return () => window.removeEventListener('jplrc-disable-video-pip-change', onSyncedSetting);
-  }, []);
+  }, [setDisableVideoPiP]);
 
   return {
     readingMode,
     setReadingMode,
-    romanizeFurigana,
+    romanizeFurigana: romanized,
     setRomanizeFurigana,
     showTranslation,
     setShowTranslation,

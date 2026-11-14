@@ -22,7 +22,8 @@ import { useNowPlaying } from '@/hooks/useNowPlaying';
 import { useAuthSession } from '@/lib/auth-session';
 import { cacheSongCovers } from '@/lib/song-cover-cache';
 import { buildManualCreateUrl } from '@/lib/song-prefill';
-import { getCachedSongs, setCachedSongs } from '@/lib/song-list-cache';
+import { setCachedSongs, useCachedSongs } from '@/lib/song-list-cache';
+import { useStoredPreference } from '@/lib/browser-storage';
 import { requestSongList } from '@/lib/song-list-fetch';
 import { groupSongsByAlbum } from '@/lib/song-albums';
 import { noResultsMessage } from '@/lib/search-filter-a11y';
@@ -34,22 +35,17 @@ const EMPTY_SONG_IDS = new Set<string>();
 export type SongLibraryKind = 'songs' | 'albums';
 const viewModeKey = (listKind: SongLibraryKind) => `jplrc:${listKind}:view-mode`;
 
-function getSongViewMode(listKind: SongLibraryKind): SongViewMode {
-  if (typeof window === 'undefined') return 'list';
-  try {
-    const saved = window.localStorage.getItem(viewModeKey(listKind));
-    return saved === 'grid' ? saved : 'list';
-  } catch {
-    return 'list';
-  }
-}
+/** `grid` is the only stored value; anything else (or nothing) means `list`. */
+const parseSongViewMode = (raw: string | null): SongViewMode => (raw === 'grid' ? 'grid' : 'list');
 
 export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKind }) {
   const { t, bcp47 } = useI18n();
   const searchParams = useSearchParams();
-  const [initialSongs] = useState(() => getCachedSongs<SongItem>());
-  const [songs, setSongs] = useState<SongItem[]>(() => initialSongs ?? []);
-  const [loading, setLoading] = useState(() => initialSongs === null);
+  // The session cache is read after hydration: the server cannot see it, so
+  // seeding state from it during render would break the SSR markup (issue #419).
+  const cachedSongs = useCachedSongs<SongItem>();
+  const [songs, setSongs] = useState<SongItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const { session, updateSession } = useAuthSession();
@@ -82,7 +78,8 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
   const [importReview, setImportReview] = useState<ImportReviewState | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-  const [songViewMode, setSongViewMode] = useState<SongViewMode>(() => getSongViewMode(listKind));
+  // Hydration-safe: the stored mode is adopted after hydration (issue #419).
+  const [songViewMode, setSongViewMode] = useStoredPreference(viewModeKey(listKind), parseSongViewMode);
   const [collapsedAlbums, setCollapsedAlbums] = useState<Set<string>>(new Set());
   // Stable, SSR-safe prefix for the album group header/content id pairs (#318).
   const albumGroupIdPrefix = useId();
@@ -201,10 +198,20 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
     }
   }, [searchParams]);
 
+  // Adopt the session cache once, on the first post-hydration render, so a
+  // returning reader sees the previous list instead of the loading skeleton.
+  const adoptedCache = useRef(false);
   useEffect(() => {
-    if (initialSongs) cacheSongCovers(initialSongs);
+    if (adoptedCache.current || !cachedSongs) return;
+    adoptedCache.current = true;
+    cacheSongCovers(cachedSongs);
+    setSongs((previous) => (previous.length > 0 ? previous : cachedSongs));
+    setLoading(false);
+  }, [cachedSongs]);
+
+  useEffect(() => {
     void requestSongList('all').then(applySongListResult);
-  }, [initialSongs, applySongListResult]);
+  }, [applySongListResult]);
 
   useEffect(() => {
     if (!currentUser?.email) return;
@@ -563,12 +570,8 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
     previousSongRectsRef.current = currentRects;
   }, [songViewMode, visibleSongIds]);
 
-  const changeSongViewMode = (mode: SongViewMode) => {
-    setSongViewMode(mode);
-    try {
-      localStorage.setItem(viewModeKey(listKind), mode);
-    } catch {}
-  };
+  // Persisting is `useStoredPreference`'s job, so there is one writer only.
+  const changeSongViewMode = setSongViewMode;
 
   const renderSongCard = (song: SongItem, variant: 'list' | 'grid', hideCover = false) => {
     const isPlaying = nowPlaying?.is_playing && isSongPlaying(song, nowPlaying.track, currentUser?.email);

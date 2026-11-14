@@ -48,8 +48,8 @@ import { trackIdentity } from '@/lib/spotify-seek-override';
 import type { CoverColor } from '@/lib/cover-color';
 import type { CoverPalette } from '@/lib/cover-color';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
-import { getCachedSongCover, cacheSongCover, clearCachedSongPalette } from '@/lib/song-cover-cache';
-import { getCachedSong } from '@/lib/song-list-cache';
+import { useCachedSongCover, cacheSongCover, clearCachedSongPalette } from '@/lib/song-cover-cache';
+import { useCachedSong } from '@/lib/song-list-cache';
 import type { FuriganaLine } from '@/lib/types';
 import { useAuthSession } from '@/lib/auth-session';
 import type { SyncRefs } from '@/hooks/useSpotifySync';
@@ -161,7 +161,8 @@ export default function SongViewPage() {
   const params = useParams();
   const { t, bcp47 } = useI18n();
   const id = params?.id as string;
-  const cachedSong = useMemo(() => getCachedSong(id), [id]);
+  // Post-hydration only: sessionStorage is invisible to the server (issue #419).
+  const cachedSong = useCachedSong(id);
 
   // Data + handlers hook
   const data = useSongData(id);
@@ -327,8 +328,12 @@ export default function SongViewPage() {
   const videoPiPSupported = useSyncExternalStore(subscribeStaticCapability, getVideoPiPSupport, () => false);
   const pipSupported = documentPiPSupported || (!data.disableVideoPiP && videoPiPSupported);
 
-  // Start with the list's cached cover so the shared element has real visual content on its first render.
-  const [fallbackCoverUrl, setFallbackCoverUrl] = useState<string | null>(() => getCachedSongCover(id));
+  // Start with the list's cached cover so the shared element has real visual
+  // content from the first rendered frame. Read after hydration, since
+  // localStorage takes no part in the server render (issue #419).
+  const cachedCoverUrl = useCachedSongCover(id);
+  const [fetchedCoverUrl, setFetchedCoverUrl] = useState<string | null>(null);
+  const fallbackCoverUrl = fetchedCoverUrl ?? cachedCoverUrl;
   const [showSongInfo, setShowSongInfo] = useState(false);
   const [showDownloadDialog, setShowDownloadDialog] = useState(false);
   // The favorite is otherwise only reachable from the home list's star; the
@@ -401,7 +406,7 @@ export default function SongViewPage() {
       .then((url) => {
         if (url) {
           cacheSongCover(id, url);
-          setFallbackCoverUrl(url);
+          setFetchedCoverUrl(url);
         }
       })
       .catch(() => {});

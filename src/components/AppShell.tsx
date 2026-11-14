@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Link as TransitionLink } from '@/components/navigation/ViewTransitions';
 import './navigation/library-navigation.css';
 import { I18nProvider, useI18n } from '@/lib/i18n';
+import type { Locale } from '@/lib/locale';
 import { ThemeProvider, useTheme } from '@/lib/theme';
 import { useAuthSession } from '@/lib/auth-session';
 import { fetchAndSyncSettings } from '@/lib/sync-settings';
@@ -129,14 +130,21 @@ function Nav() {
   );
 }
 
-export default function AppShell({ children }: { children: React.ReactNode }) {
+export default function AppShell({
+  children,
+  initialLocale,
+}: {
+  children: React.ReactNode;
+  /** Locale the server rendered with, from the `jplrc-locale` cookie (issue #419). */
+  initialLocale?: Locale;
+}) {
   const pathname = usePathname();
   // The share page owns its responsive gutters; avoid nesting the global page padding.
   const isSharePage = /^\/songs\/[^/]+\/share\/?$/.test(pathname || '');
 
   return (
     <ThemeProvider>
-      <I18nProvider>
+      <I18nProvider initialLocale={initialLocale}>
         <AppMetadataSync />
         <BootstrapSettingsSync />
         <ServiceWorkerUpdate />

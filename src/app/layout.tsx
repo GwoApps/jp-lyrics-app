@@ -1,17 +1,18 @@
 import type { Metadata, Viewport } from 'next';
+import { cookies, headers } from 'next/headers';
 import './globals.css';
 import { ViewTransitions } from '@/components/navigation/ViewTransitions';
 import AppShell from '@/components/AppShell';
 import { APP_ICON_REVISION } from '@/lib/app-icon';
 import { APP_NAME_NEUTRAL, APP_NAME_SHORT, APP_DESCRIPTION } from '@/lib/app-identity';
 import GoogleFontsStylesheet from '@/components/GoogleFontsStylesheet';
+import { asLocale, LOCALE_COOKIE, localeFromLanguages, type Locale } from '@/lib/locale';
 
 /**
- * Language-neutral shell metadata. The active locale lives in `localStorage`,
- * which the server never sees, so naming the app in one language here would
- * show that language to everyone. `AppMetadataSync` swaps in `common.appName`
- * right after hydration (issue #273); `public/manifest.json` carries the same
- * neutral name for install surfaces.
+ * Language-neutral shell metadata. `metadata` cannot await the request, so it
+ * names the app in one language and `AppMetadataSync` swaps in
+ * `common.appName` right after hydration (issue #273); `public/manifest.json`
+ * carries the same neutral name for install surfaces.
  */
 export const metadata: Metadata = {
   title: APP_NAME_NEUTRAL,
@@ -40,13 +41,50 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 };
 
-export default function RootLayout({
+/**
+ * The reader's locale for this request (issue #419). Reading it on the server is
+ * what lets the first byte carry real text; without it the tree had to stay
+ * empty until hydration, so every cold start began with a blank page.
+ *
+ * - `jplrc-locale` cookie: the reader's own choice, mirrored there by
+ *   `I18nProvider` so a *second* visit never has to guess.
+ * - `Accept-Language`: the browser's preference, used for the first visit —
+ *   it is exactly what `navigator.languages` would have reported client-side,
+ *   so the server and `I18nProvider`'s reconciler agree and there is no flash.
+ *
+ * Reading cookies/headers opts the route into dynamic rendering. That is
+ * already true for every song route (they read the session), the shell is cheap
+ * to render, and the service worker keeps navigations network-first — so the
+ * trade is a per-request HTML render for a first paint that has content in it.
+ */
+async function readRequestLocale(): Promise<Locale> {
+  const [cookieStore, headerStore] = await Promise.all([cookies(), headers()]);
+  const chosen = cookieStore.get(LOCALE_COOKIE)?.value;
+  if (chosen && asLocale(chosen) === chosen) return asLocale(chosen);
+  return localeFromLanguages(parseAcceptLanguage(headerStore.get('accept-language')));
+}
+
+/**
+ * `Accept-Language` → tags in preference order, dropping the `;q=` weights.
+ * Good enough for picking among four languages; a full q-sort would not change
+ * the answer for any real browser request.
+ */
+function parseAcceptLanguage(header: string | null): string[] {
+  if (!header) return [];
+  return header
+    .split(',')
+    .map((part) => part.split(';')[0].trim())
+    .filter(Boolean);
+}
+
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const locale = await readRequestLocale();
   return (
-    <html lang="zh-CN">
+    <html lang={locale}>
       <head>
         <meta name="theme-color" content="#0a0a0a" id="theme-color-meta" />
         <script dangerouslySetInnerHTML={{ __html: `
@@ -67,7 +105,7 @@ export default function RootLayout({
       </head>
       <body>
         <ViewTransitions>
-          <AppShell>{children}</AppShell>
+          <AppShell initialLocale={locale}>{children}</AppShell>
         </ViewTransitions>
       </body>
     </html>

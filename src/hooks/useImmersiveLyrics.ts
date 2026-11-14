@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { animateSmoothScroll, cancelSmoothScroll } from '@/lib/scroll-ease';
+import { useStoredPreference } from '@/lib/browser-storage';
 import {
   centeredLyricScrollTop, isLyricsView, lyricsViewUrl,
   LYRIC_FOLLOW_RESUME_MS, shouldFollowImmersiveLyrics,
@@ -25,19 +26,15 @@ export function useImmersiveLyrics(
   const [active, setActive] = useState(false);
   const [browserFullscreen, setBrowserFullscreen] = useState(false);
   const [manualBrowsing, setManualBrowsing] = useState(false);
-  const [fontStep, setFontStep] = useState(() => {
-    try {
-      return parseImmersiveFontStep(typeof window === 'undefined' ? null : localStorage.getItem(IMMERSIVE_FONT_STORAGE_KEY));
-    } catch {
-      return parseImmersiveFontStep(null);
-    }
-  });
-  useEffect(() => {
-    try { localStorage.setItem(IMMERSIVE_FONT_STORAGE_KEY, String(fontStep)); } catch { /* Storage may be unavailable. */ }
-  }, [fontStep]);
+  // Reads localStorage only after hydration, so the SSR markup and the first
+  // client render agree (issue #419).
+  const [fontStep, setFontStep] = useStoredPreference(
+    IMMERSIVE_FONT_STORAGE_KEY,
+    parseImmersiveFontStep,
+  );
   const changeFontStep = useCallback((direction: -1 | 1) => {
     setFontStep((step) => Math.max(0, Math.min(IMMERSIVE_FONT_SIZES.length - 1, step + direction)));
-  }, []);
+  }, [setFontStep]);
   const activeRef = useRef(false);
   const ownedFullscreen = useRef(false);
   const manualUntil = useRef(0);
