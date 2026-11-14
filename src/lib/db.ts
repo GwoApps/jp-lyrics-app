@@ -21,6 +21,7 @@
 import { type SQLiteTable, type SQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { sql, eq, and, or, like, inArray, desc, asc, isNull, isNotNull } from 'drizzle-orm';
 import * as schema from './schema.ts';
+import { ensureLyricsEolHealed } from './lyrics-eol-repair.ts';
 
 // Use `any` so getDB() stays synchronous — the actual Drizzle type is the same
 // regardless of driver, and we don't want to expose the async init type.
@@ -62,7 +63,12 @@ export function getDB(): DrizzleDB {
   if (_isD1) {
     const binding = getD1Binding()!;
     const { drizzle } = require('drizzle-orm/d1') as typeof import('drizzle-orm/d1');
-    return drizzle(binding as any, { schema });
+    const db = drizzle(binding as any, { schema });
+    // D1 never runs the Node startup migrator below, so the CRLF sweep has to be
+    // scheduled from a request instead (issue #421). It is memoised per isolate,
+    // and `waitUntil` keeps it alive past the response this request returns.
+    scheduleLyricsEolHeal(db);
+    return db;
   }
 
   // Singleton for Turso / local (initialised eagerly below via top-level await)
@@ -105,6 +111,28 @@ if (_d1) {
     const client = libsql.createClient({ url: 'file:data/local.db', timeout: 15_000 });
     _db = drizzle(client, { schema });
   }
+}
+
+let healScheduled = false;
+
+/**
+ * Kick off the legacy-CRLF lyrics sweep on the first D1 request of an isolate.
+ *
+ * D1 never runs the Node startup migrator below, so the backfill has to be
+ * scheduled from a request instead (issue #421). Without `waitUntil` the
+ * promise would be cancelled when the response returns, so the sweep is only
+ * started once per isolate and only where the runtime context can keep it
+ * alive; the write paths fold their own input anyway, which keeps this a pure
+ * backfill of legacy rows.
+ */
+function scheduleLyricsEolHeal(db: any) {
+  if (healScheduled) return;
+  healScheduled = true;
+  try {
+    const ctx = (globalThis as any)[Symbol.for('__cloudflare-context__')]?.ctx;
+    const heal = ensureLyricsEolHealed(db);
+    if (typeof ctx?.waitUntil === 'function') ctx.waitUntil(heal);
+  } catch { /* no request context — nothing to schedule */ }
 }
 
 // --- Schema migration via Drizzle (runs once for non-D1 backends) ---
@@ -339,6 +367,10 @@ async function runMigrations() {
 
 // Block module initialisation until schema is ready; route handlers must never race migrations.
 await runMigrations();
+
+// One-shot backfill of legacy CRLF lyrics (issue #421): runs after the schema is
+// known to exist, is a no-op on a clean database, and never throws.
+if (!_isD1) await ensureLyricsEolHealed(getDB());
 
 // Safety net for databases that are already fully migrated (their journal has
 // every entry, so `runMigrations()` had nothing to do) but whose slot-identity

@@ -436,6 +436,25 @@ table/column list or run ad-hoc `ALTER TABLE` statements from an old guide.
   database before deploying the Worker. Do not replay old migrations against
   a database initialized with the latest schema.
 
+### Lyrics line endings heal themselves
+
+`lyrics_raw` / `lyrics_synced` are read back with a plain `split('\n')` by every
+downstream reader (furigana validation, translation row indices, export,
+rendering), so both columns must only ever hold LF. Every write path folds
+`\r\n` / `\r` to `\n` (`normalizeLyricsEol()` in
+[`src/lib/lyrics-content.ts`](src/lib/lyrics-content.ts)), and rows stored before
+that fold existed are repaired by the app itself — **no migration script to
+run**: [`src/lib/lyrics-eol-repair.ts`](src/lib/lyrics-eol-repair.ts) scans for
+rows containing `\r`, folds `lyrics_raw` / `lyrics_synced` and re-shapes the
+stored furigana segments in the same transaction-free compare-and-set per row
+(a cache that no longer reconstructs the folded text is dropped, so it is
+regenerated). It is a no-op on a clean database and never bumps `updated_at`.
+
+- **Docker / Node / Turso:** runs once at startup, right after the migration
+  journal is applied.
+- **Cloudflare D1:** runs once per isolate on the first request that opens the
+  database, kept alive with `ctx.waitUntil()`.
+
 ### Time columns are UTC
 
 Every `*_at` column stores an absolute UTC instant

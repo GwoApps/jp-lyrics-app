@@ -2,6 +2,7 @@ import { or, sql } from 'drizzle-orm';
 import type { CoverPaletteJson } from '@/lib/types';
 import { manualGlossaryEntries, type GlossaryEntry } from '@/lib/lyrics-glossary';
 import { resolveLrcTextUpdate } from '@/lib/lrc';
+import { normalizeLyricsEol } from '@/lib/lyrics-content';
 import { nowUtcSql } from './db-time-sql.ts';
 
 /**
@@ -34,8 +35,15 @@ export function buildSongUpdateSet(
     lyrics_glossary?: GlossaryEntry[] | null;
   },
 ): Record<string, unknown> {
-  const { title, artist, cover_palette, reading_scheme, reading_scheme_confirmed, lyrics_raw, lyrics_synced, clear_furigana, clear_translation, clear_reasoning, clear_glossary, lyrics_glossary } = body;
+  const { title, artist, cover_palette, reading_scheme, reading_scheme_confirmed, clear_furigana, clear_translation, clear_reasoning, clear_glossary, lyrics_glossary } = body;
   const set: Record<string, unknown> = {};
+
+  // This is the ONE place that decides what lands in the lyrics columns, so the
+  // EOL fold belongs here rather than in each caller: hand-pasted CRLF text
+  // (song editor, Linkcore import, timeline save) must reach the database in
+  // the LF shape every reader assumes (`lyrics_raw.split('\n')`, issue #421).
+  const lyrics_raw = typeof body.lyrics_raw === 'string' ? normalizeLyricsEol(body.lyrics_raw) : body.lyrics_raw;
+  const lyrics_synced = typeof body.lyrics_synced === 'string' ? normalizeLyricsEol(body.lyrics_synced) : body.lyrics_synced;
 
   // --- Independent fields: write only when present in the payload ---
   if (title !== undefined) set.title = title;

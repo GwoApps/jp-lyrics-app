@@ -5,6 +5,7 @@ import { parseLrc, findLrcConflicts } from '@/lib/lrc';
 import { getAuthUser } from '@/lib/auth';
 import { getSpotifyTrack } from '@/lib/spotify';
 import { parseJsonBody } from '@/lib/admin';
+import { normalizeLyricsEol } from '@/lib/lyrics-content';
 import { songVisibilityWhere, SONGS_S_COLUMNS } from '@/lib/song-visibility';
 import type { SQL } from 'drizzle-orm';
 import type { SongListItem } from '@/lib/types';
@@ -143,9 +144,12 @@ export async function POST(request: NextRequest) {
     ? await getSpotifyTrack(user.email, requestedSpotifyTrackId)
     : null;
 
-  // If LRC synced lyrics provided, strip timestamps to get raw text
-  let rawLyrics = lyrics_raw || '';
-  const syncedLyrics = lyrics_synced || '';
+  // Every lyric write folds its line terminators to LF, so a hand-pasted CRLF
+  // document cannot create another row that no reader can line-index (issue
+  // #421). The fold happens here, before the plain text is derived from the LRC,
+  // because that derivation also splits on `\n`.
+  const syncedLyrics = normalizeLyricsEol(typeof lyrics_synced === 'string' ? lyrics_synced : '');
+  let rawLyrics = normalizeLyricsEol(typeof lyrics_raw === 'string' ? lyrics_raw : '');
   if (syncedLyrics && !rawLyrics) {
     const parsed = parseLrc(syncedLyrics);
     rawLyrics = parsed.map((l) => l.text).join('\n');
