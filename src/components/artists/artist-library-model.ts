@@ -1,4 +1,5 @@
 import { groupArtistAlbums, splitArtists } from '@/lib/artists';
+import { matchesSearchTerms, searchTerms, songSearchText } from '@/lib/search-normalize';
 import { formatDbDate, parseDbTimestamp } from '@/lib/db-time';
 import type { SongItem } from '@/lib/types';
 
@@ -34,11 +35,12 @@ export const qualityState = (flag: unknown): Exclude<QualityFilter, 'all'> => fl
 export function defaultLibraryView(): LibraryView {
   return { tab: 'songs', query: '', filtersOpen: false, sort: 'name', credit: 'all', review: 'all', lyrics: 'all', timeline: 'all', furigana: 'all', translation: 'all', expandedAlbumKeys: [] };
 }
-const normalize = (value: string) => value.normalize('NFKC').toLocaleLowerCase().trim();
 const timestamp = (value: string | null | undefined) => parseDbTimestamp(value)?.getTime() ?? -Infinity;
 
 export function filterArtistSongs(songs: readonly ArtistLibrarySong[], view: LibraryView, locale: string): ArtistLibrarySong[] {
-  const terms = normalize(view.query).split(/\s+/).filter(Boolean);
+  // Same normalization as the home list (#426): NFKC + kana folding + lowercase,
+  // whitespace kept so terms AND together.
+  const terms = searchTerms(view.query);
   const collator = new Intl.Collator(locale, { numeric: true, sensitivity: 'base' });
   return songs.filter((song) => {
     const credits = splitArtists(song.artist);
@@ -46,8 +48,7 @@ export function filterArtistSongs(songs: readonly ArtistLibrarySong[], view: Lib
     if (view.credit === 'collab' && credits.length <= 1) return false;
     if (view.review === 'needsReview' && song.lyrics_needs_review !== 1) return false;
     if (qualityKinds.some((kind) => view[kind] !== 'all' && qualityState(song[qualityFields[kind]]) !== view[kind])) return false;
-    const haystack = normalize([song.title, song.spotify_album ?? '', song.artist].join(' '));
-    return terms.every((term) => haystack.includes(term));
+    return matchesSearchTerms(songSearchText(song), terms);
   }).sort((a, b) => {
     if (view.sort !== 'name') {
       const field = view.sort === 'created' ? 'created_at' : 'updated_at';

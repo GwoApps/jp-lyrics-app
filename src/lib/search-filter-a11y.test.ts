@@ -64,11 +64,22 @@ test('mobile toolbar keeps the applied search visible and clearable after collap
 test('list filtering and the empty state both key off the trimmed query', () => {
   const page = read('components/home/SongLibraryPage.tsx');
   assert.ok(page.includes('const appliedSearch = searchQuery.trim();'));
-  assert.match(page, /if \(appliedSearch\) \{\s*const q = appliedSearch\.toLowerCase\(\);/);
+  // Terms are normalized (#426), not lowered inline: NFKC + kana folding live
+  // in one helper shared with the artist pages.
+  assert.ok(page.includes('const searchTermList = searchTerms(appliedSearch);'));
+  assert.ok(page.includes('matchesSearchTerms(songSearchText(s), searchTermList)'));
   // The applied category filter is handed to the empty state as well (#392).
   assert.ok(page.includes('noResultsMessage(listKind, appliedSearch, t, activeCollectionName)'));
   // Empty state offers a clear action next to the explanation.
   assert.match(page, /\{appliedSearch && \([\s\S]*?setSearchQuery\(''\)/);
+});
+
+test('the home filter never narrows the haystack by view, and never compares raw text (#426)', () => {
+  const page = read('components/home/SongLibraryPage.tsx');
+  // Album name counts in the song list too: the same query must not work on
+  // /albums and fail on /.
+  assert.ok(!page.includes("listKind === 'albums' && !!s.spotify_album"));
+  assert.ok(!/\.toLowerCase\(\)\.includes\(/.test(page));
 });
 
 test('an empty category filter gets its own copy and an exit, not the search-empty state', () => {

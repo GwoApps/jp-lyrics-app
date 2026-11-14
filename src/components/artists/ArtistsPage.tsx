@@ -4,6 +4,7 @@ import { Link } from '@/components/navigation/ViewTransitions';
 import { Search, UsersRound, X } from 'lucide-react';
 import { useState } from 'react';
 import { artistHref } from '@/lib/artists';
+import { matchesSearchTerms, normalizeSearchText, searchTerms } from '@/lib/search-normalize';
 import { useI18n } from '@/lib/i18n';
 import LazyArtistAvatar from './ArtistAvatar';
 import { useArtistResource, validArtistList } from './useArtistResource';
@@ -13,9 +14,14 @@ export default function ArtistsPage() {
   const { t } = useI18n();
   const { state, retry } = useArtistResource('/api/artists', validArtistList);
   const [query, setQuery] = useState('');
-  const search = query.normalize('NFKC').trim().toLocaleLowerCase();
+  // Same normalization as the song lists (#426): 「アイミョン」 and 「あいみょん」 are
+  // the same artist, and multi-word queries tighten instead of widening.
+  const terms = searchTerms(query);
+  const hasQuery = terms.length > 0;
   const artists = state.status === 'ready' ? state.data.artists : [];
-  const filtered = artists.filter((artist) => artist.name.normalize('NFKC').toLocaleLowerCase().includes(search));
+  const filtered = hasQuery
+    ? artists.filter((artist) => matchesSearchTerms(normalizeSearchText(artist.name), terms))
+    : artists;
 
   return (
     <div className="artists-page" data-artist-directory-state={state.status}>
@@ -50,8 +56,8 @@ export default function ArtistsPage() {
       ) : (
         <div className="artists-state" role="status">
           <UsersRound size={28} aria-hidden="true" />
-          <p>{t(search ? 'artists.noMatches' : 'artists.empty')}</p>
-          <button type="button" className="artists-button" onClick={search ? () => setQuery('') : retry}>{t(search ? 'common.clear' : 'common.reload')}</button>
+          <p>{t(hasQuery ? 'artists.noMatches' : 'artists.empty')}</p>
+          <button type="button" className="artists-button" onClick={hasQuery ? () => setQuery('') : retry}>{t(hasQuery ? 'common.clear' : 'common.reload')}</button>
         </div>
       ))}
     </div>

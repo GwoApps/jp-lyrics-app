@@ -10,6 +10,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import { groupArtistAlbums, splitArtists } from '@/lib/artists';
 import { formatDbDate, formatDbDateTime, parseDbTimestamp } from '@/lib/db-time';
+import { matchesSearchTerms, normalizeSearchText, searchTerms, songSearchText } from '@/lib/search-normalize';
 
 const require = createRequire(import.meta.url);
 const directory = dirname(fileURLToPath(import.meta.url));
@@ -30,6 +31,7 @@ function render(resource: object) {
       } };
       if (specifier === '@/lib/i18n') return { useI18n: () => ({ t: (key: string) => key, locale: 'en' }) };
       if (specifier === '@/lib/db-time') return { formatDbDate, formatDbDateTime, parseDbTimestamp };
+      if (specifier === '@/lib/search-normalize') return { matchesSearchTerms, normalizeSearchText, searchTerms, songSearchText };
       if (specifier === '@/lib/artists') return { groupArtistAlbums, splitArtists };
       if (specifier === '@/lib/auth-session') return { useAuthSession: () => ({ session: { user: null } }), refreshAuthSession: () => Promise.resolve() };
       if (specifier === '@/components/home/FavoriteCategoriesDialog') return { __esModule: true, default: () => null };

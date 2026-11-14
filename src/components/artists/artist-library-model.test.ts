@@ -46,6 +46,20 @@ test('query searches title, album and full artist credits with normalized multiw
   assert.deepEqual(ids(filterArtistSongs(songs, { ...defaultLibraryView(), query: 'not found' }, 'en')), []);
 });
 
+test('kana script and width do not split the query from the data (#426)', () => {
+  const kana = [
+    makeSong('kata', { title: 'サヨナラのキス', artist: 'アイミョン', spotify_album: 'Ｄｉｖｅ ｉＮ' }),
+    makeSong('hira', { title: 'さよならfrequency', artist: 'あいみょん' }),
+  ];
+  // Katakana query, hiragana title — and the other way round.
+  const matches = (query: string) => ids(filterArtistSongs(kana, { ...defaultLibraryView(), query }, 'en')).sort();
+  assert.deepEqual(matches('サヨナラ'), ['hira', 'kata']);
+  assert.deepEqual(matches('さよなら'), ['hira', 'kata']);
+  // Full-width album name typed by a Japanese IME still reaches the song.
+  assert.deepEqual(matches('dive in'), ['kata']);
+  assert.deepEqual(matches('ｄｉｖｅ'), ['kata']);
+});
+
 test('credit and review filters are independent and reuse canonical comma-separated credits', () => {
   assert.deepEqual(ids(filterArtistSongs(songs, { ...defaultLibraryView(), credit: 'solo' }, 'en')), ['a', 'c', 'd']);
   assert.deepEqual(ids(filterArtistSongs(songs, { ...defaultLibraryView(), credit: 'collab', review: 'needsReview' }, 'en')), ['b']);

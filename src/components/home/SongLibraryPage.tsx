@@ -27,6 +27,7 @@ import { useStoredPreference } from '@/lib/browser-storage';
 import { requestSongList } from '@/lib/song-list-fetch';
 import { buildAlbumList, type AlbumList } from '@/lib/song-albums';
 import { noResultsMessage } from '@/lib/search-filter-a11y';
+import { matchesSearchTerms, searchTerms, songSearchText } from '@/lib/search-normalize';
 import { clearCollectionFilterLabel } from '@/lib/song-card-a11y';
 
 type ToastState = { type: 'success' | 'error'; msg: string; actionSong?: { id: string; title: string } } | null;
@@ -502,14 +503,15 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
   // Whitespace-only input is not a filter: the toolbar hides its chip for it, so
   // filtering on it would resurrect the "invisible filter" this issue is about.
   const appliedSearch = searchQuery.trim();
+  // Comparison only (#426): NFKC + kana folding + lowercase on both sides, so
+  // 「サヨナラ」 finds 「さよなら」 and 「ｓｅａｇｌａｓｓ」 finds 「seaglass」. Album name is
+  // part of the haystack in both views — it was only searched in the album list,
+  // which made the identical query work on one page and fail on the other.
+  const searchTermList = searchTerms(appliedSearch);
   const filteredSongs = songs.filter((s) => {
     if (currentUser && favoritesOnly && !visibleFavorites.has(s.id)) return false;
     if (visibleCollection && !visibleCollectionSongs.has(s.id)) return false;
-    if (appliedSearch) {
-      const q = appliedSearch.toLowerCase();
-      return s.title.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q)
-        || (listKind === 'albums' && !!s.spotify_album?.toLowerCase().includes(q));
-    }
+    if (searchTermList.length > 0) return matchesSearchTerms(songSearchText(s), searchTermList);
     return true;
   });
   const toggleAlbumCollapse = useCallback((key: string) => {

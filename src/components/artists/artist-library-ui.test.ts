@@ -10,6 +10,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import * as artists from '@/lib/artists';
 import { formatDbDate, formatDbDateTime, parseDbTimestamp } from '@/lib/db-time';
+import { matchesSearchTerms, normalizeSearchText, searchTerms, songSearchText } from '@/lib/search-normalize';
 import { defaultLibraryView, type ArtistLibrarySong, type LibraryView } from './artist-library-model.ts';
 
 const require = createRequire(import.meta.url);
@@ -37,6 +38,7 @@ function harness(options: { view?: LibraryView; locale?: string; signedIn?: bool
       if (specifier.endsWith('.css')) return {};
       if (specifier === '@/lib/i18n') return { useI18n: () => ({ t, locale: options.locale ?? 'en' }) };
       if (specifier === '@/lib/db-time') return { formatDbDate, formatDbDateTime, parseDbTimestamp };
+      if (specifier === '@/lib/search-normalize') return { matchesSearchTerms, normalizeSearchText, searchTerms, songSearchText };
       if (specifier === '@/lib/artists') return artists;
       if (specifier === '@/lib/auth-session') return { useAuthSession: () => ({ session: { user: options.signedIn === false ? null : { email: 'test@example.test' } } }), refreshAuthSession: async () => null };
       if (specifier === './useArtistResource') return { useArtistResource: () => ({ state: resource, retry() {} }) };
