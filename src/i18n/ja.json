@@ -277,6 +277,8 @@
     "furiganaLoadFailed": "注音の読み込みに失敗しました。ネットワークを確認してください。歌詞テキストは表示できます。",
     "furiganaRetry": "再試行",
     "noLyricsSimple": "歌詞がありません",
+    "noLyricsNotFoundTitle": "歌詞が見つかりません",
+    "noLyricsNotFoundHint": "どの歌詞ソースからもこの曲の歌詞が返りませんでした。インストゥルメンタルや間奏かもしれません。もう一度同期するか、手動で入力できます。",
     "noLyricsHint": "この曲にはまだ歌詞がありません。オンラインから同期するか、手動で追加できます。",
     "noLyricsWaiting": "作者による歌詞の追加をお待ちください。",
     "noLyricsSync": "歌詞を同期",

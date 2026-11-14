@@ -277,6 +277,8 @@
     "furiganaLoadFailed": "注音加载失败，请检查网络。歌词文本仍可显示。",
     "furiganaRetry": "重试",
     "noLyricsSimple": "没有歌词",
+    "noLyricsNotFoundTitle": "搜索不到歌词",
+    "noLyricsNotFoundHint": "几个歌词源都没有返回这首歌的歌词，可能是纯音乐或间奏。可以再同步一次，或直接手动录入。",
     "noLyricsHint": "这首歌还没有歌词，可以同步在线歌词或手动编辑补充。",
     "noLyricsWaiting": "等待作者补充歌词。",
     "noLyricsSync": "同步歌词",

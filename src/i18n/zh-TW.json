@@ -277,6 +277,8 @@
     "furiganaLoadFailed": "注音載入失敗，請檢查網路。歌詞文字仍可顯示。",
     "furiganaRetry": "重試",
     "noLyricsSimple": "沒有歌詞",
+    "noLyricsNotFoundTitle": "搜尋不到歌詞",
+    "noLyricsNotFoundHint": "幾個歌詞來源都沒有回傳這首歌的歌詞，可能是純音樂或間奏。可以再同步一次，或直接手動輸入。",
     "noLyricsHint": "這首歌還沒有歌詞，可以同步線上歌詞或手動編輯補充。",
     "noLyricsWaiting": "等待作者補充歌詞。",
     "noLyricsSync": "同步歌詞",

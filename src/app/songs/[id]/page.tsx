@@ -33,6 +33,7 @@ import { useSimulatedPlayback } from '@/hooks/useSimulatedPlayback';
 import { previewTimeline } from '@/lib/simulated-playback';
 import Dialog from '@/components/ui/dialog';
 import { isEmptyAfterTrim } from '@/lib/lyrics-export';
+import { emptyLyricsReason, hasLyricsContent } from '@/lib/empty-lyrics';
 import SpotifyLoginButton from '@/components/SpotifyLoginButton';
 import { useI18n } from '@/lib/i18n';
 import { fmtMs, fmtTime, findActiveLine } from '@/lib/lrc';
@@ -550,6 +551,11 @@ export default function SongViewPage() {
   const { song, furiganaLines, syncLines, lineTimestamps } = data;
   const canEdit = song?.permissions?.can_edit === true;
   const glossary = parseLyricsGlossary(song?.lyrics_glossary);
+  // Issue #420: branch on the lyric text, never on `furiganaLines.length` —
+  // `createdPlainFuriganaLines('')` yields one empty line, so an empty song used
+  // to render a blank panel and skip the "no lyrics" state entirely.
+  const hasLyrics = hasLyricsContent(song?.lyrics_raw);
+  const emptyReason = emptyLyricsReason(song);
   const lyricsSourceKey = song ? LYRICS_SOURCE_KEYS[song.lyrics_source] : undefined;
   const lyricsSourceLabel = song ? (lyricsSourceKey ? t(lyricsSourceKey) : song.lyrics_source) : '';
   const { spotify, syncState, resumeSync, activeLine, isSameSong, followPlaying, setFollowPlaying, pipWindowRef, playbackMsRef } = sync;
@@ -815,7 +821,7 @@ export default function SongViewPage() {
               )}
             </div>
           </div>
-          {furiganaLines.length > 0 && (
+          {hasLyrics && furiganaLines.length > 0 && (
             /* Icon-only so the entry control does not push the title aside on a phone. */
             <button type="button" onClick={enterImmersive} ref={immersiveTriggerRef}
               className="sm:hidden ml-auto inline-flex h-10 w-10 shrink-0 self-start items-center justify-center rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)]"
@@ -844,13 +850,13 @@ export default function SongViewPage() {
                 },
               ]}
             />
-            {furiganaLines.length > 0 && (
+            {hasLyrics && furiganaLines.length > 0 && (
               <button type="button" onClick={enterImmersive} ref={immersiveTriggerRef} className={btnCls()}
                 aria-label={t('song.immersiveEnter')} title={t('song.immersiveEnter')}>
                 <Maximize2 className="h-4 w-4" />
               </button>
             )}
-            {furiganaLines.length > 0 && pipSupported && (
+            {hasLyrics && furiganaLines.length > 0 && pipSupported && (
               <button
                 onClick={handleOpenPiP}
                 className={btnCls()}
@@ -1095,7 +1101,7 @@ export default function SongViewPage() {
             onKeyDown={(event) => {
               if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) immersive.noteManualScroll();
             }}>
-            {furiganaLines.length > 0 ? (
+            {hasLyrics && furiganaLines.length > 0 ? (
               furiganaLines.map((line, i) => (
                 <div key={i} ref={(el) => { lineRefs.current[i] = el; }}
                   data-lyric-distance={immersive.active && immersiveSynced ? Math.min(2, Math.abs(i - activeLine)) : undefined}
@@ -1145,7 +1151,12 @@ export default function SongViewPage() {
               </div>
             ) : (
               <div className="flex flex-col items-center gap-3 py-10 text-center">
-                <p className="text-sm text-[var(--muted-foreground)]">{t('song.noLyricsSimple')}</p>
+                <p className="text-sm font-medium text-[var(--foreground)]">
+                  {emptyReason === 'not-found' ? t('song.noLyricsNotFoundTitle') : t('song.noLyricsSimple')}
+                </p>
+                <p className="max-w-sm text-xs leading-relaxed text-[var(--muted-foreground)]">
+                  {emptyReason === 'not-found' ? t('song.noLyricsNotFoundHint') : t('song.noLyricsHint')}
+                </p>
                 {canEdit && !immersive.active ? (
                   <div className="flex flex-wrap items-center justify-center gap-2">
                     <button
@@ -1252,7 +1263,7 @@ export default function SongViewPage() {
       {/* Download dialog — replaces the previous three export menu items. */}
       <DownloadDialog open={showDownloadDialog}
           songId={id}
-          hasReadingData={furiganaLines.length > 0}
+          hasReadingData={hasLyrics && furiganaLines.length > 0}
           hasTranslation={data.hasTranslation}
           translationLangMismatch={data.translationLangMismatch}
           storedTranslationLang={data.storedTranslationLang}

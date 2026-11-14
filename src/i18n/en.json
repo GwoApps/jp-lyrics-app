@@ -277,6 +277,8 @@
     "furiganaLoadFailed": "Failed to load annotations. Check your network. Plain lyrics are still available.",
     "furiganaRetry": "Retry",
     "noLyricsSimple": "No lyrics",
+    "noLyricsNotFoundTitle": "No lyrics found",
+    "noLyricsNotFoundHint": "The lyric sources returned nothing for this track — it may be an instrumental or an interlude. Try syncing again, or paste the lyrics yourself.",
     "noLyricsHint": "This song has no lyrics yet — sync from an online source or add them manually.",
     "noLyricsWaiting": "Waiting for the author to add lyrics.",
     "noLyricsSync": "Sync lyrics",
