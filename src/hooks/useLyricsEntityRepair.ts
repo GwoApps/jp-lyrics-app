@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { useStoredPreference } from '@/lib/browser-storage';
+import { readStoredString, useStoredString, writeStoredString } from '@/lib/browser-storage';
 import {
   LYRICS_ENTITY_NOTICE_KIND,
   hasLyricsHtmlEntity,
@@ -49,19 +49,26 @@ function lyricsSignature(song: SongData | null): string {
  *   come back for the same lyrics (a genuinely new document asks again);
  * - once repaired, the signature of the fixed lyrics is remembered locally, so
  *   the banner cannot flash back if the follow-up re-read fails.
+ *
+ * The refusal is written by hand rather than through `useStoredPreference`: that
+ * hook writes the current choice under whatever key the next render produces, so
+ * a lyrics change would copy the old refusal onto the new text. Here the key and
+ * the choice are stored together, and a changed key simply means "ask again".
  */
 export function useLyricsEntityRepair(deps: Deps): UseLyricsEntityRepairReturn {
   const { id, song, refreshSong, showToast, t } = deps;
 
-  // Hydration-safe: `localStorage` is invisible to the server, so a stored
+  // Hydration-safe read: `localStorage` is invisible to the server, so a stored
   // refusal is adopted one render after the server markup. The key carries the
   // lyrics fingerprint, so a refusal can only ever silence the exact text the
   // owner declined to fix.
-  const [declined, setDeclined] = useStoredPreference(
-    lyricsEntityNoticeKey(id, song?.lyrics_raw ?? ''),
-    parseDeclinedFixes,
-    serializeDeclinedFixes,
-  );
+  const noticeKey = lyricsEntityNoticeKey(id, song?.lyrics_raw ?? '');
+  const storedDeclined = useStoredString(noticeKey);
+  // The key travels WITH the choice: once these lyrics change under us (a repair
+  // landed, or the lyrics were edited) the recorded refusal must not follow it
+  // onto the new text — least of all be written there.
+  const [choice, setChoice] = useState<{ key: string; kinds: string[] } | null>(null);
+  const declined = choice?.key === noticeKey ? choice.kinds : parseDeclinedFixes(storedDeclined);
 
   const [repairing, setRepairing] = useState(false);
   const [repairedSignature, setRepairedSignature] = useState<string | null>(null);
@@ -94,8 +101,10 @@ export function useLyricsEntityRepair(deps: Deps): UseLyricsEntityRepairReturn {
   }, [id, song, refreshSong, showToast, t]);
 
   const decline = useCallback(() => {
-    setDeclined((previous) => [...new Set([...previous, LYRICS_ENTITY_NOTICE_KIND])]);
-  }, [setDeclined]);
+    const kinds = [...new Set([...parseDeclinedFixes(readStoredString(noticeKey)), LYRICS_ENTITY_NOTICE_KIND])];
+    setChoice({ key: noticeKey, kinds });
+    writeStoredString(noticeKey, serializeDeclinedFixes(kinds));
+  }, [noticeKey]);
 
   return { needsRepair, repairing, repair, decline };
 }
