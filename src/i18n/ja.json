@@ -496,7 +496,14 @@
     "translationLangMismatchBanner": "現在の訳文は {current}、翻訳先言語は {target} です — クリックで再翻訳",
     "translationCurrentLang": "現在の訳文：{lang}",
     "translationLanguageLabel": "訳文の言語：{lang}",
-    "exportTranslationLangMismatch": "この訳文は{current}です。翻訳先言語は{target}のため、書き出しは古い言語のままです。"
+    "exportTranslationLangMismatch": "この訳文は{current}です。翻訳先言語は{target}のため、書き出しは古い言語のままです。",
+    "entityRepairTitle": "歌詞に HTML 実体参照が残っています",
+    "entityRepairDescription": "この歌詞は PetitLyrics 由来で、本文に &#039; / &quot; などの実体参照が残り、注音もその文字単位で分割されています。修復すると本文をデコードし、該当する注音キャッシュを作り直すか破棄します。",
+    "entityRepairAction": "歌詞を修復",
+    "entityRepairLater": "後で",
+    "entityRepairDone": "歌詞を修復しました",
+    "entityRepairNothing": "修復の必要はありません",
+    "entityRepairFailed": "歌詞を修復できませんでした"
   },
   "timeline": {
     "title": "LRC タイムライン編集",

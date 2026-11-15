@@ -1,5 +1,6 @@
 import * as heModule from 'he';
 import { artistScore, normalize, titleScore } from './match.ts';
+import { decodeLyricsHtmlEntities, decodeLyricsLine } from './lyrics-entity.ts';
 import type { ProviderStage } from './lyrics-provider/types.ts';
 
 const decodeHtmlEntity = (heModule as unknown as { default?: typeof heModule }).default?.decode ?? heModule.decode;
@@ -682,7 +683,10 @@ export function decodePetitLyricsLsyToLrc(payload: Uint8Array, plainLyrics: stri
     let timeCs = view.getUint16(timeArrayOffset + index * 2, true) ^ key;
     while (timeCs < previousTimeCs) timeCs += 0x1_0000;
     previousTimeCs = timeCs;
-    return `[${msToLrcTime(timeCs * 10)}]${line}`;
+    // The plain side of an LSY pair is the same encoded text the WYSIWYG
+    // payload carries, so it is decoded here rather than one layer up: any
+    // writer that reaches this extractor gets clean text (ISSUE #428).
+    return `[${msToLrcTime(timeCs * 10)}]${decodeLyricsLine(line)}`;
   });
   while (lrcLines.length > 0 && lyricLines[lrcLines.length - 1] === '') lrcLines.pop();
   return lrcLines.join('\n');
@@ -739,7 +743,7 @@ export async function fetchFromPetitLyrics(
       const plain = await fetchType(1, index);
       if (plain?.type === 1 && typeof plain.data === 'string' && isPetitLyricsMatch(plain, title, artist)) {
         const lrc = decodePetitLyricsLsyToLrc(synced.data, plain.data);
-        if (lrc) return { synced: lrc, plain: plain.data.trim() };
+        if (lrc) return { synced: lrc, plain: decodeLyricsHtmlEntities(plain.data).trim() };
       }
     }
   }
@@ -747,7 +751,7 @@ export async function fetchFromPetitLyrics(
   // Keep PetitLyrics as a useful plain-text fallback only after all checked sync candidates fail.
   const plain = await fetchType(1, 0);
   if (plain?.data && typeof plain.data === 'string' && isPetitLyricsMatch(plain, title, artist)) {
-    return { synced: '', plain: plain.data.trim() };
+    return { synced: '', plain: decodeLyricsHtmlEntities(plain.data).trim() };
   }
   return null;
 }
@@ -761,7 +765,11 @@ export function petitLyricsXmlToLrc(xml: string): string | null {
     const textMatch = block.match(/<linestring>([\s\S]*?)<\/linestring>/);
     if (timeMatch && textMatch) {
       const ms = parseInt(timeMatch[1]);
-      const text = textMatch[1].trim();
+      // PetitLyrics ships the line HTML-encoded (`fallin&#039; down`); the
+      // entity must die here, at the single point where provider text becomes a
+      // timeline row — decoding only in the orchestrator left every other write
+      // path able to persist the raw markup (ISSUE #428).
+      const text = decodeLyricsLine(textMatch[1].trim());
       if (text) lines.push(`[${msToLrcTime(ms)}]${text}`);
     }
   }

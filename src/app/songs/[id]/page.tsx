@@ -1073,6 +1073,36 @@ export default function SongViewPage() {
           </div>
         </div>
       )}
+      {/* Issue #428: provider HTML entities in the stored lyrics are offered as
+          a repair, never applied silently. A refusal is remembered per song, so
+          this banner cannot nag about the same lyrics twice. */}
+      {data.lyricsEntityRepair.needsRepair && (
+        <div className="mb-3 flex shrink-0 flex-col gap-3 rounded-lg border border-[var(--song-accent)]/25 bg-[var(--accent)]/60 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-[var(--foreground)]">{t('song.entityRepairTitle')}</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted-foreground)]">{t('song.entityRepairDescription')}</p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              disabled={data.lyricsEntityRepair.repairing}
+              onClick={() => void data.lyricsEntityRepair.repair()}
+              className="song-editor-primary-button inline-flex items-center gap-1 rounded-md px-3 py-2 text-xs font-medium disabled:opacity-50"
+            >
+              {data.lyricsEntityRepair.repairing && <Loader2 className="h-3 w-3 animate-spin" />}
+              {t('song.entityRepairAction')}
+            </button>
+            <button
+              type="button"
+              disabled={data.lyricsEntityRepair.repairing}
+              onClick={data.lyricsEntityRepair.decline}
+              className="rounded-md px-3 py-2 text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] disabled:opacity-50"
+            >
+              {t('song.entityRepairLater')}
+            </button>
+          </div>
+        </div>
+      )}
       {!immersive.active && (
         <div className="song-player-disclosure" data-expanded={playerExpanded}
           aria-hidden={!playerExpanded} inert={!playerExpanded}>

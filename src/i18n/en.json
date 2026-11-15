@@ -496,7 +496,14 @@
     "translationLangMismatchBanner": "This translation is in {current}, but your target language is {target} — click to re-translate",
     "translationCurrentLang": "Current translation: {lang}",
     "translationLanguageLabel": "Translation language: {lang}",
-    "exportTranslationLangMismatch": "This translation is in {current} while your target language is {target} — the export stays in the old language."
+    "exportTranslationLangMismatch": "This translation is in {current} while your target language is {target} — the export stays in the old language.",
+    "entityRepairTitle": "The lyrics contain HTML entities",
+    "entityRepairDescription": "These lyrics came from PetitLyrics with escaped text still in them (&#039; / &quot;), and the reading annotations were split on those entity characters. Repairing decodes the text and rebuilds or clears the affected annotations.",
+    "entityRepairAction": "Repair lyrics",
+    "entityRepairLater": "Not now",
+    "entityRepairDone": "Lyrics repaired",
+    "entityRepairNothing": "Nothing to repair",
+    "entityRepairFailed": "Could not repair the lyrics"
   },
   "timeline": {
     "title": "LRC Timeline Editor",

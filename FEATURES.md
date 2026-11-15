@@ -23,6 +23,9 @@ and [DEPLOYMENT.md](DEPLOYMENT.md).
   per-line context menu (copy original, copy translation, share the
   line, correct furigana). **Right-click** a line on desktop, or
   **long-press** a line on mobile / touch devices, to open it.
+- **Provider Markup Repair** — Lyrics that arrived from a provider with HTML
+  entities still in them (`&#039;`, `&quot;`) are flagged on the song page;
+  the owner can decode them in one click, and a refusal is remembered per song.
 - **Export** — Download lyrics as plain text, LRC (timestamped), or HTML.
 - **PiP (Picture-in-Picture)** — Floating lyrics window over other apps
   on supported desktop browsers, with a video PiP fallback and user settings.

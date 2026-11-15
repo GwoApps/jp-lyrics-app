@@ -455,6 +455,30 @@ regenerated). It is a no-op on a clean database and never bumps `updated_at`.
 - **Cloudflare D1:** runs once per isolate on the first request that opens the
   database, kept alive with `ctx.waitUntil()`.
 
+### Lyrics with provider HTML entities are repaired on request
+
+Some PetitLyrics rows were stored with the provider's encoded text still in
+them (`fallin&#039; down`, `&quot;SNAP!&quot;`), which also made the reading
+cache split on the entity characters. The extractor now decodes at the source
+([`src/lib/lyrics-fetcher.ts`](src/lib/lyrics-fetcher.ts)), and existing rows are
+**not** rewritten by the app: decoding changes the text a reader sees, which is
+an edit, not a storage-format fix. The song detail page asks the owner once
+(「修复歌词」/「暂不处理」) and
+[`POST /api/songs/[id]/repair-lyrics-entities`](src/app/api/songs/%5Bid%5D/repair-lyrics-entities/route.ts)
+runs only on that request:
+
+- `lyrics_raw` / `lyrics_synced` are decoded line by line, so the line count —
+  and therefore the translation row alignment — is unchanged;
+- `lyrics_furigana` is decoded and kept only when it still reconstructs the new
+  text; a cache tokenized on the entity itself is dropped (`'[]'`) and
+  regenerated on the next open;
+- the write is a compare-and-set on the values it read, so a concurrent lyrics
+  write wins instead of being clobbered.
+
+Declining is remembered per song, per lyrics text and per repair kind
+(`localStorage`), so the same question is never asked twice for the same
+lyrics. There is **no migration script to run** and no startup sweep.
+
 ### Time columns are UTC
 
 Every `*_at` column stores an absolute UTC instant

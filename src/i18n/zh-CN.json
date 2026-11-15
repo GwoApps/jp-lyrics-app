@@ -496,7 +496,14 @@
     "translationLangMismatchBanner": "当前译文为 {current}，目标语言为 {target}——点击重新翻译",
     "translationCurrentLang": "当前译文：{lang}",
     "translationLanguageLabel": "译文语言：{lang}",
-    "exportTranslationLangMismatch": "这份译文是{current}，你的目标语言是{target}；导出内容仍是旧语言。"
+    "exportTranslationLangMismatch": "这份译文是{current}，你的目标语言是{target}；导出内容仍是旧语言。",
+    "entityRepairTitle": "歌词里有 HTML 实体",
+    "entityRepairDescription": "这首歌的歌词来自 PetitLyrics，正文里留下了 &#039; / &quot; 这类实体，注音也是按实体字符切的词。修复会解码正文，并重建或清除对应的注音缓存。",
+    "entityRepairAction": "修复歌词",
+    "entityRepairLater": "暂不处理",
+    "entityRepairDone": "歌词已修复",
+    "entityRepairNothing": "歌词无需修复",
+    "entityRepairFailed": "修复歌词失败"
   },
   "timeline": {
     "title": "LRC 时间轴编辑",

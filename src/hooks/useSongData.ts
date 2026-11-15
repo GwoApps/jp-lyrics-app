@@ -21,6 +21,7 @@ import { matchSong, type SongMatchPurpose } from '@/lib/match-song';
 import { updateReadingScheme } from '@/lib/reading-scheme';
 import { usePiP } from './usePiP';
 import { useFurigana } from './useFurigana';
+import { useLyricsEntityRepair } from './useLyricsEntityRepair';
 import type { ImportAlertState, ImportReviewState } from './models';
 
 // Extract the language-independent error code from a failed write response.
@@ -123,6 +124,13 @@ export interface UseSongDataReturn {
   cantoneseSuggestion: CantoneseDetectionResult | null;
   setSongReadingScheme: (scheme: ReadingScheme) => Promise<void>;
   dismissCantoneseSuggestion: () => Promise<void>;
+  /** The stored lyrics still carry provider HTML entities and the owner is being asked (issue #428). */
+  lyricsEntityRepair: {
+    needsRepair: boolean;
+    repairing: boolean;
+    repair: () => Promise<void>;
+    decline: () => void;
+  };
   debug: boolean;
   setDebug: React.Dispatch<React.SetStateAction<boolean>>;
   deleteConfirm: boolean;
@@ -273,6 +281,10 @@ export function useSongData(id: string): UseSongDataReturn {
     }
     return undefined;
   }, [id]);
+
+  // Issue #428: the HTML-entity repair is an edit of user-visible lyrics, so it
+  // is offered here and never applied by itself (no startup sweep, no script).
+  const lyricsEntityRepair = useLyricsEntityRepair({ id, song, refreshSong, showToast, t });
 
   // ── Translation sub-hook ────────────────────────────────
   const {
@@ -483,6 +495,7 @@ export function useSongData(id: string): UseSongDataReturn {
     cantoneseSuggestion,
     setSongReadingScheme,
     dismissCantoneseSuggestion,
+    lyricsEntityRepair,
     debug,
     setDebug,
     deleteConfirm,

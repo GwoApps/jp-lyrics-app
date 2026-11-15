@@ -84,6 +84,31 @@ test('parses PetitLyrics candidate metadata and converts its WYSIWYG timing to l
   assert.equal(petitLyricsXmlToLrc(candidate!.data as string), '[00:01.47]第一行');
 });
 
+test('PetitLyrics extraction decodes HTML entities at the source (ISSUE #428)', () => {
+  // A regression fixture: the provider answers with encoded line text, and the
+  // extractor — not the orchestrator one layer up — must hand back clean lyrics,
+  // otherwise any write path that bypasses normalization persists the markup.
+  const timingXml = '<wsy>'
+    + '<line><linestring>Why don&#039;t we cuddle</linestring><word><starttime>1470</starttime><wordstring>x</wordstring></word></line>'
+    + '<line><linestring>&quot;SNAP!&quot;の合図</linestring><word><starttime>2000</starttime><wordstring>y</wordstring></word></line>'
+    + '</wsy>';
+  const lrc = petitLyricsXmlToLrc(timingXml);
+  assert.equal(lrc, '[00:01.47]Why don\'t we cuddle\n[00:02.00]"SNAP!"の合図');
+  assert.equal(/&[a-z#0-9]+;/i.test(lrc ?? ''), false);
+
+  // The LSY path pairs its timings with the same encoded plain text.
+  const payload = new Uint8Array(0xcc + 2);
+  const view = new DataView(payload.buffer);
+  const key = 0x1234;
+  view.setUint16(0x1a, key, true);
+  view.setUint32(0x38, 1, true);
+  view.setUint16(0xcc, 30 ^ key, true);
+  assert.equal(
+    decodePetitLyricsLsyToLrc(payload, 'fallin&#039; down'),
+    '[00:00.30]fallin\' down',
+  );
+});
+
 test('PetitLyrics accepts a candidate whose title differs only by kana script (ISSUE #317)', () => {
   // PetitLyrics indexes 「サヨナラ」 in katakana while the requested Spotify title
   // is hiragana — the exact-equality gate used to reject the candidate outright.
