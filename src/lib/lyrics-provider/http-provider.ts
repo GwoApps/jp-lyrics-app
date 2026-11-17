@@ -8,6 +8,7 @@
  */
 import type { LyricsProvider, LyricsProviderQuery, ProviderContext, ProviderOutcome } from './types.ts';
 import { searchHttpProvider } from './http-client.ts';
+import { randomId } from '@/lib/random-id';
 import type { ProviderConfigRow } from './config.ts';
 
 /** Build a `LyricsProvider` adapter for one stored HTTP provider config. */
@@ -31,7 +32,7 @@ export function httpLyricsProvider(cfg: ProviderConfigRow, authSecret: string | 
         },
         query,
         timeoutMs,
-        crypto.randomUUID(),
+        randomId(),
         context.signal,
       );
     },

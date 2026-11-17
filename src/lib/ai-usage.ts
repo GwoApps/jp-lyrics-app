@@ -1,4 +1,5 @@
 import { sql, eq, and, lt } from 'drizzle-orm';
+import { randomId } from '@/lib/random-id';
 import * as schema from './schema.ts';
 
 /**
@@ -113,9 +114,7 @@ function changesOf(result: unknown): number {
 }
 
 function generateRequestId(): string {
-  const c = globalThis.crypto as Crypto | undefined;
-  if (c && typeof c.randomUUID === 'function') return c.randomUUID();
-  return `res-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  return randomId('res-');
 }
 
 /** Daily committed usage, derived from reservation rows plus the legacy ledger. */

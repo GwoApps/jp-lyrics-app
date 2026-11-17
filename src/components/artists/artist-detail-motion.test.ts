@@ -44,6 +44,7 @@ function render(resource: object) {
       if (specifier === './useArtistResource') return { useArtistResource: () => ({ state: resource, retry() {} }) };
       if (specifier === '@/components/ArtistLinks') return { __esModule: true, default: ({ artist }: { artist: string }) => React.createElement('span', null, artist) };
       if (specifier === '@/components/CoverImage') return { __esModule: true, default: () => React.createElement('span', { className: 'cover' }) };
+      if (specifier === '@/lib/random-id' || specifier === '../../lib/random-id' || specifier === '../../lib/random-id.ts') return { randomId: (prefix = '') => `${prefix}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}` };
       if (specifier.startsWith('./')) {
         const base = resolve(dirname(path), specifier);
         const target = [base, `${base}.ts`, `${base}.tsx`].find((candidate) => existsSync(candidate));
