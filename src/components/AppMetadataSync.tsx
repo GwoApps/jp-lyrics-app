@@ -20,8 +20,11 @@ export default function AppMetadataSync() {
 
   useEffect(() => {
     const name = t('common.appName');
+    // Server-rendered routes (song detail, albums, artists) own a descriptive
+    // title. Only replace the generic shell title with the localized app name.
+    const generic = new Set([name, '歌詞ノート · Lyrics Note']);
     const apply = () => {
-      if (document.title !== name) document.title = name;
+      if (generic.has(document.title.trim())) document.title = name;
       document
         .querySelector('meta[name="apple-mobile-web-app-title"]')
         ?.setAttribute('content', name);

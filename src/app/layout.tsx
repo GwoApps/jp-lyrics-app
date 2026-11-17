@@ -15,7 +15,7 @@ import { asLocale, LOCALE_COOKIE, localeFromLanguages, type Locale } from '@/lib
  * carries the same neutral name for install surfaces.
  */
 export const metadata: Metadata = {
-  title: APP_NAME_NEUTRAL,
+  title: { default: APP_NAME_NEUTRAL, template: `%s · ${APP_NAME_SHORT}` },
   description: APP_DESCRIPTION,
   manifest: '/manifest.json',
   appleWebApp: {
@@ -69,6 +69,11 @@ async function readRequestLocale(): Promise<Locale> {
  * Good enough for picking among four languages; a full q-sort would not change
  * the answer for any real browser request.
  */
+/** Shared by song layouts: same cookie/Accept-Language precedence as the shell. */
+export async function readRequestLocaleForMetadata(): Promise<Locale> {
+  return readRequestLocale();
+}
+
 function parseAcceptLanguage(header: string | null): string[] {
   if (!header) return [];
   return header
