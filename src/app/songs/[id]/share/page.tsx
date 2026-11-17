@@ -6,6 +6,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import QRCode from 'qrcode';
 import { AlertCircle, ArrowLeft, ClipboardCopy, Download, Link2, Loader2, Check, Smartphone, Monitor, RefreshCw } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { useAuthSession } from '@/lib/auth-session';
 import { useCoverTheme } from '@/hooks/useCoverPalette';
 import { drawCard, getLyricLines, type Orientation, type ShareCardFit, type ShareSong } from '@/lib/share-card';
 import { resolveTranslationLang, targetLangDisplay } from '@/lib/target-lang';
@@ -54,7 +55,11 @@ export default function SharePage() {
   // selection it was drawn for, so a stale frame never marks the wrong rows.
   const [cardFit, setCardFit] = useState<{ key: string; fit: ShareCardFit } | null>(null);
 
+  // Anonymous visitors have no saved target language; don't hit an endpoint
+  // that only returns 401 for them (issue #438).
+  const { session } = useAuthSession();
   useEffect(() => {
+    if (!session?.user) return;
     let cancelled = false;
     fetch('/api/me/settings', { cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : null))
@@ -63,7 +68,7 @@ export default function SharePage() {
       })
       .catch(() => { /* no target language → no mismatch badge */ });
     return () => { cancelled = true; };
-  }, []);
+  }, [session?.user]);
 
   const pageUrl = typeof window !== 'undefined' ? `${window.location.origin}/songs/${id}` : '';
   const coverTheme = useCoverTheme(song?.cover_url);
