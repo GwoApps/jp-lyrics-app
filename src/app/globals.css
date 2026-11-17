@@ -1712,3 +1712,139 @@ textarea {
   .lyrics-immersive-active .lyrics-scroll > div,
   .immersive-song-cover, .immersive-song-text { transition: none; }
 }
+
+/* Issue #433: printing must page the whole lyrics block, not the visible scroll
+   window. Keep the same DOM on screen; only relax the print layout and force
+   readable colours before the browser drops dark backgrounds. */
+@media print {
+  :root,
+  [data-theme="light"] {
+    color-scheme: light;
+    --background: #ffffff;
+    --foreground: #111111;
+    --card: #ffffff;
+    --card-foreground: #111111;
+    --muted: #ffffff;
+    --muted-foreground: #444444;
+    --border: #cccccc;
+    --accent: #ffffff;
+    --accent-foreground: #111111;
+    --primary: #111111;
+    --primary-foreground: #ffffff;
+  }
+
+  html, body {
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #111111 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  body.song-page-themed {
+    background: #ffffff !important;
+  }
+
+  .app-topbar,
+  .song-print-hide,
+  .lyrics-dot-grid,
+  .lyrics-ambient-breath,
+  .lyrics-ambient-orbit,
+  .lyric-time-axis,
+  .immersive-actions,
+  .immersive-resume,
+  .immersive-song-info,
+  .toast,
+  [role="dialog"] {
+    display: none !important;
+  }
+
+  main {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .song-view,
+  .song-editor-page {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .song-detail-header {
+    margin-bottom: 12mm !important;
+  }
+
+  .song-detail-header button,
+  .song-detail-header a,
+  .song-detail-header [role="button"] {
+    display: none !important;
+  }
+
+  .song-detail-header h1 {
+    margin: 0 !important;
+    font-size: 20pt !important;
+    line-height: 1.3 !important;
+    color: #111111 !important;
+  }
+
+  .song-detail-header p {
+    margin: 2mm 0 0 !important;
+    font-size: 11pt !important;
+    color: #444444 !important;
+  }
+
+  .lyrics-panel-shell,
+  .lyrics-panel,
+  .lyrics-scroll {
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    mask-image: none !important;
+    -webkit-mask-image: none !important;
+    transform: none !important;
+    text-align: left !important;
+    font-size: 12pt !important;
+  }
+
+  .lyrics-scroll,
+  .lyrics-scroll * {
+    color: #111111 !important;
+    opacity: 1 !important;
+    text-shadow: none !important;
+    filter: none !important;
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .lyrics-scroll > div,
+  .lyric-line-context-trigger {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .lyric-line,
+  .lyric-line--active,
+  .lyric-translation,
+  .lyric-translation-placeholder {
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+    font-size: inherit !important;
+    line-height: 1.7 !important;
+  }
+
+  .lyric-line rt {
+    opacity: 1 !important;
+    font-size: 0.6em !important;
+  }
+}

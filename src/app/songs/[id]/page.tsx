@@ -415,7 +415,7 @@ export default function SongViewPage() {
     return (
       <div className="fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-hidden sm:block sm:h-auto sm:pb-0">
         {/* Breadcrumb */}
-        <div className="shrink-0 mb-3 sm:mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
+        <div className="song-print-hide shrink-0 mb-3 sm:mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
           <button onClick={() => transitionRouter.push('/')} className="hover:text-[var(--foreground)] transition-colors inline-flex items-center gap-1">
             <ArrowLeft className="h-3 w-3" /> {t('common.list')}
           </button>
@@ -716,7 +716,7 @@ export default function SongViewPage() {
   return (
     <div className={`song-view fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-visible sm:block sm:h-auto sm:pb-0${coverColor ? ' song-view--accented' : ''}${immersive.active ? ' lyrics-immersive-active' : ''}`} style={{ ...songThemeStyle, ['--immersive-font-mobile' as string]: `${immersive.fontSize.mobile}px`, ['--immersive-font-desktop' as string]: `${immersive.fontSize.desktop}px` }} data-player-expanded={playerExpanded} role={immersive.active ? 'region' : undefined} aria-label={immersive.active ? t('song.immersiveEnter') : undefined}>
       {/* Breadcrumb */}
-      <div className="shrink-0 mb-3 sm:mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
+      <div className="song-print-hide shrink-0 mb-3 sm:mb-8 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
         <button onClick={() => transitionRouter.push('/')} className="hover:text-[var(--foreground)] transition-colors inline-flex items-center gap-1">
           <ArrowLeft className="h-3 w-3" /> {t('common.list')}
         </button>
@@ -835,7 +835,7 @@ export default function SongViewPage() {
             </button>
           )}
           {/* Desktop toolbar */}
-          <div className="song-detail-toolbar hidden self-end sm:flex flex-col items-end gap-3">
+          <div className="song-detail-toolbar song-print-hide hidden self-end sm:flex flex-col items-end gap-3">
             <div className="flex flex-wrap items-center justify-end gap-2 [&>*]:shrink-0">
             <ToolbarMenu
               label={<span className="inline-flex items-center">{data.copied ? <Check className="h-4 w-4 text-[var(--success)]" /> : <Copy className="h-4 w-4" />}</span>}
@@ -992,7 +992,7 @@ export default function SongViewPage() {
       </div>
 
         {/* Spotify playback status stays mounted so loading/resolved state cannot move the lyrics layout. */}
-        <div className="mt-2 sm:mt-4 flex min-h-7 items-center gap-2">
+        <div className="song-print-hide mt-2 sm:mt-4 flex min-h-7 items-center gap-2">
             <SongPlaybackStatus connected={spotifyConnected} spotify={spotify} syncState={syncState}
               matching={!simulated && isSameSong} simulatedPlaying={simulation.playback?.is_playing === true}
               expanded={playerExpanded} onToggle={() => setPlayerExpanded((value) => !value)} onResume={() => void resumeSync()}
@@ -1019,7 +1019,7 @@ export default function SongViewPage() {
 
         {/* Debug panel */}
         {data.debug && (
-          <div className="mt-3 rounded-md bg-[var(--muted)] border border-[var(--border)] p-2 sm:p-3 text-[10px] sm:text-[11px] font-mono space-y-1 overflow-x-auto">
+          <div className="song-print-hide mt-3 rounded-md bg-[var(--muted)] border border-[var(--border)] p-2 sm:p-3 text-[10px] sm:text-[11px] font-mono space-y-1 overflow-x-auto">
             <div className="text-[var(--song-accent)] font-medium mb-1.5">{t('song.debugInfo')}</div>
             <div>{t('song.debugConnection', {
               connection: spotify?.connected ? `✓ ${t('song.debugConnected')}` : `✗ ${t('song.debugDisconnected')}`,
@@ -1050,7 +1050,7 @@ export default function SongViewPage() {
 
       </div>
       {data.cantoneseSuggestion && (
-        <div className="mb-3 flex shrink-0 flex-col gap-3 rounded-lg border border-[var(--song-accent)]/25 bg-[var(--accent)]/60 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="song-print-hide mb-3 flex shrink-0 flex-col gap-3 rounded-lg border border-[var(--song-accent)]/25 bg-[var(--accent)]/60 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-xs font-medium text-[var(--foreground)]">{t('song.cantoneseSuggestionTitle')}</p>
             <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted-foreground)]">{t('song.cantoneseSuggestionDescription')}</p>
@@ -1077,7 +1077,7 @@ export default function SongViewPage() {
           a repair, never applied silently. A refusal is remembered per song, so
           this banner cannot nag about the same lyrics twice. */}
       {data.lyricsEntityRepair.needsRepair && (
-        <div className="mb-3 flex shrink-0 flex-col gap-3 rounded-lg border border-[var(--song-accent)]/25 bg-[var(--accent)]/60 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="song-print-hide mb-3 flex shrink-0 flex-col gap-3 rounded-lg border border-[var(--song-accent)]/25 bg-[var(--accent)]/60 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-xs font-medium text-[var(--foreground)]">{t('song.entityRepairTitle')}</p>
             <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted-foreground)]">{t('song.entityRepairDescription')}</p>
@@ -1249,7 +1249,7 @@ export default function SongViewPage() {
 
       {/* Spotify connection link only; song information now opens from the cover. */}
       {!spotify?.connected && (
-        <div className="shrink-0 mt-2 sm:mt-4 flex items-center justify-end gap-2">
+        <div className="song-print-hide shrink-0 mt-2 sm:mt-4 flex items-center justify-end gap-2">
           <SpotifyLoginButton className="text-[11px] text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] disabled:opacity-60">{t('song.spotify')}</SpotifyLoginButton>
         </div>
       )}
