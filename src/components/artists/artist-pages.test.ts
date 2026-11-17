@@ -60,7 +60,8 @@ function renderPage(file: string, resource: object, props: object = {}) {
         if (specifier === './artist-profile-cache') return load(resolve(directory, 'artist-profile-cache.ts'));
         if (specifier === './artist-back-navigation') return load(resolve(directory, 'artist-back-navigation.ts'));
         if (specifier === './profile-queue') return { profileSourceHref: () => undefined, requestArtistProfile: () => Promise.resolve(null) };
-        if (specifier.startsWith('./')) {
+        if (specifier === '@/lib/random-id' || specifier === '../../lib/random-id' || specifier === '../../lib/random-id.ts') return { randomId: (prefix = '') => `${prefix}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}` };
+      if (specifier.startsWith('./')) {
           const base = resolve(dirname(path), specifier);
           const target = [base, `${base}.ts`, `${base}.tsx`].find((candidate) => existsSync(candidate));
           if (target) return load(target);

@@ -3,12 +3,13 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { createArtistLibraryHistory, type LibraryHistoryPort } from './artist-library-history';
 import type { LibraryView } from './artist-library-model';
+import { randomId } from '../../lib/random-id';
 
 const browserPort: LibraryHistoryPort = {
   read: () => typeof window === 'undefined' ? { pathname: '', state: null, scrollY: 0 } : { pathname: window.location.pathname, state: window.history.state, scrollY: window.scrollY },
   replace: (state) => window.history.replaceState(state, ''),
 };
-const newOwner = (route: string) => createArtistLibraryHistory(browserPort, route, typeof window === 'undefined' ? 'server' : window.crypto.randomUUID());
+const newOwner = (route: string) => createArtistLibraryHistory(browserPort, route, typeof window === 'undefined' ? 'server' : randomId());
 
 export function useArtistLibraryView(name: string, ready: boolean) {
   const route = `/artists/${encodeURIComponent(name)}`;

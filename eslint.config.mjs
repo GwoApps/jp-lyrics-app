@@ -9,6 +9,16 @@ const eslintConfig = defineConfig([
     rules: {
       // App Router root layouts load this stylesheet globally; the Pages Router warning is not applicable.
       "@next/next/no-page-custom-font": "off",
+      // Use the shared randomId() helper; raw crypto.randomUUID breaks on http.
+      "no-restricted-properties": ["error", {
+        object: "crypto",
+        property: "randomUUID",
+        message: "Use randomId() from @/lib/random-id instead.",
+      }, {
+        object: "globalThis.crypto",
+        property: "randomUUID",
+        message: "Use randomId() from @/lib/random-id instead.",
+      }],
     },
   },
   // Override default ignores of eslint-config-next.

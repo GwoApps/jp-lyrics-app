@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, Plus } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { randomId } from '../../lib/random-id';
 import Dialog from '@/components/ui/dialog';
 import type { CollectionInfo } from '@/components/home/CollectionsPanel';
 
@@ -79,7 +80,7 @@ export default function FavoriteCategoriesDialog({ open = true, song, onCreated,
     if (!name || busy || !availableCollections) return;
     // Only stage the new category. Cancel discards it together with checkbox edits;
     // Save creates it atomically with the song memberships.
-    const collection = { id: `draft:${crypto.randomUUID()}`, name, songCount: 0 };
+    const collection = { id: randomId('draft:'), name, songCount: 0 };
     setDraftCollections((prev) => [...prev, collection]);
     setCategories((prev) => prev && ({ ...prev, collectionIds: [...prev.collectionIds, collection.id] }));
     setNewName('');

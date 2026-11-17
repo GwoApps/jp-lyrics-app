@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { randomId } from '@/lib/random-id';
 
 // NOTE: `@/lib/db` is imported lazily (see listRecentAudit below) so this
 // module stays importable under the node test runner, matching the pattern in
@@ -130,7 +131,7 @@ export async function writeAuditLog(db: unknown, entry: {
   await (db as { insert: (t: unknown) => { values: (v: unknown) => { run: () => Promise<unknown> } } })
     .insert(adminAuditLog)
     .values({
-      id: (globalThis.crypto as Crypto)?.randomUUID?.() ?? `audit-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+      id: randomId('audit-'),
       actorUserId: entry.actorUserId,
       action: entry.action,
       targetType: entry.targetType,
