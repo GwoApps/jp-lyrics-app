@@ -597,7 +597,7 @@
   },
   "edit": {
     "title": "Edit Song",
-    "songTitle": "Title *",
+    "songTitle": "Title",
     "artist": "Artist",
     "lyrics": "Lyrics",
     "furiganaHint": "Changing lyrics will re-convert furigana",
@@ -632,7 +632,7 @@
   },
   "new": {
     "title": "Add New Song",
-    "songTitle": "Title *",
+    "songTitle": "Title",
     "titlePlaceholder": "e.g. A Cruel Angel's Thesis",
     "artist": "Artist",
     "artistPlaceholder": "e.g. Yoko Takahashi",

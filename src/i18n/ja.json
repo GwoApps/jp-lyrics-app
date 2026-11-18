@@ -597,7 +597,7 @@
   },
   "edit": {
     "title": "曲を編集",
-    "songTitle": "曲名 *",
+    "songTitle": "曲名",
     "artist": "アーティスト",
     "lyrics": "歌詞",
     "furiganaHint": "歌詞を変更すると、ふりがなが再変換されます",
@@ -632,7 +632,7 @@
   },
   "new": {
     "title": "新しい曲を追加",
-    "songTitle": "曲名 *",
+    "songTitle": "曲名",
     "titlePlaceholder": "例：残酷な天使のテーゼ",
     "artist": "アーティスト",
     "artistPlaceholder": "例：高橋洋子",

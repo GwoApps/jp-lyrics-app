@@ -597,7 +597,7 @@
   },
   "edit": {
     "title": "編輯歌曲",
-    "songTitle": "歌曲名 *",
+    "songTitle": "歌曲名",
     "artist": "歌手",
     "lyrics": "歌詞",
     "furiganaHint": "修改歌詞後將重新轉換注音",
@@ -632,7 +632,7 @@
   },
   "new": {
     "title": "新增歌曲",
-    "songTitle": "歌曲名 *",
+    "songTitle": "歌曲名",
     "titlePlaceholder": "例如：殘酷天使的行動綱領",
     "artist": "歌手",
     "artistPlaceholder": "例如：高橋洋子",

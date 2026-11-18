@@ -597,7 +597,7 @@
   },
   "edit": {
     "title": "编辑歌曲",
-    "songTitle": "歌曲名 *",
+    "songTitle": "歌曲名",
     "artist": "歌手",
     "lyrics": "歌词",
     "furiganaHint": "修改歌词后将重新转换注音",
@@ -632,7 +632,7 @@
   },
   "new": {
     "title": "添加新歌曲",
-    "songTitle": "歌曲名 *",
+    "songTitle": "歌曲名",
     "titlePlaceholder": "例如：残酷天使的行动纲领",
     "artist": "歌手",
     "artistPlaceholder": "例如：高桥洋子",
