@@ -171,9 +171,11 @@ export async function GET(request: NextRequest) {
     cursorExpr = sql`(${sql.join(clauses, sql` OR `)})`;
   }
 
-  // Single combined WHERE (or none) so the query is always valid SQL.
+  // The page query uses filters + cursor; COUNT must only use filters so the
+  // filtered total stays stable across cursor pages (issue #444).
   const allConditions = [...conditions, ...(cursorExpr ? [cursorExpr] : [])];
   const whereSql = allConditions.length > 0 ? sql`WHERE ${sql.join(allConditions, sql` AND `)}` : sql``;
+  const countWhereSql = conditions.length > 0 ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
 
   const rows = await db.all(
     sql`SELECT s.id, s.title, s.artist, s.created_by, s.created_by_name, s.is_public,
@@ -208,7 +210,7 @@ export async function GET(request: NextRequest) {
 
   const result: PageResult<Record<string, unknown>> = { items, next_cursor: nextCursor };
   if (wantTotal) {
-    const countRow = await db.get(sql`SELECT COUNT(*) AS n FROM songs s ${whereSql}`) as { n: number };
+    const countRow = await db.get(sql`SELECT COUNT(*) AS n FROM songs s ${countWhereSql}`) as { n: number };
     result.total = Number(countRow?.n ?? 0);
   }
   return NextResponse.json(result);

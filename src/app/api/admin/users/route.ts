@@ -69,9 +69,11 @@ export async function GET(request: NextRequest) {
     cursorExpr = sql`(u.updated_at < ${decoded[0]} OR (u.updated_at = ${decoded[0]} AND u.id < ${decoded[1]}))`;
   }
 
-  // Single combined WHERE (or none) so the query is always valid SQL.
+  // The page query uses filters + cursor; COUNT must only use filters so the
+  // filtered total stays stable across cursor pages (issue #444).
   const allConditions = [...conditions, ...(cursorExpr ? [cursorExpr] : [])];
   const whereSql = allConditions.length > 0 ? sql`WHERE ${sql.join(allConditions, sql` AND `)}` : sql``;
+  const countWhereSql = conditions.length > 0 ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
 
   const rows = await db.all(
     sql`SELECT u.id, u.display_name, u.is_admin, u.is_blocked, u.blocked_reason,
@@ -109,7 +111,7 @@ export async function GET(request: NextRequest) {
 
   const result: PageResult<Record<string, unknown>> = { items, next_cursor: nextCursor };
   if (wantTotal) {
-    const countRow = await db.get(sql`SELECT COUNT(*) AS n FROM users u ${whereSql}`) as { n: number };
+    const countRow = await db.get(sql`SELECT COUNT(*) AS n FROM users u ${countWhereSql}`) as { n: number };
     result.total = Number(countRow?.n ?? 0);
   }
   return NextResponse.json(result);
