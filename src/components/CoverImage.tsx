@@ -18,10 +18,10 @@ interface LoadState {
 }
 
 const sizeMap = {
-  sm: 'h-9 w-9 sm:h-10 sm:w-10 rounded-md',
-  md: 'h-16 w-16 sm:h-20 sm:w-20 rounded-xl',
-  lg: 'h-24 w-24 sm:h-32 sm:w-32 rounded-xl',
-};
+  sm: { className: 'h-9 w-9 sm:h-10 sm:w-10 rounded-md', width: 36, height: 36 },
+  md: { className: 'h-16 w-16 sm:h-20 sm:w-20 rounded-xl', width: 64, height: 64 },
+  lg: { className: 'h-24 w-24 sm:h-32 sm:w-32 rounded-xl', width: 96, height: 96 },
+} as const;
 
 /**
  * Load state for a cover URL, derived from the URL itself rather than mutated
@@ -61,7 +61,7 @@ export default function CoverImage({
   return (
     <div
       style={{ ['--vt-name' as string]: viewTransitionName }}
-      className={`relative shrink-0 overflow-hidden bg-[var(--muted)] flex items-center justify-center cover-transition ${sizeMap[size]} ${className}`}
+      className={`relative shrink-0 overflow-hidden bg-[var(--muted)] flex items-center justify-center cover-transition ${sizeMap[size].className} ${className}`}
     >
       <Music
         className={`absolute h-5 w-5 text-[var(--muted-foreground)]/40 transition-opacity duration-300 ${hidden ? 'opacity-100' : 'opacity-0'} ${placeholderClassName}`}
@@ -72,6 +72,10 @@ export default function CoverImage({
           key={url}
           src={url}
           alt={alt}
+          loading="lazy"
+          decoding="async"
+          width={sizeMap[size].width}
+          height={sizeMap[size].height}
           onLoad={() => setState({ loaded: true, error: false })}
           onError={() => setState({ loaded: false, error: true })}
           className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
