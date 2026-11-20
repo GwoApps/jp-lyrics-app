@@ -184,7 +184,14 @@ export default function EditSongPage() {
         </div>
       );
     }
-    return null;
+    return (
+      <div className="flex flex-col items-center justify-center py-32 text-center">
+        <p className="text-sm text-[var(--muted-foreground)]">{t('song.notFound')}</p>
+        <Link href="/" className="mt-4 inline-flex items-center gap-1 text-xs text-[var(--song-accent)] hover:underline">
+          <ArrowLeft className="h-3 w-3" /> {t('song.backToList')}
+        </Link>
+      </div>
+    );
   }
 
   // LRC metadata (incl. `[offset:±ms]`) embedded in the synced timeline.
