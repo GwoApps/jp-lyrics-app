@@ -100,7 +100,13 @@ export function I18nProvider({
   const t = useCallback((key: string, vars?: Record<string, string | number>): string => {
     const [ns, k] = key.split('.');
     const dict = DICTIONARIES[locale];
-    let val = dict?.[ns]?.[k] ?? DICTIONARIES[DEFAULT_LOCALE][ns]?.[k] ?? key;
+    // English singulars live in `<key>_one`; the base key stays plural so no
+    // caller needs to branch on count. All four dictionaries carry the same
+    // `_one` keys, so a singular variant always resolves to a real string.
+    const singularKey = vars?.count === 1 ? `${k}_one` : k;
+    const singularVal = dict?.[ns]?.[singularKey] ?? DICTIONARIES[DEFAULT_LOCALE][ns]?.[singularKey];
+    const baseVal = dict?.[ns]?.[k] ?? DICTIONARIES[DEFAULT_LOCALE][ns]?.[k] ?? key;
+    let val = singularVal !== undefined && singularVal !== singularKey ? singularVal : baseVal;
     // Falling back to the key itself means no dictionary has this entry, so the
     // UI is about to render an internal identifier. Dev builds shout about it;
     // `validate:i18n` is the CI-side counterpart that catches it before merge.
