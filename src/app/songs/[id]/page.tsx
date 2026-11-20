@@ -1152,7 +1152,9 @@ export default function SongViewPage() {
           <div ref={lyricsRef} className="lyrics-scroll relative z-10 p-4 sm:p-6 h-full sm:h-auto sm:max-h-[70vh] overflow-y-auto overflow-x-hidden"
             data-follow-paused={immersive.active && immersive.manualBrowsing ? true : undefined}
             style={immersive.active ? undefined : { fontSize: `${data.fontSize}px` }}
-            tabIndex={immersive.active ? 0 : undefined}
+            tabIndex={0}
+            role="region"
+            aria-label={t('song.lyricsRegion')}
             onWheel={immersive.noteManualScroll}
             onTouchMove={immersive.noteManualScroll}
             onPointerDown={immersive.noteManualScroll}

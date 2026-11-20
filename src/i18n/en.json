@@ -324,6 +324,7 @@
     "spotifyDisconnected": "Spotify is not connected",
     "pipBtn": "Floating Display",
     "immersiveEnter": "Full-screen lyrics",
+    "lyricsRegion": "Lyrics",
     "immersiveClose": "Close full-screen lyrics",
     "immersiveSettings": "Reading settings",
     "immersiveSmaller": "Smaller lyrics",

@@ -1628,7 +1628,7 @@ textarea {
   color: var(--foreground);
 }
 .immersive-action:hover { background: var(--accent); }
-.immersive-action:focus-visible, .immersive-resume:focus-visible, .lyrics-immersive-active .lyrics-scroll:focus-visible {
+.immersive-action:focus-visible, .immersive-resume:focus-visible, .lyrics-scroll:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
