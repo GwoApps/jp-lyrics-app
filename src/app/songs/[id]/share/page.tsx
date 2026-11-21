@@ -13,6 +13,7 @@ import { resolveTranslationLang, targetLangDisplay } from '@/lib/target-lang';
 import { translationLangState } from '@/lib/translation-lang-match';
 import { copyToClipboard } from '@/lib/clipboard';
 import { buildShareCopyText } from '@/lib/share-card-copy';
+import { buildSharedSongUrl } from '@/lib/shared-line';
 import Toast from '@/components/Toast';
 import ShareCardPreview from '@/components/share/ShareCardPreview';
 import ShareCopyFeedback from '@/components/share/ShareCopyFeedback';
@@ -24,7 +25,10 @@ export default function SharePage() {
   const searchParams = useSearchParams();
   const { t, bcp47: uiLanguage } = useI18n();
   const id = (params?.id as string) || '';
-  const defaultLine = searchParams?.get('line');
+  const lineParam = useMemo(() => {
+    const raw = searchParams?.get('line');
+    return raw && /^\d+$/.test(raw) ? raw : '';
+  }, [searchParams]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [song, setSong] = useState<ShareSong | null>(null);
@@ -70,7 +74,11 @@ export default function SharePage() {
     return () => { cancelled = true; };
   }, [session?.user]);
 
-  const pageUrl = typeof window !== 'undefined' ? `${window.location.origin}/songs/${id}` : '';
+  // Issue #463: copied link and QR share one URL, carrying the same source-line
+  // deep link that pinned the card so the recipient lands on that line.
+  const pageUrl = typeof window !== 'undefined'
+    ? buildSharedSongUrl(window.location.origin, id, lineParam)
+    : '';
   const coverTheme = useCoverTheme(song?.cover_url);
 
   const lyricLines = useMemo(() => (song ? getLyricLines(song) : []), [song]);
@@ -131,11 +139,11 @@ export default function SharePage() {
   // `?line=` refers to a source-line index on the detail page; match it via each
   // lyric block's original index (skips empty source lines correctly).
   const sharedLine = useMemo(() => {
-    if (defaultLine === null) return -1;
-    const idx = parseInt(defaultLine, 10);
+    if (!lineParam) return -1;
+    const idx = parseInt(lineParam, 10);
     if (Number.isNaN(idx) || idx < 0) return -1;
     return lyricLines.findIndex((line) => line.index === idx);
-  }, [defaultLine, lyricLines]);
+  }, [lineParam, lyricLines]);
 
   useEffect(() => {
     if (sharedLine >= 0) setSelected(new Set([sharedLine]));

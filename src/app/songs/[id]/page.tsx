@@ -3,7 +3,7 @@
 import ArtistLinks from '@/components/ArtistLinks';
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useCallback } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useTransitionRouter } from '@/components/navigation/ViewTransitions';
 import Link from 'next/link';
 import { RefreshCw, Bug, Clock3, Pencil, Trash2, ArrowLeft, Minus, Plus, Download, Loader2, ExternalLink, PictureInPicture, Maximize2, Repeat, Copy, Check, Languages, ChevronDown, Share2, Info, X, Palette, SlidersHorizontal, FlaskConical, Tags } from 'lucide-react';
@@ -58,6 +58,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 import { parseLyricsGlossary } from '@/lib/lyrics-glossary';
 import { getPiPCapabilities } from '@/lib/pip-support';
 import { formatDbDateTime } from '@/lib/db-time';
+import { resolveSharedLyricLine } from '@/lib/shared-line';
 
 /** Reusable button class builder */
 function btnCls(active?: boolean, variant?: 'danger') {
@@ -159,6 +160,7 @@ export default function SongViewPage() {
   const router = useRouter();
   const transitionRouter = useTransitionRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const { t, bcp47 } = useI18n();
   const id = params?.id as string;
   // Post-hydration only: sessionStorage is invisible to the server (issue #419).
@@ -214,6 +216,10 @@ export default function SongViewPage() {
   const playbackTimestamps = simulated ? preview.timestamps : data.lineTimestamps;
   // Both sources use the same lyric interpolation, highlight, scroll and PiP controller.
   const sync = useSpotifySync(syncRefs, lineRefs, lyricsRef, spotifyConnected === true, simulation.playback);
+  const sharedLine = useMemo(
+    () => resolveSharedLyricLine(searchParams?.get('line'), data.song?.lyrics_raw),
+    [searchParams, data.song?.lyrics_raw],
+  );
   useEffect(() => {
     const context = seekContextRef.current;
     context.active = true;
@@ -231,6 +237,23 @@ export default function SongViewPage() {
     syncRefs.current.immersiveLyrics = immersive.active;
     syncRefs.current.shouldFollowLyrics = immersive.shouldFollow;
   }, [immersive.active, immersive.shouldFollow]);
+  const [highlightedLine, setHighlightedLine] = useState<number | null>(null);
+  // One-shot landing: scroll the shared line into view once the lyrics have
+  // rendered, without touching playback follow or immersive mode (issue #463).
+  useEffect(() => {
+    if (sharedLine === null || immersive.active) return;
+    const line = lineRefs.current[sharedLine];
+    const container = lyricsRef.current;
+    if (!line || !container) return;
+    const lineTop = line.getBoundingClientRect().top - container.getBoundingClientRect().top;
+    animateSmoothScroll(container,
+      centeredLyricScrollTop(container.scrollTop, container.clientHeight, lineTop, line.getBoundingClientRect().height));
+    setHighlightedLine(sharedLine);
+    const timer = setTimeout(() => setHighlightedLine(null), 2500);
+    return () => clearTimeout(timer);
+  // Re-run only when the deep-link target or the rendered line count changes.
+  }, [sharedLine, data.furiganaLines.length, immersive.active]);
+
   const priorLyricsScroll = useRef<number | null>(null);
   const wasImmersive = useRef(false);
   const enterImmersive = () => {
@@ -1139,6 +1162,7 @@ export default function SongViewPage() {
             {hasLyrics && furiganaLines.length > 0 ? (
               furiganaLines.map((line, i) => (
                 <div key={i} ref={(el) => { lineRefs.current[i] = el; }}
+                  data-shared-highlight={highlightedLine === i && !immersive.active ? true : undefined}
                   data-lyric-distance={immersive.active && immersiveSynced ? Math.min(2, Math.abs(i - activeLine)) : undefined}
                   aria-current={immersive.active && immersiveSynced && i === activeLine ? true : undefined}>
                   <FuriganaLineView

@@ -1394,6 +1394,14 @@ textarea {
   opacity: 0.4;
 }
 .lyric-line:hover { opacity: 0.72; }
+/* Shared-line landing: a one-off pulse, separate from playback following. */
+.lyrics-scroll > [data-shared-highlight] .lyric-line {
+  animation: sharedLineHighlight 2.5s ease-out forwards;
+}
+@keyframes sharedLineHighlight {
+  0%, 45% { background: color-mix(in srgb, var(--song-accent) 28%, transparent); }
+  100% { background: transparent; }
+}
 .lyric-line--active {
   color: var(--foreground);
   opacity: 1;
