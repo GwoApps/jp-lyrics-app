@@ -12,9 +12,23 @@ import { asLocale, LOCALE_COOKIE, localeFromLanguages, type Locale } from '@/lib
  * Language-neutral shell metadata. `metadata` cannot await the request, so it
  * names the app in one language and `AppMetadataSync` swaps in
  * `common.appName` right after hydration (issue #273); `public/manifest.json`
- * carries the same neutral name for install surfaces.
+ * carries the same neutral name for install surfaces. `metadataBase` comes
+ * from the deployment env when set (issue #464); song routes additionally
+ * absolute-ize their URLs from the request host so no page depends on it.
  */
+// Deployment origin for statically-resolved relative metadata URLs (issue #464).
+// Song pages additionally derive a per-request origin via `resolveSiteOrigin()`.
+const configuredOrigin = (() => {
+  const value = process.env.JPLRC_SITE_URL?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url : null;
+  } catch { return null; }
+})();
+
 export const metadata: Metadata = {
+  ...(configuredOrigin ? { metadataBase: configuredOrigin } : {}),
   title: { default: APP_NAME_NEUTRAL, template: `%s · ${APP_NAME_SHORT}` },
   description: APP_DESCRIPTION,
   manifest: '/manifest.json',
@@ -40,6 +54,25 @@ export const viewport: Viewport = {
   maximumScale: 1,
   viewportFit: 'cover',
 };
+
+/**
+ * Origin used to turn relative OG paths into absolute URLs (issue #464).
+ *
+ * Prefer the configured deployment URL so reverse proxies and multi-domain
+ * setups agree on one canonical origin. Otherwise use the request's own host
+ * header (the layout already reads `headers()` for the locale), so a container
+ * never falls back to `http://localhost:3000`.
+ */
+export async function resolveSiteOrigin(): Promise<string | null> {
+  if (configuredOrigin) return configuredOrigin.origin;
+  const headerStore = await headers();
+  const host = headerStore.get('x-forwarded-host') ?? headerStore.get('host');
+  if (!host) return null;
+  const proto = headerStore.get('x-forwarded-proto') === 'http' ? 'http:' : 'https:';
+  try {
+    return new URL(`${proto}//${host}`).origin;
+  } catch { return null; }
+}
 
 /**
  * The reader's locale for this request (issue #419). Reading it on the server is

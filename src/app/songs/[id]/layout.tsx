@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { readRequestLocaleForMetadata } from '@/app/layout';
+import { readRequestLocaleForMetadata, resolveSiteOrigin } from '@/app/layout';
 import { getDB, schema } from '@/lib/db';
 import { getAuthUserFromCookies } from '@/lib/auth';
 import { isSongVisibleToUser } from '@/lib/song-visibility';
@@ -15,7 +15,7 @@ export async function generateMetadata(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Metadata> {
   const { id } = await params;
-  const [locale, user] = await Promise.all([readRequestLocaleForMetadata(), getAuthUserFromCookies()]);
+  const [locale, user, siteOrigin] = await Promise.all([readRequestLocaleForMetadata(), getAuthUserFromCookies(), resolveSiteOrigin()]);
   const song = await getDB()
     .select({
       id: schema.songs.id,
@@ -31,7 +31,7 @@ export async function generateMetadata(
     .get();
   const visible = isSongVisibleToUser(song, user);
   if (!song || !visible) {
-    return buildSongMetadata({ id, title: '', visible: false, locale });
+    return buildSongMetadata({ id, title: '', visible: false, locale, siteOrigin });
   }
   return buildSongMetadata({
     id,
@@ -41,6 +41,7 @@ export async function generateMetadata(
     coverUrl: song.coverUrl,
     locale,
     visible: true,
+    siteOrigin,
   });
 }
 

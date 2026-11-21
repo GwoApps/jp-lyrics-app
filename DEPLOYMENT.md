@@ -75,6 +75,10 @@ test -f /data0/docker/jplrc-secrets/yt-music-oauth.json || \
 Optional application settings in `.env`:
 
 ```bash
+# Canonical origin for absolute OG URLs in share previews (falls back to the
+# incoming request host when unset).
+JPLRC_SITE_URL=https://jplrc.example.com
+
 # Spotify OAuth: required to log in, optional for anonymous public reading
 SPOTIFY_CLIENT_ID=your_client_id
 SPOTIFY_CLIENT_SECRET=your_client_secret

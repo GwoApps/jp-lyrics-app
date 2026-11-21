@@ -57,7 +57,7 @@ function safeHttpUrl(value: string | null | undefined): string | null {
  * `<title>` or OG tags.
  */
 export function buildSongMetadata({
-  id, title, artist, lyricsRaw, coverUrl, locale, visible,
+  id, title, artist, lyricsRaw, coverUrl, locale, visible, siteOrigin,
 }: {
   id: string;
   title: string;
@@ -66,27 +66,31 @@ export function buildSongMetadata({
   coverUrl?: string | null;
   locale?: string | null;
   visible: boolean;
+  /** Request-derived origin used to absolute-ize internal paths (issue #464). */
+  siteOrigin?: string | null;
 }): Metadata {
   if (!visible) return { title: APP_NAME_NEUTRAL, description: APP_DESCRIPTION };
   const lang = asLocale(locale);
   const name = songTitle(title, artist);
   const description = songDescription(lyricsRaw) || DEFAULT_DESCRIPTION[lang];
   const path = `/songs/${encodeURIComponent(id)}`;
-  const images = (() => {
-    const url = safeHttpUrl(coverUrl) ?? `/api/songs/${encodeURIComponent(id)}/cover-image`;
-    return [url];
-  })();
+  // Internal paths become absolute against the request origin; external
+  // covers keep the strict http(s)-only check from safeHttpUrl.
+  const absolutePath = (value: string) => siteOrigin ? new URL(value, siteOrigin).href : value;
+  const pageUrl = absolutePath(path);
+  const cover = safeHttpUrl(coverUrl);
+  const images = [cover ?? absolutePath(`/api/songs/${encodeURIComponent(id)}/cover-image`)];
   return {
     title: name,
     description,
-    alternates: { canonical: path },
+    alternates: { canonical: pageUrl },
     openGraph: {
       type: 'music.song',
       siteName: SITE_NAME,
       locale: lang === 'ja' ? 'ja_JP' : lang === 'en' ? 'en_US' : lang === 'zh-TW' ? 'zh_TW' : 'zh_CN',
       title: name,
       description,
-      url: path,
+      url: pageUrl,
       ...(images ? { images } : {}),
     },
     twitter: { card: 'summary_large_image', title: name, description, ...(images ? { images } : {}) },

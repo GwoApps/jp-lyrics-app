@@ -40,14 +40,14 @@ test('song metadata carries per-song title, description, canonical URL, OG and T
   const meta = buildSongMetadata({
     id: 'abc123', title: 'Parallax', artist: 'BABYMETAL',
     lyricsRaw: 'line one\nline two', coverUrl: 'https://i.scdn.co/image/abc',
-    locale: 'ja', visible: true,
+    locale: 'ja', visible: true, siteOrigin: 'https://lyrics.example',
   }) as TestMetadata;
   assert.equal(meta.title, 'Parallax · BABYMETAL');
   assert.equal(meta.description, 'line one line two');
-  assert.equal(meta.alternates.canonical, '/songs/abc123');
+  assert.equal(meta.alternates.canonical, 'https://lyrics.example/songs/abc123');
   assert.equal(meta.openGraph.type, 'music.song');
   assert.equal(meta.openGraph.locale, 'ja_JP');
-  assert.equal(meta.openGraph.url, '/songs/abc123');
+  assert.equal(meta.openGraph.url, 'https://lyrics.example/songs/abc123');
   assert.deepEqual(meta.openGraph.images, ['https://i.scdn.co/image/abc']);
   assert.equal(meta.twitter.card, 'summary_large_image');
   assert.deepEqual(meta.twitter.images, ['https://i.scdn.co/image/abc']);
@@ -92,4 +92,30 @@ test('song layout is a server component that applies the ACL with one indexed qu
   assert.match(songLayout, /isSongVisibleToUser\(song, user\)/);
   assert.match(songLayout, /readRequestLocaleForMetadata\(\)/);
   assert.match(songLayout, /buildSongMetadata\(\{/);
+});
+
+test('uploaded cover and page URLs are absolute when a site origin is supplied', () => {
+  const meta = buildSongMetadata({
+    id: 'cee60182-7cbc-426a-9d4b-63408ce04610',
+    title: 'さよならのキス',
+    visible: true,
+    siteOrigin: 'https://lyrics.example',
+  }) as TestMetadata;
+  const cover = 'https://lyrics.example/api/songs/cee60182-7cbc-426a-9d4b-63408ce04610/cover-image';
+  assert.equal(meta.openGraph.url, 'https://lyrics.example/songs/cee60182-7cbc-426a-9d4b-63408ce04610');
+  assert.equal(meta.alternates.canonical, meta.openGraph.url);
+  assert.deepEqual(meta.openGraph.images, [cover]);
+  assert.deepEqual(meta.twitter.images, [cover]);
+  for (const value of [meta.openGraph.url, meta.alternates.canonical, ...meta.openGraph.images!]) {
+    assert.match(value, /^https?:\/\//);
+    assert.equal(new URL(value).hostname, 'lyrics.example');
+  }
+});
+
+test('root layout sets an env-derived metadataBase; song metadata is absolute from the request', () => {
+  assert.match(layout, /metadataBase: configuredOrigin/);
+  assert.match(layout, /process\.env\.JPLRC_SITE_URL/);
+  assert.match(layout, /x-forwarded-host/);
+  assert.match(layout, /host/);
+  assert.match(songLayout, /resolveSiteOrigin/);
 });
