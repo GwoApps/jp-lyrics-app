@@ -590,6 +590,7 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
         hideCover={hideCover}
         isPlaying={isPlaying}
         spotifyConnected={!!spotify?.connected}
+        canEdit={song.can_edit === true}
         isFavorite={visibleFavorites.has(song.id)}
         locale={bcp47}
         unknownArtistLabel={t('common.unknownArtist')}

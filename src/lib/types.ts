@@ -96,6 +96,8 @@ export interface SongListItem {
    * same "needs review" badge the admin list uses.
    */
   lyrics_needs_review?: number;
+  /** Issue #462: server-authoritative edit permission for this list row. */
+  can_edit?: boolean;
 }
 
 /** Song list item as used by the home page (same shape as SongListItem). */
