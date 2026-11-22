@@ -618,9 +618,11 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
       <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">{t(listKind === 'albums' ? 'home.albumList' : 'home.songList')}</h1>
-          <p className="text-xs text-[var(--muted-foreground)] mt-1">{listKind === 'albums'
-            ? `${t('home.albumCount', { count: albumGroups.length })} · ${t('home.songCount', { count: albumTrackCount })}`
-            : `${t('home.songCount', { count: filteredSongs.length })}${(appliedSearch || mySongsOnly || favoritesOnly) && filteredSongs.length !== songs.length ? ` / ${songs.length}` : ''}`}</p>
+          <p className="text-xs text-[var(--muted-foreground)] mt-1">{loading && songs.length === 0
+            ? t('common.loading')
+            : listKind === 'albums'
+              ? `${t('home.albumCount', { count: albumGroups.length })} · ${t('home.songCount', { count: albumTrackCount })}`
+              : `${t('home.songCount', { count: filteredSongs.length })}${(appliedSearch || mySongsOnly || favoritesOnly) && filteredSongs.length !== songs.length ? ` / ${songs.length}` : ''}`}</p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {spotify === null ? null : spotify.connected ? (
