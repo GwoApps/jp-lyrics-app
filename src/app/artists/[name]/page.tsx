@@ -7,7 +7,7 @@ export async function generateMetadata(
   const { name: segment } = await params;
   const name = decodeURIComponent(segment).trim();
   return {
-    title: name || 'アーティスト',
+    ...(name ? { title: name } : {}),
     description: `${name} の歌詞・アルバム一覧 — 歌詞ノート。`,
   };
 }
