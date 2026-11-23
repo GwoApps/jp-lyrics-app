@@ -105,6 +105,8 @@
     "notFound": "This artist is not in your lyric library."
   },
   "home": {
+    "emptyLyricsNeverFetched": "never fetched lyrics",
+    "emptyLyricsNotFound": "no lyrics found",
     "navArtists": "Artists",
     "songList": "Song List",
     "albumList": "Album List",
@@ -1145,6 +1147,8 @@
     "lookupRateLimited": "The source is rate-limiting requests. Try previewing again later."
   },
   "artistLibrary": {
+    "emptyLyricsNeverFetched": "Lyrics not fetched",
+    "emptyLyricsNotFound": "No lyrics found",
     "filters": "Filter & sort",
     "filtersActive": "Filter & sort, {count} active",
     "searchLabel": "Search this library",

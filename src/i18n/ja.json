@@ -105,6 +105,8 @@
     "notFound": "歌詞ライブラリにこのアーティストはいません。"
   },
   "home": {
+    "emptyLyricsNeverFetched": "未取得の歌詞",
+    "emptyLyricsNotFound": "歌詞が見つかりません",
     "navArtists": "アーティスト",
     "songList": "曲一覧",
     "albumList": "アルバム一覧",
@@ -1145,6 +1147,8 @@
     "lookupRateLimited": "出典へのリクエストが制限されています。しばらくしてから再試行してください。"
   },
   "artistLibrary": {
+    "emptyLyricsNeverFetched": "歌詞未取得",
+    "emptyLyricsNotFound": "歌詞が見つかりません",
     "filters": "絞り込み・並べ替え",
     "filtersActive": "絞り込み・並べ替え、{count} 件を適用中",
     "searchLabel": "このライブラリを検索",

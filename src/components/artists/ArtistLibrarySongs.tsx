@@ -43,6 +43,7 @@ export default function ArtistLibrarySongs({ songs, signedIn, favoriteOverrides,
               <span className="sr-only">{label}</span><span aria-hidden="true">{t(`artistLibrary.${kind}`)} {status === 'available' ? '✓' : status === 'missing' ? '—' : '?'}{language && ` · ${language}`}</span>
             </span>;
           })}
+          {song.empty_lyrics_reason && <span className="artist-library-quality-item">{t(song.empty_lyrics_reason === 'never-fetched' ? 'artistLibrary.emptyLyricsNeverFetched' : 'artistLibrary.emptyLyricsNotFound')}</span>}
           {song.lyrics_needs_review === 1 && <span className="artist-library-review"><TriangleAlert size={12} aria-hidden="true" />{t('artistLibrary.needsReview')}</span>}
         </div>
       </div>

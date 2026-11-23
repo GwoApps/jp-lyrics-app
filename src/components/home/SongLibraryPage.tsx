@@ -659,6 +659,8 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
         unknownArtistLabel={t('common.unknownArtist')}
         createdByLabel={t('home.createdBy')}
         needsReviewLabel={t('admin.lyricsNeedsReview')}
+        emptyLyricsNeverFetchedLabel={t('home.emptyLyricsNeverFetched')}
+        emptyLyricsNotFoundLabel={t('home.emptyLyricsNotFound')}
         shareLabel={t('song.share')}
         openSongLabel={(title) => t('home.openSong', { title })}
         favoriteLabel={(title, fav) => t(fav ? 'home.manageFavoriteCategories' : 'home.addToFavorites', { title })}

@@ -105,6 +105,8 @@
     "notFound": "歌詞庫中沒有此藝人。"
   },
   "home": {
+    "emptyLyricsNeverFetched": "未抓取歌詞",
+    "emptyLyricsNotFound": "找不到歌詞",
     "navArtists": "藝人",
     "songList": "歌曲列表",
     "albumList": "專輯列表",
@@ -1145,6 +1147,8 @@
     "lookupRateLimited": "來源請求受到限流，請稍後再預覽。"
   },
   "artistLibrary": {
+    "emptyLyricsNeverFetched": "歌詞未抓取",
+    "emptyLyricsNotFound": "找不到歌詞",
     "filters": "篩選與排序",
     "filtersActive": "篩選與排序，已啟用 {count} 項",
     "searchLabel": "搜尋此曲庫",

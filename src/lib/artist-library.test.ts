@@ -71,16 +71,17 @@ test('detail summaries preserve present, empty and malformed states without lyri
   await db.insert(schema.songs).values([
     {
       id: 'complete', title: 'Complete', artist: 'Summary', spotifyAlbum: 'Album', isPublic: 1,
-      lyricsRaw: '秘密の歌詞', lyricsSynced: '[00:01.20]秘密の歌詞',
+      lyricsRaw: '秘密の歌詞', lyricsSynced: '[00:01.20]秘密の歌詞', lyricsSource: 'utanet',
       lyricsFurigana: JSON.stringify([{ segments: [{ text: '秘密', reading: 'ひみつ' }] }]),
       lyricsTranslation: JSON.stringify(['Secret translation']), lyricsTranslationLang: 'zh-cn',
       spotifyDurationMs: 201234, lyricsNeedsReview: 1,
     },
-    { id: 'empty', title: 'Empty', artist: 'Summary', spotifyAlbum: 'Album', isPublic: 1, spotifyDurationMs: 0 },
+    { id: 'empty', title: 'Empty', artist: 'Summary', spotifyAlbum: 'Album', isPublic: 1, spotifyDurationMs: 0, lyricsSource: 'none' },
+    { id: 'unfetched', title: 'Unfetched', artist: 'Summary', isPublic: 1 },
     {
       id: 'malformed', title: 'Malformed', artist: 'Summary', spotifyAlbum: 'Album', isPublic: 1,
       lyricsSynced: '[00:99]broken', lyricsFurigana: '{broken', lyricsTranslation: '["truncated',
-      lyricsTranslationLang: 'not a language', spotifyDurationMs: -1,
+      lyricsTranslationLang: 'not a language', spotifyDurationMs: -1, lyricsFetchedAt: '2026-08-02T00:00:00.000Z',
     },
     {
       id: 'unmarked', title: 'Unmarked', artist: 'Summary', isPublic: 1,
@@ -94,6 +95,7 @@ test('detail summaries preserve present, empty and malformed states without lyri
       lyricsTranslationLang: 'en-US',
     },
     { id: 'private-summary', title: 'Hidden', artist: 'Summary', createdBy: 'other', lyricsRaw: 'private body' },
+    { id: 'private-empty', title: 'Hidden empty', artist: 'Summary', createdBy: 'other', lyricsSource: 'none' },
   ]);
   const handlers = createArtistApiHandlers({
     getDB: () => db, getUser: async () => null,
@@ -105,14 +107,15 @@ test('detail summaries preserve present, empty and malformed states without lyri
   const summaries = payload.songs.map((song: Record<string, unknown>) => ({
     id: song.id, duration: song.spotify_duration_ms, lyrics: song.has_lyrics,
     timeline: song.has_synced_timeline, furigana: song.has_furigana,
-    translation: song.has_translation, lang: song.lyrics_translation_lang, favorited: song.favorited,
+    translation: song.has_translation, lang: song.lyrics_translation_lang, emptyReason: song.empty_lyrics_reason, favorited: song.favorited,
   })).sort((a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id));
   assert.deepEqual(summaries, [
-    { id: 'complete', duration: 201234, lyrics: true, timeline: true, furigana: true, translation: true, lang: 'zh-CN', favorited: null },
-    { id: 'empty', duration: null, lyrics: false, timeline: false, furigana: false, translation: false, lang: null, favorited: null },
-    { id: 'malformed', duration: null, lyrics: false, timeline: null, furigana: null, translation: null, lang: null, favorited: null },
-    { id: 'unmarked', duration: null, lyrics: true, timeline: false, furigana: false, translation: false, lang: null, favorited: null },
-    { id: 'wrong-shape', duration: null, lyrics: false, timeline: false, furigana: null, translation: null, lang: null, favorited: null },
+    { id: 'complete', duration: 201234, lyrics: true, timeline: true, furigana: true, translation: true, lang: 'zh-CN', emptyReason: undefined, favorited: null },
+    { id: 'empty', duration: null, lyrics: false, timeline: false, furigana: false, translation: false, lang: null, emptyReason: 'not-found', favorited: null },
+    { id: 'malformed', duration: null, lyrics: false, timeline: null, furigana: null, translation: null, lang: null, emptyReason: 'not-found', favorited: null },
+    { id: 'unfetched', duration: null, lyrics: false, timeline: false, furigana: false, translation: false, lang: null, emptyReason: 'never-fetched', favorited: null },
+    { id: 'unmarked', duration: null, lyrics: true, timeline: false, furigana: false, translation: false, lang: null, emptyReason: undefined, favorited: null },
+    { id: 'wrong-shape', duration: null, lyrics: false, timeline: false, furigana: null, translation: null, lang: null, emptyReason: 'never-fetched', favorited: null },
   ]);
   assert.equal(payload.songs.find((song: { id: string }) => song.id === 'complete').lyrics_needs_review, 1);
   for (const song of [...payload.songs, ...payload.albums.flatMap((album: { songs: unknown[] }) => album.songs)]) {
@@ -121,8 +124,8 @@ test('detail summaries preserve present, empty and malformed states without lyri
     }
   }
   assert.equal(JSON.stringify(payload).includes('秘密の歌詞'), false);
-  assert.equal(payload.artist.songCount, 5);
-  assert.equal((await getArtistLibrary(db, { isAdmin: true }, 'Summary'))?.artist.songCount, 6);
+  assert.equal(payload.artist.songCount, 6);
+  assert.equal((await getArtistLibrary(db, { isAdmin: true }, 'Summary'))?.artist.songCount, 8);
 });
 
 test('favorites use the route email identity in bulk, include classified favorites and isolate users', async (t) => {
