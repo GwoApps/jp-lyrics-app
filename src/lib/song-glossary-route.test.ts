@@ -100,6 +100,7 @@ function loadPut() {
       if (name === '@/lib/lrc') return { findLrcConflicts: () => [], resolveTimelineSave: () => ({ ok: true }) };
       if (name === '@/lib/song-update') return { buildSongUpdateSet: (existing: unknown, body: Record<string, unknown>) => ({ __body: body, existing }) };
       if (name === '@/lib/lyrics-glossary') return { validateGlossaryInput, applyManualPins };
+      if (name === '@/lib/song-cover-cleanup') return { cleanupSongCover: async () => {} };
       throw new Error(`Unexpected dependency ${name}`);
     },
   });

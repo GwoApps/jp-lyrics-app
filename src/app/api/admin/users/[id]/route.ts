@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDB, sql } from '@/lib/db';
 import { nowUtcSql } from '@/lib/db-time-sql';
 import { getAuthUser } from '@/lib/auth';
+import { cleanupSongCover } from '@/lib/song-cover-cleanup';
 import {
   USER_ACTIONS,
   hasUnknownFields,
@@ -178,8 +179,13 @@ export async function DELETE(
     return NextResponse.json({ error: 'user_not_found' }, { status: 404 });
   }
 
+  let ownedSongIds: string[] = [];
   const impact = await db.transaction(async (tx: unknown) => {
     const run = (tx as { run: (q: unknown) => Promise<unknown> }).run;
+    const ownedSongs = await (tx as { all: (q: unknown) => Promise<Array<Record<string, unknown>>> }).all(
+      sql`SELECT id FROM songs WHERE created_by = ${id}`
+    );
+    ownedSongIds = ownedSongs.map((row) => String(row.id));
     const rows = await (tx as { all: (q: unknown) => Promise<Array<Record<string, unknown>>> }).all(
       sql`SELECT
         (SELECT COUNT(*) FROM songs WHERE created_by = ${id}) AS songs,
@@ -208,6 +214,7 @@ export async function DELETE(
       collections: Number(counts.collections ?? 0),
     };
   });
+  await Promise.all(ownedSongIds.map((songId) => cleanupSongCover(songId)));
 
   return NextResponse.json({ success: true, ...impact });
 }

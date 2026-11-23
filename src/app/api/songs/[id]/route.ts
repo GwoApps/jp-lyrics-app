@@ -3,6 +3,7 @@ import { getDB, schema } from '@/lib/db';
 import { and, eq } from 'drizzle-orm';
 import type { CoverPaletteJson, Song, SongData } from '@/lib/types';
 import { getAuthUser } from '@/lib/auth';
+import { cleanupSongCover } from '@/lib/song-cover-cleanup';
 import { isSongVisibleToUser } from '@/lib/song-visibility';
 import { findLrcConflicts, resolveTimelineSave } from '@/lib/lrc';
 import { buildSongUpdateSet } from '@/lib/song-update';
@@ -245,5 +246,6 @@ export async function DELETE(
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
   await db.delete(schema.songs).where(eq(schema.songs.id, id));
+  await cleanupSongCover(id);
   return NextResponse.json({ success: true });
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDB, sql } from '@/lib/db';
 import { nowUtcSql } from '@/lib/db-time-sql';
 import { getAuthUser } from '@/lib/auth';
+import { cleanupSongCover } from '@/lib/song-cover-cleanup';
 import {
   SONG_ACTIONS,
   hasUnknownFields,
@@ -167,6 +168,7 @@ export async function DELETE(
       afterJson: null,
     });
   });
+  await cleanupSongCover(id);
 
   return NextResponse.json({ success: true });
 }
