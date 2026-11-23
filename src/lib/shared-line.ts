@@ -2,8 +2,7 @@
  * Helpers for the line-level song deep link (`/songs/[id]?line=N`).
  *
  * `?line=` counts source lines in `lyrics_raw` (the same index the share card
- * stores on each lyric block), not rendered lyric rows. Blank source rows are
- * still part of that index but produce no rendered row.
+ * stores on each lyric block). Blank source rows still occupy a rendered row.
  */
 
 /** Parse a source-line index from a query value; invalid values are ignored. */
@@ -29,9 +28,5 @@ export function resolveSharedLyricLine(raw: string | null | undefined, lyricsRaw
   if (sourceLine === null) return null;
   const sourceLines = (lyricsRaw ?? '').split('\n');
   if (sourceLine >= sourceLines.length || !sourceLines[sourceLine].trim()) return null;
-  let renderedLine = 0;
-  for (let i = 0; i < sourceLine; i += 1) {
-    if (sourceLines[i].trim()) renderedLine += 1;
-  }
-  return renderedLine;
+  return sourceLine;
 }

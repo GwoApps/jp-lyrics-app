@@ -18,11 +18,11 @@ test('buildSharedSongUrl appends a valid line for QR and copy-link', () => {
   assert.equal(buildSharedSongUrl('https://example.com', 's1', 'abc'), 'https://example.com/songs/s1');
 });
 
-test('resolveSharedLyricLine skips blank source separators', () => {
+test('resolveSharedLyricLine keeps blank source separators in place', () => {
   const lyrics = 'First\n\nSecond\n\n\nThird';
   assert.equal(resolveSharedLyricLine('0', lyrics), 0);
-  assert.equal(resolveSharedLyricLine('2', lyrics), 1);
-  assert.equal(resolveSharedLyricLine('5', lyrics), 2);
+  assert.equal(resolveSharedLyricLine('2', lyrics), 2);
+  assert.equal(resolveSharedLyricLine('5', lyrics), 5);
 });
 
 test('resolveSharedLyricLine ignores blank, out-of-range and invalid lines', () => {
