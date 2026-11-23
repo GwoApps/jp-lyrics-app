@@ -16,7 +16,6 @@ const ARTIST_SONG_COLUMNS = {
   cover_url: schema.songs.coverUrl,
   spotify_track_id: schema.songs.spotifyTrackId,
   spotify_album: schema.songs.spotifyAlbum,
-  created_by: schema.songs.createdBy,
   created_by_name: schema.songs.createdByName,
   is_public: schema.songs.isPublic,
   public_requested: schema.songs.publicRequested,

@@ -71,7 +71,6 @@ export interface SongListItem {
   id: string;
   title: string;
   artist: string;
-  created_by: string;
   created_by_name: string;
   is_public: number;
   public_requested: number;

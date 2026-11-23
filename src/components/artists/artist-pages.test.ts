@@ -97,7 +97,7 @@ test('artist directory is a linked grid without a grid/list switch or album thum
 });
 
 test('all local songs and album groups render, including title-equals-song singles', () => {
-  const songs = Array.from({ length: 237 }, (_, index) => ({ id: `song-${index}`, title: `Local track ${index}`, artist: 'Aimer, AC/DC', spotify_album: `Album ${index}`, created_by: 'test', created_by_name: 'Test', is_public: 1, public_requested: 0, created_at: '', updated_at: '' }));
+  const songs = Array.from({ length: 237 }, (_, index) => ({ id: `song-${index}`, title: `Local track ${index}`, artist: 'Aimer, AC/DC', spotify_album: `Album ${index}`, created_by_name: 'Test', is_public: 1, public_requested: 0, created_at: '', updated_at: '' }));
   const library: ArtistLibrary = {
     artist: { name: 'Aimer', songCount: songs.length, albumCount: songs.length },
     songs,

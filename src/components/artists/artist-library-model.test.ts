@@ -4,7 +4,7 @@ import { defaultLibraryView, filterArtistSongs, groupMatchingAlbums, formatTrans
 import { groupArtistAlbums } from '@/lib/artists';
 import { parseDbTimestamp } from '@/lib/db-time';
 
-const makeSong = (id: string, extras: Partial<ArtistLibrarySong> = {}): ArtistLibrarySong => ({ id, title: id, artist: 'Aimer', spotify_album: 'Album', created_by: 'test', created_by_name: 'Test', is_public: 1, public_requested: 0, created_at: '2026-01-01', updated_at: '2026-01-02', ...extras });
+const makeSong = (id: string, extras: Partial<ArtistLibrarySong> = {}): ArtistLibrarySong => ({ id, title: id, artist: 'Aimer', spotify_album: 'Album', created_by_name: 'Test', is_public: 1, public_requested: 0, created_at: '2026-01-01', updated_at: '2026-01-02', ...extras });
 const songs = [
   makeSong('b', { title: 'Blue Moon', artist: 'Aimer, Guest', spotify_album: 'Night', has_lyrics: true, has_synced_timeline: true, has_furigana: false, has_translation: null, lyrics_needs_review: 1, created_at: '2026-01-03' }),
   makeSong('a', { title: 'Amber', has_lyrics: false, has_synced_timeline: false, has_furigana: true, has_translation: true, updated_at: '2026-01-04' }),

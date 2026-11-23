@@ -156,7 +156,10 @@ export interface SongCandidate {
   title: string;
   artist: string;
   spotify_track_id?: string | null;
+  /** Legacy server-side matcher rows; list responses no longer carry the owner id. */
   created_by?: string;
+  /** List rows expose this instead of created_by (issue #492). */
+  can_edit?: boolean;
   is_public?: number;
 }
 
@@ -223,6 +226,11 @@ function lyricsDiscoveryScore(song: SongCandidate, track: PlayingTrack): number 
   return title && artist && title === normalize(track.name) && artist === normalize(track.artist) ? 1 : 0;
 }
 
+/** Own-song signal for callers that only have the server permission bit (issue #492). */
+function isOwnSong(song: SongCandidate, currentUserEmail?: string): boolean {
+  return song.can_edit === true || Boolean(currentUserEmail && song.created_by === currentUserEmail);
+}
+
 /**
  * Find the best-matching DB song for a Spotify track.
  * Defaults to strict playback identity. `lyrics` only offers manual navigation;
@@ -258,7 +266,7 @@ export function findBestMatch(
     const score = purpose === 'lyrics' ? lyricsDiscoveryScore(song, track) : songMatchScore(song, track);
     if (score < 0.5) continue;
 
-    const isOwn = currentUserEmail && song.created_by === currentUserEmail;
+    const isOwn = isOwnSong(song, currentUserEmail);
     const isPublic = song.is_public === 1;
     if (!isOwn && !isPublic) continue; // Non-public from others: ignored
 
@@ -314,7 +322,7 @@ export function isSongPlaying(
   if (songMatchScore(song, track) < 0.5) return false;
 
   // Own songs always match
-  if (currentUserEmail && song.created_by === currentUserEmail) return true;
+  if (isOwnSong(song, currentUserEmail)) return true;
   // Public songs match
   if (song.is_public === 1) return true;
   // Non-public songs from others don't match
