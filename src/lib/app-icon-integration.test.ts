@@ -36,7 +36,7 @@ const metadataDeclaration = layoutAst.statements
 assert.ok(metadataDeclaration?.initializer);
 const metadata = JSON.parse(JSON.stringify(runInNewContext(
   `(${metadataDeclaration.initializer.getText(layoutAst)})`,
-  { APP_ICON_REVISION, APP_NAME_NEUTRAL, APP_NAME_SHORT, APP_DESCRIPTION },
+  { APP_ICON_REVISION, APP_NAME_NEUTRAL, APP_NAME_SHORT, APP_DESCRIPTION, configuredOrigin: null },
 ))) as {
   manifest: string;
   icons: {

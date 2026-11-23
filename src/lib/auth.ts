@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
 import { getDB, schema, eq } from '@/lib/db';
 import { verifySession } from '@/lib/session-token';
@@ -41,14 +42,20 @@ async function getUserStatus(userId: string): Promise<{ isAdmin: boolean; isBloc
  * Auth is exclusively via Spotify OAuth — the cookie is set during /api/auth/callback.
  */
 export async function getAuthUser(request: NextRequest): Promise<AuthUser | null> {
-  const cookie = request.cookies.get(COOKIE_NAME)?.value;
-  if (!cookie) return null;
+  return authFromSessionCookie(request.cookies.get(COOKIE_NAME)?.value);
+}
 
+/** Same identity check as `getAuthUser`, for Server Components that have no request object. */
+export async function getAuthUserFromCookies(): Promise<AuthUser | null> {
+  const cookieStore = await cookies();
+  return authFromSessionCookie(cookieStore.get(COOKIE_NAME)?.value);
+}
+
+async function authFromSessionCookie(cookie: string | undefined): Promise<AuthUser | null> {
+  if (!cookie) return null;
   const userId = await verifySession(cookie);
   if (!userId) return null;
-
   const status = await getUserStatus(userId);
   if (!status || status.isBlocked) return null;
-
   return { id: userId, email: userId, name: '', role: status.isAdmin ? 'admin' : 'user', isAdmin: status.isAdmin, isBlocked: false };
 }

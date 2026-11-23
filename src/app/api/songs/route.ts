@@ -54,7 +54,21 @@ export async function GET(request: NextRequest) {
   // and a SQLite syntax error for admins (2026-10-08 outage, admin-only).
   const visibleWhere = songVisibilityWhere(user, SONGS_S_COLUMNS);
 
-  const selectColumns = sql`s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at, s.lyrics_needs_review`;
+  // Issue #462: expose the same edit permission GET /api/songs/[id] computes.
+  // Anonymous viewers must never match `created_by = ''`, so their branch is
+  // a literal 0 (legacy rows can have an empty owner).
+  const canEditColumn = user
+    ? sql`CASE WHEN ${user.isAdmin ? sql`1 = 1` : sql`1 = 0`} OR s.created_by = ${userEmail} THEN 1 ELSE 0 END AS can_edit`
+    : sql`0 AS can_edit`;
+  const selectColumns = sql`s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at, s.lyrics_needs_review, ${canEditColumn}`;
+
+  /** SQLite has no booleans: normalize 0/1 into the detail route's boolean shape. */
+  function toSongListItems(rows: unknown[]): SongListItem[] {
+    return rows.map((row) => {
+      const song = row as Omit<SongListItem, 'can_edit'> & { can_edit?: number };
+      return { ...song, can_edit: song.can_edit === 1 };
+    });
+  }
 
   if (favoritesOnly) {
     if (!user) {
@@ -76,7 +90,7 @@ export async function GET(request: NextRequest) {
       WHERE ${and(...filters)}
       ORDER BY s.updated_at DESC
     `;
-    const songs = await db.all(rawSql) as unknown as SongListItem[];
+    const songs = toSongListItems(await db.all(rawSql));
     return NextResponse.json(songs, { headers: NO_STORE_HEADERS });
   }
 
@@ -97,8 +111,8 @@ export async function GET(request: NextRequest) {
       FROM songs s
       WHERE ${and(...filters)}
       ORDER BY s.updated_at DESC
-    `) as unknown as SongListItem[];
-    return NextResponse.json(songs, { headers: NO_STORE_HEADERS });
+    `);
+    return NextResponse.json(toSongListItems(songs), { headers: NO_STORE_HEADERS });
   }
 }
 

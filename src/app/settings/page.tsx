@@ -368,7 +368,7 @@ export default function SettingsPage() {
 
       {/* 画中画 */}
       <section className="mb-6 rounded-lg border border-[var(--border)] bg-[var(--card)] p-5">
-        <h2 className="mb-2 text-sm font-semibold">{t('settings.sectionPip')}</h2>
+        <h2 className="mb-2 text-sm font-semibold">{t('settings.sectionPipTheme')}</h2>
         <div className="divide-y divide-[var(--border)]">
           <Row
             label={t('settings.pipTheme')}
@@ -463,7 +463,7 @@ export default function SettingsPage() {
 
       {/* Picture-in-Picture capability is browser-specific; only the opt-out is a saved user preference. */}
       <section className="mb-6 rounded-lg border border-[var(--border)] bg-[var(--card)] p-5">
-        <h2 className="mb-1 text-sm font-semibold">{t('settings.sectionPiP')}</h2>
+        <h2 className="mb-1 text-sm font-semibold">{t('settings.sectionPip')}</h2>
         <p className="mb-2 text-xs text-[var(--muted-foreground)]">{t('settings.pipStatusHint')}</p>
         <div className="divide-y divide-[var(--border)]">
           <Row

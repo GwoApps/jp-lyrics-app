@@ -6,6 +6,7 @@ import { TRANSLATION_ERROR_KEYS } from '@/lib/translation-errors';
 import { parseTranslationCache } from '@/lib/translation/parse';
 import { copyToClipboard } from '@/lib/clipboard';
 import { isLanguageTag, targetLangDisplay } from '@/lib/target-lang';
+import { useAuthSession } from '@/lib/auth-session';
 import { translationLangState } from '@/lib/translation-lang-match';
 import type { SongData } from '@/lib/types';
 
@@ -157,24 +158,27 @@ export function useTranslation(deps: UseTranslationDeps): UseTranslationReturn {
   }, []);
 
   // ── Target language fetch ───────────────────────────────
-  const fetchTargetLang = useCallback(async (): Promise<{
-    effective_target_lang?: string;
-    settings?: { translation_target_lang?: string };
-  } | null> => {
-    try {
-      const res = await fetch('/api/me/settings', { cache: 'no-store' });
-      if (!res.ok) return null;
-      return await res.json();
-    } catch { return null; }
-  }, []);
+  // Anonymous visitors have no personal target language; skip the request so
+  // public lyric pages don't emit a guaranteed 401 (issue #438).
+  const { session } = useAuthSession();
+  const signedIn = !!session?.user;
 
   useEffect(() => {
-    void fetchTargetLang().then((data) => {
-      if (!data) return;
-      applyEffectiveLang(data.effective_target_lang);
-      setTargetLangOverride(data.settings?.translation_target_lang ?? '');
-    });
-  }, [fetchTargetLang, applyEffectiveLang]);
+    if (!signedIn) return;
+    let cancelled = false;
+    fetch('/api/me/settings', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: {
+        effective_target_lang?: string;
+        settings?: { translation_target_lang?: string };
+      } | null) => {
+        if (cancelled || !data) return;
+        applyEffectiveLang(data.effective_target_lang);
+        setTargetLangOverride(data.settings?.translation_target_lang ?? '');
+      })
+      .catch(() => { /* keep the cached/default target language */ });
+    return () => { cancelled = true; };
+  }, [signedIn, applyEffectiveLang]);
 
   const setTargetLang = useCallback(async (code: string) => {
     try {

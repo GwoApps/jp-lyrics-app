@@ -25,6 +25,8 @@ interface SongItemCardProps {
   hideCover?: boolean;
   isPlaying: boolean | undefined;
   spotifyConnected: boolean;
+  /** Issue #462: only the song's owner (or an admin) may see the delete button. */
+  canEdit: boolean;
   isFavorite: boolean;
   favoritePending?: boolean;
   locale: string;
@@ -48,6 +50,7 @@ export default function SongItemCard({
   hideCover = false,
   isPlaying,
   spotifyConnected,
+  canEdit,
   isFavorite,
   favoritePending = false,
   locale,
@@ -181,9 +184,11 @@ export default function SongItemCard({
             <button onClick={onShare} title={shareLabel} aria-label={shareLabel} className="rounded p-1.5 sm:p-2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)]/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]">
               <Share2 className="h-3.5 w-3.5" />
             </button>
-            <button onClick={onDelete} aria-label={deleteLabel(song.title)} className="rounded p-1.5 sm:p-2 text-[var(--destructive)] hover:bg-[var(--destructive)]/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]">
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            {canEdit && (
+              <button onClick={onDelete} aria-label={deleteLabel(song.title)} className="rounded p-1.5 sm:p-2 text-[var(--destructive)] hover:bg-[var(--destructive)]/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
           </>
         )}
       </div>

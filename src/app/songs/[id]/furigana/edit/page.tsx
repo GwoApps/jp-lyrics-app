@@ -48,6 +48,7 @@ export default function FuriganaEditPage() {
   const [saving, setSaving] = useState(false);
   const [reconverting, setReconverting] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmReconvert, setConfirmReconvert] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -211,8 +212,9 @@ export default function FuriganaEditPage() {
     else void loadSong();
   }, [isDirty, loadSong]);
 
-  const handleReconvert = useCallback(async () => {
+  const doReconvert = useCallback(async () => {
     if (!song?.lyrics_raw) return;
+    setConfirmReconvert(false);
     setReconverting(true);
     try {
       const lines = await convertLyricsReading(song.lyrics_raw, normalizeReadingScheme(song.reading_scheme));
@@ -227,6 +229,11 @@ export default function FuriganaEditPage() {
       setReconverting(false);
     }
   }, [song, showToast, t]);
+
+  const handleReconvert = useCallback(() => {
+    if (isDirty) setConfirmReconvert(true);
+    else void doReconvert();
+  }, [isDirty, doReconvert]);
 
   const handleCancel = useCallback(() => {
     guardNavigate(`/songs/${id}`);
@@ -370,6 +377,16 @@ export default function FuriganaEditPage() {
         variant="danger"
         onConfirm={() => void doReset()}
         onCancel={() => setConfirmReset(false)}
+      />
+      <ConfirmDialog
+        open={confirmReconvert}
+        title={t('common.unsavedTitle')}
+        body={t('common.unsavedBody')}
+        confirmLabel={t('common.discard')}
+        cancelLabel={t('common.cancel')}
+        variant="danger"
+        onConfirm={() => void doReconvert()}
+        onCancel={() => setConfirmReconvert(false)}
       />
       {unsavedDialog}
     </div>

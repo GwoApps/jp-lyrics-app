@@ -23,11 +23,13 @@ const metadataDeclaration = layoutAst.statements
 assert.ok(metadataDeclaration?.initializer);
 const metadata = JSON.parse(JSON.stringify(runInNewContext(
   `(${metadataDeclaration.initializer.getText(layoutAst)})`,
-  { APP_ICON_REVISION, APP_NAME_NEUTRAL, APP_NAME_SHORT, APP_DESCRIPTION },
-))) as { title: string; description: string; appleWebApp: { title: string } };
+  { APP_ICON_REVISION, APP_NAME_NEUTRAL, APP_NAME_SHORT, APP_DESCRIPTION, configuredOrigin: null },
+))) as { title: unknown; description: string; appleWebApp: { title: string } };
+const title = metadata.title as string | { default: string; template: string };
 
 test('shell metadata names the app in a language-neutral way instead of Chinese-only copy', () => {
-  assert.equal(metadata.title, APP_NAME_NEUTRAL);
+  assert.equal(typeof title === 'string' ? title : title.default, APP_NAME_NEUTRAL);
+  assert.equal(typeof title === 'string' ? undefined : title.template, `%s · ${APP_NAME_SHORT}`);
   assert.equal(metadata.appleWebApp.title, APP_NAME_SHORT);
   assert.equal(metadata.description, APP_DESCRIPTION);
   // The reader-facing names must not be hard-coded copy in the layout.
@@ -44,6 +46,7 @@ test('PWA manifest ships the same neutral identity the layout metadata does', ()
 test('document title follows the UI locale once hydrated', () => {
   const sync = read('src/components/AppMetadataSync.tsx');
   assert.match(sync, /const name = t\('common\.appName'\)/);
+  assert.match(sync, /generic\.has\(document\.title\.trim\(\)\)/);
   assert.match(sync, /document\.title = name/);
   assert.match(sync, /meta\[name="apple-mobile-web-app-title"\]/);
   // Re-applied on navigation: Next.js re-emits layout metadata per route.

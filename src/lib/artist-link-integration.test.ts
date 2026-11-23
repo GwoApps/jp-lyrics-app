@@ -110,7 +110,7 @@ const song = { id: 'song-1', title: 'A song', artist: ' Aimer , AC/DC ', created
 for (const variant of ['list', 'grid']) {
   test(`rendered ${variant} song card keeps song navigation, individual artist links and playback actions independent`, () => {
     const html = render('components/SongItemCard.tsx', {
-      song, variant, isPlaying: true, spotifyConnected: true, isFavorite: false, locale: 'en',
+      song, variant, isPlaying: true, spotifyConnected: true, canEdit: true, isFavorite: false, locale: 'en',
       unknownArtistLabel: 'Unknown artist', createdByLabel: 'Created by', needsReviewLabel: 'Review', shareLabel: 'Share',
       openSongLabel: () => 'Open song', favoriteLabel: () => 'Favorite', deleteLabel: () => 'Delete',
       onPrefetch: () => {}, onToggleFavorite: () => {}, onShare: () => {}, onDelete: () => {},
