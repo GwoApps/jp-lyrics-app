@@ -563,6 +563,7 @@ export default function SongViewPage() {
 
       if (res.status === 401) {
         data.showToast('error', t('song.seekAuthFailed'), t('song.reconnect'), () => {
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- /api/auth/login is an OAuth API route: client-side routing would fetch it as a page instead of following the 302 to Spotify.
           window.location.assign('/api/auth/login');
         });
         return;
