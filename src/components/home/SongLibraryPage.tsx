@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Music, Plus, Unlink, Download, ExternalLink, Loader2, Search, Disc3, RefreshCw, ChevronRight, Tags, X } from 'lucide-react';
 import ConfirmDialog, { ARTIST_LINK_MARKER, artistLinkedDialogBody } from '@/components/ConfirmDialog';
 import ArtistLinks from '@/components/ArtistLinks';
@@ -40,9 +40,47 @@ const viewModeKey = (listKind: SongLibraryKind) => `jplrc:${listKind}:view-mode`
 /** `grid` is the only stored value; anything else (or nothing) means `list`. */
 const parseSongViewMode = (raw: string | null): SongViewMode => (raw === 'grid' ? 'grid' : 'list');
 
+/** URL contract for the library filters. Leave unrelated params (OAuth notices) alone. */
+type LibraryUrlFilters = {
+  q: string;
+  mine: boolean;
+  favorites: boolean;
+  collection: string | null;
+};
+
+function readLibraryUrlFilters(params: URLSearchParams): LibraryUrlFilters {
+  const favorites = params.get('favorites') === '1';
+  return {
+    q: params.get('q') ?? '',
+    mine: params.get('mine') === '1',
+    favorites,
+    // A collection filter only means anything while favorites are on.
+    collection: favorites ? (params.get('collection') || null) : null,
+  };
+}
+
+function writeLibraryUrlFilters(params: URLSearchParams, filters: LibraryUrlFilters): URLSearchParams {
+  const next = new URLSearchParams(params);
+  const setFlag = (key: string, on: boolean) => {
+    if (on) next.set(key, '1');
+    else next.delete(key);
+  };
+  if (filters.q) next.set('q', filters.q);
+  else next.delete('q');
+  setFlag('mine', filters.mine);
+  setFlag('favorites', filters.favorites);
+  if (filters.favorites && filters.collection) next.set('collection', filters.collection);
+  else next.delete('collection');
+  return next;
+}
+
 export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKind }) {
   const { t, bcp47 } = useI18n();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  // The root layout reads cookies/headers, so this route is dynamic: server and
+  // first client render see the same params (no hydration mismatch).
+  const initialUrlFilters = readLibraryUrlFilters(new URLSearchParams(searchParams.toString()));
   // The session cache is read after hydration: the server cannot see it, so
   // seeding state from it during render would break the SSR markup (issue #419).
   const cachedSongs = useCachedSongs<SongItem>();
@@ -78,19 +116,19 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [importAlert, setImportAlert] = useState<ImportAlertState | null>(null);
   const [importReview, setImportReview] = useState<ImportReviewState | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => initialUrlFilters.q);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   // Hydration-safe: the stored mode is adopted after hydration (issue #419).
   const [songViewMode, setSongViewMode] = useStoredPreference(viewModeKey(listKind), parseSongViewMode);
   const [collapsedAlbums, setCollapsedAlbums] = useState<Set<string>>(new Set());
   // Stable, SSR-safe prefix for the album group header/content id pairs (#318).
   const albumGroupIdPrefix = useId();
-  const [mySongsOnly, setMySongsOnly] = useState(false);
-  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [mySongsOnly, setMySongsOnly] = useState(() => initialUrlFilters.mine);
+  const [favoritesOnly, setFavoritesOnly] = useState(() => initialUrlFilters.favorites);
   const [showPlaylistImport, setShowPlaylistImport] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [collections, setCollections] = useState<{ id: string; name: string; songCount: number }[]>([]);
-  const [filterCollection, setFilterCollection] = useState<string | null>(null);
+  const [filterCollection, setFilterCollection] = useState<string | null>(() => initialUrlFilters.collection);
   const [collectionSongs, setCollectionSongs] = useState<{ id: string; ids: Set<string> } | null>(null);
   const [favoriteDialogSong, setFavoriteDialogSong] = useState<{ id: string; title: string } | null>(null);
   const [favoritePending, setFavoritePending] = useState<Set<string>>(new Set());
@@ -199,6 +237,31 @@ export default function SongLibraryPage({ listKind }: { listKind: SongLibraryKin
       window.history.replaceState({}, '', url.pathname + url.search);
     }
   }, [searchParams]);
+
+  // ─── Mirror search & filter state into the URL ───
+  // Keeps the query/filters shareable and restores them after a song page
+  // round trip. `replace` avoids stuffing every keystroke into the history.
+  const urlSyncTimer = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    const next = writeLibraryUrlFilters(
+      new URLSearchParams(searchParams.toString()),
+      { q: searchQuery.trim(), mine: mySongsOnly, favorites: favoritesOnly, collection: filterCollection },
+    );
+    // history.replaceState is invisible to the router, so strip the OAuth
+    // notice here as well or the notice would come back with the next sync.
+    next.delete('spotify_error');
+    next.delete('spotify');
+    const targetSearch = next.toString();
+    const currentSearch = searchParams.toString();
+    if (targetSearch === currentSearch) return;
+    if (urlSyncTimer.current !== undefined) window.clearTimeout(urlSyncTimer.current);
+    urlSyncTimer.current = window.setTimeout(() => {
+      router.replace(`${pathname}${targetSearch ? `?${targetSearch}` : ''}`, { scroll: false });
+    }, 300);
+    return () => {
+      if (urlSyncTimer.current !== undefined) window.clearTimeout(urlSyncTimer.current);
+    };
+  }, [searchQuery, mySongsOnly, favoritesOnly, filterCollection, pathname, router, searchParams]);
 
   // Adopt the session cache once, on the first post-hydration render, so a
   // returning reader sees the previous list instead of the loading skeleton.
