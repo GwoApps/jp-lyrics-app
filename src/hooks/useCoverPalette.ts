@@ -109,29 +109,39 @@ export function useCoverTheme(
   enabled = true,
 ): CoverTheme {
   const palette = useCoverPalette(coverUrl, refreshKey, serverPalette, cacheKey, onExtracted, enabled);
+  const readableText = useMemo(() => palette && ({
+    dark: rgb(readableCoverTextColor(palette, 'dark')),
+    light: rgb(readableCoverTextColor(palette, 'light')),
+  }), [palette]);
   const style = useMemo<React.CSSProperties | undefined>(() => {
-    if (!palette) return undefined;
+    if (!palette || !readableText) return undefined;
     return {
       '--song-accent': rgb(palette.primary),
       '--song-accent-primary': rgb(palette.primary),
       '--song-accent-secondary': rgb(palette.secondary),
       '--song-accent-tertiary': rgb(palette.tertiary),
-      '--song-accent-text-dark': rgb(readableCoverTextColor(palette, 'dark')),
-      '--song-accent-text-light': rgb(readableCoverTextColor(palette, 'light')),
+      '--song-accent-text-dark': readableText.dark,
+      '--song-accent-text-light': readableText.light,
     } as React.CSSProperties;
-  }, [palette]);
+  }, [palette, readableText]);
 
   useEffect(() => {
-    if (!palette) return;
+    if (!palette || !readableText) return;
 
+    // Mirror the readable colours on <body> so portalled menus (which live
+    // outside .song-view) inherit the same theme-selected text colour.
     document.body.style.setProperty('--song-page-accent', rgb(palette.primary));
+    document.body.style.setProperty('--song-accent-text-dark', readableText.dark);
+    document.body.style.setProperty('--song-accent-text-light', readableText.light);
     document.body.classList.add('song-page-themed');
 
     return () => {
       document.body.classList.remove('song-page-themed');
       document.body.style.removeProperty('--song-page-accent');
+      document.body.style.removeProperty('--song-accent-text-dark');
+      document.body.style.removeProperty('--song-accent-text-light');
     };
-  }, [palette]);
+  }, [palette, readableText]);
 
   return { palette, isThemed: palette !== null, style };
 }

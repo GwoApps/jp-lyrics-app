@@ -546,7 +546,7 @@ export default function TimelineEditorPage() {
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2 text-xs">
             <div className="truncate text-[var(--muted-foreground)]">{t('timelineWorkspace.progress')} <span className="ml-1 font-semibold text-[var(--foreground)] tabular-nums">{markedCount} / {lines.length}</span></div>
-            <div className="shrink-0 font-medium text-[var(--song-accent)]">{progressPercent}%</div>
+            <div className="shrink-0 font-medium text-[var(--song-accent-text)]">{progressPercent}%</div>
           </div>
           <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[var(--muted)]"><div className="h-full rounded-full bg-[var(--song-accent)]" style={{ width: `${progressPercent}%` }} /></div>
         </div>

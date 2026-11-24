@@ -139,7 +139,7 @@ export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSup
           <DropdownMenuContent side="top" align="end" className={mobileContentCls()}>
             {buildReadingMenuItems(data, song, t, canEdit).map((item, i) => {
               const activeCls = item.active
-                ? 'text-[var(--song-accent)] bg-[var(--song-accent)]/10 data-[highlighted]:bg-[var(--song-accent)]/10'
+                ? 'text-[var(--song-accent-text)] bg-[var(--song-accent)]/10 data-[highlighted]:bg-[var(--song-accent)]/10'
                 : '';
               return (
                 <DropdownMenuItem

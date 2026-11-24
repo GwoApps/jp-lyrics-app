@@ -399,7 +399,7 @@ export default function SongForm({
                 setReadingScheme('yue-jyutping');
                 setReadingSchemeConfirmed(true);
               }}
-              className="mt-2 text-left text-xs font-medium text-[var(--song-accent)] hover:underline"
+              className="mt-2 text-left text-xs font-medium text-[var(--song-accent-text)] hover:underline"
             >
               {t('new.cantoneseDetected')}
             </button>

@@ -512,7 +512,7 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
                   <button
                     type="button"
                     onClick={applyLine}
-                    className="rounded-md px-3 py-1.5 text-xs font-medium text-[var(--song-accent)] bg-[var(--song-accent)]/10 hover:bg-[var(--song-accent)]/20 transition-colors"
+                    className="rounded-md px-3 py-1.5 text-xs font-medium text-[var(--song-accent-text)] bg-[var(--song-accent)]/10 hover:bg-[var(--song-accent)]/20 transition-colors"
                   >
                     {t('furigana.applyToLine', { count: String(lineWordCount) })}
                   </button>
@@ -521,7 +521,7 @@ export default function FuriganaEditor({ lines, rawLines, onChange, readingSchem
                   <button
                     type="button"
                     onClick={() => setConfirmApplyAll(true)}
-                    className="rounded-md px-3 py-1.5 text-xs font-medium text-[var(--song-accent)] bg-[var(--song-accent)]/10 hover:bg-[var(--song-accent)]/20 transition-colors"
+                    className="rounded-md px-3 py-1.5 text-xs font-medium text-[var(--song-accent-text)] bg-[var(--song-accent)]/10 hover:bg-[var(--song-accent)]/20 transition-colors"
                   >
                     {t('furigana.applyAll', { count: String(lineWordCount + otherLineWordCount) })}
                   </button>

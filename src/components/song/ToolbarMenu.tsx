@@ -231,7 +231,7 @@ export function ToolbarMenu({ label, triggerLabel, items, triggerClassName }: {
           const cls = item.danger
             ? `${base} text-[var(--destructive)] data-[highlighted]:bg-[var(--destructive)]/15`
             : item.active
-              ? `${base} text-[var(--song-accent)] bg-[var(--song-accent)]/10 data-[highlighted]:bg-[var(--song-accent)]/15`
+              ? `${base} text-[var(--song-accent-text)] bg-[var(--song-accent)]/10 data-[highlighted]:bg-[var(--song-accent)]/15`
               : `${base} text-[var(--foreground)] data-[highlighted]:bg-[var(--accent)]`;
           if (item.href) {
             return (
