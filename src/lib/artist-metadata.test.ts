@@ -209,3 +209,78 @@ test('token lookup failure/timeout falls back to public metadata and empty names
   assert.equal(requests, 0);
   assert.equal((await resolve('YOASOBI', [{ spotify_track_id: '../bad' }], 'me')).source, 'Deezer');
 });
+
+test('visitor falls back to app-level token for public Spotify metadata', async () => {
+  const authHeaders: Array<string | null> = [];
+  let appTokenCalls = 0;
+  const resolve = createArtistMetadataResolver({
+    getApplicationToken: async () => { appTokenCalls++; return 'app-token'; },
+    fetch: async (input, options) => {
+      authHeaders.push(new Headers(options?.headers).get('Authorization'));
+      const url = String(input);
+      if (url.includes('/tracks/')) return response({ artists: [{ id: 'abc123', name: 'HACHI' }] });
+      if (url.includes('/artists/')) return response({ id: 'abc123', name: 'HACHI', images: [{ url: 'https://i.scdn.co/image/abc' }], genres: ['vocaloid'] });
+      return response({ data: [] });
+    },
+  });
+  const result = await resolve('HACHI', [{ spotify_track_id: 'track123' }]);
+  assert.equal(result.source, 'Spotify');
+  assert.deepEqual(result.genres, ['vocaloid']);
+  assert.equal(result.imageUrl, 'https://i.scdn.co/image/abc');
+  assert.equal(appTokenCalls, 1);
+  assert.ok(authHeaders.every((header) => header === 'Bearer app-token'));
+});
+
+test('user token is preferred; app token is used only when the user token fails', async () => {
+  const authHeaders: string[] = [];
+  const resolve = createArtistMetadataResolver({
+    getAccessToken: async () => 'user-token',
+    getApplicationToken: async () => 'app-token',
+    fetch: async (input, options) => {
+      authHeaders.push(new Headers(options?.headers).get('Authorization')!);
+      const url = String(input);
+      if (url.includes('/tracks/')) return response({ artists: [{ id: 'abc123', name: 'HACHI' }] });
+      if (url.includes('/artists/')) return response({ id: 'abc123', name: 'HACHI', images: [], genres: [] });
+      return response({ data: [] });
+    },
+  });
+  assert.equal((await resolve('HACHI', [{ spotify_track_id: 'track123' }], 'me')).source, 'Spotify');
+  assert.ok(authHeaders.every((header) => header === 'Bearer user-token'));
+
+  const fallback = createArtistMetadataResolver({
+    getAccessToken: async () => { throw new Error('refresh failed'); },
+    getApplicationToken: async () => 'app-token',
+    fetch: async (input, options) => {
+      const url = String(input);
+      if (url.includes('api.spotify.com')) assert.equal(new Headers(options?.headers).get('Authorization'), 'Bearer app-token');
+      if (url.includes('/tracks/')) return response({ artists: [{ id: 'abc123', name: 'HACHI' }] });
+      if (url.includes('/artists/')) return response({ id: 'abc123', name: 'HACHI', images: [], genres: [] });
+      return response({ data: [] });
+    },
+  });
+  assert.equal((await fallback('HACHI', [{ spotify_track_id: 'track123' }], 'me')).source, 'Spotify');
+});
+
+test('app token cooldown is shared by visitors but never blocks user tokens', async () => {
+  const now = 0;
+  let appTokenCalls = 0;
+  const resolve = createArtistMetadataResolver({
+    now: () => now,
+    failureTtlMs: 50,
+    getAccessToken: async () => 'user-token',
+    getApplicationToken: async () => { appTokenCalls++; return 'app-token'; },
+    fetch: async (input, options) => {
+      if (!String(input).includes('api.spotify.com')) return response({ data: [] });
+      if (new Headers(options?.headers).get('Authorization') === 'Bearer app-token') return new Response('', { status: 503 });
+      const url = String(input);
+      if (url.includes('/tracks/')) return response({ artists: [{ id: 'A1', name: 'A' }] });
+      return response({ id: 'A1', name: 'A', images: [], genres: [] });
+    },
+  });
+  const appTrack = [{ spotify_track_id: 'apptrack' }];
+  const userTrack = [{ spotify_track_id: 'usertrack' }];
+  assert.equal((await resolve('A', appTrack)).source, null);
+  assert.equal((await resolve('A', appTrack)).source, null);
+  assert.equal(appTokenCalls, 1);
+  assert.equal((await resolve('A', userTrack, 'me')).source, 'Spotify');
+});

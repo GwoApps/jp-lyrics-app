@@ -1,6 +1,6 @@
 import { getDB, schema, eq } from './db';
 import { nowUtcSql } from './db-time-sql.ts';
-import { isFetchTimeoutError } from './fetch-timeout';
+import { isFetchTimeoutError, SPOTIFY_REQUEST_TIMEOUT_MS } from './fetch-timeout';
 import {
   createSpotifyClient,
   normalizeSpotifyTrack,
@@ -8,6 +8,25 @@ import {
   type SpotifyResult,
   type SpotifyTrackMetadata,
 } from './spotify-api';
+
+/**
+ * App-level Spotify token for PUBLIC metadata only (artist avatars/genres and
+ * track identity). Client credentials carry no user session; never use this
+ * token for playback or any `/me` endpoint.
+ * Returns null when app credentials are absent or the token exchange fails.
+ */
+export async function getSpotifyApplicationToken(): Promise<string | null> {
+  const { SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET } = await import('./spotify-api');
+  if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) return null;
+  try {
+    const result = createSpotifyClient().requestApplicationToken();
+    const settled = await Promise.race([
+      result.then((value) => ({ value })),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('spotify_app_token_timeout')), SPOTIFY_REQUEST_TIMEOUT_MS)),
+    ]);
+    return settled.value.ok ? settled.value.data.access_token : null;
+  } catch { return null; }
+}
 
 export {
   SPOTIFY_CLIENT_ID,

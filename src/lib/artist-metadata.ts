@@ -5,6 +5,7 @@ interface MetadataOptions {
   fetch?: typeof fetch;
   now?: () => number;
   getAccessToken?: (email: string) => Promise<string | null>;
+  getApplicationToken?: () => Promise<string | null>;
   maxEntries?: number;
   successTtlMs?: number;
   failureTtlMs?: number;
@@ -39,13 +40,39 @@ export function createArtistMetadataResolver(options: MetadataOptions = {}) {
   // Only transient failure state is user-scoped; public success cache never
   // stores credentials or local-library rows, and one bad token cannot poison it.
   const spotifyCooldowns = new Map<string, number>();
-  function coolDown(email: string, error: unknown) {
+  const appCooldowns = { until: 0 };
+  function coolDown(store: Map<string, number> | { until: number }, key: string, error: unknown) {
     const retry = object(error).retryAfterMs;
     const duration = Math.max(failureTtl, typeof retry === 'number' && Number.isFinite(retry) ? retry : 0);
-    const until = Math.max(spotifyCooldowns.get(email) ?? 0, now() + duration);
-    spotifyCooldowns.delete(email);
-    while (spotifyCooldowns.size >= limit) spotifyCooldowns.delete(spotifyCooldowns.keys().next().value!);
-    spotifyCooldowns.set(email, until);
+    if ('until' in store) {
+      store.until = Math.max(store.until, now() + duration);
+      return;
+    }
+    const until = Math.max(store.get(key) ?? 0, now() + duration);
+    store.delete(key);
+    while (store.size >= limit) store.delete(store.keys().next().value!);
+    store.set(key, until);
+  }
+  // User token first; app-level token is public-metadata-only fallback.
+  async function spotifyToken(email?: string | null): Promise<{ token: string; cooldown: Map<string, number> | { until: number }; key: string } | null> {
+    const key = email ?? '';
+    if ((spotifyCooldowns.get(key) ?? 0) > now()) return null;
+    // Only a signed-in viewer has a user token; visitors go straight to the
+    // app-level token for public metadata.
+    if (email && options.getAccessToken) {
+      spotifyCooldowns.delete(key);
+      try {
+        const token = await bounded(() => options.getAccessToken!(key));
+        if (token) return { token, cooldown: spotifyCooldowns, key };
+      } catch { /* fall through to app token */ }
+    }
+    if (appCooldowns.until > now()) return null;
+    if (!options.getApplicationToken) return null;
+    try {
+      const token = await bounded(() => options.getApplicationToken!());
+      if (token) return { token, cooldown: appCooldowns, key: '' };
+    } catch { /* no app token available */ }
+    return null;
   }
 
   async function bounded<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
@@ -127,26 +154,30 @@ export function createArtistMetadataResolver(options: MetadataOptions = {}) {
     }, (profile) => profile.source ? successTtl : failureTtl) ?? neutral(name);
   }
 
-  async function spotifyJson(url: string, token: string, email: string): Promise<JsonObject> {
+  async function spotifyJson(
+    url: string,
+    token: string,
+    cooldown: Map<string, number> | { until: number },
+    key: string,
+  ): Promise<JsonObject> {
     // A sibling track lookup or a request awaiting token refresh may establish
     // the cooldown after spotify() started. Gate every new outbound request.
-    if ((spotifyCooldowns.get(email) ?? 0) > now()) throw new Error('artist_metadata_cooldown');
+    if ('until' in cooldown ? cooldown.until > now() : (cooldown.get(key) ?? 0) > now()) throw new Error('artist_metadata_cooldown');
     try { return await json(url, token); }
-    catch (error) { coolDown(email, error); throw error; }
+    catch (error) { coolDown(cooldown, key, error); throw error; }
   }
 
-  async function spotify(name: string, songs: readonly MetadataSong[], email: string): Promise<ArtistProfile | null> {
-    if (!options.getAccessToken || (spotifyCooldowns.get(email) ?? 0) > now()) return null;
-    spotifyCooldowns.delete(email);
+  async function spotify(name: string, songs: readonly MetadataSong[], email?: string | null): Promise<ArtistProfile | null> {
     try {
-      const token = await bounded(() => options.getAccessToken!(email));
-      if (!token) return null;
+      const resolved = await spotifyToken(email);
+      if (!resolved) return null;
+      const { token, cooldown, key } = resolved;
       // Bounded enrichment only; the library endpoints never limit their songs.
       const trackIds = [...new Set(songs.map((song) => song.spotify_track_id).filter(validId))].slice(0, 3);
       const tracks = await Promise.all(trackIds.map(async (id) => {
         try {
           return await memo(`spotify-track:${id}`, async () => {
-            const track = await spotifyJson(`https://api.spotify.com/v1/tracks/${id}`, token, email);
+            const track = await spotifyJson(`https://api.spotify.com/v1/tracks/${id}`, token, cooldown, key);
             // Retain only public artist identity, not the full track or caller's library.
             return array(track.artists).map(object).filter((artist) => validId(artist.id) && typeof artist.name === 'string')
               .map((artist) => ({ id: String(artist.id), name: String(artist.name) }));
@@ -162,7 +193,7 @@ export function createArtistMetadataResolver(options: MetadataOptions = {}) {
       // ID-keyed positive cache is independent of anonymous name-search misses.
       return await memo(`spotify:${id}`, async () => {
         try {
-          const artist = await spotifyJson(`https://api.spotify.com/v1/artists/${id}`, token, email);
+          const artist = await spotifyJson(`https://api.spotify.com/v1/artists/${id}`, token, cooldown, key);
           if (artist.id !== id || typeof artist.name !== 'string' || artistKey(artist.name) !== artistKey(name)) return null;
           const images = array(artist.images).map(object).sort((a, b) => Number(b.width ?? 0) - Number(a.width ?? 0));
           const imageUrl = images.map((image) => safeUrl(image.url, ['i.scdn.co', 'mosaic.scdn.co'], '/image/')).find(Boolean) ?? null;
@@ -180,10 +211,8 @@ export function createArtistMetadataResolver(options: MetadataOptions = {}) {
 
   return async function resolve(name: string, songs: readonly MetadataSong[] = [], userEmail?: string | null): Promise<ArtistProfile> {
     if (!artistKey(name)) return neutral(name);
-    if (userEmail) {
-      const verified = await spotify(name, songs, userEmail);
-      if (verified) return verified;
-    }
+    const verified = await spotify(name, songs, userEmail);
+    if (verified) return verified;
     const profile = await deezer(name);
     return profile.source ? profile : neutral(name);
   };
@@ -193,5 +222,9 @@ export const getArtistProfile = createArtistMetadataResolver({
   getAccessToken: async (email) => {
     const { getSpotifyTokenForUser } = await import('./spotify');
     return getSpotifyTokenForUser(email);
+  },
+  getApplicationToken: async () => {
+    const { getSpotifyApplicationToken } = await import('./spotify');
+    return getSpotifyApplicationToken();
   },
 });
