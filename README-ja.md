@@ -51,6 +51,7 @@ npm run dev
 | `AI_DAILY_NEURON_LIMIT` | 任意の1日あたり翻訳上限 |
 | `SESSION_SECRET`、`JPLRC_LOGIN_PASSPHRASE_REQUIRED`、`JPLRC_LOGIN_PASSPHRASE` | 本番では独立したセッション署名用シークレットを設定。OAuth 前のパスフレーズ確認は任意 |
 | `LYRICS_PROVIDER_*` | HTTP 歌詞ソースのデプロイレベルのネットワーク制限、Bearer キー暗号化、タイムアウト。詳細は[デプロイガイド第4節](DEPLOYMENT.md#4-http-lyrics-providers-deployment-configuration-issue-148) |
+| `JPLRC_SEO_ENABLED` | `true` に設定した場合のみ `/robots.txt` と `/sitemap.xml` を公開（公開曲のみ）。既定は無効 |
 
 管理者はアプリ内でも**グローバルな翻訳プロバイダ／モデル**を設定できます。DB に保存された空でない値が環境変数に優先し、空欄は環境変数へフォールバックします。ログインユーザーは翻訳先言語を個別に上書きできます。詳細は [.env.example](.env.example) と [DEPLOYMENT.md](DEPLOYMENT.md) を参照。実際の認証情報はコミットしないでください。
 

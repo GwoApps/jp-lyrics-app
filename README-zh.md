@@ -51,6 +51,7 @@ npm run dev
 | `AI_DAILY_NEURON_LIMIT` | 可选的每日翻译配额 |
 | `SESSION_SECRET`、`JPLRC_LOGIN_PASSPHRASE_REQUIRED`、`JPLRC_LOGIN_PASSPHRASE` | 生产环境设置独立的会话签名密钥；可选登录前口令校验 |
 | `LYRICS_PROVIDER_*` | HTTP 歌词源的部署级网络策略、Bearer 密钥加密及超时预算；详见[部署指南第 4 节](DEPLOYMENT.md#4-http-lyrics-providers-deployment-configuration-issue-148) |
+| `JPLRC_SEO_ENABLED` | 设为 `true` 才开放 `/robots.txt` 与 `/sitemap.xml`（仅含公开歌曲）；默认关闭 |
 
 管理员还可以在应用内配置**全局翻译 Provider／模型**：数据库中非空的设置优先于环境变量，空值回退环境变量；登录用户可另行覆盖目标语言。详情见 [.env.example](.env.example) 和 [DEPLOYMENT.md](DEPLOYMENT.md)。不要提交真实凭据。
 

@@ -79,6 +79,10 @@ Optional application settings in `.env`:
 # incoming request host when unset).
 JPLRC_SITE_URL=https://jplrc.example.com
 
+# Search-engine discovery is opt-in (ISSUE #494). Only an explicit `true`
+# exposes /robots.txt and /sitemap.xml; keep it off on staging/private hosts.
+JPLRC_SEO_ENABLED=false
+
 # Spotify OAuth: required to log in, optional for anonymous public reading
 SPOTIFY_CLIENT_ID=your_client_id
 SPOTIFY_CLIENT_SECRET=your_client_secret
