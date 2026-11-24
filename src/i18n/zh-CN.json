@@ -323,7 +323,7 @@
     "translationUnavailable": "翻译服务未配置",
     "translationEmptyLyrics": "歌词为空，无法翻译",
     "translationFailed": "翻译失败",
-    "translationQuotaExceeded": "今日 AI 翻译额度已用尽，请明天再试",
+    "translationQuotaExceeded": "今日 AI 翻译额度已用尽，配额按 UTC 日重置（北京时间 08:00），请在重置后重试。",
     "translationStaleSource": "翻译期间歌词已在其他页面更新，请刷新后重试",
     "spotify": "Spotify",
     "spotifyLoading": "正在加载 Spotify 播放状态…",

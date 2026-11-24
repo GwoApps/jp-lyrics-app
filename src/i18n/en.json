@@ -323,7 +323,7 @@
     "translationUnavailable": "Translation service not configured",
     "translationEmptyLyrics": "No lyrics to translate",
     "translationFailed": "Translation failed",
-    "translationQuotaExceeded": "Daily AI translation quota reached — try again tomorrow",
+    "translationQuotaExceeded": "Daily AI translation quota reached — resets at 00:00 UTC (08:00 Beijing time). Please try again after that.",
     "translationStaleSource": "Lyrics were updated elsewhere during translation. Reload and retry.",
     "spotify": "Spotify",
     "spotifyLoading": "Loading Spotify playback status…",

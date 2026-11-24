@@ -323,7 +323,7 @@
     "translationUnavailable": "翻訳サービスが設定されていません",
     "translationEmptyLyrics": "歌詞が空のため翻訳できません",
     "translationFailed": "翻訳に失敗しました",
-    "translationQuotaExceeded": "本日の AI 翻訳枠を使い切りました。明日またお試しください",
+    "translationQuotaExceeded": "本日の AI 翻訳枠を使い切りました。枠は UTC の 00:00（北京時間 08:00）にリセットされます。それ以降にお試しください。",
     "translationStaleSource": "翻訳中に歌詞が別の画面で更新されました。再読み込みしてやり直してください",
     "spotify": "Spotify連携",
     "spotifyLoading": "Spotifyの再生状態を読み込み中…",
