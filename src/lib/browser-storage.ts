@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState, useSyncExternalStore, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Dispatch, type SetStateAction } from 'react';
+import { useAuthSession } from './auth-session';
+import { queueSettingUpload } from './settings-upload';
 
 /**
  * Reading `localStorage` / `sessionStorage` during render is only safe once the
@@ -65,6 +67,10 @@ export function useStoredPreference<T>(
   parse: (raw: string | null) => T,
   serialize: (value: T) => string = String,
 ): readonly [T, Dispatch<SetStateAction<T>>] {
+  const { session } = useAuthSession();
+  const isLoggedIn = !!session?.user;
+  const isLoggedInRef = useRef(isLoggedIn);
+  useEffect(() => { isLoggedInRef.current = isLoggedIn; }, [isLoggedIn]);
   const stored = useStoredString(key);
   // The raw string the reader chose, or `null` while the stored value is still
   // authoritative. Keeping the serialized form (not the parsed value) means the
@@ -75,7 +81,10 @@ export function useStoredPreference<T>(
   useEffect(() => {
     // Only a reader's own choice is written back; the initial render must not
     // overwrite a stored value it merely read.
-    if (chosen !== null) writeStoredString(key, chosen);
+    if (chosen !== null) {
+      writeStoredString(key, chosen);
+      queueSettingUpload(key, isLoggedInRef.current);
+    }
   }, [key, chosen]);
 
   const setValue = useCallback<Dispatch<SetStateAction<T>>>((action) => {
