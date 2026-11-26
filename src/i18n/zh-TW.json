@@ -333,6 +333,7 @@
     "pipBtn": "懸浮展示",
     "immersiveEnter": "全螢幕歌詞",
     "lyricsRegion": "歌詞",
+    "lyricsKeyboardHint": "j/k：移動焦點 · Enter：複製當前行",
     "immersiveClose": "關閉全螢幕歌詞",
     "immersiveSettings": "閱讀設定",
     "immersiveSmaller": "縮小歌詞",

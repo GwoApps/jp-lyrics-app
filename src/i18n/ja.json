@@ -333,6 +333,7 @@
     "pipBtn": "フローティング表示",
     "immersiveEnter": "全画面歌詞",
     "lyricsRegion": "歌詞",
+    "lyricsKeyboardHint": "j/k：行を移動 · Enter：現在の行をコピー",
     "immersiveClose": "全画面歌詞を閉じる",
     "immersiveSettings": "表示設定",
     "immersiveSmaller": "歌詞を小さく",

@@ -60,6 +60,10 @@ import { parseLyricsGlossary } from '@/lib/lyrics-glossary';
 import { getPiPCapabilities } from '@/lib/pip-support';
 import { formatDbDateTime } from '@/lib/db-time';
 import { resolveSharedLyricLine } from '@/lib/shared-line';
+import {
+  clampLineIndex, isLineCopyShortcut, isLineNavigationShortcut,
+  NATIVE_SCROLL_KEYS, readingViewOwnsKey,
+} from '@/lib/lyrics-keyboard-nav';
 
 /** Reusable button class builder */
 function btnCls(active?: boolean, variant?: 'danger') {
@@ -435,6 +439,69 @@ export default function SongViewPage() {
       })
       .catch(() => {});
   }, [id, currentUserEmail, spotifyConnected, coverUrl, data.song?.permissions?.can_edit]);
+  // Roving keyboard focus on one row (issue #473): the container stays the only
+  // Tab stop, while aria-current names the row j/k/Enter operate on. Playback
+  // follow owns the same attribute for the active line, so browsing pauses it
+  // just like a wheel scroll instead of fighting over the highlight.
+  const [focusedLine, setFocusedLine] = useState(-1);
+  const [keyboardHint, setKeyboardHint] = useState(false);
+  const focusedLineRef = useRef(focusedLine);
+  const noteScrollRef = useRef(immersive.noteManualScroll);
+  const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { focusedLineRef.current = focusedLine; }, [focusedLine]);
+  useEffect(() => { noteScrollRef.current = immersive.noteManualScroll; }, [immersive.noteManualScroll]);
+  useEffect(() => () => { if (hintTimerRef.current) clearTimeout(hintTimerRef.current); }, []);
+
+  const setFocusedLineIndex = useCallback((next: number) => {
+    const clamped = clampLineIndex(next, data.furiganaLines.length);
+    if (clamped < 0) return;
+    setFocusedLine(clamped);
+    focusedLineRef.current = clamped;
+    noteScrollRef.current();
+    const container = lyricsRef.current;
+    const line = lineRefs.current[clamped];
+    if (!container || !line) return;
+    const box = line.getBoundingClientRect();
+    cancelSmoothScroll(container);
+    container.scrollTop = centeredLyricScrollTop(
+      container.scrollTop, container.clientHeight,
+      box.top - container.getBoundingClientRect().top, box.height,
+    );
+  }, [data.furiganaLines.length]);
+
+  const handleLyricsKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || event.nativeEvent.isComposing || readingViewOwnsKey(event.target)) return;
+    const count = data.furiganaLines.length;
+    if (NATIVE_SCROLL_KEYS.has(event.key)) {
+      noteScrollRef.current();
+    }
+    if (!event.altKey && !event.ctrlKey && !event.metaKey && isLineNavigationShortcut(event.key)) {
+      if (count === 0) return;
+      event.preventDefault();
+      const current = focusedLineRef.current;
+      const step = event.key.toLowerCase() === 'j' ? 1 : -1;
+      const next = current < 0
+        ? (step > 0 ? 0 : count - 1)
+        : current + step;
+      setFocusedLineIndex(next);
+      setKeyboardHint(true);
+      if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
+      hintTimerRef.current = setTimeout(() => setKeyboardHint(false), 3000);
+      return;
+    }
+    if (isLineCopyShortcut(event.key)) {
+      const target = focusedLineRef.current >= 0 ? focusedLineRef.current : sync.activeLine;
+      const line = target >= 0 ? data.furiganaLines[target] : null;
+      if (!line) return;
+      event.preventDefault();
+      const text = line.segments.map((segment) => segment.text).join('');
+      if (!text) return;
+      void copyToClipboard(text).then((ok) => {
+        data.showToast(ok ? 'success' : 'error', ok ? t('share.copied') : t('song.copyFailed'));
+      });
+    }
+  }, [data, setFocusedLineIndex, sync.activeLine, t]);
+
   if (data.loading) {
     return (
       <div className="fade-in flex flex-col h-[calc(100dvh-2.75rem)] pb-24 overflow-hidden sm:block sm:h-auto sm:pb-0">
@@ -1157,18 +1224,18 @@ export default function SongViewPage() {
             tabIndex={0}
             role="region"
             aria-label={t('song.lyricsRegion')}
+            aria-keyshortcuts="j k Enter"
             onWheel={immersive.noteManualScroll}
             onTouchMove={immersive.noteManualScroll}
             onPointerDown={immersive.noteManualScroll}
-            onKeyDown={(event) => {
-              if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) immersive.noteManualScroll();
-            }}>
+            onKeyDown={handleLyricsKeyDown}>
             {hasLyrics && furiganaLines.length > 0 ? (
               furiganaLines.map((line, i) => (
                 <div key={i} ref={(el) => { lineRefs.current[i] = el; }}
                   data-shared-highlight={highlightedLine === i && !immersive.active ? true : undefined}
                   data-lyric-distance={immersive.active && immersiveSynced ? Math.min(2, Math.abs(i - activeLine)) : undefined}
-                  aria-current={immersive.active && immersiveSynced && i === activeLine ? true : undefined}>
+                  data-keyboard-focused={focusedLine === i ? true : undefined}
+                  aria-current={focusedLine === i || (immersive.active && immersiveSynced && i === activeLine) ? true : undefined}>
                   <FuriganaLineView
                     line={line}
                     isActive={i === activeLine && !!isSynced}
@@ -1246,6 +1313,9 @@ export default function SongViewPage() {
               </div>
             )}
           </div>
+          {keyboardHint && (
+            <div className="lyrics-keyboard-hint" role="status">{t('song.lyricsKeyboardHint')}</div>
+          )}
         </div>
 
         {/* Desktop time axis: sits in the left gutter, OUTSIDE the card, and is

@@ -333,6 +333,7 @@
     "pipBtn": "Floating Display",
     "immersiveEnter": "Full-screen lyrics",
     "lyricsRegion": "Lyrics",
+    "lyricsKeyboardHint": "j/k: move focus · Enter: copy the focused line",
     "immersiveClose": "Close full-screen lyrics",
     "immersiveSettings": "Reading settings",
     "immersiveSmaller": "Smaller lyrics",

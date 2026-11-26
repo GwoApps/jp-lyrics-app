@@ -1417,6 +1417,26 @@ textarea {
   opacity: 1;
 }
 .lyric-line rt { color: currentColor; opacity: 0.65; }
+/* Keyboard line navigation (issue #473): one roving row is highlighted without
+   making every lyric line a Tab stop; :focus-visible keeps mouse clicks quiet. */
+.lyrics-scroll > [data-keyboard-focused] {
+  outline: 2px solid color-mix(in srgb, var(--song-accent, var(--primary)) 75%, transparent);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+.lyrics-keyboard-hint {
+  position: absolute;
+  z-index: 11;
+  right: 12px;
+  bottom: 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 95%, transparent);
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
 @keyframes lyricActivate {
   0% { transform: scale(1); filter: brightness(1); }
   40% { transform: scale(1.06); filter: brightness(1.25); }
@@ -1848,6 +1868,11 @@ textarea {
   .lyric-line-context-trigger {
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  .lyrics-keyboard-hint,
+  .lyrics-scroll > [data-keyboard-focused] {
+    display: none !important;
   }
 
   .lyric-line,
