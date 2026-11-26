@@ -522,7 +522,8 @@
     "syncDiffConfirmTitle": "同步前确认歌词差异",
     "syncDiffConfirmBody": "获取到的歌词与库中不同。确认后将覆盖歌词，并重置下方涉及的按行注音、译文与自动抽取的术语表，此操作不可撤销。",
     "syncDiffSummary": "变更：新增 {added} 行、删除 {removed} 行、修改 {changed} 行",
-    "syncDiffExpand": "查看全部 {count} 处变更"
+    "syncDiffExpand": "查看全部 {count} 处变更",
+    "translationAvailableLangs": "已有译文：{langs}"
   },
   "timeline": {
     "title": "LRC 时间轴编辑",

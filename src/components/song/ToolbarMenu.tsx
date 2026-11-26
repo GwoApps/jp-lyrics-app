@@ -106,6 +106,16 @@ export function buildReadingMenuItems(
       onClick: () => data.setRomanizeFurigana(!data.romanizeFurigana),
       keepOpen: true,
     }]),
+    // ISSUE #485: show which other languages already have a saved cache so
+    // switching the target language is an informed, one-tap view change.
+    ...(data.availableTranslationLangs.length > 0 ? [{
+      icon: <Languages className="h-3.5 w-3.5" />,
+      label: t('song.translationAvailableLangs', {
+        langs: data.availableTranslationLangs.map((lang) => targetLangDisplay(lang)).join(' / '),
+      }),
+      keepOpen: true,
+      onClick: () => {},
+    } as ToolbarMenuItem] : []),
     {
       icon: data.translating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Languages className="h-3.5 w-3.5" />,
       label: translationLabel(),

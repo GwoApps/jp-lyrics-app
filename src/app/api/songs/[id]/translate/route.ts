@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDB, schema } from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import { getAuthUser } from '@/lib/auth';
+import { readSongTranslation, writeSongTranslation, ensureSongTranslations } from '@/lib/song-translations';
 import { extractLyricsGlossary, getTranslationConfig, streamTranslateLyricLines, translateLyricLines, TranslationError, type GlossaryEntry } from '@/lib/translation';
 import { getStoredTranslationConfig, resolveTranslationConfig } from '@/lib/translation-settings';
 import { getUserSettings, applyUserTargetLang } from '@/lib/user-settings';
@@ -121,14 +122,22 @@ export async function POST(
     return NextResponse.json({ error: 'empty_lyrics' }, { status: 400 });
   }
 
-  // The stored cache was generated in a specific target language. A cache
-  // whose recorded language doesn't match the current effective target
-  // language is treated as NOT a valid cache for this request — the user
-  // changed their target language (or the admin/global default changed) and
-  // the old translations would otherwise be served as-is (issue #93).
-  // Unknown/NULL language (legacy data, manual corrections) is likewise
-  // treated as incompatible so the first request re-translates.
-  const cacheLangMatches = existing.lyricsTranslationLang === config.targetLang;
+  // ISSUE #485: every language owns a cache row. Switching the target language
+  // now reads the cache that belongs to THAT language instead of discarding the
+  // whole-song translation. The legacy columns stay as the compatibility view
+  // for the current effective language; readSongTranslation() falls back to
+  // them for rows written before the new table existed.
+  await ensureSongTranslations(db);
+  const perLang = await readSongTranslation(db, id, config.targetLang, {
+    lyrics_translation: existing.lyricsTranslation,
+    lyrics_translation_lang: existing.lyricsTranslationLang,
+    lyrics_translation_reasoning: existing.lyricsTranslationReasoning,
+  });
+  const effectiveCache = perLang?.lines ?? (existing.lyricsTranslationLang === config.targetLang ? existing.lyricsTranslation : null);
+  // The cache was generated in the target language iff its row is keyed by that
+  // language (or the legacy stamp matches). Unknown/NULL legacy data stays
+  // incompatible so the first request re-translates and stamps the row.
+  const cacheLangMatches = !!perLang || (existing.lyricsTranslationLang === config.targetLang && !!existing.lyricsTranslation);
 
   // An empty array (the default '[]' placeholder) is NOT a valid cache — it means
   // the song was never translated, so fall through to real translation.
@@ -144,9 +153,9 @@ export async function POST(
   // editor's AI fill / single-line re-translate stays inside the draft
   // 「保存/放弃」boundary — the user persists the whole draft on save (#251).
   const persist = body.persist !== false;
-  if (!isSlice && !force && cacheLangMatches && existing.lyricsTranslation) {
+  if (!isSlice && !force && cacheLangMatches && effectiveCache) {
     try {
-      const cached = JSON.parse(existing.lyricsTranslation);
+      const cached = JSON.parse(effectiveCache!);
       if (Array.isArray(cached) && cached.length === lines.length
         && cached.every((item, i) => typeof item === 'string' && (lines[i].trim() ? item !== '' : true))) {
         if (body.stream === true) {
@@ -179,8 +188,8 @@ export async function POST(
   // When the recorded language doesn't match the current target language, the
   // old translations are unusable (wrong language) — treat the cache as empty
   // so the whole song is re-translated into the new language (issue #93).
-  const cache: string[] = cacheLangMatches
-    ? parseTranslationCache(existing.lyricsTranslation, lines.length)
+  const cache: string[] = cacheLangMatches && effectiveCache
+    ? parseTranslationCache(effectiveCache, lines.length)
     : Array(lines.length).fill('');
 
   // Dedup: map each distinct non-empty line to its first occurrence (whole song),
@@ -560,6 +569,10 @@ export async function POST(
               send('error', { error: 'stale_annotation_source', ...progressPayload(requestDone, coverage) });
               return;
             }
+            await writeSongTranslation(db, {
+              songId: id, lang: config.targetLang,
+              lines: JSON.stringify(result.cache), reasoning: reasoningBuffer,
+            }).catch(() => {});
           }
           send('done', { start, count: finalSlice.length, translations: finalSlice, cached: false, lang: config.targetLang, glossary_failed: glossaryExtractionFailed, ...glossaryReport(), ...progressPayload(requestDone, coverage) });
         } catch (error) {
@@ -591,6 +604,11 @@ export async function POST(
             });
             if (!reasoningWrite.ok) {
               console.warn('[translate] reasoning not persisted (source lyrics changed mid-flight)');
+            } else {
+              await writeSongTranslation(db, {
+                songId: id, lang: config.targetLang,
+                lines: JSON.stringify(cache), reasoning: reasoningBuffer,
+              }).catch(() => {});
             }
           }
           // Persist whatever complete lines streamed in before the failure so

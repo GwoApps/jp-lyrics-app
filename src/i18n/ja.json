@@ -522,7 +522,8 @@
     "syncDiffConfirmTitle": "同期前の歌詞の差分を確認",
     "syncDiffConfirmBody": "取得した歌詞は保存済みのものと異なります。確認すると歌詞を上書きし、行番号で対応するふりがな・翻訳・自動抽出された用語集がリセットされます。この操作は取り消せません。",
     "syncDiffSummary": "変更: 追加 {added} 行、削除 {removed} 行、変更 {changed} 行",
-    "syncDiffExpand": "すべての {count} 件の変更を表示"
+    "syncDiffExpand": "すべての {count} 件の変更を表示",
+    "translationAvailableLangs": "利用可能な翻訳: {langs}"
   },
   "timeline": {
     "title": "LRC タイムライン編集",

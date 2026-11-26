@@ -50,6 +50,24 @@ export const songs = sqliteTable('songs', {
   updatedAt: text('updated_at').notNull().default(nowUtcSql()),
 });
 
+/**
+ * One translation cache per (song, target language) — ISSUE #485.
+ *
+ * The legacy `songs.lyrics_translation` / `lyrics_translation_lang` columns
+ * remain as the compatibility view for the *effective* language only; every
+ * language now owns its own row here, so switching target languages keeps all
+ * existing translations instead of forcing a paid re-translation.
+ */
+export const songTranslations = sqliteTable('song_translations', {
+  songId: text('song_id').notNull().references(() => songs.id, { onDelete: 'cascade' }),
+  lang: text('lang').notNull(),
+  lines: text('lines').notNull().default('[]'),
+  reasoning: text('reasoning'),
+  updatedAt: text('updated_at').notNull().default(nowUtcSql()),
+}, (t) => [
+  primaryKey({ columns: [t.songId, t.lang] }),
+]);
+
 export const spotifyAuth = sqliteTable('spotify_auth', {
   userEmail: text('user_email').primaryKey(),
   accessToken: text('access_token').notNull().default(''),

@@ -79,6 +79,9 @@ export default function TranslationEditPage() {
   const [pendingRetranslate, setPendingRetranslate] = useState<number | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; msg: string } | null>(null);
   const { session } = useAuthSession();
+  // The proofreading editor always works on the effective target language's
+  // cache (ISSUE #485). `/api/me/settings` resolves user > admin > default.
+  const [targetLang, setTargetLang] = useState<string | null>(null);
   const coverTheme = useCoverTheme(song?.cover_url);
   const coverColor = coverTheme.palette;
   const inputRefs = useRef<(HTMLTextAreaElement | null)[]>([]);
@@ -106,7 +109,7 @@ export default function TranslationEditPage() {
     setLoading(true);
     let wasNotFound = false;
     try {
-      const res = await fetch(`/api/songs/${id}`);
+      const res = await fetch(`/api/songs/${id}?translation_lang=${encodeURIComponent(targetLang || 'zh-CN')}`);
       if (res.status === 404) {
         wasNotFound = true;
         setLoadError(false);
@@ -142,11 +145,25 @@ export default function TranslationEditPage() {
     } finally {
       setLoading(false);
     }
-  }, [id, showToast, t]);
+  }, [id, targetLang, showToast, t]);
 
   useEffect(() => {
+    if (targetLang === null) return;
     loadSong();
-  }, [loadSong]);
+    // loadSong already depends on targetLang; listing it here as well makes the
+    // guard explicit for exhaustive-deps.
+  }, [loadSong, targetLang]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/me/settings', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { effective_target_lang?: string } | null) => {
+        if (!cancelled) setTargetLang(data?.effective_target_lang || 'zh-CN');
+      })
+      .catch(() => { /* keep default view */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const sourceLyrics = song?.lyrics_raw ?? '';
   const rawLines = useMemo(() => sourceLyrics.split('\n'), [sourceLyrics]);

@@ -522,7 +522,8 @@
     "syncDiffConfirmTitle": "同步前確認歌詞差異",
     "syncDiffConfirmBody": "取得的歌詞與資料庫不同。確認後將覆蓋歌詞，並重設下方涉及的按行注音、譯文與自動擷取的術語表，此操作無法復原。",
     "syncDiffSummary": "變更：新增 {added} 行、刪除 {removed} 行、修改 {changed} 行",
-    "syncDiffExpand": "查看全部 {count} 處變更"
+    "syncDiffExpand": "查看全部 {count} 處變更",
+    "translationAvailableLangs": "已有譯文：{langs}"
   },
   "timeline": {
     "title": "LRC 時間軸編輯",

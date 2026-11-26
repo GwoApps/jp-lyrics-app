@@ -61,7 +61,7 @@ export interface UseSongDataReturn {
   loading: boolean;
   loadError: boolean;
   retryLoad: () => void;
-  refreshSong: () => Promise<void>;
+  refreshSong: (translationLang?: string) => Promise<SongData | undefined>;
   syncLines: ReturnType<typeof parseLrc>;
   furiganaLines: FuriganaLine[];
   translations: string[];
@@ -107,6 +107,8 @@ export interface UseSongDataReturn {
   targetLangOverride: string;
   /** Persist a new translation target language and refresh the effective value. */
   setTargetLang: (code: string) => Promise<void>;
+  /** BCP-47 tags with a stored cache for this song (ISSUE #485). */
+  availableTranslationLangs: string[];
   furiganaLoading: boolean;
   furiganaError: string;
   retryFurigana: () => void;
@@ -195,6 +197,9 @@ export function useSongData(id: string): UseSongDataReturn {
 
   const [song, setSong] = useState<SongData | null>(null);
   const [loading, setLoading] = useState(true);
+  // Kept in a ref so refreshSong/fetchSong stay stable (useTranslation calls
+  // them from its own callbacks; changing identity would restart effects).
+  const targetLangRef = useRef<string | null>(null);
   // True when the detail fetch failed for a retryable reason (HTTP 5xx/429 or
   // network/timeout). A 404 (genuinely absent song) keeps `song=null` and is
   // shown as "not found" — distinct from a load error.
@@ -272,9 +277,14 @@ export function useSongData(id: string): UseSongDataReturn {
   // Refresh song data (e.g. after request-public). Resolves with the fresh
   // song payload (or undefined on failure) so callers can compute derived
   // numbers synchronously without relying on async state propagation.
-  const refreshSong = useCallback(async () => {
+  const refreshSong = useCallback(async (translationLang?: string) => {
     try {
-      const res = await fetch(`/api/songs/${id}`);
+      // ISSUE #485: the requested translation language is a view parameter,
+      // not a different song — the API projects that language's cache onto the
+      // legacy fields the client already reads.
+      const lang = translationLang ?? targetLangRef.current;
+      const url = `/api/songs/${id}${lang ? `?translation_lang=${encodeURIComponent(lang)}` : ''}`;
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         setSong(data);
@@ -298,12 +308,18 @@ export function useSongData(id: string): UseSongDataReturn {
     translationStage, translationReasoning, showTranslationReasoning,
     setShowTranslationReasoning, toggleTranslationReasoning, hasSavedReasoning,
     openSavedReasoning, copyReasoning, exportReasoning, dismissTranslationError, clearReasoning,
-    handleTranslate, cancelTranslate, targetLang, targetLangOverride, setTargetLang,
+    handleTranslate, cancelTranslate, targetLang, targetLangOverride, setTargetLang, availableTranslationLangs,
     seedFromLoad,
   } = useTranslation({
     id, song, furiganaLinesLength: furiganaLines.length, showTranslation,
     setShowTranslation, showToast, dismissToast, t, refreshSong, setSong,
   });
+
+  // Keep the latest effective target language in a ref so the stable song
+  // fetchers always project the right per-language cache (ISSUE #485).
+  useEffect(() => {
+    targetLangRef.current = targetLang;
+  }, [targetLang]);
 
   // Issue #331: PiP follows the same "show translation" preference as the main
   // lyric list — no separate switch. `undefined` keeps PiP source-only when the
@@ -323,10 +339,12 @@ export function useSongData(id: string): UseSongDataReturn {
   // every other failure (HTTP 5xx/429, network or timeout). Pure fetch — no
   // setState — so callers can apply the result inside a promise `.then`
   // callback (avoids synchronous setState in an effect).
-  const fetchSong = useCallback(async (): Promise<{ data?: SongData; notFound?: boolean }> => {
+  const fetchSong = useCallback(async (translationLang?: string): Promise<{ data?: SongData; notFound?: boolean }> => {
     if (!id) return {};
     try {
-      const res = await fetch(`/api/songs/${id}`);
+      const lang = translationLang ?? targetLangRef.current;
+      const url = `/api/songs/${id}${lang ? `?translation_lang=${encodeURIComponent(lang)}` : ''}`;
+      const res = await fetch(url);
       if (res.status === 404) return { notFound: true };
       if (!res.ok) return {};
       const data = await res.json() as SongData;
@@ -484,6 +502,7 @@ export function useSongData(id: string): UseSongDataReturn {
     targetLang,
     targetLangOverride,
     setTargetLang,
+    availableTranslationLangs,
     furiganaLoading,
     furiganaError,
     retryFurigana,

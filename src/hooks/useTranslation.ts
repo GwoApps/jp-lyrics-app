@@ -21,7 +21,7 @@ interface UseTranslationDeps {
   dismissToast: () => void;
   t: (key: string, params?: Record<string, string>) => string;
   /** Refresh song from server and return the fresh payload. */
-  refreshSong: () => Promise<SongData | undefined>;
+  refreshSong: (translationLang?: string) => Promise<SongData | undefined>;
   /** Update the song state in the orchestrator. */
   setSong: React.Dispatch<React.SetStateAction<SongData | null>>;
 }
@@ -60,6 +60,8 @@ export interface UseTranslationReturn {
   targetLang: string | null;
   targetLangOverride: string;
   setTargetLang: (code: string) => Promise<void>;
+  /** BCP-47 tags with a stored cache for this song (ISSUE #485). */
+  availableTranslationLangs: string[];
   /**
    * Called by the orchestrator's `applySongResult` to seed reasoning state
    * from the initial song fetch (persisted reasoning). This avoids the
@@ -180,6 +182,11 @@ export function useTranslation(deps: UseTranslationDeps): UseTranslationReturn {
     return () => { cancelled = true; };
   }, [signedIn, applyEffectiveLang]);
 
+  // ISSUE #485: switching the target language is a *local view change* when
+  // a cache for that language already exists — the server already keeps every
+  // language, so we just adopt the effective language here. The song payload
+  // still carries the mirror for the old language; the next fetch reflects the
+  // new one. No second translation is requested.
   const setTargetLang = useCallback(async (code: string) => {
     try {
       const res = await fetch('/api/me/settings', {
@@ -191,8 +198,21 @@ export function useTranslation(deps: UseTranslationDeps): UseTranslationReturn {
       const data = await res.json() as { effective_target_lang?: string; settings?: { translation_target_lang?: string } };
       applyEffectiveLang(data.effective_target_lang);
       setTargetLangOverride(data.settings?.translation_target_lang ?? '');
+      // ISSUE #485: re-project the song onto the new language. The server
+      // resolves the per-language row (or the legacy mirror) and returns the
+      // same payload shape, so the existing translation/UI state just updates.
+      // Project explicitly: the ref inside refreshSong only catches up after
+      // the targetLang state change settles, which is too late for this click.
+      const effective = data.effective_target_lang?.trim();
+      const fresh = await refreshSong(effective || code);
+      if (fresh) setSong(fresh);
     } catch { /* keep previous value */ }
-  }, [applyEffectiveLang]);
+  }, [applyEffectiveLang, refreshSong, setSong]);
+
+  const availableTranslationLangs = useMemo(
+    () => song?.available_translation_langs ?? [],
+    [song?.available_translation_langs],
+  );
 
   // ── Seed from initial load ──────────────────────────────
   const seedFromLoad = useCallback((data: { lyrics_translation_reasoning?: string | null }) => {
@@ -504,6 +524,7 @@ export function useTranslation(deps: UseTranslationDeps): UseTranslationReturn {
     targetLang,
     targetLangOverride,
     setTargetLang,
+    availableTranslationLangs,
     seedFromLoad,
   };
 }
