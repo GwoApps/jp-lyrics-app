@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
   const canEditColumn = user
     ? sql`CASE WHEN ${user.isAdmin ? sql`1 = 1` : sql`1 = 0`} OR s.created_by = ${userEmail} THEN 1 ELSE 0 END AS can_edit`
     : sql`0 AS can_edit`;
-  const selectColumns = sql`s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at, s.lyrics_needs_review, s.lyrics_source, s.lyrics_fetched_at, s.lyrics_raw, ${canEditColumn}`;
+  const selectColumns = sql`s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at, s.lyrics_needs_review, s.lyrics_source, s.lyrics_fetched_at, s.lyrics_raw, ${canEditColumn}`;
 
   /**
    * Normalize SQLite 0/1 and mark only songs with no visible lyric text. The

@@ -19,7 +19,6 @@ const ARTIST_SONG_COLUMNS = {
   spotify_album: schema.songs.spotifyAlbum,
   lyrics_source: schema.songs.lyricsSource,
   lyrics_fetched_at: schema.songs.lyricsFetchedAt,
-  created_by: schema.songs.createdBy,
   created_by_name: schema.songs.createdByName,
   is_public: schema.songs.isPublic,
   public_requested: schema.songs.publicRequested,

@@ -15,7 +15,7 @@ import { defaultLibraryView, type ArtistLibrarySong, type LibraryView } from './
 
 const require = createRequire(import.meta.url);
 const directory = dirname(fileURLToPath(import.meta.url));
-const song = (id: string, extras: Partial<ArtistLibrarySong> = {}): ArtistLibrarySong => ({ id, title: id, artist: 'Artist', spotify_album: 'Album', created_by: 'test', created_by_name: 'Test', is_public: 1, public_requested: 0, created_at: '2026-01-01', updated_at: '2026-01-02', ...extras });
+const song = (id: string, extras: Partial<ArtistLibrarySong> = {}): ArtistLibrarySong => ({ id, title: id, artist: 'Artist', spotify_album: 'Album', created_by_name: 'Test', is_public: 1, public_requested: 0, created_at: '2026-01-01', updated_at: '2026-01-02', ...extras });
 const songs = [song('Blue', { artist: 'Artist, Guest', lyrics_needs_review: 1, has_lyrics: true, has_synced_timeline: false, has_translation: null, favorited: true, spotify_duration_ms: 185000, spotify_track_id: '0123456789ABCDEFGHIJKL' }), song('Amber', { spotify_album: 'Other', favorited: false })];
 
 type Node = React.ReactElement<Record<string, unknown>>;
