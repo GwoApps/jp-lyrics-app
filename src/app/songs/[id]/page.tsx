@@ -255,10 +255,14 @@ export default function SongViewPage() {
     const lineTop = line.getBoundingClientRect().top - container.getBoundingClientRect().top;
     animateSmoothScroll(container,
       centeredLyricScrollTop(container.scrollTop, container.clientHeight, lineTop, line.getBoundingClientRect().height));
+    // Hold the landed row until the shared follow window expires (issue #500).
+    immersive.pauseFollowingForSharedLine();
     setHighlightedLine(sharedLine);
     const timer = setTimeout(() => setHighlightedLine(null), 2500);
     return () => clearTimeout(timer);
-  // Re-run only when the deep-link target or the rendered line count changes.
+  // pauseFollowingForSharedLine is a stable hook callback; adding it to deps
+  // makes the hook object appear as a dependency and re-trigger this one-shot.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- the stable callback is intentionally omitted.
   }, [sharedLine, data.furiganaLines.length, immersive.active]);
 
   const priorLyricsScroll = useRef<number | null>(null);

@@ -48,15 +48,19 @@ export function useImmersiveLyrics(
   useEffect(() => { currentLine.current = activeLine; }, [activeLine]);
   useEffect(() => { debugRef.current = debug; }, [debug]);
   useEffect(() => { followEnabledRef.current = followEnabled; }, [followEnabled]);
-  const shouldFollow = useCallback(() => !activeRef.current || shouldFollowImmersiveLyrics(performance.now(), manualUntil.current), []);
+  // The same deadline gates both views: normal-page line follow reads it too,
+  // so a deep-link landing can hold the shared row (issue #500).
+  const shouldFollow = useCallback((now: number = performance.now()) => shouldFollowImmersiveLyrics(now, manualUntil.current), []);
 
-  const centerCurrent = useCallback(() => {
-    if (!activeRef.current || debugRef.current || !followEnabledRef.current || !shouldFollowImmersiveLyrics(performance.now(), manualUntil.current)) return;
+  // Shared by the immersive centering and the expiry of a deep-link pause.
+  // Unlike centerCurrent it also works before the reading view is opened.
+  const centerTrackedLine = useCallback(() => {
+    if (debugRef.current || !followEnabledRef.current || !shouldFollow()) return;
     const container = lyricsRef.current;
     if (!container) return;
     const line = lineRefs.current[currentLine.current];
     if (!line) {
-      if (currentLine.current === -1) animateSmoothScroll(container, 0);
+      if (currentLine.current === -1 && activeRef.current) animateSmoothScroll(container, 0);
       return;
     }
     const box = line.getBoundingClientRect();
@@ -64,7 +68,23 @@ export function useImmersiveLyrics(
     animateSmoothScroll(container, centeredLyricScrollTop(
       container.scrollTop, container.clientHeight, box.top - viewport.top, box.height,
     ));
-  }, [lineRefs, lyricsRef]);
+  }, [lineRefs, lyricsRef, shouldFollow]);
+
+  const centerCurrent = useCallback(() => {
+    if (!activeRef.current) return;
+    centerTrackedLine();
+  }, [centerTrackedLine]);
+
+  // The normal page keeps the original offsetTop centering; only the reading
+  // view uses viewport geometry (issue #500 should not change page appearance).
+  const resumeCenteredLine = useCallback(() => {
+    if (debugRef.current || !followEnabledRef.current || !shouldFollow()) return;
+    const container = lyricsRef.current;
+    const line = lineRefs.current[currentLine.current];
+    if (!container || !line) return;
+    animateSmoothScroll(container,
+      line.offsetTop - container.offsetTop - container.clientHeight / 2 + line.offsetHeight / 2);
+  }, [lineRefs, lyricsRef, shouldFollow]);
 
   // The active row can change while a user is browsing. When browsing expires,
   // follow the latest committed row rather than the row from the previous render.
@@ -100,6 +120,20 @@ export function useImmersiveLyrics(
       if (currentLine.current >= 0) centerCurrent();
     }, LYRIC_FOLLOW_RESUME_MS);
   }, [centerCurrent, lyricsRef]);
+
+  // Deep-link landing borrows the same deadline without the manual-browsing UI:
+  // it expires on its own and re-centres the live line, so the shared row is
+  // never followed away immediately (issue #500).
+  const pauseFollowingForSharedLine = useCallback(() => {
+    manualUntil.current = performance.now() + LYRIC_FOLLOW_RESUME_MS;
+    if (returnTimer.current) clearTimeout(returnTimer.current);
+    returnTimer.current = setTimeout(() => {
+      returnTimer.current = null;
+      manualUntil.current = 0;
+      if (activeRef.current) requestAnimationFrame(centerCurrent);
+      else if (currentLine.current >= 0) requestAnimationFrame(resumeCenteredLine);
+    }, LYRIC_FOLLOW_RESUME_MS);
+  }, [centerCurrent, resumeCenteredLine]);
 
   const leaveBrowserFullscreen = useCallback(() => {
     if (ownedFullscreen.current && document.fullscreenElement === document.documentElement) {
@@ -237,7 +271,8 @@ export function useImmersiveLyrics(
     active, browserFullscreen, manualBrowsing, resumeFollowing,
     fontStep, fontSize: IMMERSIVE_FONT_SIZES[fontStep], changeFontStep,
     canRequestFullscreen: typeof document !== 'undefined' && !!document.documentElement.requestFullscreen,
-    enter, leave, requestBrowserFullscreen, noteManualScroll, clearManualScroll, centerCurrent,
+    enter, leave, requestBrowserFullscreen, noteManualScroll,
+    pauseFollowingForSharedLine, clearManualScroll, centerCurrent,
     shouldFollow,
   };
 }

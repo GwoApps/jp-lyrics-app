@@ -33,6 +33,20 @@ test('manual browsing resumes six seconds after the latest input, or immediately
   assert.equal(shouldFollowImmersiveLyrics(4000, 0), true);
 });
 
+test('shared-line landing borrows the manual deadline without the manual UI', () => {
+  const pause = hook.match(/const pauseFollowingForSharedLine = useCallback\(\(\) => \{[\s\S]*?\n  \}, \[centerCurrent, resumeCenteredLine\]\);/);
+  assert.ok(pause);
+  assert.match(pause[0], /manualUntil\.current = performance\.now\(\) \+ LYRIC_FOLLOW_RESUME_MS/);
+  assert.match(pause[0], /if \(activeRef\.current\) requestAnimationFrame\(centerCurrent\);/);
+  assert.match(pause[0], /else if \(currentLine\.current >= 0\) requestAnimationFrame\(resumeCenteredLine\);/);
+  assert.doesNotMatch(pause[0], /setManualBrowsing/);
+  assert.match(hook, /const shouldFollow = useCallback\(\(now: number = performance\.now\(\)\) => shouldFollowImmersiveLyrics\(now, manualUntil\.current\), \[\]\)/);
+  assert.match(hook, /if \(debugRef\.current \|\| !followEnabledRef\.current \|\| !shouldFollow\(\)\) return;/);
+  assert.match(hook, /if \(!active \|\| !shouldFollow\(\)\) return;/);
+  assert.match(page, /immersive\.pauseFollowingForSharedLine\(\);/);
+  assert.match(page, /syncRefs\.current\.shouldFollowLyrics = immersive\.shouldFollow;/);
+});
+
 test('stored fullscreen size is independent, bounded, and every step changes the rendered size', () => {
   for (const invalid of [null, '', ' ', '-1', '5', '20', 'NaN', '1.5', '1px']) {
     assert.equal(parseImmersiveFontStep(invalid), 2);
