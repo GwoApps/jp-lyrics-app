@@ -11,6 +11,15 @@ const STATIC_TITLE_KEYS: Record<string, string> = {
   '/artists': 'artists.title',
 };
 
+/**
+ * The title this route must show, or `null` when the server already rendered a
+ * route-specific one (song pages) and it must not be touched.
+ *
+ * `/artists/<name>` reads the artist from the route param instead of parsing
+ * `document.title`: during a client-side navigation `document.title` still holds
+ * the previous page's title, so parsing it dropped the site name and could carry
+ * the wrong first segment over (issue #491).
+ */
 function localizedTitle(
   pathname: string | null,
   nameSegment: string | string[] | undefined,
@@ -19,8 +28,6 @@ function localizedTitle(
   const path = pathname?.replace(/\/+$/, '') || '/';
   const appName = t('common.appName');
   if (path in STATIC_TITLE_KEYS) return localizedDocumentTitle(t(STATIC_TITLE_KEYS[path]), appName);
-  // `/artists/<name>` uses the route segment rather than `document.title`: a
-  // client navigation may still carry the previous page's title when this runs.
   const detail = path.match(/^\/artists\/([^/]+)$/);
   if (detail) {
     const raw = Array.isArray(nameSegment) ? nameSegment[0] : nameSegment;
@@ -46,6 +53,13 @@ function localizedTitle(
  * The `description` meta stays as the static English copy in the layout: it is
  * read by crawlers before hydration, where a one-line product description
  * beats a two-word UI label.
+ *
+ * Every write is gated on the value actually differing. Assigning the same
+ * title still replaces the `<title>` text node, so an unconditional write here
+ * re-enters this observer and writes forever — a self-triggering loop that pins
+ * the main thread and freezes the page. It fired on every route whose server
+ * title is the neutral `APP_NAME_NEUTRAL` (`/`, `/settings`) and on every route
+ * with a `STATIC_TITLE_KEYS` entry (`/albums`, `/artists`).
  */
 export default function AppMetadataSync() {
   const { t } = useI18n();
@@ -54,25 +68,24 @@ export default function AppMetadataSync() {
 
   useEffect(() => {
     const name = t('common.appName');
-    const localTitle = localizedTitle(pathname, params?.name, t);
+    const routeTitle = localizedTitle(pathname, params?.name, t);
     const generic = new Set([name, APP_NAME_NEUTRAL]);
     const apply = () => {
-      // Next.js may have flushed a static page title; the localized one wins.
-      if (localTitle) {
-        document.title = localTitle;
-      } else if (generic.has(document.title.trim())) {
-        document.title = name;
-      }
-      document
-        .querySelector('meta[name="apple-mobile-web-app-title"]')
-        ?.setAttribute('content', name);
+      // A route-specific title wins; a neutral one becomes the localized app
+      // name; a title the route rendered itself (song pages) is left alone.
+      const next = routeTitle ?? (generic.has(document.title.trim()) ? name : null);
+      if (next && document.title !== next) document.title = next;
+      const meta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+      if (meta && meta.getAttribute('content') !== name) meta.setAttribute('content', name);
     };
     apply();
     // Next.js flushes the layout metadata after hydration and again on every
     // client-side navigation, re-inserting its own `<title>`; a plain
-    // assignment would be overwritten by that flush.
+    // assignment would be overwritten by that flush. `characterData` need not be
+    // observed: rewriting the title replaces the `<title>` text node, which is
+    // already a childList mutation inside `document.head`.
     const observer = new MutationObserver(apply);
-    observer.observe(document.head, { childList: true, subtree: true, characterData: true });
+    observer.observe(document.head, { childList: true, subtree: true });
     return () => observer.disconnect();
   }, [t, pathname, params?.name]);
 

@@ -2,11 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  DEFAULT_DESCRIPTION, buildSongMetadata, songDescription, songTitle,
+  DEFAULT_DESCRIPTION, SITE_NAME, buildSongMetadata, songDescription, songTitle,
 } from './route-metadata.ts';
 
 const layout = readFileSync(new URL('../app/layout.tsx', import.meta.url), 'utf8');
 const songLayout = readFileSync(new URL('../app/songs/[id]/layout.tsx', import.meta.url), 'utf8');
+
+/** Mimic the root layout template to catch duplicated site names. */
+function templateTitle(title: unknown): string {
+  const raw = typeof title === 'string' ? title : (title as { absolute?: string }).absolute;
+  return raw!.includes(SITE_NAME) ? raw! : `${raw} · ${SITE_NAME}`;
+}
 
 interface TestMetadata {
   title: unknown;
@@ -61,7 +67,8 @@ test('private or missing songs fall back to generic metadata without leaking the
     }) as TestMetadata;
     assert.equal(JSON.stringify(meta).includes('Secret Song'), false);
     assert.equal(JSON.stringify(meta).includes('private lyrics'), false);
-    assert.equal(meta.title, '歌詞ノート · Lyrics Note');
+    assert.deepEqual(meta.title, { absolute: '歌詞ノート · Lyrics Note' });
+    assert.equal(templateTitle(meta.title), '歌詞ノート · Lyrics Note');
     assert.equal(meta.openGraph, undefined);
     assert.equal(meta.twitter, undefined);
   }

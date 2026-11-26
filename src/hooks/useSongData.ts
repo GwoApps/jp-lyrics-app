@@ -232,7 +232,7 @@ export function useSongData(id: string): UseSongDataReturn {
   const {
     furiganaLines, furiganaLoading, furiganaError, retryFurigana,
     cantoneseSuggestion, resetFurigana,
-  } = useFurigana({ id, song, t });
+  } = useFurigana({ id, song, t, readingMode });
   const lineTimestamps = useMemo(() => {
     if (!song || !furiganaLines.length) return [] as (number | null)[];
     const renderedRows = furiganaLines.map((line) => line.segments.map((segment) => segment.text).join(''));

@@ -69,7 +69,10 @@ export function buildSongMetadata({
   /** Request-derived origin used to absolute-ize internal paths (issue #464). */
   siteOrigin?: string | null;
 }): Metadata {
-  if (!visible) return { title: APP_NAME_NEUTRAL, description: APP_DESCRIPTION };
+  // The root layout appends ` · ${APP_NAME_SHORT}` to plain titles, so a plain
+  // neutral name here would render the product name twice. `absolute` opts this
+  // fallback out of the template while keeping the same neutral default title.
+  if (!visible) return { title: { absolute: APP_NAME_NEUTRAL }, description: APP_DESCRIPTION };
   const lang = asLocale(locale);
   const name = songTitle(title, artist);
   const description = songDescription(lyricsRaw) || DEFAULT_DESCRIPTION[lang];

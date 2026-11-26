@@ -38,6 +38,7 @@ export default function SpotifyLoginButton({ children, className, title }: Spoti
       if (!response.ok) throw new Error('login_gate_unavailable');
       const data = await response.json() as { required?: boolean };
       if (!data.required) {
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- /api/auth/login is an OAuth API route: client-side routing would fetch it as a page instead of following the 302 to Spotify.
         window.location.assign('/api/auth/login');
         return;
       }
@@ -70,6 +71,7 @@ export default function SpotifyLoginButton({ children, className, title }: Spoti
         return;
       }
       setPassphrase('');
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- /api/auth/login is an OAuth API route: client-side routing would fetch it as a page instead of following the 302 to Spotify.
       window.location.assign('/api/auth/login');
     } catch {
       setError(t('loginGate.requestFailed'));

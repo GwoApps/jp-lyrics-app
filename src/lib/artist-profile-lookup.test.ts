@@ -132,3 +132,56 @@ test('hard timeout bounds a fetch that ignores AbortSignal', async () => {
   const lookup = createArtistProfileLookup({ timeoutMs: 5, fetch: async () => new Promise<Response>(() => {}) });
   await assert.rejects(lookup('musicbrainz', MB), /artist_profile_lookup_unavailable/);
 });
+
+test('Spotify uses app token when there is no visitor session; user token is preferred', async () => {
+  let appTokens = 0;
+  const headers: Array<string | null> = [];
+  const lookup = createArtistProfileLookup({
+    getAccessToken: async () => { throw new Error('no session'); },
+    getApplicationToken: async () => { appTokens++; return 'app-token'; },
+    fetch: async (url, init) => {
+      headers.push(new Headers(init?.headers).get('Authorization'));
+      return Response.json(spFixture);
+    },
+  });
+  assert.equal((await lookup('spotify', SP)).name, 'Queen');
+  assert.equal(appTokens, 1);
+  assert.ok(headers.every((header) => header === 'Bearer app-token'));
+
+  let userHeaders = 0;
+  const priority = createArtistProfileLookup({
+    getAccessToken: async (email) => { assert.equal(email, 'admin'); return 'user-token'; },
+    getApplicationToken: async () => 'app-token',
+    fetch: async (url, init) => {
+      assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer user-token');
+      userHeaders++;
+      return Response.json(spFixture);
+    },
+  });
+  assert.equal((await priority('spotify', SP, 'admin')).name, 'Queen');
+  assert.equal(userHeaders, 1);
+});
+
+test('Spotify app-token 401 uses a separate cooldown from user-token failures', async () => {
+  let now = 0;
+  let appTokens = 0;
+  let userTokens = 0;
+  const lookup = createArtistProfileLookup({
+    now: () => now, failureTtlMs: 50,
+    getAccessToken: async () => { userTokens++; return 'user-token'; },
+    getApplicationToken: async () => { appTokens++; return 'app-token'; },
+    fetch: async (url, init) => {
+      assert.equal(String(url), `https://api.spotify.com/v1/artists/${SP}`);
+      return new Headers(init?.headers).get('Authorization') === 'Bearer app-token'
+        ? new Response('', { status: 401 })
+        : Response.json(spFixture);
+    },
+  });
+  await assert.rejects(lookup('spotify', SP), /artist_profile_spotify_not_connected/);
+  now += 251;
+  await assert.rejects(lookup('spotify', SP), /artist_profile_spotify_not_connected/);
+  assert.equal(appTokens, 2);
+  now += 251;
+  assert.equal((await lookup('spotify', SP, 'admin')).name, 'Queen');
+  assert.equal(userTokens, 1);
+});

@@ -20,7 +20,7 @@ function nodes(root: React.ReactNode): Element[] {
   return [node, ...React.Children.toArray(node.props.children as React.ReactNode).flatMap(nodes)];
 }
 
-function render(options: { canEdit: boolean; spotifyConnected?: boolean }): Element {
+function render(options: { canEdit: boolean; spotifyConnected?: boolean; emptyReason?: 'never-fetched' | 'not-found' }): Element {
   const exports: { default?: (props: Record<string, unknown>) => React.ReactNode } = {};
   const hooks = {
     useRef: () => ({ current: null }),
@@ -43,7 +43,7 @@ function render(options: { canEdit: boolean; spotifyConnected?: boolean }): Elem
     return require(specifier);
   } });
   const props: Record<string, unknown> = {
-    song: { id: 'song-1', title: 'Song', artist: 'Artist', created_by_name: 'Owner', updated_at: '2026-01-01' },
+    song: { id: 'song-1', title: 'Song', artist: 'Artist', created_by_name: 'Owner', updated_at: '2026-01-01', ...(options.emptyReason ? { empty_lyrics_reason: options.emptyReason } : {}) },
     isPlaying: false,
     spotifyConnected: options.spotifyConnected ?? true,
     canEdit: options.canEdit,
@@ -52,6 +52,8 @@ function render(options: { canEdit: boolean; spotifyConnected?: boolean }): Elem
     unknownArtistLabel: 'Unknown',
     createdByLabel: 'By',
     needsReviewLabel: 'Needs review',
+    emptyLyricsNeverFetchedLabel: 'Not fetched',
+    emptyLyricsNotFoundLabel: 'No lyrics found',
     shareLabel: 'Share',
     openSongLabel: (title: string) => `Open ${title}`,
     favoriteLabel: (title: string) => `Favorite ${title}`,
@@ -77,4 +79,15 @@ test('delete button follows canEdit, while favorite and share keep the login gat
 
   const anon = actionButtons(render({ canEdit: true, spotifyConnected: false }));
   assert.equal(anon.length, 0);
+});
+
+test('empty songs show the reason badge chosen by the list API', () => {
+  const content = nodes(render({ canEdit: false, emptyReason: 'never-fetched' })).find((node) =>
+    String(node.props.className ?? '').includes('song-item-card__content'),
+  )!;
+  const badges = nodes(content).filter((node) => String(node.props.className ?? '').includes('rounded-full'));
+  assert.deepEqual(badges.map((node) => node.props.children), ['Not fetched']);
+  assert.deepEqual(nodes(render({ canEdit: false })).filter((node) =>
+    String(node.props.className ?? '').includes('bg-[var(--muted)]'),
+  ), []);
 });

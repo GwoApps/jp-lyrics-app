@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { FuriganaLine, SongData } from '@/lib/types';
+import type { FuriganaLine, ReadingMode, SongData } from '@/lib/types';
 import {
   convertLyricsReading,
   detectCantoneseLyrics,
@@ -13,10 +13,29 @@ interface UseFuriganaDeps {
   id: string;
   song: SongData | null;
   t: (key: string, params?: Record<string, string>) => string;
+  /** Reading mode is a display preference: annotations are only needed when it is `furigana`. */
+  readingMode: ReadingMode;
+}
+
+/**
+ * Issue #520: the ~17MB dictionary is worth downloading only when annotations
+ * will be shown, or when an editor can persist them for future readers.
+ * Pure so the gate can be proven without a DOM test setup.
+ */
+export function shouldConvertFurigana(input: {
+  lyricsRaw: string;
+  hasServerFurigana: boolean;
+  hasHanCharacters: boolean;
+  hasCantoneseSuggestion: boolean;
+  readingMode: ReadingMode;
+  canEdit: boolean;
+}): boolean {
+  if (!input.lyricsRaw.trim() || input.hasServerFurigana || !input.hasHanCharacters || input.hasCantoneseSuggestion) return false;
+  return input.readingMode === 'furigana' || input.canEdit;
 }
 
 export function useFurigana(deps: UseFuriganaDeps) {
-  const { id, song, t } = deps;
+  const { id, song, t, readingMode } = deps;
 
   const serverFurigana = useMemo<FuriganaLine[]>(() => {
     if (!song?.lyrics_furigana) return [];
@@ -66,10 +85,21 @@ export function useFurigana(deps: UseFuriganaDeps) {
     return plainFuriganaLines;
   }, [serverFurigana, clientFuriganaState, readingSourceKey, plainFuriganaLines]);
 
-  // Client-side furigana conversion: only once per lyrics value when server data is absent.
+  // Issue #520: opening a song in original mode (especially as a visitor)
+  // must not pull the dictionary; switching to furigana mode is the new
+  // trigger. Editors still convert on open so results get persisted.
+  const canEdit = song?.permissions?.can_edit === true;
+  const needsConversion = shouldConvertFurigana({
+    lyricsRaw,
+    hasServerFurigana: serverFurigana.length > 0,
+    hasHanCharacters,
+    hasCantoneseSuggestion: cantoneseSuggestion !== null,
+    readingMode,
+    canEdit,
+  });
   const [furiganaRetryTick, setFuriganaRetryTick] = useState(0);
   useEffect(() => {
-    if (!lyricsRaw.trim() || serverFurigana.length > 0 || !hasHanCharacters || cantoneseSuggestion) {
+    if (!needsConversion) {
       // Nothing to load for this input, so a pending retry can never resolve itself.
       retryPendingRef.current = false;
       return;
@@ -94,7 +124,7 @@ export function useFurigana(deps: UseFuriganaDeps) {
         settled = true;
         setClientFuriganaState({ source: readingSourceKey, lines, loading: false, error: '' });
         // Persist to server so next load skips kuromoji entirely
-        if (lines.length > 0 && id && song?.permissions?.can_edit) {
+        if (lines.length > 0 && id && canEdit) {
           fetch(`/api/songs/${id}/furigana`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -118,7 +148,7 @@ export function useFurigana(deps: UseFuriganaDeps) {
       cancelled = true;
       if (!settled && requestedLyricsRef.current === requestKey) requestedLyricsRef.current = '';
     };
-  }, [lyricsRaw, serverFurigana.length, hasHanCharacters, cantoneseSuggestion, id, readingScheme, readingSourceKey, song?.permissions?.can_edit, t, furiganaRetryTick]);
+  }, [needsConversion, id, readingSourceKey, lyricsRaw, readingScheme, canEdit, t, furiganaRetryTick]);
 
   // Retry a failed client-side furigana conversion: the effect only runs once
   // per lyrics value, so clear the guard and bump the tick to re-run it.
@@ -129,7 +159,7 @@ export function useFurigana(deps: UseFuriganaDeps) {
     retryPendingRef.current = true;
     setRetryPending(true);
     setFuriganaRetryTick((n) => n + 1);
-  }, []);
+  }, [setFuriganaRetryTick, setRetryPending]);
 
   // Reset client furigana state after a reading-scheme change invalidates it.
   const resetFurigana = useCallback(() => {
@@ -137,7 +167,7 @@ export function useFurigana(deps: UseFuriganaDeps) {
     retryPendingRef.current = false;
     setRetryPending(false);
     setClientFuriganaState({ source: '', lines: [], loading: false, error: '' });
-  }, []);
+  }, [setRetryPending, setClientFuriganaState]);
 
   return {
     furiganaLines,

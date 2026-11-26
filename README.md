@@ -51,6 +51,7 @@ Spotify credentials are not needed to start the app or browse public songs, but 
 | `AI_DAILY_NEURON_LIMIT` | Optional daily translation quota |
 | `SESSION_SECRET`, `JPLRC_LOGIN_PASSPHRASE_REQUIRED`, `JPLRC_LOGIN_PASSPHRASE` | Set a dedicated session-signing secret in production; optional pre-OAuth passphrase gate |
 | `LYRICS_PROVIDER_*` | Deployment-level network policy, Bearer-token encryption key, and request budgets for HTTP lyrics plugins; see [§4 of the deployment guide](DEPLOYMENT.md#4-http-lyrics-providers-deployment-configuration-issue-148) |
+| `JPLRC_SEO_ENABLED` | Set to `true` to expose `/robots.txt` and `/sitemap.xml` with public songs only; default off |
 
 Admins can also set the **global translation provider/model** in the app. Non-empty admin-stored values override the environment; empty fields fall back to it. A signed-in user's target-language preference can override the global default. See [.env.example](.env.example) and [DEPLOYMENT.md](DEPLOYMENT.md) for details. Do not commit real credentials.
 

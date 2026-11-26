@@ -104,6 +104,7 @@ interface LookupOptions {
   fetch?: typeof fetch;
   now?: () => number;
   getAccessToken?: (email: string) => Promise<string | null>;
+  getApplicationToken?: () => Promise<string | null>;
   timeoutMs?: number;
   maxEntries?: number;
   successTtlMs?: number;
@@ -121,6 +122,7 @@ export function createArtistProfileLookup(options: LookupOptions = {}) {
   const pending = new Map<string, Promise<ArtistProfile>>();
   const nextRequest = new Map<ArtistProfileLookupSource, number>();
   const privateFailures = new Map<string, number>();
+  let appFailureUntil = 0;
   const successTtl = Math.min(86400000, Math.max(0, options.successTtlMs ?? 21600000));
   const failureTtl = Math.min(300000, Math.max(0, options.failureTtlMs ?? 60000));
   function remember(key: string, value: Entry) {
@@ -156,15 +158,25 @@ export function createArtistProfileLookup(options: LookupOptions = {}) {
       if (stale) { remember(key, stale); return structuredClone(stale.profile!); }
       throw new ArtistProfileError('artist_profile_lookup_rate_limited', 429);
     }
+    const userKey = email ?? '';
     const job = (async () => {
       let token: string | null = null;
+      let usingAppToken = false;
       if (source === 'spotify') {
-        const userKey = email ?? '';
-        if (!email || !options.getAccessToken || (privateFailures.get(userKey) ?? 0) > now()) throw new ArtistProfileError('artist_profile_spotify_not_connected', 409);
-        try { token = await bounded(() => options.getAccessToken!(email)); } catch { /* stable code below */ }
+        // User token first; a missing/failed user token falls back to the
+        // app-level token so visitors still see public artist metadata.
+        if (email && options.getAccessToken && (privateFailures.get(userKey) ?? 0) <= now()) {
+          try { token = await bounded(() => options.getAccessToken!(email)); } catch { /* try app token */ }
+        }
+        if (!token && options.getApplicationToken && appFailureUntil <= now()) {
+          try { token = await bounded(() => options.getApplicationToken!()); } catch { /* no app token */ }
+          if (token) usingAppToken = true;
+        }
         if (!token) {
-          while (privateFailures.size >= max) privateFailures.delete(privateFailures.keys().next().value!);
-          privateFailures.set(userKey, now() + failureTtl);
+          if (email) {
+            while (privateFailures.size >= max) privateFailures.delete(privateFailures.keys().next().value!);
+            privateFailures.set(userKey, now() + failureTtl);
+          }
           throw new ArtistProfileError('artist_profile_spotify_not_connected', 409);
         }
       }
@@ -187,8 +199,12 @@ export function createArtistProfileLookup(options: LookupOptions = {}) {
               throw new ArtistProfileError('artist_profile_lookup_rate_limited', 429);
             }
             if (source === 'spotify' && (response.status === 401 || response.status === 403)) {
-              while (privateFailures.size >= max) privateFailures.delete(privateFailures.keys().next().value!);
-              privateFailures.set(email!, now() + failureTtl);
+              if (usingAppToken) {
+                appFailureUntil = now() + failureTtl;
+              } else {
+                while (privateFailures.size >= max) privateFailures.delete(privateFailures.keys().next().value!);
+                privateFailures.set(userKey, now() + failureTtl);
+              }
               throw new ArtistProfileError('artist_profile_spotify_not_connected', 409);
             }
             if (response.status === 404) throw new ArtistProfileError('artist_profile_lookup_not_found', 404);
@@ -228,6 +244,10 @@ export const lookupArtistProfile = createArtistProfileLookup({
   getAccessToken: async (email) => {
     const { getSpotifyTokenForUser } = await import('./spotify');
     return getSpotifyTokenForUser(email);
+  },
+  getApplicationToken: async () => {
+    const { getSpotifyApplicationToken } = await import('./spotify');
+    return getSpotifyApplicationToken();
   },
 });
 export type ArtistProfileLookup = ReturnType<typeof createArtistProfileLookup>;

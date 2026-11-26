@@ -80,6 +80,25 @@ export function syncSettingsToLocalStorage(settings: SettingsPayload) {
 }
 
 /**
+ * Merge a server settings map with the browser's current local values. Local
+ * values win: the song page may have changed a preference since the last
+ * upload, and copying the server map into localStorage would reverse it
+ * (issue #519). Keys absent locally fall back to the server.
+ */
+export function mergeSettingsWithLocal(
+  server: SettingsPayload,
+  readLocal: (lsKey: string) => string | null,
+): SettingsPayload {
+  const merged: SettingsPayload = { ...server };
+  for (const [key, lsKey] of Object.entries(SETTING_TO_LS)) {
+    let local: string | null;
+    try { local = readLocal(lsKey); } catch { local = null; }
+    if (local !== null) merged[key] = local;
+  }
+  return merged;
+}
+
+/**
  * Apply theme + locale immediately from a settings payload so a just-fetched
  * server value is reflected without a reload. Theme needs the ThemeProvider's
  * setTheme; locale needs the I18n setLocale. No-ops when not passed (the

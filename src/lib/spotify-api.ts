@@ -295,6 +295,11 @@ export class SpotifyApiClient {
     return this.postTokenRequest({ grant_type: 'refresh_token', refresh_token: refreshToken });
   }
 
+  /** App-level token via client credentials — only for public metadata reads. */
+  requestApplicationToken(): Promise<SpotifyResult<SpotifyTokenResponse>> {
+    return this.postTokenRequest({ grant_type: 'client_credentials' });
+  }
+
   /** `/me` — carries the email (when the scope allows) and the account id. */
   async fetchProfile(): Promise<SpotifyProfile | null> {
     const result = await this.request<Record<string, unknown>>('/me');
