@@ -1,12 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  buildCsvExport,
   buildExport,
   buildHtmlExport,
+  buildReviewCsvExport,
   buildTextExport,
   ExportError,
-  escapeCsvField,
   isEmptyAfterTrim,
   joinReadingParts,
   parseFuriganaLines,
@@ -437,83 +436,43 @@ test('buildExport LRC with translation aligns when an untimed row sits between t
   );
 });
 
-
-test('escapeCsvField escapes quotes and guards against spreadsheet formulas', () => {
-  assert.equal(escapeCsvField('plain'), '"plain"');
-  assert.equal(escapeCsvField('a,b'), '"a,b"');
-  assert.equal(escapeCsvField('say "hi"'), '"say ""hi"""');
-  // RFC 4180 quoting alone is not enough: spreadsheet apps execute cells
-  // starting with these characters as formulas.
-  for (const prefix of ['=', '+', '-', '@', '\t', '\r']) {
-    assert.equal(escapeCsvField(`${prefix}cmd`), `"'${prefix}cmd"`);
-  }
-  // A leading apostrophe in the original value is not a formula trigger.
-  assert.equal(escapeCsvField("'hello"), '"\'hello"');
+test('buildReviewCsvExport keeps one row per source line including blank separators', () => {
+  const csv = buildReviewCsvExport(SONG, true, 'none');
+  assert.ok(csv.startsWith('\ufeff'), 'CSV needs a UTF-8 BOM for Excel');
+  const rows = csv.replace(/^\ufeff/, '').trimEnd().split('\r\n');
+  assert.deepEqual(rows[0], '"Line","Original","Furigana","Translation"');
+  assert.equal(rows.length, 4, 'header + 3 source lines (blank separator included)');
+  // Issue #501: the blank source row stays in its own row, no paragraph is
+  // merged away, and it never consumes a translation from the next line.
+  assert.equal(rows[2], '"1","","",""');
+  assert.equal(rows[3], '"2","明日へ","","Toward tomorrow"');
 });
 
-test('buildCsvExport emits a BOM, CRLF records and aligned line-level rows', () => {
-  const csv = buildCsvExport(SONG, 'none');
-  assert.ok(csv.startsWith('\ufeff'));
-  const lines = csv.slice(1).trimEnd().split('\r\n');
-  assert.deepEqual(lines[0], '原文,注音,译文,曲名,歌手');
-  // 3 source lines + header
-  assert.equal(lines.length, 4);
-  assert.equal(lines[1], '"桜が舞う","","Cherry blossoms dance","桜","Example"');
-  assert.equal(lines[2], '"","","","桜","Example"');
-  assert.equal(lines[3], '"明日へ","","Toward tomorrow","桜","Example"');
+test('buildReviewCsvExport pairs readings with the original source line', () => {
+  const furigana = buildReviewCsvExport(SONG, false, 'furigana');
+  assert.match(furigana, /"0","桜が舞う","桜\(さくら\)が舞\(ま\)う"/);
+  const romaji = buildReviewCsvExport(SONG, false, 'romaji');
+  assert.match(romaji, /"0","桜が舞う","sakura ga mau"/);
 });
 
-test('buildCsvExport reads annotations from the aligned furigana cache', () => {
-  const none = buildCsvExport(SONG, 'none');
-  assert.doesNotMatch(none, /さくら/);
-
-  const furigana = buildCsvExport(SONG, 'furigana');
-  assert.match(furigana, /"桜\(さくら\)が舞\(ま\)う"/);
-  assert.match(furigana, /"明日\(あした\)へ"/);
-  assert.doesNotMatch(furigana, /sakura/);
-
-  const romaji = buildCsvExport(SONG, 'romaji');
-  assert.match(romaji, /"sakura ga mau"/);
-  assert.match(romaji, /"ashita he"/);
-});
-
-test('buildCsvExport keeps jyutping syllable boundaries in both reading modes', () => {
-  const furigana = buildCsvExport(YUE_SONG, 'furigana');
-  assert.match(furigana, /"今\(gam1\)天\(tin1\)天\(tin1\)氣\(hei3\)很\(han2\)好\(hou2\)"/);
-  const romaji = buildCsvExport(YUE_SONG, 'romaji');
-  assert.match(romaji, /"gam1 tin1 tin1 hei3 han2 hou2"/);
-});
-
-test('buildCsvExport leaves cells empty for missing translation and reading', () => {
+test('buildReviewCsvExport escapes quotes and neutralises spreadsheet formulas', () => {
   const song = {
     ...SONG,
-    lyrics_furigana: '[]',
-    lyrics_translation: JSON.stringify(['', null, '']),
-  };
-  const csv = buildCsvExport(song, 'furigana');
-  const lines = csv.slice(1).trimEnd().split('\r\n');
-  // Every reading/translation cell is empty, but source text and metadata survive.
-  assert.equal(lines[1], '"桜が舞う","","","桜","Example"');
-  assert.equal(lines[3], '"明日へ","","","桜","Example"');
-});
-
-test('buildCsvExport quotes source text containing commas, quotes and formulas', () => {
-  const song = {
-    ...SONG,
-    lyrics_raw: 'Hello, "world"\n=1+1',
+    lyrics_raw: '=SUM(A1:A2)\n"quoted", line',
     lyrics_furigana: '[]',
     lyrics_translation: '[]',
-    artist: '',
   };
-  const lines = buildCsvExport(song, 'none').slice(1).trimEnd().split('\r\n');
-  assert.equal(lines[1], '"Hello, ""world""","","","桜",""');
-  assert.equal(lines[2], '"\'=1+1","","","桜",""');
+  const csv = buildReviewCsvExport(song, false, 'none');
+  assert.match(csv, /"'=SUM\(A1:A2\)"/, 'formula cell must be quoted and prefixed');
+  assert.match(csv, /"""quoted"", line"/, 'embedded quotes must be doubled');
 });
 
-test('buildExport routes csv to the text/csv content type and .csv extension', () => {
-  const csv = buildExport(SONG, { format: 'csv', includeTranslation: false, reading: 'furigana' });
+test('buildExport routes CSV with a BOM and text/csv content type', () => {
+  const csv = buildExport(SONG, { format: 'csv', includeTranslation: false, reading: 'none' });
   assert.equal(csv.extension, 'csv');
   assert.equal(csv.contentType, 'text/csv; charset=utf-8');
   assert.ok(csv.body.startsWith('\ufeff'));
-  assert.match(csv.body, /"桜\(さくら\)が舞\(ま\)う"/);
+  // Even when the UI leaves reading on "none", the review table still carries
+  // the aligned furigana column — the whole point of the CSV export.
+  assert.match(csv.body, /"0","桜が舞う","桜\(さくら\)が舞\(ま\)う"/);
 });

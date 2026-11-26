@@ -186,6 +186,68 @@ export function joinReadingParts(
 }
 
 /**
+ * Quote one CSV field per RFC 4180 and neutralise spreadsheet formulas.
+ *
+ * Issue #486 flagged CSV injection as the main risk of a row-based review
+ * export: a lyric beginning with `=`, `+`, `-` or `@` must stay text, so a
+ * leading apostrophe is added before quoting. Quotes themselves are doubled.
+ */
+function csvCell(value: string): string {
+  const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  return `"${safe.replaceAll('"', '""')}"`;
+}
+
+/**
+ * Build the review table: one row per `lyrics_raw` line, so blank separator
+ * rows stay in place (issue #501) instead of being merged away. The reading
+ * column follows the selected mode; CSV rows always carry the original source
+ * text plus its furigana (or romaji) reading, and optionally the translation.
+ * The BOM keeps Excel from mis-reading UTF-8 Japanese/Cantonese text.
+ */
+export function buildReviewCsvExport(
+  song: ExportSongData,
+  includeTranslation: boolean,
+  readingMode: ExportReadingMode,
+): string {
+  const furiganaLines = parseFuriganaLines(song.lyrics_furigana);
+  const translations = parseTranslations(song.lyrics_translation);
+  const rawLines = song.lyrics_raw.split('\n');
+  const rows: string[][] = [];
+
+  rawLines.forEach((rawLine, index) => {
+    // Issue #501: one row per source line, blank separators included. Dropping
+    // them would hide the stanza structure the source deliberately encodes.
+    const line = furiganaLines[index];
+    const segments = line && readingMode === 'furigana'
+      ? normalizeFuriganaSegments(line.segments, song.reading_scheme)
+      : line?.segments ?? [];
+    const reading = segments.length === 0 || readingMode === 'none'
+      ? ''
+      : joinReadingParts(
+        segments.map((seg) => readingMode === 'romaji'
+          ? resolveFuriganaReading(seg.text, seg.reading, true, song.reading_scheme, seg) || seg.text
+          : segmentToAnnotatedText(
+            seg,
+            resolveFuriganaReading(seg.text, seg.reading, false, song.reading_scheme, seg),
+            song.reading_scheme,
+          )),
+        song.reading_scheme,
+        readingMode,
+      );
+    rows.push([
+      String(index),
+      rawLine,
+      reading,
+      ...(includeTranslation ? [translations[index]?.trim() ?? ''] : []),
+    ]);
+  });
+
+  const header = ['Line', 'Original', readingMode === 'none' ? 'Furigana' : readingMode === 'romaji' ? 'Romaji' : 'Reading',
+    ...(includeTranslation ? ['Translation'] : [])];
+  return `\ufeff${[header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n')}\r\n`;
+}
+
+/**
  * One plain-text part per segment: the original text, with the reading
  * appended in parentheses only when the segment has one.
  *
@@ -317,79 +379,6 @@ ${bodyLines}
 </html>`;
 }
 
-/**
- * RFC 4180 field escaping: wrap in double quotes and double any embedded quote.
- * Fields starting with `=`, `+`, `-`, `@`, tab or carriage return are prefixed
- * with an apostrophe so spreadsheet apps treat them as text, not formulas
- * (CSV injection). The BOM written in `buildCsvExport` keeps Excel from
- * misreading UTF-8 Japanese/Chinese characters.
- */
-export function escapeCsvField(value: string): string {
-  const dangerous = /^[=+\-@\t\r]/u.test(value);
-  const safe = dangerous ? `'${value}` : value;
-  return `"${safe.replaceAll('"', '""')}"`;
-}
-
-/** One `原文(读音)` string per segment, used by the CSV furigana column. */
-function lineToAnnotatedText(
-  line: FuriganaLine,
-  scheme: ReadingScheme,
-  readingMode: Exclude<ExportReadingMode, 'none'>,
-): string {
-  const parts: string[] = [];
-  const segments: FuriganaSegment[] = readingMode === 'furigana'
-    ? normalizeFuriganaSegments(line.segments, scheme).map((seg) => ({
-        text: seg.text,
-        reading: seg.reading,
-        ...(seg.pos ? { pos: seg.pos } : {}),
-      }))
-    : line.segments;
-  for (const seg of segments) {
-    const part = readingMode === 'furigana'
-      ? segmentToAnnotatedText(
-          seg,
-          resolveFuriganaReading(seg.text, seg.reading, false, scheme, seg),
-          scheme,
-        )
-      : resolveFuriganaReading(seg.text, seg.reading, true, scheme, seg) || seg.text;
-    if (readingMode === 'romaji' && scheme === 'ja-kana' && seg.joinPrev && parts.length) {
-      parts[parts.length - 1] += part;
-    } else {
-      parts.push(part);
-    }
-  }
-  return joinReadingParts(parts, scheme, readingMode);
-}
-
-/**
- * Emit a line-level study table as UTF-8 CSV (BOM included).
- *
- * Columns: original, reading, translation, title, artist. Every row is
- * index-aligned to `lyrics_raw`; blank separator lines are kept so the file
- * mirrors the source layout, and cells without data are empty. No dedup, no
- * word-level tokenization — the JSON caches already carry line-level pairing.
- */
-export function buildCsvExport(
-  song: ExportSongData,
-  readingMode: ExportReadingMode,
-): string {
-  const header = ['原文', '注音', '译文', '曲名', '歌手'];
-  const furiganaLines = parseFuriganaLines(song.lyrics_furigana);
-  const translations = parseTranslations(song.lyrics_translation);
-  const rows = song.lyrics_raw.split('\n').map((rawLine, index) => {
-    const line = furiganaLines[index];
-    const reading = readingMode === 'none' || !line || line.segments.length === 0
-      ? ''
-      : lineToAnnotatedText(line, song.reading_scheme, readingMode);
-    const translation = translations[index]?.trim() ?? '';
-    return [rawLine, reading, translation, song.title, song.artist ?? '']
-      .map(escapeCsvField)
-      .join(',');
-  });
-  // BOM so Excel recognizes UTF-8; CRLF is the RFC 4180 record separator.
-  return `\ufeff${[header.join(','), ...rows].join('\r\n')}\r\n`;
-}
-
 /** Raised when an export cannot be produced (e.g. LRC requested without a synced timeline). */
 export class ExportError extends Error {
   readonly code: string;
@@ -432,19 +421,19 @@ export function buildExport(song: ExportSongData, options: ExportOptions): Expor
     };
   }
 
-  if (format === 'csv') {
-    return {
-      body: buildCsvExport(song, reading),
-      contentType: 'text/csv; charset=utf-8',
-      extension: 'csv',
-    };
-  }
-
   if (format === 'html') {
     return {
       body: buildHtmlExport(song, includeTranslation, reading),
       contentType: 'text/html; charset=utf-8',
       extension: 'html',
+    };
+  }
+
+  if (format === 'csv') {
+    return {
+      body: buildReviewCsvExport(song, includeTranslation, reading === 'romaji' ? 'romaji' : 'furigana'),
+      contentType: 'text/csv; charset=utf-8',
+      extension: 'csv',
     };
   }
 

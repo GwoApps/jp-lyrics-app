@@ -379,6 +379,8 @@
     "exportDownloading": "Downloading…",
     "exportFailed": "Export failed",
     "exportSongNotFound": "Song not found — it may have been deleted or is no longer visible to you",
+    "exportReviewTable": "Review table (CSV)",
+    "exportReviewTableHint": "One row per source line — blank lines stay as paragraph separators; readings and translations are paired with the original text",
     "exportRetry": "Retry",
     "requestPublic": "Request Public",
     "requestPublicTitle": "Make this lyrics public?",

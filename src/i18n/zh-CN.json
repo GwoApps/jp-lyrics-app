@@ -379,6 +379,8 @@
     "exportDownloading": "正在下载…",
     "exportFailed": "导出失败",
     "exportSongNotFound": "找不到歌曲（可能已删除，或你已无权查看）",
+    "exportReviewTable": "复习表（CSV）",
+    "exportReviewTableHint": "按原歌词逐行输出，空行作为段落分隔保留；注音与译文按行对齐",
     "exportRetry": "重试",
     "requestPublic": "申请公开",
     "requestPublicTitle": "公开这首歌词？",

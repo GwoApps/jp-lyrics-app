@@ -82,7 +82,9 @@ export default function DownloadDialog({
   // A CSV study table is only useful when there is reading or translation data
   // to study; warn when neither cache exists rather than shipping metadata only.
   const showCsvHint = format === 'csv' && !hasReadingData && !hasTranslation;
-  const showReadingOptions = hasReadingData && format !== 'lrc' && !showCsvHint;
+  // CSV always carries the aligned furigana column, so the reading selector is
+  // hidden for it (romaji still carries over from another format via buildUrl).
+  const showReadingOptions = hasReadingData && format !== 'lrc' && format !== 'csv';
   // LRC now supports pairing each timed row with its translation, so the
   // translation toggle is offered for every format (requires a stored translation).
   const showTranslationOption = hasTranslation;
@@ -112,6 +114,9 @@ export default function DownloadDialog({
   const buildUrl = (format: ExportFormat = selectedFormat) => {
     const params = new URLSearchParams({ format });
     if (showReadingOptions && reading !== 'none') params.set('reading', reading);
+    // CSV always carries the aligned furigana column; the UI "none" mode only
+    // means "don't add readings to .txt/.html", not "drop review data".
+    if (format === 'csv' && reading === 'romaji') params.set('reading', 'romaji');
     if (showTranslationOption && includeTranslation) params.set('include_translation', '1');
     return `/api/songs/${songId}/export?${params.toString()}`;
   };
