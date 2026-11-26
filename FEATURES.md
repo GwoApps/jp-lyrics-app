@@ -76,8 +76,10 @@ and [DEPLOYMENT.md](DEPLOYMENT.md).
 - **Resilience** — Retry with backoff on transient failures, per-error
   localized messages, and a daily token quota
   (`AI_DAILY_NEURON_LIMIT`, `429 / ai_quota_exceeded` → quota toast).
-- **Whole-song workspace** — `/songs/[id]/translation` translates the full
-  lyrics into the target language (SSE, `max_tokens` 32768).
+- **Whole-song translation** — Triggered from the song detail page
+  (`/songs/[id]`): the full lyrics are translated into the target language with
+  SSE progress, batched requests and resumable partial results. Line-by-line
+  proofreading lives at `/songs/[id]/translation/edit`.
 
 ## Spotify Integration
 

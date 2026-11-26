@@ -105,6 +105,8 @@
     "notFound": "歌词库中没有此艺人。"
   },
   "home": {
+    "emptyLyricsNeverFetched": "未抓取歌词",
+    "emptyLyricsNotFound": "未找到歌词",
     "navArtists": "艺人",
     "songList": "歌曲列表",
     "albumList": "专辑列表",
@@ -323,7 +325,7 @@
     "translationUnavailable": "翻译服务未配置",
     "translationEmptyLyrics": "歌词为空，无法翻译",
     "translationFailed": "翻译失败",
-    "translationQuotaExceeded": "今日 AI 翻译额度已用尽，请明天再试",
+    "translationQuotaExceeded": "今日 AI 翻译额度已用尽，配额按 UTC 日重置（北京时间 08:00），请在重置后重试。",
     "translationStaleSource": "翻译期间歌词已在其他页面更新，请刷新后重试",
     "spotify": "Spotify",
     "spotifyLoading": "正在加载 Spotify 播放状态…",
@@ -1145,6 +1147,8 @@
     "lookupRateLimited": "来源请求受到限流，请稍后再预览。"
   },
   "artistLibrary": {
+    "emptyLyricsNeverFetched": "歌词未抓取",
+    "emptyLyricsNotFound": "未找到歌词",
     "filters": "筛选与排序",
     "filtersActive": "筛选与排序，已启用 {count} 项",
     "searchLabel": "搜索此曲库",

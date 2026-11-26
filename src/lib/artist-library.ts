@@ -5,6 +5,7 @@ import { songVisibilityWhere, type SongViewer } from './song-visibility.ts';
 import { artistKey, groupArtistAlbums, groupSongsByArtist, splitArtists, type ArtistLibrary, type ArtistProfile } from './artists.ts';
 import type { SongItem } from './types';
 import { summarizeSongLibraryContent } from './song-library-summary.ts';
+import { emptyLyricsReason } from './empty-lyrics.ts';
 
 type ArtistDB = Pick<BaseSQLiteDatabase<'async', unknown, typeof schema>, 'select'>;
 const NO_STORE_HEADERS = { 'Cache-Control': 'private, no-store' };
@@ -16,6 +17,8 @@ const ARTIST_SONG_COLUMNS = {
   cover_url: schema.songs.coverUrl,
   spotify_track_id: schema.songs.spotifyTrackId,
   spotify_album: schema.songs.spotifyAlbum,
+  lyrics_source: schema.songs.lyricsSource,
+  lyrics_fetched_at: schema.songs.lyricsFetchedAt,
   created_by_name: schema.songs.createdByName,
   is_public: schema.songs.isPublic,
   public_requested: schema.songs.publicRequested,
@@ -69,11 +72,15 @@ export async function getArtistLibrary(db: ArtistDB, viewer: SongViewer | null |
   )).orderBy(desc(schema.songs.updatedAt), asc(schema.songs.id));
   // Rebuild aggregates from the second ACL-checked read, so a visibility/credit
   // change between reads cannot leak a formerly visible row or stale counts.
-  return findArtistLibrary(rows.map(({ song, content, favorite }) => ({
-    ...song,
-    ...summarizeSongLibraryContent(content),
-    favorited: email ? favorite === 1 : null,
-  })), name);
+  return findArtistLibrary(rows.map(({ song, content, favorite }) => {
+    const summary = summarizeSongLibraryContent(content);
+    return {
+      ...song,
+      ...summary,
+      ...(summary.has_lyrics === false ? { empty_lyrics_reason: emptyLyricsReason(song) } : {}),
+      favorited: email ? favorite === 1 : null,
+    };
+  }), name);
 }
 
 export function emptyArtistProfile(name: string): ArtistProfile {

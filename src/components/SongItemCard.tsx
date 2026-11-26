@@ -17,6 +17,8 @@ export interface SongItemCardSong {
   updated_at: string;
   /** Issue #323: `1` when the lyrics match was low-confidence (needs review). */
   lyrics_needs_review?: number;
+  /** Issue #502: present when the song has no lyric text to display. */
+  empty_lyrics_reason?: 'never-fetched' | 'not-found';
 }
 
 interface SongItemCardProps {
@@ -34,6 +36,9 @@ interface SongItemCardProps {
   createdByLabel: string;
   /** Issue #323: badge label for `lyrics_needs_review === 1` (shared with the admin list). */
   needsReviewLabel: string;
+  /** Issue #502: badge labels for empty songs; both required when a song can be empty. */
+  emptyLyricsNeverFetchedLabel?: string;
+  emptyLyricsNotFoundLabel?: string;
   shareLabel: string;
   openSongLabel: (title: string) => string;
   favoriteLabel: (title: string, isFavorite: boolean) => string;
@@ -57,6 +62,8 @@ export default function SongItemCard({
   unknownArtistLabel,
   createdByLabel,
   needsReviewLabel,
+  emptyLyricsNeverFetchedLabel,
+  emptyLyricsNotFoundLabel,
   shareLabel,
   openSongLabel,
   favoriteLabel: favoriteAccessibleName,
@@ -93,6 +100,11 @@ export default function SongItemCard({
   const accent = palette
     ? `rgb(${palette.primary.r} ${palette.primary.g} ${palette.primary.b})`
     : 'var(--border)';
+  const emptyLyricsBadgeLabel = song.empty_lyrics_reason === 'never-fetched'
+    ? emptyLyricsNeverFetchedLabel
+    : song.empty_lyrics_reason === 'not-found'
+      ? emptyLyricsNotFoundLabel
+      : undefined;
 
   const updatePointer = (event: React.PointerEvent<HTMLElement>) => {
     const card = cardRef.current;
@@ -157,6 +169,11 @@ export default function SongItemCard({
               <span className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--destructive)]/10 text-[var(--destructive)]">
                 <AlertTriangle className="h-3 w-3 mr-0.5" />
                 {needsReviewLabel}
+              </span>
+            )}
+            {emptyLyricsBadgeLabel && (
+              <span className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-[var(--muted)] text-[var(--muted-foreground)]">
+                {emptyLyricsBadgeLabel}
               </span>
             )}
             {isPlaying && <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--success)] animate-pulse shrink-0" />}

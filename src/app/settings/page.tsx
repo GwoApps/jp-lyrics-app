@@ -13,6 +13,7 @@ import { PIP_THEME_EVENT } from '@/lib/pip-theme';
 import {
   isSyncEnabled,
   syncSettingsToLocalStorage,
+  mergeSettingsWithLocal,
   setSyncEnabled,
   SYNCABLE_KEYS,
   type SettingsPayload,
@@ -131,18 +132,7 @@ export default function SettingsPage() {
       // This effect intentionally synchronizes the form with an external store
       // when the persisted master switch changes after saving.
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSettings({
-        theme: localStorage.getItem('jplrc-theme') ?? undefined,
-        locale: localStorage.getItem('jplrc-locale') ?? undefined,
-        font_size: localStorage.getItem('jplrc-font-size') ?? undefined,
-        reading_mode: localStorage.getItem('jplrc-reading-mode') ?? undefined,
-        romanize_furigana: localStorage.getItem('jplrc-romanize-furigana') ?? undefined,
-        show_translation: localStorage.getItem('jplrc-show-translation') ?? undefined,
-        follow_playing: localStorage.getItem('jplrc-follow-playing') ?? undefined,
-        disable_video_pip: localStorage.getItem('jplrc-disable-video-pip') ?? undefined,
-        pip_theme: localStorage.getItem('jplrc-pip-theme') ?? undefined,
-        sync_settings: 'false',
-      });
+      setSettings(mergeSettingsWithLocal({}, (lsKey) => localStorage.getItem(lsKey)) as SettingsMap);
       setLoading(false);
       return;
     }
@@ -152,11 +142,15 @@ export default function SettingsPage() {
         return r.json();
       })
       .then((data) => {
-        const server = data.settings ?? {};
-        setSettings(server);
-        // Fast-path: sync server settings into localStorage so first-screen
-        // behaviour matches the persisted values on the next load.
-        syncSettingsToLocalStorage(server);
+        // Union with the browser's current values: a local preference is real
+        // state even when the server has never seen it (issue #519). Never
+        // copy the server map into localStorage here — the reader may have
+        // changed a preference on the song page after the last upload.
+        const merged = mergeSettingsWithLocal(
+          data.settings ?? {},
+          (lsKey) => localStorage.getItem(lsKey),
+        ) as SettingsMap;
+        setSettings(merged);
       })
       .catch(() => {
         // Falls back to existing localStorage behaviour on transient failure.
@@ -199,6 +193,8 @@ export default function SettingsPage() {
       const syncOn = settings.sync_settings === 'true';
       const payload: SettingsPayload = { sync_settings: String(syncOn) };
       if (syncOn) {
+        // The form is the local ∪ server union, so sending the whole patch
+        // seeds an account that has never saved anything before.
         for (const key of SYNCABLE_KEYS) {
           const value = settings[key as keyof SettingsMap];
           if (value !== undefined) payload[key] = value;
@@ -213,19 +209,14 @@ export default function SettingsPage() {
         showToast('error', t('settings.saveFailed'));
         return;
       }
-      const data = await res.json();
       // Mirror the chosen value into localStorage regardless of server state,
       // so the switch and preferences take effect even on a transient failure.
       setSyncEnabledState(syncOn);
       setSyncEnabled(syncOn);
       syncSettingsToLocalStorage(syncOn ? payload : { ...payload, ...settings });
-      // When sync is on, the server's persisted map is the source of truth for
-      // the form. When off, keep the local values the user just chose.
-      if (syncOn) {
-        setSettings(data.settings ?? {});
-      } else {
-        setSettings((prev) => ({ ...prev, sync_settings: 'false' }));
-      }
+      // Keep the form on the values the reader is looking at; the server never
+      // gets to overwrite a local choice made outside this page.
+      setSettings((prev) => ({ ...prev, sync_settings: String(syncOn) }));
       setDirty(false);
       showToast('success', t('settings.saved'));
     } catch {

@@ -58,6 +58,7 @@ async function getSongs(
       if (name === '@/lib/admin') return { parseJsonBody: () => ({}) };
       if (name === '@/lib/spotify') return { getSpotifyTrack: async () => null };
       if (name === '@/lib/lyrics-content') return { normalizeLyricsEol: (value: string) => value };
+      if (name === '@/lib/empty-lyrics') return require('./empty-lyrics.ts');
       return require(name);
     },
   });
@@ -67,6 +68,19 @@ async function getSongs(
 }
 
 const row = { id: 'song-1', title: 'Song', artist: 'Artist', created_by: 'owner@example.test' };
+
+test('GET /api/songs flags empty songs with the same reason the detail page uses', async () => {
+  const { body } = await getSongs(
+    [
+      { ...row, lyrics_raw: '', lyrics_source: 'manual', lyrics_fetched_at: null },
+      { ...row, id: 'song-2', lyrics_raw: '  ', lyrics_source: 'none', lyrics_fetched_at: '2026-08-02T00:00:00.000Z' },
+      { ...row, id: 'song-3', lyrics_raw: '歌詞', lyrics_source: 'manual', lyrics_fetched_at: null },
+    ],
+    null,
+  );
+  assert.deepEqual(body.map((song) => song.empty_lyrics_reason), ['never-fetched', 'not-found', undefined]);
+  assert.equal(Object.hasOwn(body[0], 'lyrics_raw'), false, 'lyrics bodies must not leak into list payloads');
+});
 
 test('GET /api/songs returns a boolean can_edit per row', async () => {
   const { body, response, query } = await getSongs(

@@ -95,6 +95,8 @@ export interface SongListItem {
    * same "needs review" badge the admin list uses.
    */
   lyrics_needs_review?: number;
+  /** Issue #502: why an empty song has no lyrics, surfaced on list cards. */
+  empty_lyrics_reason?: 'never-fetched' | 'not-found';
   /** Issue #462: server-authoritative edit permission for this list row. */
   can_edit?: boolean;
 }

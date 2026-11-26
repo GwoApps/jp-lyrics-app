@@ -47,7 +47,10 @@ test('document title follows the UI locale once hydrated', () => {
   const sync = read('src/components/AppMetadataSync.tsx');
   assert.match(sync, /const name = t\('common\.appName'\)/);
   assert.match(sync, /generic\.has\(document\.title\.trim\(\)\)/);
-  assert.match(sync, /document\.title = name/);
+  // Gated on an actual difference: an unconditional write re-enters the
+  // MutationObserver and re-writes forever, pinning the main thread (the loop
+  // that froze `/`, `/settings`, `/albums`, `/artists`).
+  assert.match(sync, /document\.title !== next\) document\.title = next/);
   assert.match(sync, /meta\[name="apple-mobile-web-app-title"\]/);
   // Re-applied on navigation: Next.js re-emits layout metadata per route.
   assert.match(sync, /\}, \[t, pathname\]\)/);

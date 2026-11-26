@@ -6,6 +6,7 @@ import { getAuthUser } from '@/lib/auth';
 import { getSpotifyTrack } from '@/lib/spotify';
 import { parseJsonBody } from '@/lib/admin';
 import { normalizeLyricsEol } from '@/lib/lyrics-content';
+import { emptyLyricsReason, hasLyricsContent } from '@/lib/empty-lyrics';
 import { songVisibilityWhere, SONGS_S_COLUMNS } from '@/lib/song-visibility';
 import type { SQL } from 'drizzle-orm';
 import type { SongListItem } from '@/lib/types';
@@ -60,13 +61,26 @@ export async function GET(request: NextRequest) {
   const canEditColumn = user
     ? sql`CASE WHEN ${user.isAdmin ? sql`1 = 1` : sql`1 = 0`} OR s.created_by = ${userEmail} THEN 1 ELSE 0 END AS can_edit`
     : sql`0 AS can_edit`;
-  const selectColumns = sql`s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at, s.lyrics_needs_review, ${canEditColumn}`;
+  const selectColumns = sql`s.id, s.title, s.artist, s.cover_url, s.spotify_track_id, s.spotify_album, s.created_by_name, s.is_public, s.public_requested, s.created_at, s.updated_at, s.lyrics_needs_review, s.lyrics_source, s.lyrics_fetched_at, s.lyrics_raw, ${canEditColumn}`;
 
-  /** SQLite has no booleans: normalize 0/1 into the detail route's boolean shape. */
+  /**
+   * Normalize SQLite 0/1 and mark only songs with no visible lyric text. The
+   * `lyrics_raw` column is read for the emptiness check and stripped again so
+   * the list payload stays as small as before (issue #502).
+   */
   function toSongListItems(rows: unknown[]): SongListItem[] {
     return rows.map((row) => {
-      const song = row as Omit<SongListItem, 'can_edit'> & { can_edit?: number };
-      return { ...song, can_edit: song.can_edit === 1 };
+      const { lyrics_raw, ...song } = row as Omit<SongListItem, 'can_edit' | 'empty_lyrics_reason'> & {
+        can_edit?: number;
+        lyrics_raw?: string | null;
+        lyrics_source?: string | null;
+        lyrics_fetched_at?: string | null;
+      };
+      return {
+        ...song,
+        can_edit: song.can_edit === 1,
+        ...(hasLyricsContent(lyrics_raw) ? {} : { empty_lyrics_reason: emptyLyricsReason(song) }),
+      };
     });
   }
 
