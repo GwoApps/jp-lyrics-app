@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useRef, useState } from 'react';
-import { Download, FileText, FileClock, FileCode2, Check, X, AlertCircle, Ban, Loader2 } from 'lucide-react';
+import { Download, FileText, FileClock, FileCode2, FileSpreadsheet, Check, X, AlertCircle, Ban, Loader2 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import Dialog from '@/components/ui/dialog';
 import { exportErrorMsg } from '@/lib/export-errors';
@@ -39,6 +39,7 @@ const FORMAT_OPTIONS: { format: ExportFormat; icon: typeof FileText }[] = [
   { format: 'text', icon: FileText },
   { format: 'lrc', icon: FileClock },
   { format: 'html', icon: FileCode2 },
+  { format: 'csv', icon: FileSpreadsheet },
 ];
 
 export default function DownloadDialog({
@@ -78,7 +79,7 @@ export default function DownloadDialog({
     }
   }
 
-  const showReadingOptions = hasReadingData && format !== 'lrc';
+  const showReadingOptions = hasReadingData && format !== 'lrc' && format !== 'csv';
   // LRC now supports pairing each timed row with its translation, so the
   // translation toggle is offered for every format (requires a stored translation).
   const showTranslationOption = hasTranslation;
@@ -108,6 +109,9 @@ export default function DownloadDialog({
   const buildUrl = (format: ExportFormat = selectedFormat) => {
     const params = new URLSearchParams({ format });
     if (showReadingOptions && reading !== 'none') params.set('reading', reading);
+    // CSV always carries the aligned furigana column; the UI "none" mode only
+    // means "don't add readings to .txt/.html", not "drop review data".
+    if (format === 'csv' && reading === 'romaji') params.set('reading', 'romaji');
     if (showTranslationOption && includeTranslation) params.set('include_translation', '1');
     return `/api/songs/${songId}/export?${params.toString()}`;
   };
@@ -185,7 +189,7 @@ export default function DownloadDialog({
           {/* Format */}
           <div>
             <div className="mb-2 text-xs font-medium text-[var(--muted-foreground)]">{t('song.exportFormatLabel')}</div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {FORMAT_OPTIONS.map(({ format: f, icon: Icon }) => {
                 const isLrc = f === 'lrc';
                 const disabled = isLrc && lrcDisabled;
@@ -212,6 +216,7 @@ export default function DownloadDialog({
                     <Icon className="h-4 w-4" />
                     <span className="inline-flex items-center gap-1">
                       .{f === 'text' ? 'txt' : f}
+                      {f === 'csv' && <span className="sr-only">{t('song.exportReviewTable')}</span>}
                       {isLrc && disabled && <Ban className="h-3 w-3" />}
                     </span>
                   </button>

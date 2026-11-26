@@ -15,7 +15,7 @@ export async function GET(
   const user = await getAuthUser(request);
 
   const formatParam = request.nextUrl.searchParams.get('format') || 'text';
-  const format: ExportFormat = formatParam === 'lrc' || formatParam === 'html' ? formatParam : 'text';
+  const format: ExportFormat = formatParam === 'lrc' || formatParam === 'html' || formatParam === 'csv' ? formatParam : 'text';
   const readingParam = request.nextUrl.searchParams.get('reading') || 'none';
   const reading: ExportReadingMode = readingParam === 'furigana' || readingParam === 'romaji' ? readingParam : 'none';
   const includeTranslation = request.nextUrl.searchParams.get('include_translation') === '1';

@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   buildExport,
   buildHtmlExport,
+  buildReviewCsvExport,
   buildTextExport,
   ExportError,
   isEmptyAfterTrim,
@@ -433,4 +434,45 @@ test('buildExport LRC with translation aligns when an untimed row sits between t
     lrc.body,
     '[00:10.000]A\n[00:10.000]TA\nB\n[00:20.000]C\n[00:20.000]TC',
   );
+});
+
+test('buildReviewCsvExport keeps one row per source line including blank separators', () => {
+  const csv = buildReviewCsvExport(SONG, true, 'none');
+  assert.ok(csv.startsWith('\ufeff'), 'CSV needs a UTF-8 BOM for Excel');
+  const rows = csv.replace(/^\ufeff/, '').trimEnd().split('\r\n');
+  assert.deepEqual(rows[0], '"Line","Original","Furigana","Translation"');
+  assert.equal(rows.length, 4, 'header + 3 source lines (blank separator included)');
+  // Issue #501: the blank source row stays in its own row, no paragraph is
+  // merged away, and it never consumes a translation from the next line.
+  assert.equal(rows[2], '"1","","",""');
+  assert.equal(rows[3], '"2","明日へ","","Toward tomorrow"');
+});
+
+test('buildReviewCsvExport pairs readings with the original source line', () => {
+  const furigana = buildReviewCsvExport(SONG, false, 'furigana');
+  assert.match(furigana, /"0","桜が舞う","桜\(さくら\)が舞\(ま\)う"/);
+  const romaji = buildReviewCsvExport(SONG, false, 'romaji');
+  assert.match(romaji, /"0","桜が舞う","sakura ga mau"/);
+});
+
+test('buildReviewCsvExport escapes quotes and neutralises spreadsheet formulas', () => {
+  const song = {
+    ...SONG,
+    lyrics_raw: '=SUM(A1:A2)\n"quoted", line',
+    lyrics_furigana: '[]',
+    lyrics_translation: '[]',
+  };
+  const csv = buildReviewCsvExport(song, false, 'none');
+  assert.match(csv, /"'=SUM\(A1:A2\)"/, 'formula cell must be quoted and prefixed');
+  assert.match(csv, /"""quoted"", line"/, 'embedded quotes must be doubled');
+});
+
+test('buildExport routes CSV with a BOM and text/csv content type', () => {
+  const csv = buildExport(SONG, { format: 'csv', includeTranslation: false, reading: 'none' });
+  assert.equal(csv.extension, 'csv');
+  assert.equal(csv.contentType, 'text/csv; charset=utf-8');
+  assert.ok(csv.body.startsWith('\ufeff'));
+  // Even when the UI leaves reading on "none", the review table still carries
+  // the aligned furigana column — the whole point of the CSV export.
+  assert.match(csv.body, /"0","桜が舞う","桜\(さくら\)が舞\(ま\)う"/);
 });

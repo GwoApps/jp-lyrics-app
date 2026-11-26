@@ -377,6 +377,8 @@
     "exportDownloading": "ダウンロード中…",
     "exportFailed": "エクスポートに失敗しました",
     "exportSongNotFound": "曲が見つかりません（削除されたか、閲覧権限がありません）",
+    "exportReviewTable": "復習表（CSV）",
+    "exportReviewTableHint": "歌詞の各行を1行ずつ出力（空行は段落区切りとして保持）。読みと訳文を原文に対応させます",
     "exportRetry": "再試行",
     "requestPublic": "公開申請",
     "requestPublicTitle": "この歌詞を公開しますか？",
