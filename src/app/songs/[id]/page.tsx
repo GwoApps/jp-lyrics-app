@@ -64,6 +64,7 @@ import {
   clampLineIndex, isLineCopyShortcut, isLineNavigationShortcut,
   NATIVE_SCROLL_KEYS, readingViewOwnsKey,
 } from '@/lib/lyrics-keyboard-nav';
+import InitialLyrics, { useInitialLyrics } from '@/components/song/InitialLyrics';
 
 /** Reusable button class builder */
 function btnCls(active?: boolean, variant?: 'danger') {
@@ -173,6 +174,7 @@ export default function SongViewPage() {
 
   // Data + handlers hook
   const data = useSongData(id);
+  const initialLyrics = useInitialLyrics();
   const [showSyncConfirm, setShowSyncConfirm] = useState(false);
   // Best existing lyric page for manual viewing (including this page when a
   // different Spotify release uses the same title/artist). Never drives sync.
@@ -532,10 +534,16 @@ export default function SongViewPage() {
             </div>
           </div>
         </div>
-        {/* Spinner */}
-        <div className="flex-1 flex items-center justify-center">
-          <div className="h-5 w-5 border-2 border-[var(--muted-foreground)]/30 border-t-[var(--muted-foreground)] rounded-full animate-spin" />
-        </div>
+        {/* First paint (issue #465): read-only lyric text from the server,
+            rendered on both SSR and the first hydration render. Replaced by
+            the interactive list once the song fetch settles. */}
+        {initialLyrics && initialLyrics.lines.length > 0 ? (
+          <InitialLyrics payload={initialLyrics} />
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="h-5 w-5 border-2 border-[var(--muted-foreground)]/30 border-t-[var(--muted-foreground)] rounded-full animate-spin" />
+          </div>
+        )}
       </div>
     );
   }
