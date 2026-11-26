@@ -8,6 +8,7 @@ import { applySyncWrite } from '@/lib/sync-write';
 import { hasDerivedLyricsCaches, hasLyricsContentChanged, normalizeSyncContent } from '@/lib/lyrics-content';
 import { manualGlossaryEntries } from '@/lib/lyrics-glossary';
 import { diffLyrics, type LyricsDiff } from '@/lib/lyrics-diff';
+import { clearSongTranslations } from '@/lib/song-translations';
 
 /**
  * Single-song (re)sync business logic (issue #148 / #120).
@@ -150,6 +151,13 @@ export async function persistCandidate(
       } : {}),
     },
   });
+  // ISSUE #485: all per-language caches are aligned to the old lyrics' line
+  // numbers, so a content-changing sync must drop every language (the legacy
+  // mirror above only covers the effective one).
+  if (contentChanged && write.ok) {
+    await clearSongTranslations(db, id).catch(() => {});
+  }
+
 
   if (!write.ok) {
     return { status: 409, body: { synced: false, error: 'stale_source' } };

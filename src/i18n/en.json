@@ -522,7 +522,8 @@
     "syncDiffConfirmTitle": "Review lyric changes before syncing",
     "syncDiffConfirmBody": "The fetched lyrics differ from what is stored. Confirming will overwrite the lyrics and reset the line-indexed furigana, translation and auto-extracted glossary shown below. This cannot be undone.",
     "syncDiffSummary": "Changes: +{added} added, -{removed} removed, ~{changed} modified",
-    "syncDiffExpand": "Show all {count} changes"
+    "syncDiffExpand": "Show all {count} changes",
+    "translationAvailableLangs": "Available translations: {langs}"
   },
   "timeline": {
     "title": "LRC Timeline Editor",
