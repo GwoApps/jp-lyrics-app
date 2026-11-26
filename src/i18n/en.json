@@ -513,7 +513,8 @@
     "entityRepairLater": "Not now",
     "entityRepairDone": "Lyrics repaired",
     "entityRepairNothing": "Nothing to repair",
-    "entityRepairFailed": "Could not repair the lyrics"
+    "entityRepairFailed": "Could not repair the lyrics",
+    "translationAvailableLangs": "Available translations: {langs}"
   },
   "timeline": {
     "title": "LRC Timeline Editor",

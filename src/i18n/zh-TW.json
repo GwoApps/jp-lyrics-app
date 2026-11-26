@@ -513,7 +513,8 @@
     "entityRepairLater": "暫不處理",
     "entityRepairDone": "歌詞已修復",
     "entityRepairNothing": "歌詞無需修復",
-    "entityRepairFailed": "修復歌詞失敗"
+    "entityRepairFailed": "修復歌詞失敗",
+    "translationAvailableLangs": "已有譯文：{langs}"
   },
   "timeline": {
     "title": "LRC 時間軸編輯",

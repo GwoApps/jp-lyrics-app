@@ -513,7 +513,8 @@
     "entityRepairLater": "後で",
     "entityRepairDone": "歌詞を修復しました",
     "entityRepairNothing": "修復の必要はありません",
-    "entityRepairFailed": "歌詞を修復できませんでした"
+    "entityRepairFailed": "歌詞を修復できませんでした",
+    "translationAvailableLangs": "既存の翻訳: {langs}"
   },
   "timeline": {
     "title": "LRC タイムライン編集",
