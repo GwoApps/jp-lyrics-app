@@ -9,6 +9,7 @@ import {
   VIDEO_PIP_NEXT_GAP,
   VIDEO_PIP_TITLE_FONT_PX,
   VIDEO_PIP_TITLE_TOP,
+  PIP_CANVAS_FONT_FAMILY,
   drawPipCanvasLine,
   drawPipCanvasText,
   measurePipCanvasLines,
@@ -17,6 +18,9 @@ import {
 } from '@/lib/pip-canvas';
 import { getPiPCapabilities } from '@/lib/pip-support';
 import { PIP_PALETTES, PIP_THEME_EVENT, pipPaletteVars, readStoredPipTheme } from '@/lib/pip-theme';
+import { sourceLyricsLang } from '@/lib/lyrics-reading';
+import { resolveTranslationLang } from '@/lib/target-lang';
+import { fontFamiliesForTags, googleFontsHref } from '@/lib/font-families';
 import { resolvePipTheme, type PipTheme } from '@/lib/settings-utils';
 
 interface UsePiPDeps {
@@ -43,6 +47,18 @@ interface UsePiPDeps {
   showUntranslatedHint?: boolean;
   showToast: (type: 'success' | 'error' | 'info', msg: string, actionLabel?: string, onAction?: () => void) => void;
   t: (key: string, params?: Record<string, string>) => string;
+}
+
+/** Google Fonts for exactly the languages this PiP window will display: the
+ * source lyrics, the shown translation and Latin readings/header (issue #466).
+ * Unused CJK families stay system-fallback; `escapeHtml` keeps song data out of
+ * the generated stylesheet URL.
+ */
+function piPFontsLink(song?: SongData | null, translationLang?: string | null): string {
+  const tags = ['en', sourceLyricsLang(song?.reading_scheme)];
+  if (translationLang) tags.push(resolveTranslationLang(translationLang));
+  const href = googleFontsHref(fontFamiliesForTags(tags));
+  return href ? `<link href="${escapeHtml(href)}" rel="stylesheet">` : '';
 }
 
 /**
@@ -282,6 +298,7 @@ export function usePiP(deps: UsePiPDeps) {
     // is the only switch. Keeping the source in one object means the initial
     // build and every later `pip-lyrics-render` redraw render identically.
     const shownTranslations = translations?.length ? translations : undefined;
+    const pipFontsLink = piPFontsLink(songArg, shownTranslations ? songArg?.lyrics_translation_lang : undefined);
     const pipSource: PipLyricsSource = {
       furiganaLines: furiganaLinesArg,
       song: songArg,
@@ -373,13 +390,13 @@ export function usePiP(deps: UsePiPDeps) {
       pipWindow.document.documentElement.innerHTML = `
         <head>
           <meta name="color-scheme" content="${palette.colorScheme}">
-          <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500&family=Noto+Sans+SC:wght@400;500&family=Noto Sans TC:wght@400;500&display=swap" rel="stylesheet">
+          ${pipFontsLink}
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             /* Palette comes from PIP_PALETTES (src/lib/pip-theme.ts) — the only
                place colours live; the rules below just consume the variables. */
             html { --pip-font-size: ${pipFontSize}px; --pip-bg: ${palette.bg}; --pip-fg: ${palette.fg}; --pip-strong: ${palette.strong}; --pip-muted: ${palette.muted}; --pip-faint: ${palette.faint}; --pip-border: ${palette.border}; --pip-active: ${palette.active}; --pip-active-reading: ${palette.activeReading}; --pip-translation: ${palette.translation}; --pip-active-translation: ${palette.activeTranslation}; }
-            html, body { background: var(--pip-bg); color: var(--pip-fg); font-family: 'Noto Sans JP', 'system-ui', system-ui, -apple-system, sans-serif; height: 100%; overflow: hidden; }
+            html, body { background: var(--pip-bg); color: var(--pip-fg); font-family: ${PIP_CANVAS_FONT_FAMILY}; height: 100%; overflow: hidden; }
             #pip-header { padding: 8px 12px; border-bottom: 1px solid var(--pip-border); font-size: 11px; color: var(--pip-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             #pip-header .title { color: var(--pip-strong); font-weight: 500; }
             #pip-lyrics { height: calc(100% - 36px); overflow-y: auto; padding: 12px; scroll-behavior: smooth; }
@@ -404,10 +421,10 @@ export function usePiP(deps: UsePiPDeps) {
             /* Per-language fonts, same policy as globals.css: a Chinese
                translation must not be drawn with Japanese glyph shapes, and
                readings (romaji / jyutping) stay in the Latin stack. */
-            [lang="ja"] { font-family: 'Noto Sans JP', 'system-ui', system-ui, -apple-system, sans-serif; }
-            [lang^="zh"] { font-family: 'Noto Sans SC', 'Noto Sans JP', 'system-ui', system-ui, -apple-system, sans-serif; }
-            [lang^="zh-TW"], [lang^="zh-HK"], [lang^="zh-Hant"], [lang="yue-Hant"] { font-family: 'Noto Sans TC', 'Noto Sans JP', 'system-ui', system-ui, -apple-system, sans-serif; }
-            [lang="en"], [lang="yue-Latn"] { font-family: 'Inter', 'Noto Sans JP', 'system-ui', system-ui, -apple-system, sans-serif; }
+            [lang="ja"] { font-family: 'Noto Sans JP', ${PIP_CANVAS_FONT_FAMILY}; }
+            [lang^="zh"] { font-family: 'Noto Sans SC', ${PIP_CANVAS_FONT_FAMILY}; }
+            [lang^="zh-TW"], [lang^="zh-HK"], [lang^="zh-Hant"], [lang="yue-Hant"] { font-family: 'Noto Sans TC', ${PIP_CANVAS_FONT_FAMILY}; }
+            [lang="en"], [lang="yue-Latn"] { font-family: 'Inter', ${PIP_CANVAS_FONT_FAMILY}; }
           </style>
         </head>
         <body>
