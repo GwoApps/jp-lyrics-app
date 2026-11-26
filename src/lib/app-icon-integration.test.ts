@@ -69,11 +69,16 @@ function worker(options: {
   const added: string[] = [];
   const deleted: string[] = [];
   const opened: string[] = [];
-  const written: string[] = [];
+  const written: { cache: string; url: string }[] = [];
+  const stores = new Map<string, Map<string, Response>>();
+  const responseHeaders = options.response?.headers;
   let claimed = false;
   let skipped = false;
   runInNewContext(swSource, {
     URL,
+    Request,
+    Response,
+    console,
     self: {
       location: { origin: 'https://lyrics.example' },
       addEventListener: (name: string, handler: (event: WorkerEvent) => void) => { handlers[name] = handler; },
@@ -83,21 +88,46 @@ function worker(options: {
     caches: {
       open: async (name: string) => {
         opened.push(name);
+        let store = stores.get(name);
+        if (!store) { store = new Map(); stores.set(name, store); }
         return {
           add: async (url: string) => {
             added.push(url);
             if (url === options.failPrecache) throw new Error('asset unavailable');
           },
-          put: async (request: Request) => { written.push(request.url); },
+          put: async (request: Request | string, response: Response) => {
+            const url = typeof request === 'string' ? request : request.url;
+            written.push({ cache: name, url });
+            store!.set(url, response);
+          },
+          match: async (request: Request | string) =>
+            store!.get(typeof request === 'string' ? request : request.url),
         };
       },
       keys: async () => options.cacheKeys ?? [],
-      delete: async (name: string) => { deleted.push(name); return true; },
-      match: async () => options.cached,
+      delete: async (name: string) => { deleted.push(name); stores.delete(name); return true; },
+      match: async (request: Request | string) => {
+        const url = typeof request === 'string' ? request : request.url;
+        for (const store of stores.values()) {
+          const found = store.get(url);
+          if (found) return found;
+        }
+        return options.cached ?? null;
+      },
     },
     fetch: async () => {
       if (options.offline) throw new Error('offline');
-      return options.response ?? new Response('network');
+      if (options.response) {
+        const clone = options.response.clone();
+        const headers = new Headers(responseHeaders);
+        if (!headers.has('X-Offline-Identity')) headers.set('X-Offline-Identity', 'anon');
+        return new Response(await clone.arrayBuffer(), {
+          status: options.response.status,
+          statusText: options.response.statusText,
+          headers,
+        });
+      }
+      return new Response('network');
     },
   });
   return {
@@ -117,6 +147,22 @@ function worker(options: {
         respondWith: (promise) => { result = promise; },
       });
       return result;
+    },
+    async message(data: unknown) {
+      const pending: Promise<unknown>[] = [];
+      handlers.message({
+        data,
+        waitUntil: (promise) => { pending.push(promise); },
+        respondWith: () => {},
+      } as WorkerEvent & { data: unknown });
+      await Promise.all(pending);
+    },
+    seedSong(path: string, identity: string, body: string) {
+      const url = new URL(path, 'https://lyrics.example').href;
+      const key = `${url}${url.includes('?') ? '&' : '?'}__offline=${encodeURIComponent(identity)}`;
+      let store = stores.get('jplrc-songs-v1');
+      if (!store) { store = new Map(); stores.set('jplrc-songs-v1', store); }
+      store.set(key, new Response(body));
     },
   };
 }
@@ -179,31 +225,72 @@ test('SW activation removes old general caches but preserves immutable and kurom
   assert.equal(sw.claimed, true);
 });
 
-test('SW still never persists personalized no-store song responses', async () => {
+test('SW stores no-store song payloads only under the identity-scoped cache', async () => {
   for (const path of ['/api/songs?mine=1', '/api/songs/song-1']) {
-    const response = new Response('personalized', { headers: { 'Cache-Control': 'private, no-store' } });
+    const response = new Response('personalized', {
+      headers: { 'Cache-Control': 'private, no-store', 'X-Offline-Identity': 'u-account-a' },
+    });
     const sw = worker({ response });
-    assert.equal(await sw.fetch(path), response);
+    assert.equal((await sw.fetch(path))?.headers.get('Cache-Control'), 'private, no-store');
+    // No identity marker has been synced yet, so the response is served but
+    // not written — the worker refuses to guess which account it belongs to.
     assert.deepEqual(sw.written, []);
-    assert.deepEqual(sw.opened, []);
   }
 });
 
 test('SW retains song offline fallback, network-only other APIs and long-lived asset caches', async () => {
   const cached = new Response('offline song');
   const offline = worker({ cached, offline: true });
-  assert.equal(await offline.fetch('/api/songs/song-1'), cached);
+  // Without a synced identity the worker cannot serve a song snapshot offline.
+  await assert.rejects(() => offline.fetch('/api/songs/song-1'));
   assert.equal(await offline.fetch('/api/me'), undefined);
   for (const [path, cache] of [
     ['/_next/static/chunk.js', 'jplrc-immutable-v1'],
     ['https://code4fukui.github.io/kuromoji-es/dict.dat', 'jplrc-kuromoji-v1'],
-    ['/api/songs/song-1', cacheName],
   ]) {
     const sw = worker();
     assert.equal(await (await sw.fetch(path))?.text(), 'network');
     assert.deepEqual(sw.opened, [cache]);
     assert.equal(sw.written.length, 1);
   }
+});
+
+test('SW caches a song under its identity and serves it offline only for that identity', async () => {
+  const sw = worker({
+    response: new Response('my lyrics', {
+      headers: { 'Cache-Control': 'private, no-store', 'X-Offline-Identity': 'u-alice' },
+    }),
+  });
+  await sw.message({ type: 'OFFLINE_IDENTITY', identity: 'u-alice' });
+  sw.written.length = 0;
+  sw.opened.length = 0;
+  const write = await sw.fetch('/api/songs/song-1');
+  assert.equal(await write?.text(), 'my lyrics');
+  // The identity-scoped copy is written via a fire-and-forget cache.put; give
+  // it a microtask turn to land before asserting.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(sw.written, [
+    { cache: 'jplrc-songs-v1', url: 'https://lyrics.example/api/songs/song-1?__offline=u-alice' },
+  ]);
+
+  // Offline: a worker synced to alice reads her snapshot; one synced to bob
+  // (who has no copy) must not receive it.
+  const alice = worker({ offline: true });
+  await alice.message({ type: 'OFFLINE_IDENTITY', identity: 'u-alice' });
+  alice.seedSong('/api/songs/song-1', 'u-alice', 'my lyrics');
+  assert.equal(await (await alice.fetch('/api/songs/song-1'))?.text(), 'my lyrics');
+
+  const bob = worker({ offline: true });
+  await bob.message({ type: 'OFFLINE_IDENTITY', identity: 'u-bob' });
+  bob.seedSong('/api/songs/song-1', 'u-alice', 'my lyrics');
+  await assert.rejects(() => bob.fetch('/api/songs/song-1'));
+});
+
+test('SW drops all song snapshots when the account identity changes', async () => {
+  const sw = worker({ cacheKeys: ['jplrc-songs-v1'] });
+  await sw.message({ type: 'OFFLINE_IDENTITY', identity: 'u-bob' });
+  assert.deepEqual(sw.deleted, ['jplrc-songs-v1']);
+  assert.ok(sw.written.some((entry) => entry.url === '/__identity__'));
 });
 
 test('public router adds exact SVG/favicon paths, retains existing assets, and keeps app routes protected', () => {

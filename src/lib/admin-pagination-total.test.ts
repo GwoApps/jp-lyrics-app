@@ -63,6 +63,7 @@ function loadRoute(routePath: string) {
       if (name === 'drizzle-orm') return drizzle;
       if (name === '@/lib/db') return { getDB: () => db, sql: drizzle.sql };
       if (name === '@/lib/auth') return { getAuthUser: async () => ({ isAdmin: true }) };
+      if (name === '@/lib/offline-identity') return { withOfflineIdentity: async (r: Response) => r };
       // Small helpers used by the songs route; the assertions below only care
       // about the SQL shape, so stable stubs are sufficient here.
       if (name === '@/lib/lyrics-export') return { parseFuriganaLines: () => [], parseTranslations: () => [] };
