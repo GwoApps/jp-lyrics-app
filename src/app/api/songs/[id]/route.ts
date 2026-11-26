@@ -3,6 +3,7 @@ import { getDB, schema } from '@/lib/db';
 import { and, eq } from 'drizzle-orm';
 import type { CoverPaletteJson, Song, SongData } from '@/lib/types';
 import { getAuthUser } from '@/lib/auth';
+import { withOfflineIdentity } from '@/lib/offline-identity';
 import { cleanupSongCover } from '@/lib/song-cover-cleanup';
 import { isSongVisibleToUser } from '@/lib/song-visibility';
 import { findLrcConflicts, resolveTimelineSave } from '@/lib/lrc';
@@ -135,9 +136,12 @@ export async function GET(
       };
     }
   }
-  return NextResponse.json(
-    { ...sanitizeSong(view, canEdit), available_translation_langs: availableTranslationLangs },
-    { headers: NO_STORE_HEADERS },
+  return withOfflineIdentity(
+    NextResponse.json(
+      { ...sanitizeSong(view, canEdit), available_translation_langs: availableTranslationLangs },
+      { headers: NO_STORE_HEADERS },
+    ),
+    user?.id,
   );
 }
 

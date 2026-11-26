@@ -9,6 +9,7 @@ import { normalizeLyricsEol } from '@/lib/lyrics-content';
 import { emptyLyricsReason, hasLyricsContent } from '@/lib/empty-lyrics';
 import { buildLyricSearchText } from '@/lib/search-normalize';
 import { songVisibilityWhere, SONGS_S_COLUMNS } from '@/lib/song-visibility';
+import { withOfflineIdentity } from '@/lib/offline-identity';
 import type { SQL } from 'drizzle-orm';
 import type { SongListItem } from '@/lib/types';
 
@@ -110,7 +111,10 @@ export async function GET(request: NextRequest) {
       ORDER BY s.created_at DESC
     `;
     const songs = toSongListItems(await db.all(rawSql));
-    return NextResponse.json(songs, { headers: NO_STORE_HEADERS });
+    return withOfflineIdentity(
+      NextResponse.json(songs, { headers: NO_STORE_HEADERS }),
+      user?.id,
+    );
   }
 
   // Non-favorites query
@@ -131,7 +135,10 @@ export async function GET(request: NextRequest) {
       WHERE ${and(...filters)}
       ORDER BY s.created_at DESC
     `);
-    return NextResponse.json(toSongListItems(songs), { headers: NO_STORE_HEADERS });
+    return withOfflineIdentity(
+      NextResponse.json(toSongListItems(songs), { headers: NO_STORE_HEADERS }),
+      user?.id,
+    );
   }
 }
 

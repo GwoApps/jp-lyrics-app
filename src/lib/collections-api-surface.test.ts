@@ -105,6 +105,7 @@ function loadItemRoute(options: { signedIn?: boolean; owned?: boolean } = {}) {
         return { NextResponse: { json: (body: unknown, init?: ResponseInit) => Response.json(body, init) } };
       }
       if (name === '@/lib/auth') return { getAuthUser: async () => (signedIn ? { email: 'me@example.test' } : null) };
+      if (name === '@/lib/offline-identity') return { withOfflineIdentity: async (r: Response) => r };
       if (name === '@/lib/db') {
         return {
           getDB: () => ({

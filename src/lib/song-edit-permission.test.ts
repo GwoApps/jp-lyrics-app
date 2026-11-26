@@ -53,6 +53,7 @@ async function getSongs(
       if (name === 'drizzle-orm') return drizzle;
       if (name === '@/lib/db') return { getDB: () => fake.db, schema: { songs: {}, spotifyAuth: {} }, sql: drizzle.sql, and: drizzle.and };
       if (name === '@/lib/auth') return { getAuthUser: async () => user };
+      if (name === '@/lib/offline-identity') return { withOfflineIdentity: async (r: Response) => r };
       if (name === '@/lib/song-visibility') return { songVisibilityWhere: () => drizzle.sql`1 = 1`, SONGS_S_COLUMNS: {} };
       if (name === '@/lib/lrc') return { parseLrc: () => [], findLrcConflicts: () => [] };
       if (name === '@/lib/admin') return { parseJsonBody: () => ({}) };
@@ -64,7 +65,7 @@ async function getSongs(
     },
   });
   const url = new URL(`http://localhost${path}`);
-  const response = await exports.GET!({ nextUrl: url });
+  const response = await exports.GET!({ nextUrl: url, cookies: { get: () => undefined } });
   return { response, body: await response.json() as Record<string, unknown>[], query: fake.getQuery() };
 }
 

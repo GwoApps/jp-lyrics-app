@@ -1,17 +1,13 @@
 /**
- * Issue #298 — personalized song API responses must not be persisted.
+ * Issues #298 + #467 — personalized song API responses are private, but can
+ * still be read offline from an identity-scoped service-worker cache.
  *
- * `/api/songs` and `/api/songs/:id` return session-scoped data (private songs,
- * `?mine=1` / `?favorites=1`). The service worker used to key its persistent
- * cache by URL alone, so after logout / session expiry / an account switch a
- * failed request replayed the previous user's lyrics and translations — even
- * while offline, where the server ACL (`getAuthUser`, `isSongVisibleToUser`)
- * never runs.
- *
- * Fix (option 1): the routes answer with `Cache-Control: private, no-store`,
- * and `sw.js` skips its cache write for any response carrying `no-store`. The
- * offline fallback itself is intentionally kept, together with the public
- * static-asset caching.
+ * `/api/songs` and `/api/songs/:id` return ACL-gated data and keep
+ * `Cache-Control: private, no-store` so shared/CDN and browser HTTP caches
+ * never persist them. The service worker keeps a separate per-browser copy for
+ * offline reading, keyed by the server-issued `X-Offline-Identity` (derived
+ * from the signed session cookie), and discards the whole song cache when the
+ * identity changes. A response without the identity header is never stored.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -44,9 +40,11 @@ function declaredCacheControl(source: string): string | null {
  */
 function unheaderedSuccessResponses(body: string): string[] {
   const offenders: string[] = [];
+  // Match every `NextResponse.json(...)` success payload, whether it is
+  // returned directly or wrapped in `withOfflineIdentity(...)` (issue #467).
   // `[^;]*` (rather than a dotAll regex) keeps the scan within one statement
   // without needing the `s` flag, which the ES2017 target rejects.
-  const statements = body.match(/return NextResponse\.json\([^;]*;/g) || [];
+  const statements = body.match(/NextResponse\.json\([^;]*;/g) || [];
   for (const statement of statements) {
     // `{ status: 4xx }` (or an error payload) marks a non-success branch.
     if (/status:\s*[45]\d\d/.test(statement)) continue;
@@ -121,20 +119,26 @@ test('NextResponse conveys Cache-Control: private, no-store verbatim', () => {
   assert.equal(response.status, 200);
 });
 
-test('sw.js skips the cache write when the server says no-store', () => {
+test('sw.js persists song responses only in the identity-scoped song cache', () => {
   const branch = swApiBranch(swSource);
-  // The cache write must be gated by the response header, not by `response.ok`.
-  assert.match(branch, /caches\.open\(CACHE_NAME\)\.then\(\(c\) => c\.put\(request, clone\)\)/);
+  assert.match(branch, /caches\.open\(SONG_CACHE\)/);
+  assert.match(branch, /serverIdentity = response\.headers\.get\(['"]X-Offline-Identity['"]\)/);
+  assert.match(branch, /response\.ok\s*&&\s*serverIdentity/);
+  assert.doesNotMatch(branch, /caches\.open\(CACHE_NAME\)[\s\S]*?c\.put\(key, clone\)/);
+  // A song copy is never keyed by the raw URL alone.
+  assert.match(branch, /songCacheKey\(request, serverIdentity\)/);
   assert.match(
     branch,
-    /if\s*\(\s*isCacheable\(response\)\s*\)\s*\{[\s\S]*?caches\.open\(CACHE_NAME\)[\s\S]*?\}/,
-    'the cache write must be guarded by isCacheable(response)',
+    /if\s*\(\s*identity === serverIdentity\s*\)/,
+    'a mismatched worker identity must not store a foreign payload',
   );
-  assert.doesNotMatch(
-    branch,
-    /if\s*\(\s*response\.ok\s*\)\s*\{[\s\S]*?c\.put\(request, clone\)/,
-    'the raw response.ok guard would re-cache no-store responses',
-  );
+});
+
+test('sw.js clears the song cache when the signed-in identity changes', () => {
+  assert.match(swSource, /addEventListener\(['"]message['"]/);
+  assert.match(swSource, /OFFLINE_IDENTITY/);
+  assert.match(swSource, /async function syncIdentity\(identity\)[\s\S]*?clearSongCache\(\)/);
+  assert.match(swSource, /const SONG_CACHE = 'jplrc-songs-v1'/);
 });
 
 /**
@@ -157,11 +161,11 @@ test('sw.js only cache-stores responses that are not marked no-store', () => {
       headers: cacheControl ? { 'Cache-Control': cacheControl } : undefined,
     });
 
-  // Personalized responses (the #298 case) must be passed through, never stored.
+  // Responses without the offline identity header are never stored by the
+  // generic path; the song branch additionally checks the header itself.
   assert.equal(isCacheable(json(PRIVATE_NO_STORE)), false);
   assert.equal(isCacheable(json('no-store')), false);
   assert.equal(isCacheable(json('private, NO-STORE')), false);
-  assert.equal(isCacheable(json('no-cache, no-store, must-revalidate')), false);
 
   // Public/offline-able payloads keep their caching ability.
   assert.equal(isCacheable(json()), true);
@@ -173,9 +177,9 @@ test('sw.js only cache-stores responses that are not marked no-store', () => {
   assert.equal(isCacheable(new Response('', { status: 500 })), false);
 });
 
-test('sw.js keeps the offline fallback for song requests', () => {
+test('sw.js keeps the offline fallback for song requests, keyed by identity', () => {
   const branch = swApiBranch(swSource);
   assert.match(branch, /url\.pathname === '\/api\/songs'/);
   assert.match(branch, /\/\^\\\/api\\\/songs\\\/\[\^\/\]\+\$\/\.test\(url\.pathname\)/);
-  assert.match(branch, /\.catch\(\(\) => caches\.match\(request\)\)/);
+  assert.match(branch, /caches\.match\(songCacheKey\(request, identity\)\)/);
 });

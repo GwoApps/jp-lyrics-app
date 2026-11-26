@@ -96,6 +96,7 @@ function loadPut() {
       if (name === '@/lib/db') return { getDB: () => db, schema: { songs: new Proxy({}, { get: (_t, key) => column(String(key)) }) } };
       if (name === 'drizzle-orm') return { and: () => ({}), eq: () => ({}) };
       if (name === '@/lib/auth') return { getAuthUser: async () => ({ id: 'user-1', isAdmin: false }) };
+      if (name === '@/lib/offline-identity') return { withOfflineIdentity: async (r: Response) => r };
       if (name === '@/lib/song-visibility') return { isSongVisibleToUser: () => true };
       if (name === '@/lib/lrc') return { findLrcConflicts: () => [], resolveTimelineSave: () => ({ ok: true }) };
       if (name === '@/lib/song-update') return { buildSongUpdateSet: (existing: unknown, body: Record<string, unknown>) => ({ __body: body, existing }) };
