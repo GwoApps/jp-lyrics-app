@@ -4,7 +4,7 @@ import test from 'node:test';
 import ts from 'typescript';
 import { runInNewContext } from 'node:vm';
 import { APP_ICON_REVISION } from '@/lib/app-icon';
-import { APP_NAME_NEUTRAL, APP_NAME_SHORT, APP_DESCRIPTION } from '@/lib/app-identity';
+import { APP_NAME_NEUTRAL, APP_NAME_SHORT, APP_DESCRIPTION, localizedDocumentTitle } from '@/lib/app-identity';
 import { shouldAnnounceUpdate } from '@/lib/sw-update';
 
 const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
@@ -47,13 +47,15 @@ test('document title follows the UI locale once hydrated', () => {
   const sync = read('src/components/AppMetadataSync.tsx');
   assert.match(sync, /const name = t\('common\.appName'\)/);
   assert.match(sync, /generic\.has\(document\.title\.trim\(\)\)/);
+  assert.match(sync, /localizedDocumentTitle/);
+  assert.doesNotMatch(sync, /document\.title\.trim\(\)\.split/);
   // Gated on an actual difference: an unconditional write re-enters the
   // MutationObserver and re-writes forever, pinning the main thread (the loop
   // that froze `/`, `/settings`, `/albums`, `/artists`).
   assert.match(sync, /document\.title !== next\) document\.title = next/);
   assert.match(sync, /meta\[name="apple-mobile-web-app-title"\]/);
   // Re-applied on navigation: Next.js re-emits layout metadata per route.
-  assert.match(sync, /\}, \[t, pathname\]\)/);
+  assert.match(sync, /\}, \[t, pathname, params\?\.name\]\)/);
 });
 
 test('service worker update copy comes from the dictionaries, not an inline locale table', () => {
@@ -100,4 +102,11 @@ test('update toast copy is translated in all four locales', () => {
       assert.notEqual(value, `common.${key}`, `${locale}.json common.${key} leaks the raw key`);
     }
   }
+});
+
+test('localized document titles keep the site name', () => {
+  assert.equal(localizedDocumentTitle('yama', 'Lyrics Note'), 'yama · Lyrics Note');
+  assert.equal(localizedDocumentTitle('专辑', 'Lyrics Note'), '专辑 · Lyrics Note');
+  assert.equal(localizedDocumentTitle(null, 'Lyrics Note'), 'Lyrics Note');
+  assert.equal(localizedDocumentTitle('  ', 'Lyrics Note'), 'Lyrics Note');
 });

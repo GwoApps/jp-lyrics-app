@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation';
 import { useI18n } from '@/lib/i18n';
-import { APP_NAME_NEUTRAL } from '@/lib/app-identity';
+import { APP_NAME_NEUTRAL, localizedDocumentTitle } from '@/lib/app-identity';
 
 /** Titles that used to be hard-coded in per-route metadata; now localized here. */
 const STATIC_TITLE_KEYS: Record<string, string> = {
@@ -15,24 +15,31 @@ const STATIC_TITLE_KEYS: Record<string, string> = {
  * The title this route must show, or `null` when the server already rendered a
  * route-specific one (song pages) and it must not be touched.
  *
- * `/artists/<name>` derives the artist from the pathname instead of parsing
+ * `/artists/<name>` reads the artist from the route param instead of parsing
  * `document.title`: during a client-side navigation `document.title` still holds
  * the previous page's title, so parsing it dropped the site name and could carry
  * the wrong first segment over (issue #491).
  */
-function localizedTitle(pathname: string | null, appName: string, t: (key: string) => string): string | null {
+function localizedTitle(
+  pathname: string | null,
+  nameSegment: string | string[] | undefined,
+  t: (key: string) => string,
+): string | null {
   const path = pathname?.replace(/\/+$/, '') || '/';
-  if (path in STATIC_TITLE_KEYS) return t(STATIC_TITLE_KEYS[path]);
+  const appName = t('common.appName');
+  if (path in STATIC_TITLE_KEYS) return localizedDocumentTitle(t(STATIC_TITLE_KEYS[path]), appName);
   const detail = path.match(/^\/artists\/([^/]+)$/);
   if (detail) {
-    let artist = detail[1];
-    try {
-      artist = decodeURIComponent(artist);
-    } catch {
-      // Malformed percent-escape: keep the raw path segment.
+    const raw = Array.isArray(nameSegment) ? nameSegment[0] : nameSegment;
+    let artist: string | null = null;
+    if (raw) {
+      try {
+        artist = decodeURIComponent(raw).trim() || null;
+      } catch {
+        artist = raw.trim() || null;
+      }
     }
-    artist = artist.trim();
-    return artist ? `${artist} · ${appName}` : t('artists.title');
+    return localizedDocumentTitle(artist ?? t('artists.title'), appName);
   }
   return null;
 }
@@ -57,10 +64,11 @@ function localizedTitle(pathname: string | null, appName: string, t: (key: strin
 export default function AppMetadataSync() {
   const { t } = useI18n();
   const pathname = usePathname();
+  const params = useParams<{ name?: string }>();
 
   useEffect(() => {
     const name = t('common.appName');
-    const routeTitle = localizedTitle(pathname, name, t);
+    const routeTitle = localizedTitle(pathname, params?.name, t);
     const generic = new Set([name, APP_NAME_NEUTRAL]);
     const apply = () => {
       // A route-specific title wins; a neutral one becomes the localized app
@@ -79,7 +87,7 @@ export default function AppMetadataSync() {
     const observer = new MutationObserver(apply);
     observer.observe(document.head, { childList: true, subtree: true });
     return () => observer.disconnect();
-  }, [t, pathname]);
+  }, [t, pathname, params?.name]);
 
   return null;
 }
