@@ -14,9 +14,9 @@ import { LRC_LEADING_TIMESTAMPS_REGEX, extractLrcMetadata, isLrcMetadataLine, st
 import { sourceLyricsLang } from './lyrics-reading.ts';
 import { resolveTranslationLang } from './target-lang.ts';
 
-export type ExportFormat = 'text' | 'lrc' | 'html';
+export type ExportFormat = 'text' | 'lrc' | 'html' | 'csv';
 
-/** Furigana/reading option applied to `.txt` and `.html` exports. */
+/** Furigana/reading option applied to `.txt`, `.html` and `.csv` exports. */
 export type ExportReadingMode = 'none' | 'furigana' | 'romaji';
 
 export interface ExportSongData {
@@ -36,9 +36,11 @@ export interface ExportOptions {
   /** When true the translated line is paired with each source line. */
   includeTranslation: boolean;
   /**
-   * Reading mode for `.txt` / `.html`. `.lrc` always emits the raw synced
+   * Reading mode for `.txt` / `.html` / `.csv`. `.lrc` always emits the raw synced
    * timeline and ignores this option; when `includeTranslation` is set it
    * additionally appends a translated line after each timed row (same timestamp).
+   * For `.csv` the mode controls the "reading" column: `none` leaves it empty,
+   * `furigana` annotates the original characters, `romaji` emits readings only.
    */
   reading?: ExportReadingMode;
 }
@@ -315,6 +317,79 @@ ${bodyLines}
 </html>`;
 }
 
+/**
+ * RFC 4180 field escaping: wrap in double quotes and double any embedded quote.
+ * Fields starting with `=`, `+`, `-`, `@`, tab or carriage return are prefixed
+ * with an apostrophe so spreadsheet apps treat them as text, not formulas
+ * (CSV injection). The BOM written in `buildCsvExport` keeps Excel from
+ * misreading UTF-8 Japanese/Chinese characters.
+ */
+export function escapeCsvField(value: string): string {
+  const dangerous = /^[=+\-@\t\r]/u.test(value);
+  const safe = dangerous ? `'${value}` : value;
+  return `"${safe.replaceAll('"', '""')}"`;
+}
+
+/** One `原文(读音)` string per segment, used by the CSV furigana column. */
+function lineToAnnotatedText(
+  line: FuriganaLine,
+  scheme: ReadingScheme,
+  readingMode: Exclude<ExportReadingMode, 'none'>,
+): string {
+  const parts: string[] = [];
+  const segments: FuriganaSegment[] = readingMode === 'furigana'
+    ? normalizeFuriganaSegments(line.segments, scheme).map((seg) => ({
+        text: seg.text,
+        reading: seg.reading,
+        ...(seg.pos ? { pos: seg.pos } : {}),
+      }))
+    : line.segments;
+  for (const seg of segments) {
+    const part = readingMode === 'furigana'
+      ? segmentToAnnotatedText(
+          seg,
+          resolveFuriganaReading(seg.text, seg.reading, false, scheme, seg),
+          scheme,
+        )
+      : resolveFuriganaReading(seg.text, seg.reading, true, scheme, seg) || seg.text;
+    if (readingMode === 'romaji' && scheme === 'ja-kana' && seg.joinPrev && parts.length) {
+      parts[parts.length - 1] += part;
+    } else {
+      parts.push(part);
+    }
+  }
+  return joinReadingParts(parts, scheme, readingMode);
+}
+
+/**
+ * Emit a line-level study table as UTF-8 CSV (BOM included).
+ *
+ * Columns: original, reading, translation, title, artist. Every row is
+ * index-aligned to `lyrics_raw`; blank separator lines are kept so the file
+ * mirrors the source layout, and cells without data are empty. No dedup, no
+ * word-level tokenization — the JSON caches already carry line-level pairing.
+ */
+export function buildCsvExport(
+  song: ExportSongData,
+  readingMode: ExportReadingMode,
+): string {
+  const header = ['原文', '注音', '译文', '曲名', '歌手'];
+  const furiganaLines = parseFuriganaLines(song.lyrics_furigana);
+  const translations = parseTranslations(song.lyrics_translation);
+  const rows = song.lyrics_raw.split('\n').map((rawLine, index) => {
+    const line = furiganaLines[index];
+    const reading = readingMode === 'none' || !line || line.segments.length === 0
+      ? ''
+      : lineToAnnotatedText(line, song.reading_scheme, readingMode);
+    const translation = translations[index]?.trim() ?? '';
+    return [rawLine, reading, translation, song.title, song.artist ?? '']
+      .map(escapeCsvField)
+      .join(',');
+  });
+  // BOM so Excel recognizes UTF-8; CRLF is the RFC 4180 record separator.
+  return `\ufeff${[header.join(','), ...rows].join('\r\n')}\r\n`;
+}
+
 /** Raised when an export cannot be produced (e.g. LRC requested without a synced timeline). */
 export class ExportError extends Error {
   readonly code: string;
@@ -354,6 +429,14 @@ export function buildExport(song: ExportSongData, options: ExportOptions): Expor
       body,
       contentType: 'text/plain; charset=utf-8',
       extension: 'lrc',
+    };
+  }
+
+  if (format === 'csv') {
+    return {
+      body: buildCsvExport(song, reading),
+      contentType: 'text/csv; charset=utf-8',
+      extension: 'csv',
     };
   }
 

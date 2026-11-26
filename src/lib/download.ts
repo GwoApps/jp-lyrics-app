@@ -8,6 +8,7 @@
 const EXTENSION_BY_TYPE: Record<string, string> = {
   'text/plain': 'txt',
   'text/html': 'html',
+  'text/csv': 'csv',
 };
 
 /** Requested format → extension, used when the content type is unexpected. */
@@ -15,6 +16,7 @@ const EXTENSION_BY_FORMAT: Record<string, string> = {
   text: 'txt',
   lrc: 'lrc',
   html: 'html',
+  csv: 'csv',
 };
 
 function extensionOf(contentType: string | null, format: string): string {

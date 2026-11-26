@@ -360,6 +360,8 @@
     "exportFurigana": "(with annotations)",
     "downloadWithEllipsis": "Download…",
     "exportSubtitle": "Pick a format and the extra lines to include",
+    "exportFormatCsvLabel": "Study table",
+    "exportCsvNoDataHint": "CSV is most useful with readings or translations — this song has neither, so the table will only contain the lyrics and metadata.",
     "exportFormatLabel": "Format",
     "exportReadingLabel": "Readings",
     "exportReadingNone": "Original (no readings)",

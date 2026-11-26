@@ -360,6 +360,8 @@
     "exportFurigana": "（含振假名）",
     "downloadWithEllipsis": "下载…",
     "exportSubtitle": "选择格式与需要输出的副行",
+    "exportFormatCsvLabel": "对照表",
+    "exportCsvNoDataHint": "CSV 在有注音或译文时更有用；这首歌两者都没有，表格将只包含歌词和歌曲信息。",
     "exportFormatLabel": "格式",
     "exportReadingLabel": "注音",
     "exportReadingNone": "原文（不含注音）",

@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  buildCsvExport,
   buildExport,
   buildHtmlExport,
   buildTextExport,
   ExportError,
+  escapeCsvField,
   isEmptyAfterTrim,
   joinReadingParts,
   parseFuriganaLines,
@@ -433,4 +435,85 @@ test('buildExport LRC with translation aligns when an untimed row sits between t
     lrc.body,
     '[00:10.000]A\n[00:10.000]TA\nB\n[00:20.000]C\n[00:20.000]TC',
   );
+});
+
+
+test('escapeCsvField escapes quotes and guards against spreadsheet formulas', () => {
+  assert.equal(escapeCsvField('plain'), '"plain"');
+  assert.equal(escapeCsvField('a,b'), '"a,b"');
+  assert.equal(escapeCsvField('say "hi"'), '"say ""hi"""');
+  // RFC 4180 quoting alone is not enough: spreadsheet apps execute cells
+  // starting with these characters as formulas.
+  for (const prefix of ['=', '+', '-', '@', '\t', '\r']) {
+    assert.equal(escapeCsvField(`${prefix}cmd`), `"'${prefix}cmd"`);
+  }
+  // A leading apostrophe in the original value is not a formula trigger.
+  assert.equal(escapeCsvField("'hello"), '"\'hello"');
+});
+
+test('buildCsvExport emits a BOM, CRLF records and aligned line-level rows', () => {
+  const csv = buildCsvExport(SONG, 'none');
+  assert.ok(csv.startsWith('\ufeff'));
+  const lines = csv.slice(1).trimEnd().split('\r\n');
+  assert.deepEqual(lines[0], '原文,注音,译文,曲名,歌手');
+  // 3 source lines + header
+  assert.equal(lines.length, 4);
+  assert.equal(lines[1], '"桜が舞う","","Cherry blossoms dance","桜","Example"');
+  assert.equal(lines[2], '"","","","桜","Example"');
+  assert.equal(lines[3], '"明日へ","","Toward tomorrow","桜","Example"');
+});
+
+test('buildCsvExport reads annotations from the aligned furigana cache', () => {
+  const none = buildCsvExport(SONG, 'none');
+  assert.doesNotMatch(none, /さくら/);
+
+  const furigana = buildCsvExport(SONG, 'furigana');
+  assert.match(furigana, /"桜\(さくら\)が舞\(ま\)う"/);
+  assert.match(furigana, /"明日\(あした\)へ"/);
+  assert.doesNotMatch(furigana, /sakura/);
+
+  const romaji = buildCsvExport(SONG, 'romaji');
+  assert.match(romaji, /"sakura ga mau"/);
+  assert.match(romaji, /"ashita he"/);
+});
+
+test('buildCsvExport keeps jyutping syllable boundaries in both reading modes', () => {
+  const furigana = buildCsvExport(YUE_SONG, 'furigana');
+  assert.match(furigana, /"今\(gam1\)天\(tin1\)天\(tin1\)氣\(hei3\)很\(han2\)好\(hou2\)"/);
+  const romaji = buildCsvExport(YUE_SONG, 'romaji');
+  assert.match(romaji, /"gam1 tin1 tin1 hei3 han2 hou2"/);
+});
+
+test('buildCsvExport leaves cells empty for missing translation and reading', () => {
+  const song = {
+    ...SONG,
+    lyrics_furigana: '[]',
+    lyrics_translation: JSON.stringify(['', null, '']),
+  };
+  const csv = buildCsvExport(song, 'furigana');
+  const lines = csv.slice(1).trimEnd().split('\r\n');
+  // Every reading/translation cell is empty, but source text and metadata survive.
+  assert.equal(lines[1], '"桜が舞う","","","桜","Example"');
+  assert.equal(lines[3], '"明日へ","","","桜","Example"');
+});
+
+test('buildCsvExport quotes source text containing commas, quotes and formulas', () => {
+  const song = {
+    ...SONG,
+    lyrics_raw: 'Hello, "world"\n=1+1',
+    lyrics_furigana: '[]',
+    lyrics_translation: '[]',
+    artist: '',
+  };
+  const lines = buildCsvExport(song, 'none').slice(1).trimEnd().split('\r\n');
+  assert.equal(lines[1], '"Hello, ""world""","","","桜",""');
+  assert.equal(lines[2], '"\'=1+1","","","桜",""');
+});
+
+test('buildExport routes csv to the text/csv content type and .csv extension', () => {
+  const csv = buildExport(SONG, { format: 'csv', includeTranslation: false, reading: 'furigana' });
+  assert.equal(csv.extension, 'csv');
+  assert.equal(csv.contentType, 'text/csv; charset=utf-8');
+  assert.ok(csv.body.startsWith('\ufeff'));
+  assert.match(csv.body, /"桜\(さくら\)が舞\(ま\)う"/);
 });
