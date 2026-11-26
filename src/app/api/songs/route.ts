@@ -7,6 +7,7 @@ import { getSpotifyTrack } from '@/lib/spotify';
 import { parseJsonBody } from '@/lib/admin';
 import { normalizeLyricsEol } from '@/lib/lyrics-content';
 import { emptyLyricsReason, hasLyricsContent } from '@/lib/empty-lyrics';
+import { buildLyricSearchText } from '@/lib/search-normalize';
 import { songVisibilityWhere, SONGS_S_COLUMNS } from '@/lib/song-visibility';
 import type { SQL } from 'drizzle-orm';
 import type { SongListItem } from '@/lib/types';
@@ -70,15 +71,19 @@ export async function GET(request: NextRequest) {
    */
   function toSongListItems(rows: unknown[]): SongListItem[] {
     return rows.map((row) => {
-      const { lyrics_raw, ...song } = row as Omit<SongListItem, 'can_edit' | 'empty_lyrics_reason'> & {
-        can_edit?: number;
-        lyrics_raw?: string | null;
-        lyrics_source?: string | null;
-        lyrics_fetched_at?: string | null;
-      };
+      const { lyrics_furigana, lyrics_translation, lyrics_raw, ...song } =
+        row as Omit<SongListItem, 'can_edit' | 'empty_lyrics_reason'> & {
+          can_edit?: number;
+          lyrics_furigana?: string | null;
+          lyrics_translation?: string | null;
+          lyrics_raw?: string | null;
+          lyrics_source?: string | null;
+          lyrics_fetched_at?: string | null;
+        };
       return {
         ...song,
         can_edit: song.can_edit === 1,
+        search_text: buildLyricSearchText({ lyrics_furigana, lyrics_translation }),
         ...(hasLyricsContent(lyrics_raw) ? {} : { empty_lyrics_reason: emptyLyricsReason(song) }),
       };
     });
@@ -98,7 +103,7 @@ export async function GET(request: NextRequest) {
       visibleWhere,
     ];
     const rawSql = sql`
-      SELECT ${selectColumns}
+      SELECT ${selectColumns}, s.lyrics_furigana, s.lyrics_translation
       FROM songs s
       INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail}
       WHERE ${and(...filters)}
@@ -121,7 +126,7 @@ export async function GET(request: NextRequest) {
       visibleWhere,
     ];
     const songs = await db.all(sql`
-      SELECT ${selectColumns}
+      SELECT ${selectColumns}, s.lyrics_furigana, s.lyrics_translation
       FROM songs s
       WHERE ${and(...filters)}
       ORDER BY s.created_at DESC

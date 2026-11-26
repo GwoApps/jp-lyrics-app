@@ -59,6 +59,7 @@ async function getSongs(
       if (name === '@/lib/spotify') return { getSpotifyTrack: async () => null };
       if (name === '@/lib/lyrics-content') return { normalizeLyricsEol: (value: string) => value };
       if (name === '@/lib/empty-lyrics') return require('./empty-lyrics.ts');
+      if (name === '@/lib/search-normalize') return require('./search-normalize.ts');
       return require(name);
     },
   });
@@ -111,4 +112,21 @@ test('the favorites branch applies the same permission to each row', async () =>
     '/api/songs?favorites=1',
   );
   assert.deepEqual(body.map((song) => song.can_edit), [true]);
+});
+
+test('ISSUE #475: GET /api/songs exposes a derived lyric search text, never raw lyric bodies', async () => {
+  const { body } = await getSongs(
+    [{
+      ...row,
+      lyrics_furigana: JSON.stringify([{ segments: [{ text: '落花', reading: 'らくか' }] }]),
+      lyrics_translation: JSON.stringify(['Falling blossoms']),
+    }],
+    null,
+  );
+  assert.equal(body.length, 1);
+  assert.match(body[0].search_text as string, /rakuka/);
+  assert.match(body[0].search_text as string, /falling blossoms/);
+  for (const column of ['lyrics_raw', 'lyrics_synced', 'lyrics_furigana', 'lyrics_translation']) {
+    assert.equal(Object.hasOwn(body[0], column), false, `${column} must not leak`);
+  }
 });

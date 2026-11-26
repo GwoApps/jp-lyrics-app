@@ -5,6 +5,7 @@ import { songVisibilityWhere, type SongViewer } from './song-visibility.ts';
 import { artistKey, groupArtistAlbums, groupSongsByArtist, splitArtists, type ArtistLibrary, type ArtistProfile } from './artists.ts';
 import type { SongItem } from './types';
 import { summarizeSongLibraryContent } from './song-library-summary.ts';
+import { buildLyricSearchText } from './search-normalize.ts';
 import { emptyLyricsReason } from './empty-lyrics.ts';
 
 type ArtistDB = Pick<BaseSQLiteDatabase<'async', unknown, typeof schema>, 'select'>;
@@ -77,6 +78,10 @@ export async function getArtistLibrary(db: ArtistDB, viewer: SongViewer | null |
     return {
       ...song,
       ...summary,
+      search_text: buildLyricSearchText({
+        lyrics_furigana: content.lyrics_furigana,
+        lyrics_translation: content.lyrics_translation,
+      }),
       ...(summary.has_lyrics === false ? { empty_lyrics_reason: emptyLyricsReason(song) } : {}),
       favorited: email ? favorite === 1 : null,
     };

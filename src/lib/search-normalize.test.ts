@@ -5,6 +5,7 @@ import {
   normalizeSearchText,
   searchTerms,
   songSearchText,
+  buildLyricSearchText,
 } from './search-normalize.ts';
 
 test('katakana queries fold onto the hiragana spelling of the same reading', () => {
@@ -45,4 +46,41 @@ test('every term must appear, and the album is searchable from the song list too
   assert.equal(matchesSearchTerms(haystack, searchTerms('seaglass missing')), false);
   // No terms means "not filtering", which the callers check for explicitly.
   assert.ok(matchesSearchTerms(haystack, []));
+});
+
+test('ISSUE #475: romaji readings and translations are searchable through the derived lyric text', () => {
+  const song = {
+    title: '落花',
+    artist: 'Unknown',
+    search_text: buildLyricSearchText({
+      lyrics_furigana: JSON.stringify([
+        { segments: [{ text: '落花', reading: 'らくか' }] },
+        { segments: [{ text: '流', reading: 'りゅう' }] },
+      ]),
+      lyrics_translation: JSON.stringify(['落下する花', 'Falling blossoms']),
+    }),
+  };
+  // A reader who types romaji finds a song whose title is only Japanese.
+  assert.ok(matchesSearchTerms(songSearchText(song), searchTerms('rakuka')));
+  assert.ok(matchesSearchTerms(songSearchText(song), searchTerms('ryu')));
+  // Chinese/English translation words land in the same haystack.
+  assert.ok(matchesSearchTerms(songSearchText(song), searchTerms('落下')));
+  assert.ok(matchesSearchTerms(songSearchText(song), searchTerms('falling')));
+  // The canonical example in the issue: romaji query for a kana/kanji lyric.
+  const kanaSong = {
+    title: 'サヨナラ',
+    search_text: buildLyricSearchText({
+      lyrics_furigana: JSON.stringify([{ segments: [{ text: 'サヨナラ', reading: 'サヨナラ' }] }]),
+    }),
+  };
+  assert.ok(matchesSearchTerms(songSearchText(kanaSong), searchTerms('sayonara')));
+});
+
+test('ISSUE #475: malformed lyric caches never shift lines or leak JSON fragments', () => {
+  assert.equal(buildLyricSearchText({ lyrics_furigana: '{broken', lyrics_translation: '["truncated' }), '');
+  assert.equal(buildLyricSearchText({ lyrics_furigana: '[]', lyrics_translation: JSON.stringify([null, 'Second', 42]) }), 'second');
+  assert.equal(buildLyricSearchText({}), '');
+  // No derived text: the original title/artist/album haystack is unchanged.
+  const base = { title: 'seaglass', artist: 'Aimer', spotify_album: 'Dive iN' };
+  assert.equal(songSearchText(base), 'seaglass aimer dive in');
 });

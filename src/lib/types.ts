@@ -88,6 +88,8 @@ export interface SongListItem {
   lyrics_translation_lang?: string | null;
   /** Current user's favorite existence (including classified favorites); null for guests. */
   favorited?: boolean | null;
+  /** ISSUE #475: derived romanized/translated lyric text for search only; never rendered. */
+  search_text?: string | null;
   created_at: string;
   updated_at: string;
   /**
