@@ -421,7 +421,7 @@
     "readingSchemeUpdateFailed": "更新注音方案失败",
     "translationEdit": "翻译校正",
     "syncConfirmTitle": "同步歌词",
-    "syncConfirmBody": "将从在线来源重新获取歌词，覆盖当前的歌词与时间轴。歌词文本未变化时保留注音与翻译，仅文本变化时才需重新生成。确定继续？",
+    "syncConfirmBody": "系统会先获取歌词。若文本有变化，会先展示逐行差异，需你确认后才会覆盖；在此之前当前歌词不会被改动。",
     "copyOriginal": "复制原文",
     "copyTranslation": "复制翻译",
     "copyLyrics": "复制歌词",
@@ -515,7 +515,11 @@
     "entityRepairLater": "暂不处理",
     "entityRepairDone": "歌词已修复",
     "entityRepairNothing": "歌词无需修复",
-    "entityRepairFailed": "修复歌词失败"
+    "entityRepairFailed": "修复歌词失败",
+    "syncDiffConfirmTitle": "同步前确认歌词差异",
+    "syncDiffConfirmBody": "获取到的歌词与库中不同。确认后将覆盖歌词，并重置下方涉及的按行注音、译文与自动抽取的术语表，此操作不可撤销。",
+    "syncDiffSummary": "变更：新增 {added} 行、删除 {removed} 行、修改 {changed} 行",
+    "syncDiffExpand": "查看全部 {count} 处变更"
   },
   "timeline": {
     "title": "LRC 时间轴编辑",

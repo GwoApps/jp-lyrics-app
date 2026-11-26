@@ -7,6 +7,7 @@ import { signCandidate, type CandidateTokenPayload } from '@/lib/candidate-token
 import { applySyncWrite } from '@/lib/sync-write';
 import { hasDerivedLyricsCaches, hasLyricsContentChanged, normalizeSyncContent } from '@/lib/lyrics-content';
 import { manualGlossaryEntries } from '@/lib/lyrics-glossary';
+import { diffLyrics, type LyricsDiff } from '@/lib/lyrics-diff';
 
 /**
  * Single-song (re)sync business logic (issue #148 / #120).
@@ -48,6 +49,7 @@ export async function persistCandidate(
     spotifyTrack?: any | null;
     sourceLyrics: string;
   },
+  options?: { diff?: LyricsDiff; confirmDiff?: boolean },
 ): Promise<{ status: number; body: unknown }> {
 /* eslint-enable @typescript-eslint/no-explicit-any */
   // Line endings are folded to LF on the way in, so the value compared below IS
@@ -87,6 +89,27 @@ export async function persistCandidate(
     translation: song.lyricsTranslation,
     glossary: song.lyricsGlossary,
   });
+
+  // Issue #493: a content-changing re-sync wipes the line-indexed derived
+  // caches irreversibly. A fresh sync that would reset them is gated: instead
+  // of writing, the server returns the diff for the client to show in a second
+  // confirmation dialog, and only writes once that diff was explicitly
+  // confirmed (via `confirmDiff`, including on the signed-token path). A
+  // re-sync of unchanged text keeps the caches and never hits this gate.
+  if (cachesReset && !options?.confirmDiff) {
+    return {
+      status: 200,
+      body: {
+        synced: false,
+        diffConfirm: true,
+        diff: options?.diff ?? diffLyrics(song.lyricsRaw, plain),
+        plain,
+        syncedLyrics: synced,
+        source: candidate.source,
+        confidence: candidate.confidence,
+      },
+    };
+  }
 
   // CAS write: the UPDATE only matches while `lyrics_raw` still equals the
   // snapshot this request was based on. If another tab/session edited the
@@ -160,6 +183,7 @@ interface FreshSyncArgs {
   body: {
     force?: boolean;
     confirmPlain?: boolean;
+    confirmDiff?: boolean;
   };
   sourceLyrics: string;
 }
@@ -248,6 +272,12 @@ export async function runFreshSync(
     };
   }
 
+  // Compute the line-level diff once, in the same pass as the change check that
+  // decides whether caches will be wiped (issue #493). The EOL-folded
+  // `result.plain` is the exact text that will be written, so the preview's
+  // line numbers line up with the furigana / translation row indices.
+  const diff = diffLyrics(song.lyricsRaw, result.plain);
+
   // Build the signed candidate so the later confirmation writes THIS exact
   // preview (bound to the song's current updatedAt to detect concurrent edits).
   const makeCandidate = (): Promise<string> => signCandidate({
@@ -257,6 +287,7 @@ export async function runFreshSync(
     plain: result.plain,
     synced: result.synced,
     updatedAt: song.updatedAt,
+    diff,
   });
 
   // Plain-text hit (no LRC timeline) — do NOT silently overwrite stored lyrics /
@@ -276,6 +307,7 @@ export async function runFreshSync(
         confidence,
         plain: result.plain,
         candidate,
+        diff,
         match,
       },
     };
@@ -296,6 +328,7 @@ export async function runFreshSync(
         lines: parsed.length,
         lrc: result.synced,
         candidate,
+        diff,
         match,
       },
     };
@@ -312,8 +345,9 @@ export async function runFreshSync(
     plain: result.plain,
     synced: result.synced,
     updatedAt: song.updatedAt,
+    diff,
   }, {
     spotifyTrack,
     sourceLyrics,
-  });
+  }, { diff, confirmDiff: body.confirmDiff });
 }

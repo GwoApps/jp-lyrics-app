@@ -423,6 +423,16 @@ textarea {
   cursor: pointer; transition: background 0.15s;
 }
 .confirm-dialog-children .preview-toggle:hover { background: var(--accent); }
+/* Lyrics sync diff preview (issue #493): compact per-row change list. */
+.lyrics-diff-summary { font-weight: 600; color: var(--foreground); margin-bottom: 6px; }
+.lyrics-diff-rows { display: flex; flex-direction: column; gap: 2px; }
+.lyrics-diff-row { display: flex; gap: 8px; align-items: baseline; white-space: pre-wrap; word-break: break-word; }
+.lyrics-diff-label { flex: 0 0 auto; min-width: 2.5em; font-variant-numeric: tabular-nums; font-weight: 600; }
+.lyrics-diff-row--added .lyrics-diff-label { color: #2e7d32; }
+.lyrics-diff-row--removed .lyrics-diff-label { color: #c62828; }
+.lyrics-diff-row--changed .lyrics-diff-label { color: #b26a00; }
+.lyrics-diff-text { flex: 1 1 auto; }
+.lyrics-diff-more { opacity: 0.7; padding-left: 2.5em; }
 .confirm-dialog-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .confirm-dialog-btn {
   /* inline-flex so an optional icon inside the button shares the text baseline:

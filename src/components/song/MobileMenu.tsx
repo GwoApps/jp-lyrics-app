@@ -7,6 +7,7 @@ import { useI18n } from '@/lib/i18n';
 import { useSongData } from '@/hooks/useSongData';
 import { useSpotifySync } from '@/hooks/useSpotifySync';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import LyricsDiffPreview from '@/components/song/LyricsDiffPreview';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -268,6 +269,17 @@ export function MobileMenu({ data, sync, song, id, router, furiganaLines, pipSup
         }}
         onCancel={() => setShowSyncConfirm(false)}
       />
+      <ConfirmDialog
+        open={!!data.diffConfirm}
+        title={t('song.syncDiffConfirmTitle')}
+        body={t('song.syncDiffConfirmBody')}
+        confirmLabel={t('song.sync')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={() => void data.confirmDiffSync()}
+        onCancel={data.cancelDiffSync}
+      >
+        {data.diffConfirm && <LyricsDiffPreview diff={data.diffConfirm.diff} />}
+      </ConfirmDialog>
     </div>
   );
 }

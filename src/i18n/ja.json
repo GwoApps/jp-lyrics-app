@@ -421,7 +421,7 @@
     "readingSchemeUpdateFailed": "ふりがなの方式を更新できませんでした",
     "translationEdit": "翻訳の編集",
     "syncConfirmTitle": "歌詞を同期",
-    "syncConfirmBody": "オンラインから歌詞を再取得し、現在の歌詞とタイミングを上書きします。歌詞テキストが変わらない場合はふりがなと翻訳を保持し、変わった場合のみ再生成が必要です。続行しますか？",
+    "syncConfirmBody": "まず歌詞を取得します。テキストが異なる場合は行単位の差分を表示し、確認するまで上書きされません。それまでは現在の歌詞は変更されません。",
     "copyOriginal": "原文をコピー",
     "copyTranslation": "翻訳をコピー",
     "copyLyrics": "歌詞をコピー",
@@ -515,7 +515,11 @@
     "entityRepairLater": "後で",
     "entityRepairDone": "歌詞を修復しました",
     "entityRepairNothing": "修復の必要はありません",
-    "entityRepairFailed": "歌詞を修復できませんでした"
+    "entityRepairFailed": "歌詞を修復できませんでした",
+    "syncDiffConfirmTitle": "同期前の歌詞の差分を確認",
+    "syncDiffConfirmBody": "取得した歌詞は保存済みのものと異なります。確認すると歌詞を上書きし、行番号で対応するふりがな・翻訳・自動抽出された用語集がリセットされます。この操作は取り消せません。",
+    "syncDiffSummary": "変更: 追加 {added} 行、削除 {removed} 行、変更 {changed} 行",
+    "syncDiffExpand": "すべての {count} 件の変更を表示"
   },
   "timeline": {
     "title": "LRC タイムライン編集",

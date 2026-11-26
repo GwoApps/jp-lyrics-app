@@ -3,7 +3,7 @@ import { getDB, schema, eq } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import type { ProviderStage } from '@/lib/lyrics-provider/types';
 import { syncStageToDynamicProviderStage as toProviderStage } from '@/lib/lyrics-fetcher';
-import { verifyCandidate } from '@/lib/candidate-token';
+import { signCandidate, verifyCandidate } from '@/lib/candidate-token';
 import { resolveSyncBaseline } from '@/lib/sync-write';
 import { persistCandidate, runFreshSync } from '@/lib/sync-service';
 
@@ -55,6 +55,7 @@ export async function POST(
     force?: boolean;
     confirmPlain?: boolean;
     candidate?: string;
+    confirmDiff?: boolean;
     source_lyrics?: unknown;
   };
 
@@ -102,7 +103,7 @@ export async function POST(
     // silently clobbered either.
     return toNextResponse(await persistCandidate(db, id, song, candidate, {
       sourceLyrics: song.lyricsRaw,
-    }));
+    }, { diff: candidate.diff, confirmDiff: body.confirmDiff }));
   }
 
   // === Full (re)sync path — only used for a fresh preview ===
@@ -125,17 +126,42 @@ export async function POST(
   // The SSE stream passes its own AbortSignal so a client disconnect / cancel
   // actually aborts the in-flight fetch and the remaining provider chain
   // (issue #148 hardening). The plain-JSON path uses the request signal.
-  const run = (opts?: {
+  const run = async (opts?: {
     onStage?: (stage: string | ProviderStage) => void;
     signal?: AbortSignal;
-  }) => runFreshSync({
-    userEmail: user.email,
-    db,
-    id,
-    song,
-    body,
-    sourceLyrics,
-  }, opts?.onStage, opts?.signal ?? request.signal);
+  }): Promise<{ status: number; body: unknown }> => {
+    const result = await runFreshSync({
+      userEmail: user.email,
+      db,
+      id,
+      song,
+      body,
+      sourceLyrics,
+    }, opts?.onStage, opts?.signal ?? request.signal);
+    // A content-changing write was gated on an explicit diff confirmation
+    // (issue #493). Bind the reviewed content + diff into a signed token so
+    // confirming writes exactly what was previewed — same TOCTOU guarantee as
+    // the low-confidence / plain-text paths, and no second fetch.
+    const previewBody = result.body as {
+      diffConfirm?: boolean;
+      plain?: string;
+      syncedLyrics?: string;
+      source?: string;
+      confidence?: number;
+    };
+    if (result.status === 200 && previewBody?.diffConfirm) {
+      const candidate = await signCandidate({
+        song: id,
+        source: previewBody.source ?? '',
+        confidence: previewBody.confidence ?? 0,
+        plain: previewBody.plain ?? '',
+        synced: previewBody.syncedLyrics ?? '',
+        updatedAt: song.updatedAt,
+      });
+      return { status: 200, body: { ...previewBody, candidate } };
+    }
+    return result;
+  };
 
   // When the client opts into Server-Sent Events, stream per-source stage
   // updates ("正在查询 LRCLIB…" etc.) and finish with a single `result` event

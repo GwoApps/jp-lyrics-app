@@ -1,3 +1,5 @@
+import type { LyricsDiff } from './lyrics-diff.ts';
+
 /**
  * Candidate token signing/verification for the lyrics sync confirmation flow.
  *
@@ -65,6 +67,13 @@ export interface CandidateTokenPayload {
   synced: string;
   /** `updatedAt` of the song when the token was issued — used to detect a concurrent edit. */
   updatedAt: string;
+  /**
+   * Compact line-level diff between the stored lyrics and this candidate,
+   * computed on the server in the same pass as the change check (issue #493).
+   * Optional so older tokens / direct writes stay valid; carried in the signed
+   * token so the confirmation dialog shows the reviewed diff without re-fetch.
+   */
+  diff?: LyricsDiff;
 }
 
 /** Compute a stable hex hash of a string (SHA-256, first 16 hex chars). */
@@ -142,6 +151,26 @@ export async function verifyCandidate(
     || typeof payload.synced !== 'string'
     || typeof payload.updatedAt !== 'string') {
     return { ok: false, reason: 'tampered' };
+  }
+  // The optional diff is display-only, but still validate its shape so a
+  // tampered token cannot inject arbitrary structures into the dialog.
+  if (payload.diff !== undefined) {
+    const d = payload.diff;
+    if (!d || typeof d !== 'object'
+      || typeof d.added !== 'number' || typeof d.removed !== 'number'
+      || typeof d.changed !== 'number' || typeof d.totalChanges !== 'number'
+      || !Array.isArray(d.rows)) {
+      return { ok: false, reason: 'tampered' };
+    }
+    for (const row of d.rows) {
+      if (!row || typeof row !== 'object'
+        || (row.newLine !== null && typeof row.newLine !== 'number')
+        || (row.oldLine !== null && typeof row.oldLine !== 'number')
+        || (row.type !== 'added' && row.type !== 'removed' && row.type !== 'changed')
+        || typeof row.text !== 'string' || typeof row.oldText !== 'string') {
+        return { ok: false, reason: 'tampered' };
+      }
+    }
   }
 
   return { ok: true, payload };

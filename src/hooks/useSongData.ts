@@ -23,6 +23,7 @@ import { usePiP } from './usePiP';
 import { useFurigana } from './useFurigana';
 import { useLyricsEntityRepair } from './useLyricsEntityRepair';
 import type { ImportAlertState, ImportReviewState } from './models';
+import type { LyricsDiff } from '@/lib/lyrics-diff';
 
 // Extract the language-independent error code from a failed write response.
 // Network errors and non-JSON bodies surface as `undefined`.
@@ -154,12 +155,15 @@ export interface UseSongDataReturn {
     id: string; title: string; artist: string; spotify_track_id?: string | null;
   } | null>;
   handleSync: () => Promise<void>;
-  lowConfidenceSync: { source: string; confidence: number; lines: number; lrc: string; candidate: string; match?: ImportReviewState['match'] } | null;
+  lowConfidenceSync: { source: string; confidence: number; lines: number; lrc: string; candidate: string; diff?: LyricsDiff; match?: ImportReviewState['match'] } | null;
   confirmLowConfidenceSync: () => void;
   cancelLowConfidenceSync: () => void;
-  plainHitSync: { source: string; confidence: number; plain: string; candidate: string; match?: ImportReviewState['match'] } | null;
+  plainHitSync: { source: string; confidence: number; plain: string; candidate: string; diff?: LyricsDiff; match?: ImportReviewState['match'] } | null;
   confirmPlainSync: () => void;
   cancelPlainSync: () => void;
+  diffConfirm: { source: string; confidence: number; diff: LyricsDiff; candidate: string } | null;
+  confirmDiffSync: () => void;
+  cancelDiffSync: () => void;
   handleDelete: () => void;
   confirmDelete: () => Promise<void>;
   handleCopy: (mode?: 'original' | 'translation') => Promise<void>;
@@ -368,6 +372,7 @@ export function useSongData(id: string): UseSongDataReturn {
     syncLines, syncing, syncStage,
     lowConfidenceSync, confirmLowConfidenceSync, cancelLowConfidenceSync,
     plainHitSync, confirmPlainSync, cancelPlainSync,
+    diffConfirm, confirmDiffSync, cancelDiffSync,
     handleSync, cancelSync,
   } = useSync({
     id, song, setSong, setImportAlert, fetchSong, applySongResult, showToast, t,
@@ -518,6 +523,9 @@ export function useSongData(id: string): UseSongDataReturn {
     plainHitSync,
     confirmPlainSync,
     cancelPlainSync,
+    diffConfirm,
+    confirmDiffSync,
+    cancelDiffSync,
     handleDelete,
     confirmDelete,
     handleCopy,

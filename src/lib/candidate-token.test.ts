@@ -98,3 +98,33 @@ test('contentHash is stable and differs across content', async () => {
   assert.notEqual(a, c);
   assert.match(a, /^[0-9a-f]{16}$/);
 });
+
+test('diff payload round-trips through the signed token (issue #493)', async () => {
+  const diff = {
+    added: 1,
+    removed: 0,
+    changed: 2,
+    totalChanges: 3,
+    rows: [
+      { newLine: 4, oldLine: null, type: 'added' as const, text: 'new line', oldText: '' },
+      { newLine: 7, oldLine: 6, type: 'changed' as const, text: 'after', oldText: 'before' },
+    ],
+  };
+  const token = await signCandidate({ ...basePayload, diff }, TEST_SECRET);
+  const result = await verifyCandidate(token, TEST_SECRET);
+  assert.equal(result.ok, true);
+  if (result.ok) assert.deepEqual(result.payload.diff, diff);
+});
+
+test('tampered diff payload is rejected', async () => {
+  const diff = {
+    added: 1, removed: 0, changed: 0, totalChanges: 1,
+    rows: [{ newLine: 1, oldLine: null, type: 'added' as const, text: 'x', oldText: '' }],
+  };
+  const token = await signCandidate({ ...basePayload, diff }, TEST_SECRET);
+  const parts = token.split('.');
+  // Flip a character inside the encoded payload (not the signature).
+  const mid = parts[0].charAt(40);
+  parts[0] = parts[0].slice(0, 40) + (mid === 'A' ? 'B' : 'A') + parts[0].slice(41);
+  assert.equal((await verifyCandidate(parts.join('.'), TEST_SECRET)).ok, false);
+});

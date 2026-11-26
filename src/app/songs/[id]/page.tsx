@@ -22,6 +22,7 @@ import { ToolbarMenu, buildReadingMenuItems } from '@/components/song/ToolbarMen
 import { MobileMenu } from '@/components/song/MobileMenu';
 import FuriganaLineDialog from '@/components/song/FuriganaLineDialog';
 import FavoriteCategoriesDialog from '@/components/home/FavoriteCategoriesDialog';
+import LyricsDiffPreview from '@/components/song/LyricsDiffPreview';
 import DownloadDialog from '@/components/song/DownloadDialog';
 import ImmersiveLyricsControls from '@/components/song/ImmersiveLyricsControls';
 import LyricTimeAxis from '@/components/song/LyricTimeAxis';
@@ -100,7 +101,7 @@ function SyncCandidatePreview({
   // so the user can review the full candidate before the destructive write-back.
   const shown = expanded ? previewLines : previewLines.slice(0, 6);
   return (
-    <div className="confirm-dialog-children">
+    <>
       <div className="preview-meta">
         {t('song.syncCandidatePreview', { source: sourceLabel, confidence: String(confidence), lines: String(lines) })}
       </div>
@@ -116,7 +117,7 @@ function SyncCandidatePreview({
             : t('song.syncCandidatePreviewExpand', { count: String(total) })}
         </button>
       )}
-    </div>
+    </>
   );
 }
 
@@ -1636,6 +1637,9 @@ export default function SongViewPage() {
             text={data.lowConfidenceSync.lrc}
           />
         )}
+        {data.lowConfidenceSync?.diff && (
+          <LyricsDiffPreview diff={data.lowConfidenceSync.diff} />
+        )}
       </ConfirmDialog>
       <ConfirmDialog
         open={!!data.plainHitSync}
@@ -1667,6 +1671,22 @@ export default function SongViewPage() {
             lines={data.plainHitSync.plain.split('\n').filter((l: string) => l.trim()).length}
             text={data.plainHitSync.plain}
           />
+        )}
+        {data.plainHitSync?.diff && (
+          <LyricsDiffPreview diff={data.plainHitSync.diff} />
+        )}
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={!!data.diffConfirm}
+        title={t('song.syncDiffConfirmTitle')}
+        body={t('song.syncDiffConfirmBody')}
+        confirmLabel={t('song.sync')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={() => void data.confirmDiffSync()}
+        onCancel={data.cancelDiffSync}
+      >
+        {data.diffConfirm && (
+          <LyricsDiffPreview diff={data.diffConfirm.diff} />
         )}
       </ConfirmDialog>
     </div>

@@ -421,7 +421,7 @@
     "readingSchemeUpdateFailed": "更新注音方案失敗",
     "translationEdit": "翻譯校正",
     "syncConfirmTitle": "同步歌詞",
-    "syncConfirmBody": "將從線上來源重新取得歌詞，覆蓋目前的歌詞與時間軸。歌詞文字未變化時保留注音與翻譯，僅文字變化時才需重新產生。確定繼續？",
+    "syncConfirmBody": "系統會先取得歌詞。若文字有變化，會先顯示逐行差異，需你確認後才會覆蓋；在此之前目前歌詞不會被改動。",
     "copyOriginal": "複製原文",
     "copyTranslation": "複製翻譯",
     "copyLyrics": "複製歌詞",
@@ -515,7 +515,11 @@
     "entityRepairLater": "暫不處理",
     "entityRepairDone": "歌詞已修復",
     "entityRepairNothing": "歌詞無需修復",
-    "entityRepairFailed": "修復歌詞失敗"
+    "entityRepairFailed": "修復歌詞失敗",
+    "syncDiffConfirmTitle": "同步前確認歌詞差異",
+    "syncDiffConfirmBody": "取得的歌詞與資料庫不同。確認後將覆蓋歌詞，並重設下方涉及的按行注音、譯文與自動擷取的術語表，此操作無法復原。",
+    "syncDiffSummary": "變更：新增 {added} 行、刪除 {removed} 行、修改 {changed} 行",
+    "syncDiffExpand": "查看全部 {count} 處變更"
   },
   "timeline": {
     "title": "LRC 時間軸編輯",
