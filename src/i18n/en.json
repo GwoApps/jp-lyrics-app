@@ -1011,7 +1011,11 @@
     "sourceConfigSyncCandidateLimitHint": "Number of indexed WYSIWYG/LSY candidates scanned serially. Higher = better hit rate but linear latency growth.",
     "lyricsProviderErrorInvalidSourceConfig": "Source config contains unknown fields or out-of-range values",
     "lyricsProviderErrorInvalidSourceSchema": "Invalid source config schema",
-    "lyricsProviderErrorHttpProviderReadonlyField": "This field cannot be changed on an HTTP provider"
+    "lyricsProviderErrorHttpProviderReadonlyField": "This field cannot be changed on an HTTP provider",
+    "systemBackup": "Full-library backup",
+    "systemBackupHint": "Download a JSON backup of every song: lyrics, furigana, timeline, translation and glossary. Ownership and private flags are excluded.",
+    "systemBackupButton": "Export JSON backup",
+    "systemBackupExporting": "Exporting…"
   },
   "translation": {
     "title": "Edit translation",
