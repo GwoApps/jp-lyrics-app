@@ -177,7 +177,7 @@ export default function EditSongPage() {
             >
               <RefreshCw className="h-3.5 w-3.5" /> {t('song.retry')}
             </button>
-            <Link href="/" className="inline-flex items-center gap-1 text-xs text-[var(--song-accent)] hover:underline">
+            <Link href="/" className="inline-flex items-center gap-1 text-xs text-[var(--song-accent-text)] hover:underline">
               <ArrowLeft className="h-3 w-3" /> {t('song.backToList')}
             </Link>
           </div>
@@ -187,7 +187,7 @@ export default function EditSongPage() {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
         <p className="text-sm text-[var(--muted-foreground)]">{t('song.notFound')}</p>
-        <Link href="/" className="mt-4 inline-flex items-center gap-1 text-xs text-[var(--song-accent)] hover:underline">
+        <Link href="/" className="mt-4 inline-flex items-center gap-1 text-xs text-[var(--song-accent-text)] hover:underline">
           <ArrowLeft className="h-3 w-3" /> {t('song.backToList')}
         </Link>
       </div>

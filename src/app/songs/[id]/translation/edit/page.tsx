@@ -389,7 +389,7 @@ export default function TranslationEditPage() {
             </button>
             <button
               onClick={() => router.push('/')}
-              className="inline-flex items-center gap-1 text-xs text-[var(--song-accent)] hover:underline"
+              className="inline-flex items-center gap-1 text-xs text-[var(--song-accent-text)] hover:underline"
             >
               <ArrowLeft className="h-3 w-3" /> {t('song.backToList')}
             </button>
@@ -402,7 +402,7 @@ export default function TranslationEditPage() {
         <p className="text-sm text-[var(--muted-foreground)]">{t('song.notFound')}</p>
         <button
           onClick={() => router.push('/')}
-          className="mt-4 inline-flex items-center gap-1 text-xs text-[var(--song-accent)] hover:underline"
+          className="mt-4 inline-flex items-center gap-1 text-xs text-[var(--song-accent-text)] hover:underline"
         >
           <ArrowLeft className="h-3 w-3" /> {t('song.backToList')}
         </button>

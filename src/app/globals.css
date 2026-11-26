@@ -992,6 +992,15 @@ textarea {
 .song-view {
   --song-accent: var(--border);
 }
+/* Decorative accents stay raw; text uses the contrast-checked derivative.
+   Defined on <body> so portalled menus get it too; useCoverTheme mirrors the
+   light/dark candidates there from readableCoverTextColor(). */
+body {
+  --song-accent-text: var(--song-accent-text-dark, var(--foreground));
+}
+[data-theme="light"] body {
+  --song-accent-text: var(--song-accent-text-light, var(--foreground));
+}
 /* On touch browsers :active is unreliable; the button's pointer handlers
    expose the held-press state without leaving a permanent hint on the cover. */
 @media (hover: none) {

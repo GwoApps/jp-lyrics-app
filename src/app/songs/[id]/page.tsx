@@ -570,7 +570,7 @@ export default function SongViewPage() {
             <button onClick={data.retryLoad} className="mt-0 inline-flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-4 py-2 text-xs font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors">
               <RefreshCw className="h-3.5 w-3.5" /> {t('song.retry')}
             </button>
-            <button onClick={() => transitionRouter.push('/')} className="mt-0 inline-flex items-center gap-1 text-xs text-[var(--song-accent)] hover:underline">
+            <button onClick={() => transitionRouter.push('/')} className="mt-0 inline-flex items-center gap-1 text-xs text-[var(--song-accent-text)] hover:underline">
               <ArrowLeft className="h-3 w-3" /> {t('song.backToList')}
             </button>
           </div>
@@ -580,7 +580,7 @@ export default function SongViewPage() {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-center">
         <p className="text-sm text-[var(--muted-foreground)]">{t('song.notFound')}</p>
-        <button onClick={() => transitionRouter.push('/')} className="mt-4 text-xs text-[var(--song-accent)] hover:underline inline-flex items-center gap-1">
+        <button onClick={() => transitionRouter.push('/')} className="mt-4 text-xs text-[var(--song-accent-text)] hover:underline inline-flex items-center gap-1">
           <ArrowLeft className="h-3 w-3" /> {t('song.backToList')}
         </button>
       </div>
@@ -872,7 +872,7 @@ export default function SongViewPage() {
                   type="button"
                   onClick={() => setSongVisibility(song.is_public !== 1)}
                   disabled={visibilityBusy}
-                  className="text-[10px] text-[var(--song-accent)] hover:text-[var(--song-accent)]/80 underline transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                  className="text-[10px] text-[var(--song-accent-text)] hover:text-[var(--song-accent-text)]/80 underline transition-colors disabled:opacity-50 disabled:pointer-events-none"
                 >
                   {song.is_public === 1 ? t('song.setPrivate') : t('song.setPublic')}
                 </button>
@@ -918,7 +918,7 @@ export default function SongViewPage() {
                         data.showToast('error', t('song.requestPublicFailed'));
                       }
                     }}
-                    className="text-[10px] text-[var(--song-accent)] hover:text-[var(--song-accent)]/80 underline transition-colors"
+                    className="text-[10px] text-[var(--song-accent-text)] hover:text-[var(--song-accent-text)]/80 underline transition-colors"
                   >
                     {t('song.requestPublic')}
                   </button>
@@ -1120,7 +1120,7 @@ export default function SongViewPage() {
         {/* Debug panel */}
         {data.debug && (
           <div className="song-print-hide mt-3 rounded-md bg-[var(--muted)] border border-[var(--border)] p-2 sm:p-3 text-[10px] sm:text-[11px] font-mono space-y-1 overflow-x-auto">
-            <div className="text-[var(--song-accent)] font-medium mb-1.5">{t('song.debugInfo')}</div>
+            <div className="text-[var(--song-accent-text)] font-medium mb-1.5">{t('song.debugInfo')}</div>
             <div>{t('song.debugConnection', {
               connection: spotify?.connected ? `✓ ${t('song.debugConnected')}` : `✗ ${t('song.debugDisconnected')}`,
               playing: String(!!spotify?.is_playing),
