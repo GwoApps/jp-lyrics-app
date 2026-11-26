@@ -333,6 +333,7 @@
     "pipBtn": "Floating Display",
     "immersiveEnter": "Full-screen lyrics",
     "lyricsRegion": "Lyrics",
+    "lyricsKeyboardHint": "j/k: move focus · Enter: copy the focused line",
     "immersiveClose": "Close full-screen lyrics",
     "immersiveSettings": "Reading settings",
     "immersiveSmaller": "Smaller lyrics",
@@ -360,6 +361,8 @@
     "exportFurigana": "(with annotations)",
     "downloadWithEllipsis": "Download…",
     "exportSubtitle": "Pick a format and the extra lines to include",
+    "exportFormatCsvLabel": "Study table",
+    "exportCsvNoDataHint": "CSV is most useful with readings or translations — this song has neither, so the table will only contain the lyrics and metadata.",
     "exportFormatLabel": "Format",
     "exportReadingLabel": "Readings",
     "exportReadingNone": "Original (no readings)",
@@ -377,6 +380,8 @@
     "exportDownloading": "Downloading…",
     "exportFailed": "Export failed",
     "exportSongNotFound": "Song not found — it may have been deleted or is no longer visible to you",
+    "exportReviewTable": "Review table (CSV)",
+    "exportReviewTableHint": "One row per source line — blank lines stay as paragraph separators; readings and translations are paired with the original text",
     "exportRetry": "Retry",
     "requestPublic": "Request Public",
     "requestPublicTitle": "Make this lyrics public?",
@@ -419,7 +424,7 @@
     "readingSchemeUpdateFailed": "Failed to update the annotation scheme",
     "translationEdit": "Edit translation",
     "syncConfirmTitle": "Sync lyrics",
-    "syncConfirmBody": "Fetches lyrics from the online source and overwrites the current lyrics and timing. If the lyric text is unchanged, your furigana annotations and translation are kept; otherwise they will need to be regenerated. Continue?",
+    "syncConfirmBody": "The lyrics are fetched first. If the text differs, you will see a line-by-line diff and must confirm it before anything is overwritten. The current lyrics stay untouched until then.",
     "copyOriginal": "Copy original",
     "copyTranslation": "Copy translation",
     "copyLyrics": "Copy lyrics",
@@ -513,7 +518,12 @@
     "entityRepairLater": "Not now",
     "entityRepairDone": "Lyrics repaired",
     "entityRepairNothing": "Nothing to repair",
-    "entityRepairFailed": "Could not repair the lyrics"
+    "entityRepairFailed": "Could not repair the lyrics",
+    "syncDiffConfirmTitle": "Review lyric changes before syncing",
+    "syncDiffConfirmBody": "The fetched lyrics differ from what is stored. Confirming will overwrite the lyrics and reset the line-indexed furigana, translation and auto-extracted glossary shown below. This cannot be undone.",
+    "syncDiffSummary": "Changes: +{added} added, -{removed} removed, ~{changed} modified",
+    "syncDiffExpand": "Show all {count} changes",
+    "translationAvailableLangs": "Available translations: {langs}"
   },
   "timeline": {
     "title": "LRC Timeline Editor",
@@ -1009,7 +1019,11 @@
     "sourceConfigSyncCandidateLimitHint": "Number of indexed WYSIWYG/LSY candidates scanned serially. Higher = better hit rate but linear latency growth.",
     "lyricsProviderErrorInvalidSourceConfig": "Source config contains unknown fields or out-of-range values",
     "lyricsProviderErrorInvalidSourceSchema": "Invalid source config schema",
-    "lyricsProviderErrorHttpProviderReadonlyField": "This field cannot be changed on an HTTP provider"
+    "lyricsProviderErrorHttpProviderReadonlyField": "This field cannot be changed on an HTTP provider",
+    "systemBackup": "Full-library backup",
+    "systemBackupHint": "Download a JSON backup of every song: lyrics, furigana, timeline, translation and glossary. Ownership and private flags are excluded.",
+    "systemBackupButton": "Export JSON backup",
+    "systemBackupExporting": "Exporting…"
   },
   "translation": {
     "title": "Edit translation",

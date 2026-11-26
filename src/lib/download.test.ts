@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { exportFilename, filenameFromContentDisposition } from './download.ts';
+import { exportFilename, extensionForFormat, filenameFromContentDisposition } from './download.ts';
 
 test('filenameFromContentDisposition prefers RFC 5987 filename*', () => {
   const header = `attachment; filename="download.txt"; filename*=UTF-8''${encodeURIComponent('残酷な天使のテーゼ - 高橋洋子')}.txt`;
@@ -48,4 +48,11 @@ test('exportFilename omits the artist when absent and maps html content type', (
   assert.equal(exportFilename(null, 'text/html; charset=utf-8', 'Only Title', null, 'html'), 'Only Title.html');
   assert.equal(exportFilename(null, null, 'Only Title', '', 'lrc'), 'Only Title.lrc');
   assert.equal(exportFilename(null, null, '   ', undefined, 'text'), 'lyrics.txt');
+});
+
+
+test('exportFilename maps csv content type and requested format to .csv', () => {
+  assert.equal(exportFilename(null, 'text/csv; charset=utf-8', 'Study', null, 'csv'), 'Study.csv');
+  assert.equal(exportFilename(null, null, 'Study', null, 'csv'), 'Study.csv');
+  assert.equal(extensionForFormat('csv'), 'csv');
 });

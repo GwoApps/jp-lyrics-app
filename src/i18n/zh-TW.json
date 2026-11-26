@@ -333,6 +333,7 @@
     "pipBtn": "懸浮展示",
     "immersiveEnter": "全螢幕歌詞",
     "lyricsRegion": "歌詞",
+    "lyricsKeyboardHint": "j/k：移動焦點 · Enter：複製當前行",
     "immersiveClose": "關閉全螢幕歌詞",
     "immersiveSettings": "閱讀設定",
     "immersiveSmaller": "縮小歌詞",
@@ -360,6 +361,8 @@
     "exportFurigana": "（含注音）",
     "downloadWithEllipsis": "下載…",
     "exportSubtitle": "選擇格式與需要輸出的副行",
+    "exportFormatCsvLabel": "對照表",
+    "exportCsvNoDataHint": "CSV 在有注音或譯文時更有用；這首歌兩者都沒有，表格將只包含歌詞和歌曲資訊。",
     "exportFormatLabel": "格式",
     "exportReadingLabel": "注音",
     "exportReadingNone": "原文（不含注音）",
@@ -377,6 +380,8 @@
     "exportDownloading": "正在下載…",
     "exportFailed": "匯出失敗",
     "exportSongNotFound": "找不到歌曲（可能已刪除，或你已無權檢視）",
+    "exportReviewTable": "複習表（CSV）",
+    "exportReviewTableHint": "按原歌詞逐行輸出，空行作為段落分隔保留；注音與譯文按行對齊",
     "exportRetry": "重試",
     "requestPublic": "申請公開",
     "requestPublicTitle": "公開這首歌詞？",
@@ -419,7 +424,7 @@
     "readingSchemeUpdateFailed": "更新注音方案失敗",
     "translationEdit": "翻譯校正",
     "syncConfirmTitle": "同步歌詞",
-    "syncConfirmBody": "將從線上來源重新取得歌詞，覆蓋目前的歌詞與時間軸。歌詞文字未變化時保留注音與翻譯，僅文字變化時才需重新產生。確定繼續？",
+    "syncConfirmBody": "系統會先取得歌詞。若文字有變化，會先顯示逐行差異，需你確認後才會覆蓋；在此之前目前歌詞不會被改動。",
     "copyOriginal": "複製原文",
     "copyTranslation": "複製翻譯",
     "copyLyrics": "複製歌詞",
@@ -513,7 +518,12 @@
     "entityRepairLater": "暫不處理",
     "entityRepairDone": "歌詞已修復",
     "entityRepairNothing": "歌詞無需修復",
-    "entityRepairFailed": "修復歌詞失敗"
+    "entityRepairFailed": "修復歌詞失敗",
+    "syncDiffConfirmTitle": "同步前確認歌詞差異",
+    "syncDiffConfirmBody": "取得的歌詞與資料庫不同。確認後將覆蓋歌詞，並重設下方涉及的按行注音、譯文與自動擷取的術語表，此操作無法復原。",
+    "syncDiffSummary": "變更：新增 {added} 行、刪除 {removed} 行、修改 {changed} 行",
+    "syncDiffExpand": "查看全部 {count} 處變更",
+    "translationAvailableLangs": "已有譯文：{langs}"
   },
   "timeline": {
     "title": "LRC 時間軸編輯",
@@ -1009,7 +1019,11 @@
     "sourceConfigSyncCandidateLimitHint": "串行掃描 indexed WYSIWYG/LSY 候選的數量。調大提高命中率、延遲線性增長。",
     "lyricsProviderErrorInvalidSourceConfig": "來源設定包含未知欄位或值不在允許範圍內",
     "lyricsProviderErrorInvalidSourceSchema": "來源設定 schema 無效",
-    "lyricsProviderErrorHttpProviderReadonlyField": "HTTP Provider 不支援該欄位"
+    "lyricsProviderErrorHttpProviderReadonlyField": "HTTP Provider 不支援該欄位",
+    "systemBackup": "整庫備份",
+    "systemBackupHint": "匯出包含全部歌曲的歌詞、注音、時間軸、譯文與術語表的 JSON 備份檔案；不包含私人標記與建立者資訊。",
+    "systemBackupButton": "匯出 JSON 備份",
+    "systemBackupExporting": "正在匯出…"
   },
   "translation": {
     "title": "翻譯校正",

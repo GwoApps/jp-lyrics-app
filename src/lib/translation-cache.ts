@@ -32,6 +32,7 @@
 
 import { and, eq } from 'drizzle-orm';
 import * as schema from './schema.ts';
+import { writeSongTranslation } from './song-translations.ts';
 import { parseTranslationCache } from './translation/parse.ts';
 import { nowUtcSql } from './db-time-sql.ts';
 import { applyLineEdits, type LineEdit } from './translation-line-edits.ts';
@@ -174,6 +175,21 @@ async function mergeUnderOptimisticLock(
       .returning({ id: schema.songs.id })
       .get();
     if (applied) {
+      // Keep the per-language cache (ISSUE #485) in step with the compatibility
+      // mirror. The mirror already committed, so a failure here is a repair
+      // case for the next write rather than a reason to fail this request.
+      const mirrorLang = stampedLang !== undefined ? stampedLang : latest.lyricsTranslationLang;
+      if (mirrorLang) {
+        try {
+          await writeSongTranslation(db, {
+            songId: opts.id,
+            lang: mirrorLang,
+            lines: JSON.stringify(merged),
+          });
+        } catch (error) {
+          console.warn(`[translation] per-language cache mirror failed for ${opts.id}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
       return { ok: true, cache: merged, ...(stampedLang !== undefined ? { lang: stampedLang } : {}) };
     }
     // Lost the race — loop re-reads and merges on top of the winner's cache.

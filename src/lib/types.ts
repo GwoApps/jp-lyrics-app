@@ -10,6 +10,8 @@ export interface Song {
   lyrics_translation: string;
   lyrics_translation_lang?: string | null;
   lyrics_translation_reasoning?: string | null;
+  /** BCP-47 tags with a stored translation for this song (ISSUE #485). */
+  available_translation_langs?: string[];
   lyrics_glossary?: string | null;
   cover_url?: string | null;
   cover_palette?: CoverPaletteJson | null;
@@ -86,6 +88,8 @@ export interface SongListItem {
   lyrics_translation_lang?: string | null;
   /** Current user's favorite existence (including classified favorites); null for guests. */
   favorited?: boolean | null;
+  /** ISSUE #475: derived romanized/translated lyric text for search only; never rendered. */
+  search_text?: string | null;
   created_at: string;
   updated_at: string;
   /**

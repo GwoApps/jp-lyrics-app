@@ -6,6 +6,7 @@ import type { ProviderStage } from '@/lib/lyrics-provider/types';
 import { readSyncEventStream } from '@/lib/sync-sse-reader';
 import { parseLrc } from '@/lib/lrc';
 import { LYRICS_SOURCE_KEYS } from '@/lib/lyrics-source';
+import type { LyricsDiff } from '@/lib/lyrics-diff';
 
 interface UseSyncDeps {
   id: string;
@@ -22,14 +23,18 @@ interface UseSyncReturn {
   syncLines: ReturnType<typeof parseLrc>;
   syncing: boolean;
   syncStage: SyncStage | ProviderStage | null;
-  lowConfidenceSync: { source: string; confidence: number; lines: number; lrc: string; candidate: string; match?: ImportReviewState['match'] } | null;
+  lowConfidenceSync: { source: string; confidence: number; lines: number; lrc: string; candidate: string; diff?: LyricsDiff; match?: ImportReviewState['match'] } | null;
   confirmLowConfidenceSync: () => Promise<void>;
   cancelLowConfidenceSync: () => void;
-  plainHitSync: { source: string; confidence: number; plain: string; candidate: string; match?: ImportReviewState['match'] } | null;
+  plainHitSync: { source: string; confidence: number; plain: string; candidate: string; diff?: LyricsDiff; match?: ImportReviewState['match'] } | null;
   confirmPlainSync: () => Promise<void>;
   cancelPlainSync: () => void;
   handleSync: () => Promise<void>;
   cancelSync: () => void;
+  /** Content-changing re-sync preview waiting for an explicit diff confirmation. */
+  diffConfirm: { source: string; confidence: number; diff: LyricsDiff; candidate: string } | null;
+  confirmDiffSync: () => Promise<void>;
+  cancelDiffSync: () => void;
 }
 
 /**
@@ -58,6 +63,7 @@ export function useSync(deps: UseSyncDeps): UseSyncReturn {
     lines: number;
     lrc: string;
     candidate: string;
+    diff?: LyricsDiff;
     match?: ImportReviewState['match'];
   } | null>(null);
   // Pending plain-text sync result (no LRC timeline) waiting for explicit user
@@ -67,7 +73,16 @@ export function useSync(deps: UseSyncDeps): UseSyncReturn {
     confidence: number;
     plain: string;
     candidate: string;
+    diff?: LyricsDiff;
     match?: ImportReviewState['match'];
+  } | null>(null);
+  // Pending content-changing re-sync whose derived caches would be wiped —
+  // the user must confirm the diff before anything is written (issue #493).
+  const [diffConfirm, setDiffConfirm] = useState<{
+    source: string;
+    confidence: number;
+    diff: LyricsDiff;
+    candidate: string;
   } | null>(null);
 
   // Handlers
@@ -130,6 +145,7 @@ export function useSync(deps: UseSyncDeps): UseSyncReturn {
           lines: data.lines,
           lrc: data.lrc,
           candidate: data.candidate,
+          diff: data.diff,
           match: data.match,
         });
         return;
@@ -142,7 +158,19 @@ export function useSync(deps: UseSyncDeps): UseSyncReturn {
           confidence: data.confidence,
           plain: data.plain,
           candidate: data.candidate,
+          diff: data.diff,
           match: data.match,
+        });
+        return;
+      }
+      // Content-changing re-sync was gated on an explicit diff confirmation
+      // (issue #493) — open the review dialog instead of writing anything.
+      if (data.diffConfirm) {
+        setDiffConfirm({
+          source: data.source,
+          confidence: data.confidence,
+          diff: data.diff,
+          candidate: data.candidate,
         });
         return;
       }
@@ -283,6 +311,39 @@ export function useSync(deps: UseSyncDeps): UseSyncReturn {
   }, [id, t, plainHitSync, applySyncResult, showToast, setImportAlert, setSong]);
 
   const cancelPlainSync = useCallback(() => setPlainHitSync(null), []);
+
+  /** Confirm a content-changing re-sync via its signed token; the server
+   *  writes exactly the reviewed candidate, with no second fetch. */
+  const confirmDiffSync = useCallback(async () => {
+    if (!diffConfirm?.candidate) return;
+    const token = diffConfirm.candidate;
+    setDiffConfirm(null);
+    setSyncing(true);
+    try {
+      const res = await fetch(`/api/songs/${id}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidate: token, confirmDiff: true }),
+      });
+      const data = await res.json();
+      if (res.status === 409 && (data.error === 'candidate_expired' || data.error === 'candidate_invalid' || data.error === 'stale_source')) {
+        setImportAlert({ message: t('song.candidateExpired') });
+        return;
+      }
+      if (data.synced || data.plainUpdated) {
+        await applySyncResult(data);
+      } else {
+        setImportAlert({ message: t('song.syncNotFound') });
+      }
+    } catch {
+      setImportAlert({ message: t('song.networkErrorAlert') });
+    } finally {
+      setSyncing(false);
+    }
+  }, [id, t, diffConfirm, applySyncResult, setImportAlert]);
+
+  const cancelDiffSync = useCallback(() => setDiffConfirm(null), []);
+
   return {
     syncLines,
     syncing,
@@ -295,5 +356,8 @@ export function useSync(deps: UseSyncDeps): UseSyncReturn {
     cancelPlainSync,
     handleSync,
     cancelSync,
+    diffConfirm,
+    confirmDiffSync,
+    cancelDiffSync,
   };
 }

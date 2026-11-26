@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useRef, useState } from 'react';
-import { Download, FileText, FileClock, FileCode2, Check, X, AlertCircle, Ban, Loader2 } from 'lucide-react';
+import { Download, FileText, FileClock, FileCode2, Table, Check, X, AlertCircle, Ban, Loader2 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import Dialog from '@/components/ui/dialog';
 import { exportErrorMsg } from '@/lib/export-errors';
@@ -39,6 +39,7 @@ const FORMAT_OPTIONS: { format: ExportFormat; icon: typeof FileText }[] = [
   { format: 'text', icon: FileText },
   { format: 'lrc', icon: FileClock },
   { format: 'html', icon: FileCode2 },
+  { format: 'csv', icon: Table },
 ];
 
 export default function DownloadDialog({
@@ -78,15 +79,20 @@ export default function DownloadDialog({
     }
   }
 
-  const showReadingOptions = hasReadingData && format !== 'lrc';
+  // A CSV study table is only useful when there is reading or translation data
+  // to study; warn when neither cache exists rather than shipping metadata only.
+  const showCsvHint = format === 'csv' && !hasReadingData && !hasTranslation;
+  // CSV always carries the aligned furigana column, so the reading selector is
+  // hidden for it (romaji still carries over from another format via buildUrl).
+  const showReadingOptions = hasReadingData && format !== 'lrc' && format !== 'csv';
   // LRC now supports pairing each timed row with its translation, so the
   // translation toggle is offered for every format (requires a stored translation).
   const showTranslationOption = hasTranslation;
   const lrcDisabled = !hasSynced;
   // The dialog always mounts fresh with a clean selection (see above), and the
   // LRC button is disabled when `lrcDisabled`, so `format` can never stay
-  // `'lrc'` while LRC is unavailable. `selectedFormat` is a defensive fallback.
-  const selectedFormat = lrcDisabled ? 'text' : format;
+  // `'lrc'` while LRC is unavailable. CSV/TXT/HTML are always valid.
+  const selectedFormat = lrcDisabled && format === 'lrc' ? 'text' : format;
   const readingLabel = (mode: ExportReadingMode) => {
     switch (mode) {
       case 'furigana': return t('song.exportReadingFurigana');
@@ -108,6 +114,9 @@ export default function DownloadDialog({
   const buildUrl = (format: ExportFormat = selectedFormat) => {
     const params = new URLSearchParams({ format });
     if (showReadingOptions && reading !== 'none') params.set('reading', reading);
+    // CSV always carries the aligned furigana column; the UI "none" mode only
+    // means "don't add readings to .txt/.html", not "drop review data".
+    if (format === 'csv' && reading === 'romaji') params.set('reading', 'romaji');
     if (showTranslationOption && includeTranslation) params.set('include_translation', '1');
     return `/api/songs/${songId}/export?${params.toString()}`;
   };
@@ -185,7 +194,7 @@ export default function DownloadDialog({
           {/* Format */}
           <div>
             <div className="mb-2 text-xs font-medium text-[var(--muted-foreground)]">{t('song.exportFormatLabel')}</div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {FORMAT_OPTIONS.map(({ format: f, icon: Icon }) => {
                 const isLrc = f === 'lrc';
                 const disabled = isLrc && lrcDisabled;
@@ -213,6 +222,9 @@ export default function DownloadDialog({
                     <span className="inline-flex items-center gap-1">
                       .{f === 'text' ? 'txt' : f}
                       {isLrc && disabled && <Ban className="h-3 w-3" />}
+                    </span>
+                    <span className="text-[10px] font-normal text-[var(--muted-foreground)]">
+                      {f === 'csv' ? t('song.exportFormatCsvLabel') : ''}
                     </span>
                   </button>
                 );
@@ -300,6 +312,13 @@ export default function DownloadDialog({
             <div className="flex items-start gap-2 rounded-xl border border-[var(--warning)]/30 bg-[var(--warning-muted)] px-3 py-2.5 text-xs text-[var(--warning)]">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{t('song.exportLrcHint')}</span>
+            </div>
+          )}
+
+          {showCsvHint && (
+            <div className="flex items-start gap-2 rounded-xl border border-[var(--warning)]/30 bg-[var(--warning-muted)] px-3 py-2.5 text-xs text-[var(--warning)]">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{t('song.exportCsvNoDataHint')}</span>
             </div>
           )}
 

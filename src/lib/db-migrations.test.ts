@@ -68,7 +68,7 @@ test('fresh DB applying full journal yields all required tables/columns', async 
     await applyMigrations(client, loadJournal());
 
     // Tables the app's schema declares (see src/lib/schema.ts).
-    const requiredTables = ['ai_usage', 'song_covers'];
+    const requiredTables = ['ai_usage', 'song_covers', 'song_translations'];
 
     // songs.* columns added by the previously-omitted migrations.
     const requiredSongColumns = ['cover_palette', 'lyrics_glossary'];
@@ -90,6 +90,18 @@ test('fresh DB applying full journal yields all required tables/columns', async 
     assert.equal(converted.rows[0].id, 'ytmusic-sidecar');
     assert.equal(converted.rows[0].kind, 'http');
     assert.equal(converted.rows[0].base_url, 'http://yt-sidecar:8910');
+
+    // ISSUE #485: the per-language table is created and seeded by migration
+    // 0027, so a fresh DB already has it and legacy caches land in it.
+    const translationCols = await client.execute('PRAGMA table_info(`song_translations`)');
+    assert.deepEqual(
+      translationCols.rows.map(r => r.name),
+      ['song_id', 'lang', 'lines', 'reasoning', 'updated_at'],
+    );
+    const seeded = await client.execute(
+      "SELECT count(*) AS n FROM song_translations WHERE song_id = 'legacy-song' AND lang = 'zh-CN'"
+    );
+    assert.equal(Number(seeded.rows[0]?.n ?? 0), 0); // no seed rows on an empty DB
 
     const songCols = await client.execute('PRAGMA table_info(`songs`)');
     const songColNames = new Set(songCols.rows.map(r => r.name as string));

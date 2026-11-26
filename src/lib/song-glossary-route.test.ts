@@ -102,6 +102,7 @@ function loadPut() {
       if (name === '@/lib/song-update') return { buildSongUpdateSet: (existing: unknown, body: Record<string, unknown>) => ({ __body: body, existing }) };
       if (name === '@/lib/lyrics-glossary') return { validateGlossaryInput, applyManualPins };
       if (name === '@/lib/song-cover-cleanup') return { cleanupSongCover: async () => {} };
+      if (name === '@/lib/song-translations') return { clearSongTranslations: async () => {}, listSongTranslationLangs: async () => [], readSongTranslation: async () => null };
       throw new Error(`Unexpected dependency ${name}`);
     },
   });

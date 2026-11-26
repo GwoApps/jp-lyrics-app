@@ -9,6 +9,7 @@ import { isSongVisibleToUser } from '@/lib/song-visibility';
 import { findLrcConflicts, resolveTimelineSave } from '@/lib/lrc';
 import { buildSongUpdateSet } from '@/lib/song-update';
 import { applyManualPins, validateGlossaryInput } from '@/lib/lyrics-glossary';
+import { clearSongTranslations, listSongTranslationLangs, readSongTranslation } from '@/lib/song-translations';
 
 /** Strip internal email while exposing server-authoritative capabilities. */
 function sanitizeSong(song: Song, canEdit: boolean): SongData {
@@ -109,8 +110,37 @@ export async function GET(
     return NextResponse.json({ error: 'song_not_found' }, { status: 404 });
   }
   const canEdit = !!user && (user.isAdmin || song.created_by === user.id);
+  const db = getDB();
+  const availableTranslationLangs = await listSongTranslationLangs(db, id, {
+    lyrics_translation: song.lyrics_translation,
+    lyrics_translation_lang: song.lyrics_translation_lang,
+  });
+  // ISSUE #485: `?translation_lang=` projects the requested language's cache
+  // onto the legacy fields the whole client already reads. Switching target
+  // language then becomes an instant view change: no re-translation, no new
+  // client-side cache format. Unknown languages simply return the default view.
+  const requestedLang = request.nextUrl.searchParams.get('translation_lang')?.trim();
+  let view = song;
+  if (requestedLang) {
+    const selected = await readSongTranslation(db, id, requestedLang, {
+      lyrics_translation: song.lyrics_translation,
+      lyrics_translation_lang: song.lyrics_translation_lang,
+      lyrics_translation_reasoning: song.lyrics_translation_reasoning,
+    });
+    if (selected) {
+      view = {
+        ...song,
+        lyrics_translation: selected.lines,
+        lyrics_translation_lang: requestedLang,
+        lyrics_translation_reasoning: selected.reasoning,
+      };
+    }
+  }
   return withOfflineIdentity(
-    NextResponse.json(sanitizeSong(song, canEdit), { headers: NO_STORE_HEADERS }),
+    NextResponse.json(
+      { ...sanitizeSong(view, canEdit), available_translation_langs: availableTranslationLangs },
+      { headers: NO_STORE_HEADERS },
+    ),
     user?.id,
   );
 }
@@ -221,6 +251,13 @@ export async function PUT(
   // the pre-check and the write that a plain `WHERE id` update cannot see.
   if (timelineGuarded && !updatedRow) {
     return NextResponse.json({ error: 'stale_timeline_source' }, { status: 409 });
+  }
+
+  // ISSUE #485: every per-language cache is indexed by lyrics_raw line number.
+  // When the lyrics content changed (or translation was explicitly cleared),
+  // all languages must be invalidated — not only the legacy mirror.
+  if (clear_translation === true || (set.lyricsTranslation !== undefined && updatedRow)) {
+    await clearSongTranslations(db, id);
   }
 
   const updated = await findSong(id);

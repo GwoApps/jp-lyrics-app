@@ -18,8 +18,12 @@
  * and a reading is never drawn without its base text.
  */
 
-/** Font stack shared by the canvas draw calls and the hidden measurement DOM. */
-export const PIP_CANVAS_FONT_FAMILY = 'system-ui, -apple-system, sans-serif';
+/**
+ * Font stack shared by the canvas draw calls and the hidden measurement DOM.
+ * Matches the PiP window's `html, body` font (issue #466): canvas and layout
+ * must measure with the same family or line wrapping and ruby placement drift.
+ */
+export const PIP_CANVAS_FONT_FAMILY = "'Inter', system-ui, -apple-system, sans-serif";
 /** Source lyric size in canvas px (the video PiP frame is 640×360). */
 export const PIP_CANVAS_SOURCE_FONT_PX = 38;
 /** Ruby annotation size relative to the base run (mirrors `ruby rt { font-size: 0.5em }`). */

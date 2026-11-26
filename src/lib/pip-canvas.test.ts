@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  PIP_CANVAS_FONT_FAMILY,
   PIP_CANVAS_SOURCE_FONT_PX,
   clusterRowTops,
   drawPipCanvasLine,
@@ -141,14 +142,14 @@ test('drawPipCanvasLine: kanji base text and its reading are both drawn', () => 
   // y is the annotation's top edge, so row 0's baseline lands at y + (top->baseline).
   assert.equal(base.y, 100 - -1 + 54);
   assert.equal(base.baseline, 'alphabetic');
-  assert.equal(base.font, `500 ${PIP_CANVAS_SOURCE_FONT_PX}px system-ui, -apple-system, sans-serif`);
+  assert.equal(base.font, `500 ${PIP_CANVAS_SOURCE_FONT_PX}px ${PIP_CANVAS_FONT_FAMILY}`);
   assert.equal(base.fillStyle, '#fff');
   // The reading sits in the annotation box above the base, centred on it.
   assert.equal(reading.baseline, 'bottom');
   assert.equal(reading.align, 'center');
   assert.equal(reading.x, 32 + 19);
   assert.equal(reading.y, 100 - -1 + 21);
-  assert.equal(reading.font, `500 ${PIP_CANVAS_SOURCE_FONT_PX * 0.5}px system-ui, -apple-system, sans-serif`);
+  assert.equal(reading.font, `500 ${PIP_CANVAS_SOURCE_FONT_PX * 0.5}px ${PIP_CANVAS_FONT_FAMILY}`);
   assert.equal(reading.fillStyle, '#a1a1aa');
 });
 
@@ -172,7 +173,7 @@ test('drawPipCanvasLine: scale follows the requested source font size', () => {
   const ctx = mockContext();
   drawPipCanvasLine(ctx, rubyLine(), { x: 0, y: 0, color: '#fff', readingColor: '#aaa', sourceFontPx: 57 });
   const base = ctx.calls.find((c) => c.text === '君')!;
-  assert.equal(base.font, '500 57px system-ui, -apple-system, sans-serif');
+  assert.equal(base.font, `500 57px ${PIP_CANVAS_FONT_FAMILY}`);
   // 1.5× scale: positions scale with the font so the frame can be up-scaled.
   assert.equal(base.y, 1 + 54 * 1.5);
 });

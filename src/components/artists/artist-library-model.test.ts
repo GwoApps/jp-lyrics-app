@@ -3,6 +3,7 @@ import test from 'node:test';
 import { defaultLibraryView, filterArtistSongs, groupMatchingAlbums, formatTranslationLanguage, formatSongDuration, formatSongDate, spotifyTrackHref, readFavoriteStatus, type ArtistLibrarySong } from './artist-library-model.ts';
 import { groupArtistAlbums } from '@/lib/artists';
 import { parseDbTimestamp } from '@/lib/db-time';
+import { buildLyricSearchText } from '@/lib/search-normalize';
 
 const makeSong = (id: string, extras: Partial<ArtistLibrarySong> = {}): ArtistLibrarySong => ({ id, title: id, artist: 'Aimer', spotify_album: 'Album', created_by_name: 'Test', is_public: 1, public_requested: 0, created_at: '2026-01-01', updated_at: '2026-01-02', ...extras });
 const songs = [
@@ -137,4 +138,22 @@ test('favorite readback is on demand, no-store and validates current-user respon
   for (const [status, body, error] of [[401, {}, 'login_required'], [500, {}, 'favorite_read_failed'], [200, { favorited: null }, 'favorite_read_failed']] as const) {
     await assert.rejects(readFavoriteStatus('x', (async () => new Response(JSON.stringify(body), { status })) as typeof fetch), new RegExp(error));
   }
+});
+
+test('ISSUE #475: artist library search includes derived romaji and translation text', () => {
+  const library = [
+    makeSong('romaji', {
+      title: '落花',
+      search_text: buildLyricSearchText({
+        lyrics_furigana: JSON.stringify([{ segments: [{ text: '落花', reading: 'らくか' }] }]),
+        lyrics_translation: JSON.stringify(['Falling blossoms']),
+      }),
+    }),
+    makeSong('plain', { title: 'Other' }),
+  ];
+  const find = (query: string) => ids(filterArtistSongs(library, { ...defaultLibraryView(), query }, 'en'));
+  assert.deepEqual(find('rakuka'), ['romaji']);
+  assert.deepEqual(find('falling'), ['romaji']);
+  assert.deepEqual(find('other'), ['plain']);
+  assert.deepEqual(find('nowhere'), []);
 });

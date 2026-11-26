@@ -208,3 +208,22 @@ test('profile upstream errors are neutral and ACL/database failures remain no-st
     assert.equal(response.headers.get('Cache-Control'), 'private, no-store');
   }
 });
+
+test('ISSUE #475: artist detail songs carry derived romanized/translated search text without lyric bodies', async (t) => {
+  const db = await fixture(t);
+  await db.insert(schema.songs).values([
+    {
+      id: 'lyrics-search', title: 'Searchable', artist: 'Summary', spotifyAlbum: 'Album', isPublic: 1,
+      lyricsFurigana: JSON.stringify([{ segments: [{ text: '落花', reading: 'らくか' }] }]),
+      lyricsTranslation: JSON.stringify(['Falling blossoms']),
+    },
+  ]);
+  const library = await getArtistLibrary(db, null, 'Summary');
+  const song = library?.songs.find((entry) => entry.id === 'lyrics-search');
+  assert.ok(song);
+  assert.match(song.search_text ?? '', /rakuka/);
+  assert.match(song.search_text ?? '', /falling blossoms/);
+  for (const column of ['lyrics_raw', 'lyrics_synced', 'lyrics_furigana', 'lyrics_translation']) {
+    assert.equal(Object.hasOwn(song, column), false, `${column} must not leak`);
+  }
+});

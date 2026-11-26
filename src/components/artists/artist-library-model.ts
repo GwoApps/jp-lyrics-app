@@ -13,6 +13,8 @@ export type ArtistLibrarySong = SongItem & {
   has_translation?: boolean | null;
   lyrics_translation_lang?: string | null;
   favorited?: boolean | null;
+  /** ISSUE #475: derived romanized/translated lyric text for search only. */
+  search_text?: string | null;
 };
 export type QualityFilter = 'all' | 'available' | 'missing' | 'unknown';
 export type LibraryView = {
