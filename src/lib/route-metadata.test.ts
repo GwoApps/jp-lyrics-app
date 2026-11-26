@@ -80,8 +80,9 @@ test('description and OG locale follow all four dialects', () => {
     const meta = buildSongMetadata({ id: 'x', title: 'T', visible: true, locale, lyricsRaw: '' }) as TestMetadata;
     assert.equal(meta.description, DEFAULT_DESCRIPTION[locale as keyof typeof DEFAULT_DESCRIPTION]);
     assert.equal(meta.openGraph.locale, ogLocale);
-    // Empty lyrics fall back to the endpoint that serves the uploaded cover.
-    assert.deepEqual(meta.openGraph.images, ['/api/songs/x/cover-image']);
+    // Without a cover or site origin, share the static site icon path.
+    assert.deepEqual(meta.openGraph.images, ['/icon-512x512.png']);
+    assert.equal(meta.twitter.card, 'summary');
   }
 });
 
@@ -89,7 +90,8 @@ test('unsafe cover URLs cannot become OG image sources', () => {
   const meta = buildSongMetadata({
     id: 'x', title: 'T', visible: true, coverUrl: 'javascript:alert(1)',
   }) as TestMetadata;
-  assert.deepEqual(meta.openGraph.images, ['/api/songs/x/cover-image']);
+  assert.deepEqual(meta.openGraph.images, ['/icon-512x512.png']);
+  assert.equal(meta.twitter.card, 'summary');
 });
 
 test('song layout is a server component that applies the ACL with one indexed query', () => {
@@ -101,22 +103,48 @@ test('song layout is a server component that applies the ACL with one indexed qu
   assert.match(songLayout, /buildSongMetadata\(\{/);
 });
 
-test('uploaded cover and page URLs are absolute when a site origin is supplied', () => {
+test('cover fallback and page URLs are absolute when a site origin is supplied', () => {
   const meta = buildSongMetadata({
     id: 'cee60182-7cbc-426a-9d4b-63408ce04610',
     title: 'さよならのキス',
     visible: true,
     siteOrigin: 'https://lyrics.example',
   }) as TestMetadata;
-  const cover = 'https://lyrics.example/api/songs/cee60182-7cbc-426a-9d4b-63408ce04610/cover-image';
+  const cover = 'https://lyrics.example/icon-512x512.png';
   assert.equal(meta.openGraph.url, 'https://lyrics.example/songs/cee60182-7cbc-426a-9d4b-63408ce04610');
   assert.equal(meta.alternates.canonical, meta.openGraph.url);
   assert.deepEqual(meta.openGraph.images, [cover]);
   assert.deepEqual(meta.twitter.images, [cover]);
+  assert.equal(meta.twitter.card, 'summary');
   for (const value of [meta.openGraph.url, meta.alternates.canonical, ...meta.openGraph.images!]) {
     assert.match(value, /^https?:\/\//);
     assert.equal(new URL(value).hostname, 'lyrics.example');
   }
+});
+
+test('uploaded covers keep large Twitter cards when a site origin is supplied', () => {
+  const meta = buildSongMetadata({
+    id: 'with-cover',
+    title: 'Covered',
+    visible: true,
+    coverUrl: 'https://i.scdn.co/image/abc',
+    siteOrigin: 'https://lyrics.example',
+  }) as TestMetadata;
+  assert.deepEqual(meta.openGraph.images, ['https://i.scdn.co/image/abc']);
+  assert.equal(meta.twitter.card, 'summary_large_image');
+  assert.deepEqual(meta.twitter.images, ['https://i.scdn.co/image/abc']);
+});
+
+test('songs without a cover use the absolute site icon and a summary Twitter card', () => {
+  const meta = buildSongMetadata({
+    id: 'no-cover', title: 'No Cover', visible: true,
+    siteOrigin: 'https://lyrics.example',
+  }) as TestMetadata;
+  const icon = 'https://lyrics.example/icon-512x512.png';
+  assert.deepEqual(meta.openGraph.images, [icon]);
+  assert.equal(meta.twitter.card, 'summary');
+  assert.deepEqual(meta.twitter.images, [icon]);
+  assert.equal(JSON.stringify(meta).includes('cover-image'), false);
 });
 
 test('root layout sets an env-derived metadataBase; song metadata is absolute from the request', () => {

@@ -82,7 +82,9 @@ export function buildSongMetadata({
   const absolutePath = (value: string) => siteOrigin ? new URL(value, siteOrigin).href : value;
   const pageUrl = absolutePath(path);
   const cover = safeHttpUrl(coverUrl);
-  const images = [cover ?? absolutePath(`/api/songs/${encodeURIComponent(id)}/cover-image`)];
+  // Without a usable cover the cover-image endpoint would fail; the site icon
+  // is a safe fallback and calls for Twitter's small summary card.
+  const images = [cover ?? absolutePath('/icon-512x512.png')];
   return {
     title: name,
     description,
@@ -96,6 +98,11 @@ export function buildSongMetadata({
       url: pageUrl,
       ...(images ? { images } : {}),
     },
-    twitter: { card: 'summary_large_image', title: name, description, ...(images ? { images } : {}) },
+    twitter: {
+      card: cover ? 'summary_large_image' : 'summary',
+      title: name,
+      description,
+      ...(images ? { images } : {}),
+    },
   };
 }
