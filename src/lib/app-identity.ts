@@ -19,3 +19,9 @@ export const APP_NAME_SHORT = '歌詞ノート';
 
 /** Manifest/description copy; English is the project's lingua franca for metadata. */
 export const APP_DESCRIPTION = 'Japanese lyrics management with furigana annotation and Spotify sync';
+
+/** Compose the localized document title used once the app hydrates. */
+export function localizedDocumentTitle(title: string | null, appName: string): string {
+  const value = title?.trim();
+  return value ? `${value} · ${appName}` : appName;
+}

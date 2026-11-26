@@ -360,6 +360,8 @@
     "exportFurigana": "（ふりがな付き）",
     "downloadWithEllipsis": "ダウンロード…",
     "exportSubtitle": "形式と出力する補助行を選択",
+    "exportFormatCsvLabel": "学習表",
+    "exportCsvNoDataHint": "CSV はふりがなや翻訳があると便利です。この曲にはどちらもないため、表には歌詞とメタデータのみが含まれます。",
     "exportFormatLabel": "形式",
     "exportReadingLabel": "ふりがな",
     "exportReadingNone": "原文（読みなし）",
@@ -1011,7 +1013,11 @@
     "sourceConfigSyncCandidateLimitHint": "WYSIWYG/LSY 候補を直列にスキャンする数。大きくすると命中率向上、遅延は線形増加。",
     "lyricsProviderErrorInvalidSourceConfig": "ソース設定に不明なフィールドまたは範囲外の値があります",
     "lyricsProviderErrorInvalidSourceSchema": "ソース設定スキーマが無効です",
-    "lyricsProviderErrorHttpProviderReadonlyField": "HTTP Provider ではこのフィールドを変更できません"
+    "lyricsProviderErrorHttpProviderReadonlyField": "HTTP Provider ではこのフィールドを変更できません",
+    "systemBackup": "ライブラリ全体のバックアップ",
+    "systemBackupHint": "全曲の歌詞・ふりがな・タイムライン・訳文・用語集を含む JSON をダウンロードします。所有情報や公開設定は含まれません。",
+    "systemBackupButton": "JSON バックアップを書き出す",
+    "systemBackupExporting": "書き出し中…"
   },
   "translation": {
     "title": "翻訳の編集",

@@ -16,7 +16,7 @@ import { resolveTranslationLang } from './target-lang.ts';
 
 export type ExportFormat = 'text' | 'lrc' | 'html' | 'csv';
 
-/** Furigana/reading option applied to `.txt` and `.html` exports. */
+/** Furigana/reading option applied to `.txt`, `.html` and `.csv` exports. */
 export type ExportReadingMode = 'none' | 'furigana' | 'romaji';
 
 export interface ExportSongData {
@@ -36,9 +36,11 @@ export interface ExportOptions {
   /** When true the translated line is paired with each source line. */
   includeTranslation: boolean;
   /**
-   * Reading mode for `.txt` / `.html`. `.lrc` always emits the raw synced
+   * Reading mode for `.txt` / `.html` / `.csv`. `.lrc` always emits the raw synced
    * timeline and ignores this option; when `includeTranslation` is set it
    * additionally appends a translated line after each timed row (same timestamp).
+   * For `.csv` the mode controls the "reading" column: `none` leaves it empty,
+   * `furigana` annotates the original characters, `romaji` emits readings only.
    */
   reading?: ExportReadingMode;
 }

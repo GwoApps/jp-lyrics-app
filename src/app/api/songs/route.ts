@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
       FROM songs s
       INNER JOIN favorites f ON f.song_id = s.id AND f.user_email = ${userEmail}
       WHERE ${and(...filters)}
-      ORDER BY s.updated_at DESC
+      ORDER BY s.created_at DESC
     `;
     const songs = toSongListItems(await db.all(rawSql));
     return NextResponse.json(songs, { headers: NO_STORE_HEADERS });
@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
       SELECT ${selectColumns}
       FROM songs s
       WHERE ${and(...filters)}
-      ORDER BY s.updated_at DESC
+      ORDER BY s.created_at DESC
     `);
     return NextResponse.json(toSongListItems(songs), { headers: NO_STORE_HEADERS });
   }

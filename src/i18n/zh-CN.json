@@ -360,6 +360,8 @@
     "exportFurigana": "（含振假名）",
     "downloadWithEllipsis": "下载…",
     "exportSubtitle": "选择格式与需要输出的副行",
+    "exportFormatCsvLabel": "对照表",
+    "exportCsvNoDataHint": "CSV 在有注音或译文时更有用；这首歌两者都没有，表格将只包含歌词和歌曲信息。",
     "exportFormatLabel": "格式",
     "exportReadingLabel": "注音",
     "exportReadingNone": "原文（不含注音）",
@@ -1011,7 +1013,11 @@
     "sourceConfigSyncCandidateLimitHint": "串行扫描 indexed WYSIWYG/LSY 候选的数量。调大提高命中率、延迟线性增长。",
     "lyricsProviderErrorInvalidSourceConfig": "源配置包含未知字段或值不在允许范围内",
     "lyricsProviderErrorInvalidSourceSchema": "源配置 schema 无效",
-    "lyricsProviderErrorHttpProviderReadonlyField": "HTTP Provider 不支持该字段"
+    "lyricsProviderErrorHttpProviderReadonlyField": "HTTP Provider 不支持该字段",
+    "systemBackup": "整库备份",
+    "systemBackupHint": "导出包含全部歌曲的歌词、注音、时间轴、译文和术语表的 JSON 备份文件；不包含私人标记与创建者信息。",
+    "systemBackupButton": "导出 JSON 备份",
+    "systemBackupExporting": "正在导出…"
   },
   "translation": {
     "title": "翻译校正",

@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Activity, CheckCircle2, CircleAlert, Clock, Loader2, Plug, ServerCrash, Settings2, X, XCircle,
+  Activity, CheckCircle2, CircleAlert, Clock, Download, Loader2, Plug, ServerCrash, Settings2, X, XCircle,
 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
 import Dialog from '@/components/ui/dialog';
@@ -71,6 +71,7 @@ export default function AdminSystemPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const configCloseRef = useRef<HTMLButtonElement>(null);
 
   const load = useCallback(async (silent = false) => {
@@ -93,6 +94,29 @@ export default function AdminSystemPanel() {
     void load();
   }, [load]);
 
+  const handleExport = useCallback(async () => {
+    setExporting(true);
+    try {
+      const res = await fetch('/api/admin/export');
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const header = res.headers.get('Content-Disposition');
+      const extended = /filename\*\s*=\s*[^']*'[^']*'([^;]+)/i.exec(header ?? '');
+      const filename = extended ? decodeURIComponent(extended[1].trim()) : 'lyrics-backup.json';
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+    } catch {
+      // The button is briefly disabled; a failed download leaves the page intact.
+    } finally {
+      setExporting(false);
+    }
+  }, []);
 
   if (loading) {
     return (
@@ -236,6 +260,26 @@ export default function AdminSystemPanel() {
             })}
           </ul>
         )}
+      </section>
+
+      {/* Full-library JSON backup (ISSUE #471) */}
+      <section className={cardCls}>
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <Download className="h-4 w-4 text-[var(--primary)]" />
+          <h2 className="text-sm font-semibold">{t('admin.systemBackup')}</h2>
+        </div>
+        <p className="mb-3 text-xs text-[var(--muted-foreground)]">{t('admin.systemBackupHint')}</p>
+        <button
+          type="button"
+          onClick={() => void handleExport()}
+          disabled={exporting}
+          className="inline-flex items-center gap-1.5 rounded-md border border-[var(--border)] px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--muted)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {exporting
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            : <Download className="h-3.5 w-3.5" />}
+          {exporting ? t('admin.systemBackupExporting') : t('admin.systemBackupButton')}
+        </button>
       </section>
 
       {/* Recent admin activity */}

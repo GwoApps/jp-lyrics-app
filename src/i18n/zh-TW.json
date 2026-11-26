@@ -360,6 +360,8 @@
     "exportFurigana": "（含注音）",
     "downloadWithEllipsis": "下載…",
     "exportSubtitle": "選擇格式與需要輸出的副行",
+    "exportFormatCsvLabel": "對照表",
+    "exportCsvNoDataHint": "CSV 在有注音或譯文時更有用；這首歌兩者都沒有，表格將只包含歌詞和歌曲資訊。",
     "exportFormatLabel": "格式",
     "exportReadingLabel": "注音",
     "exportReadingNone": "原文（不含注音）",
@@ -1011,7 +1013,11 @@
     "sourceConfigSyncCandidateLimitHint": "串行掃描 indexed WYSIWYG/LSY 候選的數量。調大提高命中率、延遲線性增長。",
     "lyricsProviderErrorInvalidSourceConfig": "來源設定包含未知欄位或值不在允許範圍內",
     "lyricsProviderErrorInvalidSourceSchema": "來源設定 schema 無效",
-    "lyricsProviderErrorHttpProviderReadonlyField": "HTTP Provider 不支援該欄位"
+    "lyricsProviderErrorHttpProviderReadonlyField": "HTTP Provider 不支援該欄位",
+    "systemBackup": "整庫備份",
+    "systemBackupHint": "匯出包含全部歌曲的歌詞、注音、時間軸、譯文與術語表的 JSON 備份檔案；不包含私人標記與建立者資訊。",
+    "systemBackupButton": "匯出 JSON 備份",
+    "systemBackupExporting": "正在匯出…"
   },
   "translation": {
     "title": "翻譯校正",
